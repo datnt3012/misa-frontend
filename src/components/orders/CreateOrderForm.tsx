@@ -1,0 +1,616 @@
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Trash2, Plus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+
+interface CreateOrderFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOrderCreated: () => void;
+}
+
+interface OrderItem {
+  product_id: string;
+  product_code: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  vat_rate: number;
+  vat_amount: number;
+  warehouse_id: string;
+}
+
+const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
+  const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  
+  const [newOrder, setNewOrder] = useState({
+    customer_id: "",
+    customer_name: "",
+    customer_phone: "",
+    customer_address: "",
+    order_type: "sale",
+    notes: "",
+    contract_number: "",
+    purchase_order_number: "",
+    
+    // VAT Information (for invoice)
+    vat_tax_code: "",
+    vat_company_name: "",
+    vat_company_address: "",
+    vat_invoice_email: "",
+    
+    // Shipping Information
+    shipping_recipient_name: "",
+    shipping_recipient_phone: "",
+    shipping_address: "",
+    
+    initial_payment: 0,
+    initial_payment_method: "cash",
+    initial_payment_bank: "",
+    items: [] as OrderItem[]
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [customersRes, productsRes, warehousesRes] = await Promise.all([
+        supabase.from('customers').select('*').order('name'),
+        supabase.from('products').select('*').order('name'),
+        supabase.from('warehouses').select('*').order('name')
+      ]);
+
+      if (customersRes.error) throw customersRes.error;
+      if (productsRes.error) throw productsRes.error;
+      if (warehousesRes.error) throw warehousesRes.error;
+
+      setCustomers(customersRes.data || []);
+      setProducts(productsRes.data || []);
+      setWarehouses(warehousesRes.data || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải dữ liệu",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const addItem = () => {
+    setNewOrder(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        product_id: "",
+        product_code: "",
+        product_name: "",
+        quantity: 1,
+        unit_price: 0,
+        total_price: 0,
+        vat_rate: 0,
+        vat_amount: 0,
+        warehouse_id: ""
+      }]
+    }));
+  };
+
+  const removeItem = (index: number) => {
+    setNewOrder(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateItem = (index: number, field: keyof OrderItem, value: any) => {
+    setNewOrder(prev => {
+      const items = [...prev.items];
+      items[index] = { ...items[index], [field]: value };
+      
+      // Auto-calculate when product, quantity, or unit_price changes
+      if (field === 'product_id' || field === 'quantity' || field === 'unit_price') {
+        if (field === 'product_id') {
+          const product = products.find(p => p.id === value);
+          if (product) {
+            items[index].product_code = product.code;
+            items[index].product_name = product.name;
+            items[index].unit_price = product.unit_price;
+          }
+        }
+        
+        const subtotal = items[index].quantity * items[index].unit_price;
+        items[index].total_price = subtotal;
+      }
+      
+      return { ...prev, items };
+    });
+  };
+
+  const calculateTotals = () => {
+    const subtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
+    const total = subtotal;
+    const debt = total - (newOrder.initial_payment || 0);
+    
+    return { subtotal, total, debt };
+  };
+
+  const handleSubmit = async () => {
+    if (!newOrder.customer_name) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập tên khách hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newOrder.items.length === 0) {
+      toast({
+        title: "Lỗi", 
+        description: "Vui lòng thêm ít nhất một sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate warehouse selection for items
+    if (newOrder.items.some(item => !item.warehouse_id)) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn kho cho tất cả sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { subtotal, total } = calculateTotals();
+      const paidAmount = newOrder.initial_payment || 0;
+
+      // Create order
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          order_number: `DH${String(Date.now()).slice(-6)}`,
+          customer_id: newOrder.customer_id || null,
+          customer_name: newOrder.customer_name,
+          customer_phone: newOrder.customer_phone,
+          customer_address: newOrder.customer_address,
+          total_amount: total,
+          paid_amount: paidAmount,
+          debt_amount: total - paidAmount,
+          status: 'pending', // Trạng thái pending ban đầu
+          order_status: 'new',
+          payment_status: paidAmount === 0 ? 'unpaid' : (paidAmount >= total ? 'paid' : 'partially_paid'),
+          completion_status: 'active',
+          order_type: newOrder.order_type,
+          notes: newOrder.notes,
+          contract_number: newOrder.contract_number,
+          purchase_order_number: newOrder.purchase_order_number,
+          vat_invoice_email: newOrder.vat_invoice_email,
+          initial_payment: paidAmount,
+          created_by: user?.id
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Create order items
+      for (const item of newOrder.items) {
+        const { error: itemError } = await supabase
+          .from('order_items')
+          .insert({
+            order_id: orderData.id,
+            product_id: item.product_id,
+            product_code: item.product_code,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+            vat_rate: item.vat_rate,
+            vat_amount: item.vat_amount,
+            warehouse_id: item.warehouse_id
+          });
+        
+        if (itemError) throw itemError;
+      }
+
+      // Create initial payment if any
+      if (paidAmount > 0) {
+        const { error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            order_id: orderData.id,
+            amount: paidAmount,
+            payment_method: newOrder.initial_payment_method,
+            notes: 'Thanh toán ban đầu khi tạo đơn',
+            created_by: user?.id
+          });
+        
+        if (paymentError) throw paymentError;
+      }
+
+      toast({
+        title: "Thành công",
+        description: `Đã tạo đơn hàng ${orderData.order_number}`,
+      });
+
+      onOrderCreated();
+    } catch (error) {
+      console.error('Error creating order:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tạo đơn hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const { subtotal, total, debt } = calculateTotals();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Tạo đơn hàng mới</DialogTitle>
+          <DialogDescription>
+            Nhập thông tin chi tiết cho đơn hàng mới
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {/* Customer Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin khách hàng</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="customer">Khách hàng</Label>
+                  <Select 
+                    value={newOrder.customer_id} 
+                    onValueChange={(value) => {
+                      const customer = customers.find(c => c.id === value);
+                      setNewOrder(prev => ({
+                        ...prev,
+                        customer_id: value,
+                        customer_name: customer?.name || "",
+                        customer_phone: customer?.phone || "",
+                        customer_address: customer?.address || ""
+                      }));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn khách hàng hoặc nhập mới" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.map((customer) => (
+                        <SelectItem key={customer.id} value={customer.id}>
+                          {customer.name} ({customer.customer_code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="customer_name">Tên khách hàng *</Label>
+                  <Input
+                    id="customer_name"
+                    value={newOrder.customer_name}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_name: e.target.value }))}
+                    placeholder="Nhập tên khách hàng"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="customer_phone">Số điện thoại</Label>
+                  <Input
+                    id="customer_phone"
+                    value={newOrder.customer_phone}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customer_address">Địa chỉ</Label>
+                  <Input
+                    id="customer_address"
+                    value={newOrder.customer_address}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_address: e.target.value }))}
+                    placeholder="Nhập địa chỉ"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* VAT Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin VAT</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="vat_tax_code">Mã số thuế</Label>
+                  <Input
+                    id="vat_tax_code"
+                    value={newOrder.vat_tax_code}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_tax_code: e.target.value }))}
+                    placeholder="Nhập mã số thuế"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="vat_invoice_email">Email nhận hóa đơn VAT</Label>
+                  <Input
+                    id="vat_invoice_email"
+                    type="email"
+                    value={newOrder.vat_invoice_email}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_invoice_email: e.target.value }))}
+                    placeholder="email@domain.com"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="vat_company_name">Tên công ty</Label>
+                <Input
+                  id="vat_company_name"
+                  value={newOrder.vat_company_name}
+                  onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_name: e.target.value }))}
+                  placeholder="Nhập tên công ty"
+                />
+              </div>
+              <div>
+                <Label htmlFor="vat_company_address">Địa chỉ công ty</Label>
+                <Input
+                  id="vat_company_address"
+                  value={newOrder.vat_company_address}
+                  onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
+                  placeholder="Nhập địa chỉ công ty"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Shipping Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin vận chuyển</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="shipping_recipient_name">Người nhận hàng</Label>
+                  <Input
+                    id="shipping_recipient_name"
+                    value={newOrder.shipping_recipient_name}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_name: e.target.value }))}
+                    placeholder="Nhập tên người nhận"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="shipping_recipient_phone">Số điện thoại</Label>
+                  <Input
+                    id="shipping_recipient_phone"
+                    value={newOrder.shipping_recipient_phone}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="shipping_address">Địa chỉ nhận hàng</Label>
+                <Input
+                  id="shipping_address"
+                  value={newOrder.shipping_address}
+                  onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_address: e.target.value }))}
+                  placeholder="Nhập địa chỉ nhận hàng"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Order Items */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                <span>Sản phẩm</span>
+                <Button onClick={addItem} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm sản phẩm
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table className="border border-border/30 rounded-lg overflow-hidden">
+                <TableHeader>
+                  <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">SL</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Thành tiền</TableHead>
+                    <TableHead className="font-semibold text-slate-700"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {newOrder.items.map((item, index) => (
+                    <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <TableCell className="border-r border-slate-100">
+                        <Select 
+                          value={item.product_id} 
+                          onValueChange={(value) => updateItem(index, 'product_id', value)}
+                        >
+                          <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Chọn sản phẩm" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name} ({product.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100">
+                        <Select 
+                          value={item.warehouse_id} 
+                          onValueChange={(value) => updateItem(index, 'warehouse_id', value)}
+                        >
+                          <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="Chọn kho" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses.map((warehouse) => (
+                              <SelectItem key={warehouse.id} value={warehouse.id}>
+                                {warehouse.name} ({warehouse.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100">
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                          className="w-20"
+                        />
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100">
+                        <Input
+                          type="number"
+                          value={item.unit_price}
+                          onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
+                          className="w-32"
+                        />
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100">
+                        {item.total_price.toLocaleString('vi-VN')}đ
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeItem(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Payment & Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thanh toán và Tổng kết</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="initial_payment">Thanh toán ban đầu</Label>
+                  <Input
+                    id="initial_payment"
+                    type="number"
+                    value={newOrder.initial_payment}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, initial_payment: Number(e.target.value) }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
+                  <Select 
+                    value={newOrder.initial_payment_method} 
+                    onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_method: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn phương thức" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Tiền mặt</SelectItem>
+                      <SelectItem value="bank_transfer">Chuyển khoản</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newOrder.initial_payment_method === "bank_transfer" && (
+                  <div>
+                    <Label htmlFor="initial_payment_bank">Ngân hàng</Label>
+                    <Select 
+                      value={newOrder.initial_payment_bank} 
+                      onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_bank: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn ngân hàng" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="vietcombank">Vietcombank</SelectItem>
+                        <SelectItem value="techcombank">Techcombank</SelectItem>
+                        <SelectItem value="bidv">BIDV</SelectItem>
+                        <SelectItem value="agribank">Agribank</SelectItem>
+                        <SelectItem value="mbbank">MB Bank</SelectItem>
+                        <SelectItem value="vpbank">VPBank</SelectItem>
+                        <SelectItem value="acb">ACB</SelectItem>
+                        <SelectItem value="sacombank">Sacombank</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <Label htmlFor="notes">Ghi chú</Label>
+                <Textarea
+                  id="notes"
+                  value={newOrder.notes}
+                  onChange={(e) => setNewOrder(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Nhập ghi chú"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleSubmit} disabled={loading}>
+              {loading ? "Đang tạo..." : "Tạo đơn hàng"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default CreateOrderForm;

@@ -1,0 +1,1026 @@
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import * as XLSX from 'xlsx';
+import React from "react";
+
+interface ProductListProps {
+  products: any[];
+  warehouses: any[];
+  canViewCostPrice: boolean;
+  canManageProducts: boolean;
+  onProductsUpdate: () => void;
+}
+
+const ProductList: React.FC<ProductListProps> = ({
+  products,
+  warehouses,
+  canViewCostPrice,
+  canManageProducts,
+  onProductsUpdate
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoryComboOpen, setCategoryComboOpen] = useState(false);
+  const [editCategoryComboOpen, setEditCategoryComboOpen] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    code: '',
+    category: '',
+    costPrice: 0,
+    sellPrice: 0,
+    unit: 'cái',
+    barcode: ''
+  });
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+  const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
+  const [isEditProductDialogOpen, setIsEditProductDialogOpen] = useState(false);
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         product.code.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = filterCategory === "all" || 
+                           (product.category && product.category.toLowerCase().includes(filterCategory.toLowerCase()));
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // Get unique categories for filters (from both products and categories table)
+  const uniqueCategories = [...new Set([
+    ...products.map(p => p.category).filter(Boolean),
+    ...categories.map(c => c.name)
+  ])].sort();
+
+  // Load categories from database
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  React.useEffect(() => {
+    loadCategories();
+  }, []);
+
+  // Save new category to database if it doesn't exist
+  const saveNewCategory = async (categoryName: string) => {
+    if (!categoryName.trim()) return;
+    
+    try {
+      const { data: existingCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name', categoryName.trim())
+        .maybeSingle();
+
+      if (!existingCategory && canManageProducts) {
+        // Get current user ID
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        const { error } = await supabase
+          .from('categories')
+          .insert({ 
+            name: categoryName.trim(),
+            created_by: user?.id || null
+          });
+
+        if (!error) {
+          loadCategories(); // Reload categories after adding new one
+        }
+      }
+    } catch (error) {
+      console.error('Error saving category:', error);
+    }
+  };
+
+  // Sorting logic
+  const sortedProducts = React.useMemo(() => {
+    if (!sortConfig) return filteredProducts;
+
+    return [...filteredProducts].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortConfig.key) {
+        case 'code':
+          aValue = a.code;
+          bValue = b.code;
+          break;
+        case 'name':
+          aValue = a.name;
+          bValue = b.name;
+          break;
+        case 'category':
+          aValue = a.category || '';
+          bValue = b.category || '';
+          break;
+        case 'cost_price':
+          aValue = a.cost_price;
+          bValue = b.cost_price;
+          break;
+        case 'unit_price':
+          aValue = a.unit_price;
+          bValue = b.unit_price;
+          break;
+        case 'updated_at':
+          aValue = new Date(a.updated_at);
+          bValue = new Date(b.updated_at);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [filteredProducts, sortConfig]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(parseInt(value));
+    setCurrentPage(1);
+  };
+
+  // Handle sorting
+  const handleSort = (key: string) => {
+    setSortConfig(prevConfig => {
+      if (!prevConfig || prevConfig.key !== key) {
+        return { key, direction: 'asc' };
+      }
+      if (prevConfig.direction === 'asc') {
+        return { key, direction: 'desc' };
+      }
+      return null;
+    });
+  };
+
+  // Get sort icon
+  const getSortIcon = (key: string) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1" />
+      : <ArrowDown className="h-4 w-4 ml-1" />;
+  };
+
+  const addProduct = async () => {
+    if (!newProduct.name || !newProduct.code) {
+      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+      return;
+    }
+
+    try {
+      setIsAddingProduct(true);
+
+      // Save new category if it doesn't exist
+      if (newProduct.category) {
+        await saveNewCategory(newProduct.category);
+      }
+
+      const { error } = await supabase.from('products').insert({
+        name: newProduct.name,
+        code: newProduct.code,
+        category: newProduct.category,
+        current_stock: 0,
+        cost_price: newProduct.costPrice,
+        unit_price: newProduct.sellPrice,
+        unit: newProduct.unit,
+        barcode: newProduct.barcode || null,
+        min_stock_level: 10
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Đã thêm sản phẩm vào danh mục!');
+      onProductsUpdate();
+      setNewProduct({
+        name: '',
+        code: '',
+        category: '',
+        costPrice: 0,
+        sellPrice: 0,
+        unit: 'cái',
+        barcode: ''
+      });
+      setIsAddProductDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding product:', error);
+      toast.error('Có lỗi khi thêm sản phẩm');
+    } finally {
+      setIsAddingProduct(false);
+    }
+  };
+
+  const startEditProduct = (product: any) => {
+    setEditingProduct(product);
+    setNewProduct({
+      name: product.name,
+      code: product.code,
+      category: product.category || '',
+      costPrice: product.cost_price || 0,
+      sellPrice: product.unit_price || 0,
+      unit: product.unit || 'cái',
+      barcode: product.barcode || ''
+    });
+    setIsEditProductDialogOpen(true);
+  };
+
+  const updateProduct = async () => {
+    if (!newProduct.name || !newProduct.code) {
+      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+      return;
+    }
+
+    try {
+      setIsEditingProduct(true);
+
+      // Save new category if it doesn't exist
+      if (newProduct.category) {
+        await saveNewCategory(newProduct.category);
+      }
+
+      const { error } = await supabase
+        .from('products')
+        .update({
+          name: newProduct.name,
+          code: newProduct.code,
+          category: newProduct.category,
+          cost_price: newProduct.costPrice,
+          unit_price: newProduct.sellPrice,
+          unit: newProduct.unit,
+          barcode: newProduct.barcode || null,
+        })
+        .eq('id', editingProduct.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Đã cập nhật sản phẩm!');
+      onProductsUpdate();
+      setEditingProduct(null);
+      setNewProduct({
+        name: '',
+        code: '',
+        category: '',
+        costPrice: 0,
+        sellPrice: 0,
+        unit: 'cái',
+        barcode: ''
+      });
+      setIsEditProductDialogOpen(false);
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('Có lỗi khi cập nhật sản phẩm');
+    } finally {
+      setIsEditingProduct(false);
+    }
+  };
+
+  const deleteProduct = async (productId: string, productName: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${productName}"?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Đã xóa sản phẩm!');
+      onProductsUpdate();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast.error('Có lỗi khi xóa sản phẩm');
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount);
+  };
+
+  const exportToExcel = () => {
+    const exportData = sortedProducts.map((product, index) => {
+      const exportItem: any = {
+        'STT': index + 1,
+        'Mã sản phẩm': product.code,
+        'Tên sản phẩm': product.name,
+        'Loại': product.category || '',
+        'Đơn vị': product.unit || 'cái',
+        'Giá bán (VND)': product.unit_price || 0,
+        'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
+      };
+
+      if (canViewCostPrice) {
+        exportItem['Giá vốn (VND)'] = product.cost_price || 0;
+      }
+
+      return exportItem;
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    const colWidths = [
+      { wch: 5 },   // STT
+      { wch: 15 },  // Mã sản phẩm
+      { wch: 30 },  // Tên sản phẩm
+      { wch: 15 },  // Loại
+      { wch: 10 },  // Đơn vị
+    ];
+
+    if (canViewCostPrice) {
+      colWidths.push({ wch: 15 }); // Giá vốn
+    }
+    
+    colWidths.push(
+      { wch: 15 },  // Giá bán
+      { wch: 12 }   // Cập nhật
+    );
+
+    ws['!cols'] = colWidths;
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sách sản phẩm');
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
+    const filename = `Danh_sach_san_pham_${dateStr}_${timeStr}.xlsx`;
+
+    XLSX.writeFile(wb, filename);
+    toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Danh Sách Sản Phẩm</CardTitle>
+        <CardDescription>Quản lý thông tin sản phẩm trong hệ thống</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Tìm kiếm theo tên hoặc mã sản phẩm..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Lọc theo loại" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại</SelectItem>
+                {uniqueCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex gap-2 sm:ml-auto">
+              {canManageProducts && (
+                <Dialog open={isAddProductDialogOpen} onOpenChange={setIsAddProductDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full sm:w-auto">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Thêm sản phẩm
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                      <DialogTitle>Thêm Sản Phẩm Mới</DialogTitle>
+                      <DialogDescription>
+                        Nhập thông tin sản phẩm vào danh mục
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="product-name" className="text-right">Tên sản phẩm *</Label>
+                        <Input 
+                          id="product-name" 
+                          className="col-span-3"
+                          value={newProduct.name}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Nhập tên sản phẩm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm *</Label>
+                        <Input 
+                          id="product-code" 
+                          className="col-span-3"
+                          value={newProduct.code}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
+                          placeholder="Nhập mã sản phẩm"
+                        />
+                      </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="product-category" className="text-right">Loại sản phẩm</Label>
+                  <div className="col-span-3">
+                    <Popover open={categoryComboOpen} onOpenChange={setCategoryComboOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={categoryComboOpen}
+                          className="w-full justify-between"
+                        >
+                          {newProduct.category || "Chọn hoặc nhập loại sản phẩm..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput 
+                            placeholder="Tìm kiếm hoặc nhập loại mới..." 
+                            value={newProduct.category}
+                            onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {newProduct.category ? (
+                                <div className="p-2">
+                                  <div className="text-sm text-muted-foreground mb-2">Không tìm thấy loại này</div>
+                                  <Button 
+                                    size="sm" 
+                                    className="w-full"
+                                    onClick={() => {
+                                      setCategoryComboOpen(false);
+                                    }}
+                                  >
+                                    Sử dụng "{newProduct.category}"
+                                  </Button>
+                                </div>
+                              ) : (
+                                "Nhập tên loại sản phẩm..."
+                              )}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {uniqueCategories.map((category) => (
+                                <CommandItem
+                                  key={category}
+                                  value={category}
+                                  onSelect={() => {
+                                    setNewProduct(prev => ({ ...prev, category: category }));
+                                    setCategoryComboOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${newProduct.category === category ? "opacity-100" : "opacity-0"}`}
+                                  />
+                                  {category}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="unit" className="text-right">Đơn vị tính *</Label>
+                        <Input 
+                          id="unit" 
+                          className="col-span-3"
+                          value={newProduct.unit}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, unit: e.target.value }))}
+                          placeholder="Đơn vị (cái, kg, m...)"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="barcode" className="text-right">Barcode</Label>
+                        <Input 
+                          id="barcode" 
+                          className="col-span-3"
+                          value={newProduct.barcode}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, barcode: e.target.value }))}
+                          placeholder="Mã vạch (tùy chọn)"
+                        />
+                      </div>
+                      {canViewCostPrice && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
+                          <Input 
+                            id="cost-price" 
+                            type="number" 
+                            className="col-span-3"
+                            value={newProduct.costPrice}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, costPrice: parseInt(e.target.value) || 0 }))}
+                            placeholder="0"
+                          />
+                        </div>
+                      )}
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
+                        <Input 
+                          id="sell-price" 
+                          type="number" 
+                          className="col-span-3"
+                          value={newProduct.sellPrice}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, sellPrice: parseInt(e.target.value) || 0 }))}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        type="submit" 
+                        onClick={addProduct}
+                        disabled={isAddingProduct}
+                      >
+                        {isAddingProduct ? 'Đang thêm...' : 'Thêm Sản Phẩm'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+
+              <Button 
+                variant="outline" 
+                onClick={exportToExcel}
+                className="w-full sm:w-auto"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Xuất Excel
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Edit Product Dialog */}
+        {canManageProducts && (
+          <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Chỉnh Sửa Sản Phẩm</DialogTitle>
+                <DialogDescription>
+                  Cập nhật thông tin sản phẩm
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-product-name" className="text-right">Tên sản phẩm *</Label>
+                  <Input 
+                    id="edit-product-name" 
+                    className="col-span-3"
+                    value={newProduct.name}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nhập tên sản phẩm"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-product-code" className="text-right">Mã sản phẩm *</Label>
+                  <Input 
+                    id="edit-product-code" 
+                    className="col-span-3"
+                    value={newProduct.code}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
+                    placeholder="Nhập mã sản phẩm"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-product-category" className="text-right">Loại sản phẩm</Label>
+                  <div className="col-span-3">
+                    <Popover open={editCategoryComboOpen} onOpenChange={setEditCategoryComboOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={editCategoryComboOpen}
+                          className="w-full justify-between"
+                        >
+                          {newProduct.category || "Chọn hoặc nhập loại sản phẩm..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput 
+                            placeholder="Tìm kiếm hoặc nhập loại mới..." 
+                            value={newProduct.category}
+                            onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {newProduct.category ? (
+                                <div className="p-2">
+                                  <div className="text-sm text-muted-foreground mb-2">Không tìm thấy loại này</div>
+                                  <Button 
+                                    size="sm" 
+                                    className="w-full"
+                                    onClick={() => {
+                                      setEditCategoryComboOpen(false);
+                                    }}
+                                  >
+                                    Sử dụng "{newProduct.category}"
+                                  </Button>
+                                </div>
+                              ) : (
+                                "Nhập tên loại sản phẩm..."
+                              )}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {uniqueCategories.map((category) => (
+                                <CommandItem
+                                  key={category}
+                                  value={category}
+                                  onSelect={() => {
+                                    setNewProduct(prev => ({ ...prev, category: category }));
+                                    setEditCategoryComboOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${newProduct.category === category ? "opacity-100" : "opacity-0"}`}
+                                  />
+                                  {category}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-unit" className="text-right">Đơn vị tính *</Label>
+                  <Input 
+                    id="edit-unit" 
+                    className="col-span-3"
+                    value={newProduct.unit}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, unit: e.target.value }))}
+                    placeholder="Đơn vị (cái, kg, m...)"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-barcode" className="text-right">Barcode</Label>
+                  <Input 
+                    id="edit-barcode" 
+                    className="col-span-3"
+                    value={newProduct.barcode}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, barcode: e.target.value }))}
+                    placeholder="Mã vạch (tùy chọn)"
+                  />
+                </div>
+                {canViewCostPrice && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
+                    <Input 
+                      id="edit-cost-price" 
+                      type="number" 
+                      className="col-span-3"
+                      value={newProduct.costPrice}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, costPrice: parseInt(e.target.value) || 0 }))}
+                      placeholder="0"
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-sell-price" className="text-right">Giá bán</Label>
+                  <Input 
+                    id="edit-sell-price" 
+                    type="number" 
+                    className="col-span-3"
+                    value={newProduct.sellPrice}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, sellPrice: parseInt(e.target.value) || 0 }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsEditProductDialogOpen(false);
+                    setEditingProduct(null);
+                    setNewProduct({
+                      name: '',
+                      code: '',
+                      category: '',
+                      costPrice: 0,
+                      sellPrice: 0,
+                      unit: 'cái',
+                      barcode: ''
+                    });
+                  }}
+                >
+                  Hủy
+                </Button>
+                <Button 
+                  type="submit" 
+                  onClick={updateProduct}
+                  disabled={isEditingProduct}
+                >
+                  {isEditingProduct ? 'Đang cập nhật...' : 'Cập nhật'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Pagination and items per page controls */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Hiển thị:</span>
+            <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">/ trang</span>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Hiển thị {startIndex + 1}-{Math.min(endIndex, sortedProducts.length)} trong tổng số {sortedProducts.length} sản phẩm
+          </div>
+        </div>
+
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('code')}
+                >
+                  <div className="flex items-center">
+                    Mã SP
+                    {getSortIcon('code')}
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center">
+                    Tên Sản Phẩm
+                    {getSortIcon('name')}
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('category')}
+                >
+                  <div className="flex items-center">
+                    Loại
+                    {getSortIcon('category')}
+                  </div>
+                </TableHead>
+                <TableHead>Đơn Vị</TableHead>
+                {canViewCostPrice && (
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('cost_price')}
+                  >
+                    <div className="flex items-center">
+                      Giá Vốn
+                      {getSortIcon('cost_price')}
+                    </div>
+                  </TableHead>
+                )}
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('unit_price')}
+                >
+                  <div className="flex items-center">
+                    Giá Bán
+                    {getSortIcon('unit_price')}
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  onClick={() => handleSort('updated_at')}
+                >
+                  <div className="flex items-center">
+                    Cập Nhật
+                    {getSortIcon('updated_at')}
+                  </div>
+                </TableHead>
+                {canManageProducts && (
+                  <TableHead className="text-center">Thao Tác</TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedProducts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 7 : 6) : (canViewCostPrice ? 6 : 5)} className="text-center py-8 text-muted-foreground">
+                    {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedProducts.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell className="font-medium">{product.code}</TableCell>
+                    <TableCell>{product.name}</TableCell>
+                    <TableCell>{product.category || '-'}</TableCell>
+                    <TableCell>{product.unit || 'cái'}</TableCell>
+                    {canViewCostPrice && (
+                      <TableCell>{formatCurrency(product.cost_price || 0)}</TableCell>
+                    )}
+                    <TableCell>{formatCurrency(product.unit_price || 0)}</TableCell>
+                    <TableCell>
+                      {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
+                    </TableCell>
+                    {canManageProducts && (
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => startEditProduct(product)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteProduct(product.id, product.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex justify-center mt-6">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (currentPage > 1) handlePageChange(currentPage - 1);
+                    }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+                
+                {/* Show first page */}
+                {currentPage > 3 && (
+                  <>
+                    <PaginationItem>
+                      <PaginationLink 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePageChange(1);
+                        }}
+                      >
+                        1
+                      </PaginationLink>
+                    </PaginationItem>
+                    {currentPage > 4 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+                  </>
+                )}
+
+                {/* Show pages around current page */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  if (pageNum < 1 || pageNum > totalPages) return null;
+
+                  return (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePageChange(pageNum);
+                        }}
+                        isActive={currentPage === pageNum}
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+                {/* Show last page */}
+                {currentPage < totalPages - 2 && (
+                  <>
+                    {currentPage < totalPages - 3 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+                    <PaginationItem>
+                      <PaginationLink 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePageChange(totalPages);
+                        }}
+                      >
+                        {totalPages}
+                      </PaginationLink>
+                    </PaginationItem>
+                  </>
+                )}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (currentPage < totalPages) handlePageChange(currentPage + 1);
+                    }}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ProductList;
