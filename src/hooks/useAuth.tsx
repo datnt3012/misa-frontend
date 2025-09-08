@@ -1,6 +1,26 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { login, logout } from '@/@core/services/auth.api';
+
+// Custom types instead of Supabase types
+interface User {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  roleId: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Session {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  expires_at: number;
+  token_type: string;
+  user: User;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -24,7 +44,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Kiểm tra session admin trong localStorage
+    // Kiểm tra session trong localStorage
+    const storedSession = localStorage.getItem('user-session');
+
+    if (storedSession) {
+      try {
+        const { user: storedUser, session: storedSessionData, userRole: storedRole } = JSON.parse(storedSession);
+
+        // Check if session is still valid (not expired)
+        if (storedSessionData && storedSessionData.expires_at > Math.floor(Date.now() / 1000)) {
+          setUser(storedUser);
+          setSession(storedSessionData);
+          setUserRole(storedRole);
+          setLoading(false);
+          console.log('User session restored from localStorage');
+          return;
+        } else {
+          // Session expired, remove it
+          localStorage.removeItem('user-session');
+          console.log('Session expired, removed from localStorage');
+        }
+      } catch (error) {
+        console.error('Error parsing stored session:', error);
+        localStorage.removeItem('user-session');
+      }
+    }
+
+    // Kiểm tra session admin trong localStorage (legacy)
     const adminSession = localStorage.getItem('admin-session');
     if (adminSession) {
       try {
@@ -41,84 +87,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted) return;
-
-        console.log('Auth state change:', event, session);
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-
-        // Fetch user role when user changes
-        if (session?.user) {
-          setTimeout(() => {
-            if (mounted) {
-              fetchUserRole(session.user.id);
-            }
-          }, 0);
-        } else {
-          setUserRole(null);
-        }
-      }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (!mounted) return;
-
-      if (error) {
-        console.error('Error getting session:', error);
-        // Clear any invalid session data
-        localStorage.removeItem('supabase.auth.token');
-        setSession(null);
-        setUser(null);
-      } else {
-        setSession(session);
-        setUser(session?.user ?? null);
-      }
-
-      setLoading(false);
-
-      if (session?.user && mounted) {
-        setTimeout(() => {
-          if (mounted) {
-            fetchUserRole(session.user.id);
-          }
-        }, 0);
-      }
-    });
+    // No valid session found
+    setLoading(false);
+    console.log('No valid session found');
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
   }, []);
 
-  const fetchUserRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching user role:', error);
-        return;
-      }
-
-      setUserRole(data?.role || null);
-    } catch (error) {
-      console.error('Error fetching user role:', error);
-    }
-  };
+  // User role is now included in the user object from API
+  // No need for separate fetchUserRole function
 
   const signIn = async (emailOrUsername: string, password: string) => {
     try {
       // First clear any existing invalid sessions
-      await supabase.auth.signOut();
+      await logout();
 
       // check username + password, if username = admin và password = 123456 thì thông báo thành công vào truy cập được vào trang admin
       if (emailOrUsername === 'admin' && password === '123456') {
@@ -126,18 +110,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const mockUser: User = {
           id: 'admin-user-id',
           email: 'admin@system.local',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          aud: 'authenticated',
-          role: 'authenticated',
-          email_confirmed_at: new Date().toISOString(),
-          phone: null,
-          phone_confirmed_at: null,
-          last_sign_in_at: new Date().toISOString(),
-          app_metadata: { provider: 'email', providers: ['email'] },
-          user_metadata: { full_name: 'Admin User', username: 'admin' },
-          identities: [],
-          factors: []
+          firstName: 'Admin',
+          lastName: 'User',
+          roleId: 'admin-role-id',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         };
 
         // Tạo mock session
@@ -159,40 +137,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('admin-session', JSON.stringify({
           user: mockUser,
           session: mockSession,
-          userRole: 'admin'
+          userRole: mockUser.roleId
         }));
 
         console.log('Admin login successful');
         return { error: null };
       }
 
-      // Nếu không phải admin, thử đăng nhập bình thường
-      const response = await fetch(`https://elogncohkxrriqmvapqo.supabase.co/functions/v1/login-with-username`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsb2duY29oa3hycmlxbXZhcHFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzNjk3NjgsImV4cCI6MjA2OTk0NTc2OH0.h3o8GRyynnnQZJhCmlGdQPyfo_pyg5f-kvbOS6RkNh8',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsb2duY29oa3hycmlxbXZhcHFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzNjk3NjgsImV4cCI6MjA2OTk0NTc2OH0.h3o8GRyynnnQZJhCmlGdQPyfo_pyg5f-kvbOS6RkNh8'
-        },
-        body: JSON.stringify({
-          emailOrUsername,
-          password,
-        }),
-      });
+      const response = await login(emailOrUsername, password);
 
-      const result = await response.json();
+      const result = response.data;
 
-      if (!result.success) {
-        return { error: { message: result.error } };
+      // Check if HTTP request was successful (status 200-299)
+      if (response.status < 200 || response.status >= 300) {
+        const errorMessage = result?.error || response.error || `HTTP Error: ${response.status}`;
+        console.error('HTTP request failed:', errorMessage);
+        return { error: { message: errorMessage } };
       }
 
-      // Set the session in Supabase client
-      if (result.session) {
-        const { error: sessionError } = await supabase.auth.setSession(result.session);
-        if (sessionError) {
-          console.error('Error setting session:', sessionError);
-          return { error: { message: 'Failed to establish session' } };
-        }
+      // Check if request manager marked it as successful
+      if (response.success === false) {
+        const errorMessage = result?.error || response.error || 'Request failed';
+        console.error('Request manager marked as failed:', errorMessage);
+        return { error: { message: errorMessage } };
+      }
+
+      // Check if server response indicates failure
+      // API returns { statusCode, message, data } format
+      if (result && result.statusCode && result.statusCode !== 200) {
+        const errorMessage = result.message || 'Server returned failure';
+        console.error('Server returned failure:', errorMessage);
+        return { error: { message: errorMessage } };
+      }
+
+      // Also check for legacy success field
+      if (result && result.success === false) {
+        const errorMessage = result.error || 'Server returned failure';
+        console.error('Server returned failure:', errorMessage);
+        return { error: { message: errorMessage } };
+      }
+
+      // Handle API response format: { statusCode, message, data: { access_token, refresh_token, user } }
+      if (result && result.data && result.data.user) {
+        console.log('API response has user data. Creating session from API response.');
+
+        // Create session from API response
+        const sessionData = {
+          access_token: result.data.access_token,
+          refresh_token: result.data.refresh_token,
+          expires_in: 3600, // Default 1 hour
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          token_type: 'bearer',
+          user: result.data.user
+        };
+
+        // Update user state directly from API response
+        setUser(result.data.user);
+        setSession(sessionData);
+
+        // Store session in localStorage for persistence
+        localStorage.setItem('user-session', JSON.stringify({
+          user: result.data.user,
+          session: sessionData,
+          userRole: result.data.user.roleId // Use roleId as userRole
+        }));
+
+        console.log('User state updated and stored in localStorage');
+
+      } else {
+        return { error: { message: 'Unexpected response format from server' } };
       }
 
       return { error: null };
@@ -203,37 +216,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName?: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName || email,
-        },
-      },
-    });
-    return { error };
+    // TODO: Implement signup API call
+    return { error: { message: 'SignUp not implemented yet' } };
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth?mode=reset`,
-    });
-    return { error };
+    // TODO: Implement reset password API call
+    return { error: { message: 'Reset password not implemented yet' } };
   };
 
   const signOut = async () => {
-    // Xóa session admin nếu có
+    // Clear all session data
+    localStorage.removeItem('user-session');
     localStorage.removeItem('admin-session');
     setUser(null);
     setSession(null);
     setUserRole(null);
 
-    // Đăng xuất Supabase
-    await supabase.auth.signOut();
+    // Call logout API if needed
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout API error:', error);
+      // Continue with local logout even if API fails
+    }
   };
 
   const value = {
