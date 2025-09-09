@@ -102,25 +102,23 @@ const Customers = () => {
     address: ""
   });
 
-  const fetchCustomers = async () => {
-    try {
-      const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
-      setCustomers(resp.customers || []);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể tải danh sách khách hàng",
-        variant: "destructive",
-      });
-      throw error; // Re-throw for lazy loading error handling
-    }
-  };
-
   // Lazy loading configuration
   const lazyData = useRouteBasedLazyData({
     customers: {
-      loadFunction: fetchCustomers
+      loadFunction: async () => {
+        try {
+          const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
+          setCustomers(resp.customers || []);
+        } catch (error) {
+          console.error('Error fetching customers:', error);
+          toast({
+            title: "Lỗi",
+            description: "Không thể tải danh sách khách hàng",
+            variant: "destructive",
+          });
+          throw error; // Re-throw for lazy loading error handling
+        }
+      }
     }
   });
 
@@ -484,7 +482,7 @@ const Customers = () => {
                 )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  Tham gia: {format(new Date(customer.created_at), 'dd/MM/yyyy', { locale: vi })}
+                  Tham gia: {customer.created_at ? format(new Date(customer.created_at), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
                 </div>
               </CardContent>
             </Card>
@@ -635,7 +633,7 @@ const Customers = () => {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>Tham gia: {format(new Date(selectedCustomer.created_at), 'dd/MM/yyyy', { locale: vi })}</span>
+                          <span>Tham gia: {selectedCustomer.created_at ? format(new Date(selectedCustomer.created_at), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}</span>
                         </div>
                       </div>
                     </div>
@@ -708,7 +706,7 @@ const Customers = () => {
                                 {order.order_number}
                               </TableCell>
                               <TableCell>
-                                {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: vi })}
+                                {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline">
