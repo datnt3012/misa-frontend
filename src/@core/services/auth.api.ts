@@ -1,6 +1,4 @@
-import { http } from '@/@core/utils/requestUtils';
-
-const AUTH_API_URL = `${import.meta.env.VITE_API_URL}/auth`;
+import { authApi } from '@/api/auth.api';
 
 // Types
 export interface LoginRequest {
@@ -9,7 +7,7 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  statusCode: number;
+  code: number;
   message: string;
   data: {
     access_token: string;
@@ -26,6 +24,7 @@ export interface LoginResponse {
     };
   };
   // Legacy fields for backward compatibility
+  statusCode?: number;
   success?: boolean;
   session?: any;
   user?: any;
@@ -53,7 +52,7 @@ export function login(emailOrUsername: string, password: string) {
     return Promise.reject(new Error('Password must be at least 6 characters'));
   }
 
-  return http.post<LoginResponse>(`${AUTH_API_URL}/login`, { 
+  return authApi.login({ 
     email: emailOrUsername, 
     password 
   });
@@ -65,9 +64,9 @@ export function refreshToken(refreshToken: string) {
     return Promise.reject(new Error('Refresh token is required'));
   }
 
-  return http.post<RefreshTokenResponse>(`${AUTH_API_URL}/refresh`, { refreshToken });
+  return authApi.refreshToken(refreshToken);
 }
 
 export function logout() {
-  return http.post(`${AUTH_API_URL}/logout`);
+  return authApi.logout();
 }

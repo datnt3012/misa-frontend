@@ -11,10 +11,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import React from "react";
+import { productApi } from "@/api/product.api";
 
 interface ProductListProps {
   products: any[];
@@ -44,7 +45,7 @@ const ProductList: React.FC<ProductListProps> = ({
     code: '',
     category: '',
     costPrice: 0,
-    sellPrice: 0,
+    price: 0,
     unit: 'cái',
     barcode: ''
   });
@@ -70,16 +71,12 @@ const ProductList: React.FC<ProductListProps> = ({
     ...categories.map(c => c.name)
   ])].sort();
 
-  // Load categories from database
+  // Load categories from products (extract unique categories)
   const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setCategories(data || []);
+      // Extract unique categories from products
+      const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
+      setCategories(uniqueCategories.map(name => ({ id: name, name })));
     } catch (error) {
       console.error('Error loading categories:', error);
     }
@@ -87,33 +84,19 @@ const ProductList: React.FC<ProductListProps> = ({
 
   React.useEffect(() => {
     loadCategories();
-  }, []);
+  }, [products]);
 
-  // Save new category to database if it doesn't exist
+  // Save new category (just add to local state for now)
   const saveNewCategory = async (categoryName: string) => {
     if (!categoryName.trim()) return;
     
     try {
-      const { data: existingCategory } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('name', categoryName.trim())
-        .maybeSingle();
-
-      if (!existingCategory && canManageProducts) {
-        // Get current user ID
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        const { error } = await supabase
-          .from('categories')
-          .insert({ 
-            name: categoryName.trim(),
-            created_by: user?.id || null
-          });
-
-        if (!error) {
-          loadCategories(); // Reload categories after adding new one
-        }
+      // Check if category already exists
+      const existingCategory = categories.find(c => c.name === categoryName.trim());
+      
+      if (!existingCategory) {
+        // Add to local categories state
+        setCategories(prev => [...prev, { id: categoryName.trim(), name: categoryName.trim() }]);
       }
     } catch (error) {
       console.error('Error saving category:', error);
@@ -206,8 +189,12 @@ const ProductList: React.FC<ProductListProps> = ({
   };
 
   const addProduct = async () => {
-    if (!newProduct.name || !newProduct.code) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+    if (!newProduct.name) {
+      toast.error('Tên sản phẩm là bắt buộc');
+      return;
+    }
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast.error('Giá bán phải lớn hơn 0');
       return;
     }
 
@@ -219,21 +206,13 @@ const ProductList: React.FC<ProductListProps> = ({
         await saveNewCategory(newProduct.category);
       }
 
-      const { error } = await supabase.from('products').insert({
+      await productApi.createProduct({
         name: newProduct.name,
-        code: newProduct.code,
+        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
-        current_stock: 0,
-        cost_price: newProduct.costPrice,
-        unit_price: newProduct.sellPrice,
         unit: newProduct.unit,
-        barcode: newProduct.barcode || null,
-        min_stock_level: 10
+        price: newProduct.price
       });
-
-      if (error) {
-        throw error;
-      }
 
       toast.success('Đã thêm sản phẩm vào danh mục!');
       onProductsUpdate();
@@ -242,7 +221,7 @@ const ProductList: React.FC<ProductListProps> = ({
         code: '',
         category: '',
         costPrice: 0,
-        sellPrice: 0,
+        price: 0,
         unit: 'cái',
         barcode: ''
       });
@@ -261,8 +240,8 @@ const ProductList: React.FC<ProductListProps> = ({
       name: product.name,
       code: product.code,
       category: product.category || '',
-      costPrice: product.cost_price || 0,
-      sellPrice: product.unit_price || 0,
+      costPrice: product.costPrice || 0,
+      price: product.price || 0,
       unit: product.unit || 'cái',
       barcode: product.barcode || ''
     });
@@ -270,8 +249,12 @@ const ProductList: React.FC<ProductListProps> = ({
   };
 
   const updateProduct = async () => {
-    if (!newProduct.name || !newProduct.code) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+    if (!newProduct.name) {
+      toast.error('Tên sản phẩm là bắt buộc');
+      return;
+    }
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast.error('Giá bán phải lớn hơn 0');
       return;
     }
 
@@ -283,22 +266,13 @@ const ProductList: React.FC<ProductListProps> = ({
         await saveNewCategory(newProduct.category);
       }
 
-      const { error } = await supabase
-        .from('products')
-        .update({
-          name: newProduct.name,
-          code: newProduct.code,
-          category: newProduct.category,
-          cost_price: newProduct.costPrice,
-          unit_price: newProduct.sellPrice,
-          unit: newProduct.unit,
-          barcode: newProduct.barcode || null,
-        })
-        .eq('id', editingProduct.id);
-
-      if (error) {
-        throw error;
-      }
+      await productApi.updateProduct(editingProduct.id, {
+        name: newProduct.name,
+        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
+        category: newProduct.category,
+        unit: newProduct.unit,
+        price: newProduct.price,
+      });
 
       toast.success('Đã cập nhật sản phẩm!');
       onProductsUpdate();
@@ -308,7 +282,7 @@ const ProductList: React.FC<ProductListProps> = ({
         code: '',
         category: '',
         costPrice: 0,
-        sellPrice: 0,
+        price: 0,
         unit: 'cái',
         barcode: ''
       });
@@ -327,14 +301,7 @@ const ProductList: React.FC<ProductListProps> = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
-
-      if (error) {
-        throw error;
-      }
+      await productApi.deleteProduct(productId);
 
       toast.success('Đã xóa sản phẩm!');
       onProductsUpdate();
@@ -345,6 +312,7 @@ const ProductList: React.FC<ProductListProps> = ({
   };
 
   const formatCurrency = (amount: number) => {
+    
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
@@ -359,12 +327,12 @@ const ProductList: React.FC<ProductListProps> = ({
         'Tên sản phẩm': product.name,
         'Loại': product.category || '',
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.unit_price || 0,
+        'Giá bán (VND)': product.price || 0,
         'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
       };
 
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.cost_price || 0;
+        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -463,13 +431,13 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm *</Label>
+                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm (tùy chọn)</Label>
                         <Input 
                           id="product-code" 
                           className="col-span-3"
                           value={newProduct.code}
                           onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Nhập mã sản phẩm"
+                          placeholder="Để trống để hệ thống tự tạo"
                         />
                       </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -575,8 +543,8 @@ const ProductList: React.FC<ProductListProps> = ({
                           id="sell-price" 
                           type="number" 
                           className="col-span-3"
-                          value={newProduct.sellPrice}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, sellPrice: parseInt(e.target.value) || 0 }))}
+                          value={newProduct.price}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, price: parseInt(e.target.value) || 0 }))}
                           placeholder="0"
                         />
                       </div>
@@ -628,13 +596,13 @@ const ProductList: React.FC<ProductListProps> = ({
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-product-code" className="text-right">Mã sản phẩm *</Label>
+                  <Label htmlFor="edit-product-code" className="text-right">Mã sản phẩm (tùy chọn)</Label>
                   <Input 
                     id="edit-product-code" 
                     className="col-span-3"
                     value={newProduct.code}
                     onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                    placeholder="Nhập mã sản phẩm"
+                    placeholder="Để trống để hệ thống tự tạo"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -740,8 +708,8 @@ const ProductList: React.FC<ProductListProps> = ({
                     id="edit-sell-price" 
                     type="number" 
                     className="col-span-3"
-                    value={newProduct.sellPrice}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, sellPrice: parseInt(e.target.value) || 0 }))}
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, price: parseInt(e.target.value) || 0 }))}
                     placeholder="0"
                   />
                 </div>
@@ -757,7 +725,7 @@ const ProductList: React.FC<ProductListProps> = ({
                       code: '',
                       category: '',
                       costPrice: 0,
-                      sellPrice: 0,
+                      price: 0,
                       unit: 'cái',
                       barcode: ''
                     });
@@ -880,9 +848,14 @@ const ProductList: React.FC<ProductListProps> = ({
                     <TableCell>{product.category || '-'}</TableCell>
                     <TableCell>{product.unit || 'cái'}</TableCell>
                     {canViewCostPrice && (
-                      <TableCell>{formatCurrency(product.cost_price || 0)}</TableCell>
+                      <TableCell>{formatCurrency(product.costPrice || 0)}</TableCell>
                     )}
-                    <TableCell>{formatCurrency(product.unit_price || 0)}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const price = product.price || 0;
+                        return formatCurrency(price);
+                      })()}
+                    </TableCell>
                     <TableCell>
                       {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
@@ -1024,3 +997,4 @@ const ProductList: React.FC<ProductListProps> = ({
 };
 
 export default ProductList;
+

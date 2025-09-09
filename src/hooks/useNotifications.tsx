@@ -1,17 +1,9 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { notificationApi, type Notification } from "@/api/notification.api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
-interface Notification {
-  id: string;
-  user_id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  related_order_id?: string;
-  read_at?: string;
-  created_at: string;
-}
+// Notification interface is now imported from API
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -27,123 +19,72 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const loadNotifications = async () => {
-    try {
-      console.log("Loading notifications...");
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      console.log("Notifications data:", data);
-      console.log("Notifications error:", error);
-
-      if (error) throw error;
-      setNotifications((data as Notification[]) || []);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    }
+    console.log("Loading notifications...");
+    const response = await notificationApi.getNotifications({ limit: 50 });
+    console.log("Notifications data:", response);
+    setNotifications(response.notifications || []);
   };
 
   const markAsRead = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setNotifications(prev =>
-        prev.map(notification =>
-          notification.id === id
-            ? { ...notification, read_at: new Date().toISOString() }
-            : notification
-        )
-      );
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
+    await notificationApi.markAsRead(id);
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === id
+          ? { ...notification, isRead: true }
+          : notification
+      )
+    );
   };
 
   const markAllAsRead = async () => {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .is('read_at', null);
-
-      if (error) throw error;
-
-      setNotifications(prev =>
-        prev.map(notification => ({
-          ...notification,
-          read_at: notification.read_at || new Date().toISOString()
-        }))
-      );
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-    }
+    await notificationApi.markAllAsRead();
+    setNotifications(prev =>
+      prev.map(notification => ({
+        ...notification,
+        isRead: true
+      }))
+    );
   };
 
   const createNotification = async (notification: Omit<Notification, 'id' | 'created_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert([{
-          user_id: notification.user_id,
-          title: notification.title,
-          message: notification.message,
-          type: notification.type,
-          related_order_id: notification.related_order_id
-        }])
-        .select()
-        .single();
+    const data = await notificationApi.createNotification({
+      user_id: notification.user_id,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      related_order_id: notification.related_order_id
+    });
 
-      if (error) throw error;
-
-      if (data) {
-        setNotifications(prev => [data as Notification, ...prev]);
-      }
-      
-      // Show toast for new notification
-      toast({
-        title: notification.title,
-        description: notification.message,
-        variant: notification.type === 'error' ? 'destructive' : 'default',
-      });
-    } catch (error) {
-      console.error('Error creating notification:', error);
+    if (data) {
+      setNotifications(prev => [data, ...prev]);
     }
+    
+    // Show toast for new notification
+    toast({
+      title: notification.title,
+      description: notification.message,
+      variant: notification.type === 'error' ? 'destructive' : 'default',
+    });
   };
 
-  const unreadCount = notifications.filter(n => !n.read_at).length;
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
-    loadNotifications();
+    // Only load notifications if user is logged in
+    if (user) {
+      loadNotifications();
+    } else {
+      // Clear notifications when user logs out
+      setNotifications([]);
+    }
 
-    // Subscribe to new notifications
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications'
-        },
-        () => {
-          loadNotifications();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+    // TODO: Implement real-time notifications with WebSocket or polling
+    // For now, we'll just load notifications once
+    // In the future, you can implement WebSocket connection or polling here
+  }, [user]);
 
   return (
     <NotificationContext.Provider value={{

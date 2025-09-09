@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { orderApi } from "@/api/order.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
@@ -120,60 +120,22 @@ const Orders: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
-    fetchCreators();
     const interval = setInterval(fetchOrders, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, [sortField, sortDirection]);
 
   const fetchCreators = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .order('full_name');
-      
-      if (error) throw error;
-      setCreators(data || []);
-    } catch (error) {
-      console.error('Error fetching creators:', error);
-    }
+    setCreators([]); // Not implemented on BE yet
   };
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (
-            id,
-            name,
-            phone,
-            address,
-            customer_code
-          ),
-          order_items (
-            id,
-            product_id,
-            product_code,
-            product_name,
-            quantity,
-            unit_price,
-            total_price
-          ),
-          order_tag_assignments (
-            order_tags (
-              id,
-              name,
-              color
-            )
-          )
-        `)
-        .order(sortField, { ascending: sortDirection === "asc" });
-
-      if (error) throw error;
-      setOrders(data || []);
+      const params: any = { page: 1, limit: 1000 };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (searchTerm) params.search = searchTerm;
+      const resp = await orderApi.getOrders(params);
+      setOrders(resp.orders || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast({
@@ -685,3 +647,4 @@ const Orders: React.FC = () => {
 };
 
 export default Orders;
+

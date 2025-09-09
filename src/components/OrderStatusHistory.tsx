@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { Clock, DollarSign, User, Package } from "lucide-react";
 
 interface OrderStatusHistoryProps {
@@ -271,3 +271,4 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
     </Card>
   );
 };
+

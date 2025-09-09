@@ -49,7 +49,7 @@ export const NotificationCenter = () => {
   };
 
   const handleNotificationClick = (notification: any) => {
-    if (!notification.read_at) {
+    if (!notification.isRead) {
       markAsRead(notification.id);
     }
     
@@ -101,7 +101,7 @@ export const NotificationCenter = () => {
               <DropdownMenuItem
                 key={notification.id}
                 className={`flex items-start gap-3 p-3 cursor-pointer ${
-                  !notification.read_at ? 'bg-blue-50' : ''
+                  !notification.isRead ? 'bg-blue-50' : ''
                 }`}
                 onClick={() => handleNotificationClick(notification)}
               >
@@ -113,7 +113,7 @@ export const NotificationCenter = () => {
                     <h4 className="text-sm font-medium truncate">
                       {notification.title}
                     </h4>
-                    {!notification.read_at && (
+                    {!notification.isRead && (
                       <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
                     )}
                   </div>
@@ -121,7 +121,7 @@ export const NotificationCenter = () => {
                     {notification.message}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {formatTime(notification.created_at)}
+                    {formatTime(notification.createdAt)}
                   </p>
                 </div>
               </DropdownMenuItem>

@@ -95,12 +95,12 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           bValue = b.current_stock;
           break;
         case 'cost_price':
-          aValue = a.cost_price;
-          bValue = b.cost_price;
+          aValue = a.costPrice;
+          bValue = b.costPrice;
           break;
         case 'unit_price':
-          aValue = a.unit_price;
-          bValue = b.unit_price;
+          aValue = a.price;
+          bValue = b.price;
           break;
         case 'warehouse':
           const warehouseA = warehouses.find(w => 
@@ -197,7 +197,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         'Loại': product.category || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.unit_price || 0,
+        'Giá bán (VND)': product.price || 0,
         'Kho': warehouse?.name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
                      product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
@@ -205,7 +205,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       };
 
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.cost_price || 0;
+        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -444,10 +444,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                       <TableCell>
                         <div className="relative group">
                           <span className="cursor-help">
-                            {formatCurrencyShort(product.cost_price || 0)}
+                            {formatCurrencyShort(product.costPrice || 0)}
                           </span>
                           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                            {formatCurrency(product.cost_price || 0)}
+                            {formatCurrency(product.costPrice || 0)}
                           </div>
                         </div>
                       </TableCell>
@@ -455,10 +455,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     <TableCell>
                       <div className="relative group">
                         <span className="cursor-help">
-                          {formatCurrencyShort(product.unit_price || 0)}
+                          {formatCurrencyShort(product.price || 0)}
                         </span>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                          {formatCurrency(product.unit_price || 0)}
+                          {formatCurrency(product.price || 0)}
                         </div>
                       </div>
                     </TableCell>

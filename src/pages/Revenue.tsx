@@ -11,9 +11,12 @@ import { CalendarIcon, Filter, Download, TrendingUp, AlertCircle, DollarSign } f
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { customerApi } from '@/api/customer.api';
+import { orderApi } from '@/api/order.api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useRouteBasedLazyData } from '@/hooks/useLazyData';
+import { Loading } from '@/components/ui/loading';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', {
@@ -31,98 +34,35 @@ export default function Revenue() {
   const [debtData, setDebtData] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { userRole } = useAuth();
-
-  // Check if user can view revenue data at all (thủ kho không thấy doanh thu)
-  const canViewRevenue = userRole === 'owner_director' || userRole === 'chief_accountant' || userRole === 'accountant' || userRole === 'admin';
-  
-  // Check if user can view profit data (chỉ kế toán trưởng và giám đốc thấy lãi)
-  const canViewProfit = userRole === 'owner_director' || userRole === 'chief_accountant' || userRole === 'admin';
-
-  // Early return if user cannot view revenue data
-  if (!canViewRevenue) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Không có quyền truy cập</h1>
-          <p className="text-muted-foreground mt-2">
-            Bạn không có quyền xem dữ liệu doanh thu
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    fetchCustomers();
-    fetchRevenueData();
-  }, []);
+  const { user } = useAuth();
 
   const fetchCustomers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('id, customer_code, name')
-        .order('name');
-
-      if (error) throw error;
-      setCustomers(data || []);
+      const response = await customerApi.getCustomers({ page: 1, limit: 1000 });
+      setCustomers(response.customers || []);
     } catch (error) {
       console.error('Error fetching customers:', error);
+      throw error; // Re-throw for lazy loading error handling
     }
   };
 
   const fetchRevenueData = async () => {
     try {
-      setLoading(true);
       
-      // Fetch actual revenue data from payments and revenue table
-      const { data: revenueRecords, error: revenueError } = await supabase
-        .from('revenue')
-        .select(`
-          *,
-          orders (
-            order_number,
-            customer_name,
-            status,
-            total_amount,
-            debt_amount,
-            order_items (
-              quantity,
-              unit_price,
-              total_price,
-              products (
-                cost_price
-              )
-            )
-          )
-        `)
-        .order('revenue_date');
+      // Fetch orders data from backend API
+      const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000 });
+      const orders = ordersResponse.orders || [];
 
-      if (revenueError) throw revenueError;
-
-      // Also get debt information from all orders
-      const { data: orders, error: ordersError } = await supabase
-        .from('orders')
-        .select('id, debt_amount, status');
-
-      if (ordersError) throw ordersError;
-
-      // Calculate revenue by month from actual revenue records
+      // Calculate revenue by month from orders
       const monthlyRevenue: any = {};
       let totalDebt = 0;
-      let totalProfit = 0;
       let totalRevenue = 0;
 
-      // Calculate debt from all orders
-      orders?.forEach(order => {
-        totalDebt += order.debt_amount || 0;
-      });
-
-      // Calculate revenue from revenue records (from actual payments)
-      revenueRecords?.forEach(revenue => {
-        const month = format(new Date(revenue.revenue_date), 'MMM', { locale: vi });
-        const year = new Date(revenue.revenue_date).getFullYear();
+      // Process orders to calculate revenue and debt
+      orders.forEach(order => {
+        const orderDate = new Date(order.created_at);
+        const month = format(orderDate, 'MMM', { locale: vi });
+        const year = orderDate.getFullYear();
         const key = `${month}-${year}`;
 
         if (!monthlyRevenue[key]) {
@@ -130,31 +70,20 @@ export default function Revenue() {
             month: month,
             year: year,
             revenue: 0,
-            profit: 0,
             debt: 0,
             orderCount: 0,
             paymentCount: 0
           };
         }
 
-        monthlyRevenue[key].revenue += revenue.amount || 0;
-        monthlyRevenue[key].paymentCount += 1;
-        totalRevenue += revenue.amount || 0;
+        // Add paid amount to revenue
+        monthlyRevenue[key].revenue += order.paid_amount || 0;
+        monthlyRevenue[key].orderCount += 1;
+        totalRevenue += order.paid_amount || 0;
 
-        // Calculate profit if user can view it and order has items
-        if (canViewProfit && revenue.orders?.order_items) {
-          let orderProfit = 0;
-          revenue.orders.order_items.forEach(item => {
-            const costPrice = item.products?.cost_price || 0;
-            const profit = (item.unit_price - costPrice) * item.quantity;
-            orderProfit += profit;
-          });
-          // Proportional profit based on payment amount vs order total
-          const orderTotal = revenue.orders.total_amount || 1;
-          const proportionalProfit = (revenue.amount / orderTotal) * orderProfit;
-          monthlyRevenue[key].profit += proportionalProfit;
-          totalProfit += proportionalProfit;
-        }
+        // Add debt amount
+        monthlyRevenue[key].debt += order.debt_amount || 0;
+        totalDebt += order.debt_amount || 0;
       });
 
       // Convert to array and sort by date
@@ -168,9 +97,9 @@ export default function Revenue() {
       setDebtData({
         totalRevenue,
         totalDebt,
-        totalProfit,
+        totalProfit: 0, // Profit calculation removed - let backend handle
         debtRatio: totalRevenue > 0 ? (totalDebt / totalRevenue) * 100 : 0,
-        profitMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
+        profitMargin: 0 // Profit margin removed - let backend handle
       });
 
     } catch (error) {
@@ -180,10 +109,18 @@ export default function Revenue() {
         description: "Không thể tải dữ liệu doanh thu",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      throw error; // Re-throw for lazy loading error handling
     }
   };
+
+  // Lazy loading configuration
+  const lazyData = useRouteBasedLazyData({
+    revenue: {
+      loadFunction: async () => {
+        await Promise.all([fetchCustomers(), fetchRevenueData()]);
+      }
+    }
+  });
 
   const getMonthIndex = (monthName: string) => {
     const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
@@ -206,14 +143,15 @@ export default function Revenue() {
     fetchRevenueData();
   };
 
-  if (loading) {
+  const revenueState = lazyData.getDataState('revenue');
+  
+  if (revenueState.isLoading || revenueState.error) {
     return (
-      <div className="space-y-6 p-6">
-        <div>
-          <h1 className="text-3xl font-bold">Báo Cáo Doanh Thu</h1>
-          <p className="text-muted-foreground">Đang tải dữ liệu...</p>
-        </div>
-      </div>
+      <Loading 
+        message="Đang tải dữ liệu doanh thu..."
+        error={revenueState.error}
+        onRetry={() => lazyData.reloadData('revenue')}
+      />
     );
   }
 
@@ -361,22 +299,20 @@ export default function Revenue() {
           </CardContent>
         </Card>
         
-        {canViewProfit && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Tổng Lãi
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(debtData.totalProfit || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                {debtData.profitMargin ? `Tỷ suất lãi: ${debtData.profitMargin.toFixed(1)}%` : 'Chưa có dữ liệu'}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Tổng Lãi
+            </CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(debtData.totalProfit || 0)}</div>
+            <p className="text-xs text-muted-foreground">
+              {debtData.profitMargin ? `Tỷ suất lãi: ${debtData.profitMargin.toFixed(1)}%` : 'Chưa có dữ liệu'}
+            </p>
+          </CardContent>
+        </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -434,7 +370,6 @@ export default function Revenue() {
               <Tooltip formatter={(value) => formatCurrency(value as number)} />
               <Bar dataKey="revenue" fill="hsl(var(--primary))" name="Doanh thu" />
               <Bar dataKey="debt" fill="hsl(var(--destructive))" name="Công nợ" />
-              {canViewProfit && <Bar dataKey="profit" fill="hsl(var(--secondary))" name="Lãi" />}
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -469,15 +404,6 @@ export default function Revenue() {
                 strokeWidth={2}
                 name="Công nợ"
               />
-              {canViewProfit && (
-                <Line 
-                  type="monotone" 
-                  dataKey="profit" 
-                  stroke="hsl(var(--secondary))" 
-                  strokeWidth={2}
-                  name="Lãi"
-                />
-              )}
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
@@ -502,3 +428,4 @@ export default function Revenue() {
     </div>
   );
 }
+

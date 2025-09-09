@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { DocumentUpload } from "./DocumentUpload";
 import { FileText, Download, Eye, Trash2, Upload } from "lucide-react";
@@ -247,3 +247,4 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
     </div>
   );
 };
+

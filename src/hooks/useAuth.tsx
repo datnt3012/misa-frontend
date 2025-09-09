@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { login, logout } from '@/@core/services/auth.api';
+import { authApi } from '@/api/auth.api';
 
 // Custom types instead of Supabase types
 interface User {
@@ -101,74 +101,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (emailOrUsername: string, password: string) => {
     try {
-      // First clear any existing invalid sessions
-      await logout();
+      // Clear any existing invalid sessions locally (don't call logout API)
+      localStorage.removeItem('user-session');
+      localStorage.removeItem('admin-session');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setUser(null);
+      setSession(null);
+      setUserRole(null);
 
-      // check username + password, if username = admin và password = 123456 thì thông báo thành công vào truy cập được vào trang admin
-      if (emailOrUsername === 'admin' && password === '123456') {
-        // Tạo mock user cho admin
-        const mockUser: User = {
-          id: 'admin-user-id',
-          email: 'admin@system.local',
-          firstName: 'Admin',
-          lastName: 'User',
-          roleId: 'admin-role-id',
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
+      // Try real backend authentication first
+      console.log('Attempting login with backend...');
 
-        // Tạo mock session
-        const mockSession: Session = {
-          access_token: 'mock-access-token',
-          refresh_token: 'mock-refresh-token',
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          token_type: 'bearer',
-          user: mockUser
-        };
+      const response = await authApi.login({ email: emailOrUsername, password });
 
-        // Set user và session
-        setUser(mockUser);
-        setSession(mockSession);
-        setUserRole('admin');
-
-        // Lưu vào localStorage để duy trì session
-        localStorage.setItem('admin-session', JSON.stringify({
-          user: mockUser,
-          session: mockSession,
-          userRole: mockUser.roleId
-        }));
-
-        console.log('Admin login successful');
-        return { error: null };
-      }
-
-      const response = await login(emailOrUsername, password);
-
-      const result = response.data;
+      // Handle both API response format and direct response
+      const result = response.data || response;
+      
+      // Debug: Log the full response to understand the structure
+      console.log('Login API response:', response);
+      console.log('Login result:', result);
+      console.log('Response status:', response.status);
+      console.log('Response success:', response.success);
+      console.log('Result code:', result?.code);
+      console.log('Result data:', result?.data);
+      console.log('Result data user:', result?.data?.user);
 
       // Check if HTTP request was successful (status 200-299)
       if (response.status < 200 || response.status >= 300) {
-        const errorMessage = result?.error || response.error || `HTTP Error: ${response.status}`;
+        // Try to get error message from response data first
+        let errorMessage = result?.message || result?.error || response.error || `HTTP Error: ${response.status}`;
         console.error('HTTP request failed:', errorMessage);
         return { error: { message: errorMessage } };
       }
+      console.log('✅ HTTP status check passed');
 
       // Check if request manager marked it as successful
-      if (response.success === false) {
+      // Only check if success property exists and is explicitly false
+      if (response.hasOwnProperty('success') && response.success === false) {
         const errorMessage = result?.error || response.error || 'Request failed';
         console.error('Request manager marked as failed:', errorMessage);
         return { error: { message: errorMessage } };
       }
+      console.log('✅ Request manager check passed');
 
       // Check if server response indicates failure
-      // API returns { statusCode, message, data } format
-      if (result && result.statusCode && result.statusCode !== 200) {
+      // Backend API returns { code, message, data } format
+      // Accept both 200 and 201 as success codes
+      if (result && result.code && result.code !== 200 && result.code !== 201) {
         const errorMessage = result.message || 'Server returned failure';
         console.error('Server returned failure:', errorMessage);
         return { error: { message: errorMessage } };
       }
+      console.log('✅ Server response code check passed');
+
+      // Also check for legacy statusCode field
+      // Accept both 200 and 201 as success codes
+      if (result && result.statusCode && result.statusCode !== 200 && result.statusCode !== 201) {
+        const errorMessage = result.message || 'Server returned failure';
+        console.error('Server returned failure:', errorMessage);
+        return { error: { message: errorMessage } };
+      }
+      console.log('✅ Legacy statusCode check passed');
 
       // Also check for legacy success field
       if (result && result.success === false) {
@@ -176,42 +170,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Server returned failure:', errorMessage);
         return { error: { message: errorMessage } };
       }
+      console.log('✅ Legacy success field check passed');
 
-      // Handle API response format: { statusCode, message, data: { access_token, refresh_token, user } }
-      if (result && result.data && result.data.user) {
+      // Handle API response format: { access_token, refresh_token, user } (directly in result)
+      console.log('Checking result.data:', result?.data);
+      console.log('Checking result.user:', result?.user);
+      console.log('Checking result.access_token:', result?.access_token);
+      
+      // Check if we have the required data directly in result
+      if (result && result.access_token && result.user) {
         console.log('API response has user data. Creating session from API response.');
 
         // Create session from API response
         const sessionData = {
-          access_token: result.data.access_token,
-          refresh_token: result.data.refresh_token,
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
           expires_in: 3600, // Default 1 hour
           expires_at: Math.floor(Date.now() / 1000) + 3600,
           token_type: 'bearer',
-          user: result.data.user
+          user: result.user
         };
 
         // Update user state directly from API response
-        setUser(result.data.user);
+        setUser(result.user);
         setSession(sessionData);
+
+        // Store tokens directly in localStorage for axios interceptor
+        localStorage.setItem('access_token', result.access_token);
+        localStorage.setItem('refresh_token', result.refresh_token);
 
         // Store session in localStorage for persistence
         localStorage.setItem('user-session', JSON.stringify({
-          user: result.data.user,
+          user: result.user,
           session: sessionData,
-          userRole: result.data.user.roleId // Use roleId as userRole
+          userRole: result.user.roleId // Use roleId as userRole
         }));
 
-        console.log('User state updated and stored in localStorage');
+        console.log('User state updated and tokens stored in localStorage');
 
       } else {
+        console.error('Unexpected response format:', result);
+        console.error('Missing required fields:', {
+          hasResult: !!result,
+          hasAccessToken: !!result?.access_token,
+          hasUser: !!result?.user
+        });
         return { error: { message: 'Unexpected response format from server' } };
       }
 
       return { error: null };
     } catch (error: any) {
       console.error('Sign in error:', error);
-      return { error: { message: error.message || 'Đăng nhập thất bại' } };
+      
+      // Try to extract error message from API response
+      let errorMessage = 'Đăng nhập thất bại';
+      
+      if (error.response?.data?.message) {
+        // Backend returned structured error response
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        // Backend returned error field
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        // Use generic error message
+        errorMessage = error.message;
+      }
+      
+      return { error: { message: errorMessage } };
     }
   };
 
@@ -226,20 +251,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    // Clear all session data
+    console.log('Starting logout process...');
+    
+    // Call logout API first (but don't block on it)
+    try {
+      await authApi.logout();
+      console.log('Logout API call completed');
+    } catch (error) {
+      console.warn('Logout API error (continuing with local logout):', error);
+      // Continue with local logout even if API fails
+    }
+
+    // Clear all session data regardless of API result
     localStorage.removeItem('user-session');
     localStorage.removeItem('admin-session');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     setUser(null);
     setSession(null);
     setUserRole(null);
-
-    // Call logout API if needed
-    try {
-      await logout();
-    } catch (error) {
-      console.error('Logout API error:', error);
-      // Continue with local logout even if API fails
-    }
+    
+    console.log('Local logout completed - all session data cleared');
   };
 
   const value = {

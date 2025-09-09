@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,13 @@ export default function Auth() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Watch for user state changes and redirect
+  useEffect(() => {
+    if (user && !loading) {
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
 
   // Redirect if already logged in
   if (user && !loading) {
@@ -51,9 +58,7 @@ export default function Auth() {
         title: 'Đăng nhập thành công',
         description: 'Chào mừng bạn quay lại!',
       });
-
-      // Redirect immediately - the user state should be updated by now
-      navigate('/', { replace: true });
+      // useEffect will handle the redirect when user state updates
     }
 
     setIsLoading(false);

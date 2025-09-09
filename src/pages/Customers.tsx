@@ -18,8 +18,10 @@ import {
   Edit,
   Trash2
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { customerApi } from "@/api/customer.api";
 import { useToast } from "@/hooks/use-toast";
+import { useRouteBasedLazyData } from "@/hooks/useLazyData";
+import { Loading } from "@/components/ui/loading";
 import { 
   Dialog,
   DialogContent,
@@ -100,9 +102,27 @@ const Customers = () => {
     address: ""
   });
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
+  const fetchCustomers = async () => {
+    try {
+      const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
+      setCustomers(resp.customers || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách khách hàng",
+        variant: "destructive",
+      });
+      throw error; // Re-throw for lazy loading error handling
+    }
+  };
+
+  // Lazy loading configuration
+  const lazyData = useRouteBasedLazyData({
+    customers: {
+      loadFunction: fetchCustomers
+    }
+  });
 
   // Restore form state from URL parameters after page reload
   useEffect(() => {
@@ -126,42 +146,20 @@ const Customers = () => {
     }
   }, [customers, searchParams]);
 
-  const fetchCustomers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCustomers(data || []);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể tải danh sách khách hàng",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const fetchCustomerOrders = async (customerId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCustomerOrders(data || []);
+      // Use backend API to fetch customer orders
+      const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000 });
+      const allOrders = ordersResponse.orders || [];
+      
+      // Filter orders for this customer
+      const customerOrders = allOrders.filter(order => order.customer_id === customerId);
+      setCustomerOrders(customerOrders);
 
       // Calculate customer stats
-      const totalOrders = data?.length || 0;
-      const totalSpent = data?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
-      const currentDebt = data?.reduce((sum, order) => sum + Number(order.debt_amount), 0) || 0;
+      const totalOrders = customerOrders.length;
+      const totalSpent = customerOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+      const currentDebt = customerOrders.reduce((sum, order) => sum + Number(order.debt_amount || 0), 0);
 
       setCustomerStats({
         total_orders: totalOrders,
@@ -182,23 +180,14 @@ const Customers = () => {
     try {
       const insertData: any = {
         name: newCustomer.name,
-        phone: newCustomer.phone || null,
+        phoneNumber: newCustomer.phone || null,
         email: newCustomer.email || null,
         address: newCustomer.address || null
       };
 
-      // Only include customer_code if provided
-      if (newCustomer.customer_code.trim()) {
-        insertData.customer_code = newCustomer.customer_code.trim();
-      }
+      // Backend will auto-generate customer code
 
-      const { data, error } = await supabase
-        .from('customers')
-        .insert([insertData])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await customerApi.createCustomer(insertData);
 
       setCustomers([data, ...customers]);
       setNewCustomer({ customer_code: "", name: "", phone: "", email: "", address: "" });
@@ -238,22 +227,15 @@ const Customers = () => {
     if (!editingCustomer) return;
 
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .update({
-          customer_code: editCustomer.customer_code,
-          name: editCustomer.name,
-          phone: editCustomer.phone || null,
-          email: editCustomer.email || null,
-          address: editCustomer.address || null
-        })
-        .eq('id', editingCustomer.id)
-        .select()
-        .single();
+      await customerApi.updateCustomer(editingCustomer.id, {
+        name: editCustomer.name,
+        phoneNumber: editCustomer.phone || null,
+        email: editCustomer.email || null,
+        address: editCustomer.address || null
+      });
 
-      if (error) throw error;
-
-      setCustomers(customers.map(c => c.id === editingCustomer.id ? data : c));
+      // Reload customers to get updated data
+      await fetchCustomers();
       setIsEditDialogOpen(false);
       setEditingCustomer(null);
       // Clear URL parameters
@@ -279,12 +261,7 @@ const Customers = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', customer.id);
-
-      if (error) throw error;
+      await customerApi.deleteCustomer(customer.id);
 
       setCustomers(customers.filter(c => c.id !== customer.id));
       
@@ -330,15 +307,15 @@ const Customers = () => {
     customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (isLoading) {
+  const customersState = lazyData.getDataState('customers');
+  
+  if (customersState.isLoading || customersState.error) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-10">
-            <div className="text-lg">Đang tải...</div>
-          </div>
-        </div>
-      </div>
+      <Loading 
+        message="Đang tải danh sách khách hàng..."
+        error={customersState.error}
+        onRetry={() => lazyData.reloadData('customers')}
+      />
     );
   }
 
@@ -390,7 +367,7 @@ const Customers = () => {
                     id="customer-code"
                     value={newCustomer.customer_code}
                     onChange={(e) => setNewCustomer(prev => ({ ...prev, customer_code: e.target.value }))}
-                    placeholder="Để trống để tự động tạo (KH000XXX)"
+                    placeholder="Để trống để hệ thống tự tạo"
                   />
                   <p className="text-xs text-muted-foreground">
                     Nếu để trống, hệ thống sẽ tự động tạo mã như KH000001, KH000002...

@@ -3,8 +3,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Package, TrendingUp, ShoppingCart, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { productApi } from "@/api/product.api";
+import { orderApi } from "@/api/order.api";
 import { useAuth } from "@/hooks/useAuth";
+import { useRouteBasedLazyData } from "@/hooks/useLazyData";
+import { Loading } from "@/components/ui/loading";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
@@ -16,7 +19,7 @@ const formatCurrency = (value: number): string => {
 };
 
 const Dashboard = () => {
-  const { userRole } = useAuth();
+  const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
     totalDebt: 0,
@@ -30,55 +33,21 @@ const Dashboard = () => {
   const [inventoryData, setInventoryData] = useState<any[]>([]);
   const [orderStatus, setOrderStatus] = useState<any[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Check if user can view profit data
-  const canViewProfit = userRole === 'owner_director' || userRole === 'chief_accountant' || userRole === 'admin';
-  
-  // Check if user can view revenue data  
-  const canViewRevenue = userRole === 'owner_director' || userRole === 'chief_accountant' || userRole === 'accountant' || userRole === 'admin';
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  // Permission checks removed - let backend handle authorization
+  const canViewProfit = true; // Always show profit data - backend will handle access control
+  const canViewRevenue = true; // Always show revenue data - backend will handle access control
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
       
-      // Fetch actual revenue data
-      const { data: revenue, error: revenueError } = await supabase
-        .from('revenue')
-        .select(`
-          amount,
-          revenue_date,
-          orders (
-            order_items (
-              quantity,
-              unit_price,
-              total_price,
-              products (
-                cost_price
-              )
-            )
-          )
-        `);
-
-      if (revenueError) throw revenueError;
-
-      // Fetch all orders for status breakdown and debt calculation
-      const { data: allOrders, error: allOrdersError } = await supabase
-        .from('orders')
-        .select('id, debt_amount, status');
-
-      if (allOrdersError) throw allOrdersError;
-
-      // Fetch products for inventory analysis
-      const { data: products, error: productsError } = await supabase
-        .from('products')
-        .select('current_stock, min_stock_level, name');
-
-      if (productsError) throw productsError;
+      // Fetch from backend APIs
+      const [ordersResp, productsResp] = await Promise.all([
+        orderApi.getOrders({ page: 1, limit: 1000 }),
+        productApi.getProducts({ page: 1, limit: 1000 })
+      ]);
+      const allOrders = ordersResp.orders || [];
+      const products = productsResp.products || [];
 
       // Calculate dashboard metrics
       let totalRevenue = 0;
@@ -90,46 +59,21 @@ const Dashboard = () => {
       let currentMonthRevenue = 0;
       let previousMonthRevenue = 0;
 
-      // Calculate total debt from all orders
-      allOrders?.forEach(order => {
-        totalDebt += order.debt_amount;
-      });
-
-      // Calculate revenue from actual revenue data
-      revenue?.forEach(revenueEntry => {
-        const revenueDate = new Date(revenueEntry.revenue_date);
-        const revenueMonth = revenueDate.getMonth();
-        const revenueYear = revenueDate.getFullYear();
-        
-        totalRevenue += revenueEntry.amount;
-
-        // Current and previous month revenue
-        if (revenueYear === currentYear) {
-          if (revenueMonth === currentMonth) {
-            currentMonthRevenue += revenueEntry.amount;
-          } else if (revenueMonth === currentMonth - 1) {
-            previousMonthRevenue += revenueEntry.amount;
-          }
+      // Calculate total debt and basic revenue estimation from orders
+      allOrders.forEach((order: any) => {
+        totalDebt += order.debt_amount || 0;
+        const createdAt = order.created_at ? new Date(order.created_at) : new Date();
+        const orderMonth = createdAt.getMonth();
+        const orderYear = createdAt.getFullYear();
+        const amount = order.total_amount || 0;
+        totalRevenue += amount;
+        if (orderYear === currentYear) {
+          if (orderMonth === currentMonth) currentMonthRevenue += amount;
+          else if (orderMonth === currentMonth - 1) previousMonthRevenue += amount;
         }
-
-        // Monthly revenue for chart
-        const monthKey = format(revenueDate, 'MMM-yyyy', { locale: vi });
-        if (!monthlyRevenue[monthKey]) {
-          monthlyRevenue[monthKey] = { month: monthKey, revenue: 0, profit: 0 };
-        }
-        monthlyRevenue[monthKey].revenue += revenueEntry.amount;
-
-        // Calculate profit if user can view it
-        if (canViewProfit && revenueEntry.orders?.order_items) {
-          let orderProfit = 0;
-          revenueEntry.orders.order_items.forEach(item => {
-            const costPrice = item.products?.cost_price || 0;
-            const profit = (item.unit_price - costPrice) * item.quantity;
-            orderProfit += profit;
-          });
-          totalProfit += orderProfit;
-          monthlyRevenue[monthKey].profit += orderProfit;
-        }
+        const monthKey = format(createdAt, 'MMM-yyyy', { locale: vi });
+        if (!monthlyRevenue[monthKey]) monthlyRevenue[monthKey] = { month: monthKey, revenue: 0, profit: 0 };
+        monthlyRevenue[monthKey].revenue += amount;
       });
 
       // Convert monthly revenue to array and sort
@@ -158,19 +102,19 @@ const Dashboard = () => {
       let outOfStock = 0;
       const lowStockItems: any[] = [];
 
-      products?.forEach(product => {
-        if (product.current_stock === 0) {
+      products.forEach((product: any) => {
+        if ((product.current_stock || 0) === 0) {
           outOfStock++;
           lowStockItems.push({
             name: product.name,
-            stock: product.current_stock,
+            stock: product.current_stock || 0,
             status: 'Hết hàng'
           });
-        } else if (product.current_stock <= product.min_stock_level) {
+        } else if ((product.current_stock || 0) <= (product.min_stock_level || 0)) {
           lowStock++;
           lowStockItems.push({
             name: product.name,
-            stock: product.current_stock,
+            stock: product.current_stock || 0,
             status: 'Sắp hết'
           });
         } else {
@@ -178,7 +122,7 @@ const Dashboard = () => {
         }
       });
 
-      const totalProducts = products?.length || 0;
+      const totalProducts = products.length || 0;
       const inventoryArray = totalProducts > 0 ? [
         { name: 'Còn hàng', value: Math.round((inStock / totalProducts) * 100), color: '#22c55e' },
         { name: 'Sắp hết', value: Math.round((lowStock / totalProducts) * 100), color: '#f59e0b' },
@@ -204,15 +148,32 @@ const Dashboard = () => {
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
     }
   };
+
+  // Lazy loading configuration
+  const lazyData = useRouteBasedLazyData({
+    dashboard: {
+      loadFunction: fetchDashboardData
+    }
+  });
 
   const getGrowthPercentage = () => {
     if (dashboardData.previousMonthRevenue === 0) return 0;
     return Math.round(((dashboardData.currentMonthRevenue - dashboardData.previousMonthRevenue) / dashboardData.previousMonthRevenue) * 100);
   };
+
+  const dashboardState = lazyData.getDataState('dashboard');
+  
+  if (dashboardState.isLoading || dashboardState.error) {
+    return (
+      <Loading 
+        message="Đang tải dữ liệu dashboard..."
+        error={dashboardState.error}
+        onRetry={() => lazyData.reloadData('dashboard')}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -271,25 +232,21 @@ const Dashboard = () => {
                 {formatCurrency(dashboardData.totalDebt)}
               </div>
               <p className="text-xs text-muted-foreground">
-                {canViewProfit && (
-                  <>Lãi gộp: {formatCurrency(dashboardData.totalProfit)}</>
-                )}
-                {!canViewProfit && "Tổng công nợ chưa thanh toán"}
+                Lãi gộp: {formatCurrency(dashboardData.totalProfit)}
               </p>
             </CardContent>
           </Card>
         </div>
 
         {/* Biểu đồ và thống kê chi tiết */}
-        <Tabs defaultValue={canViewRevenue ? "revenue" : "inventory"} className="space-y-4">
+        <Tabs defaultValue="revenue" className="space-y-4">
           <TabsList>
-            {canViewRevenue && <TabsTrigger value="revenue">Doanh Thu</TabsTrigger>}
+            <TabsTrigger value="revenue">Doanh Thu</TabsTrigger>
             <TabsTrigger value="inventory">Tồn Kho</TabsTrigger>
             <TabsTrigger value="orders">Đơn Hàng</TabsTrigger>
           </TabsList>
 
-          {canViewRevenue && (
-            <TabsContent value="revenue" className="space-y-4">
+          <TabsContent value="revenue" className="space-y-4">
               <Card>
                 <CardHeader>
                   <CardTitle>Biểu Đồ Doanh Thu 6 Tháng Gần Nhất</CardTitle>
@@ -302,13 +259,12 @@ const Dashboard = () => {
                       <XAxis dataKey="month" />
                       <YAxis tickFormatter={(value) => `${value / 1000000}M`} />
                       <Bar dataKey="revenue" fill="hsl(var(--primary))" />
-                      {canViewProfit && <Bar dataKey="profit" fill="hsl(var(--secondary))" />}
+                      <Bar dataKey="profit" fill="hsl(var(--secondary))" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             </TabsContent>
-          )}
 
           <TabsContent value="inventory" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

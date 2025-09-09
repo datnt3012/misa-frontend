@@ -9,18 +9,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse, Trash2, Edit, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Download, TrendingDown } from "lucide-react";
+import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse as WarehouseIcon, Trash2, Edit, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Download, TrendingDown } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { useRouteBasedLazyData } from "@/hooks/useLazyData";
+import { Loading } from "@/components/ui/loading";
 import { toast } from "sonner";
 import ExcelImport from "@/components/inventory/ExcelImport";
-import AddressComponent from "@/components/common/AddressComponent";
+// import AddressComponent from "@/components/common/AddressComponent"; // Temporarily commented - BE not ready
 import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
 import ImportSlips from "@/components/inventory/ImportSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
+import { productApi, type Product } from "@/api/product.api";
+import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 
 import React from "react";
 
@@ -30,25 +33,28 @@ const Inventory = () => {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+  const [warehouseSortConfig, setWarehouseSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [activeTab, setActiveTab] = useState("inventory");
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
   const [newWarehouse, setNewWarehouse] = useState({ 
     name: "", 
     code: "", 
     description: "", 
     address: "",
-    addressData: {
-      province_code: '',
-      province_name: '',
-      district_code: '',
-      district_name: '',
-      ward_code: '',
-      ward_name: '',
-      address_detail: ''
-    }
+    // Temporarily commented - BE not ready for address components
+    // addressData: {
+    //   province_code: '',
+    //   province_name: '',
+    //   district_code: '',
+    //   district_name: '',
+    //   ward_code: '',
+    //   ward_name: '',
+    //   address_detail: ''
+    // }
   });
   const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
   const [isEditingWarehouse, setIsEditingWarehouse] = useState(false);
@@ -58,48 +64,56 @@ const Inventory = () => {
     code: '',
     category: '',
     costPrice: 0,
-    sellPrice: 0,
+    price: 0,
     unit: 'cái',
     barcode: '',
     status: 'active'
   });
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
-  const { userRole } = useAuth();
+  const { user } = useAuth();
 
-  // Check if user can see cost prices - Admin có thể xem tất cả
-  const canViewCostPrice = userRole === 'chief_accountant' || userRole === 'owner_director' || userRole === 'admin';
-  
-  // Check if user can manage warehouses (admin, owner_director, inventory)
-  const canManageWarehouses = userRole === 'owner_director' || userRole === 'inventory' || userRole === 'admin';
-  
-  // Check if user can manage products (admin, owner_director, chief_accountant only) - Loại bỏ 'accountant' 
-  const canManageProducts = userRole === 'owner_director' || userRole === 'chief_accountant' || userRole === 'admin';
-  
-  // Check permissions for import slips
-  const canManageImports = userRole === 'inventory' || userRole === 'admin' || userRole === 'owner_director';
-  const canApproveImports = userRole === 'accountant' || userRole === 'chief_accountant' || userRole === 'owner_director' || userRole === 'admin';
+  // Permission checks removed - let backend handle authorization
+  const canViewCostPrice = true; // Always show cost price - backend will handle access control
+  const canManageWarehouses = true; // Always allow warehouse management - backend will handle access control
+  const canManageProducts = true; // Always allow product management - backend will handle access control
 
-  // Load products from Supabase
-  const loadProducts = async () => {
+  const loadData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('name', { ascending: true });
+      // Load products and warehouses in parallel
+      const [productsResponse, warehousesResponse] = await Promise.all([
+        productApi.getProducts({ page: 1, limit: 1000 }),
+        warehouseApi.getWarehouses({ page: 1, limit: 1000 })
+      ]);
 
-      if (error) throw error;
-      setProducts(data || []);
+      setProducts(productsResponse.products || []);
+      setWarehouses(warehousesResponse.warehouses || []);
     } catch (error) {
-      console.error('Error loading products:', error);
-      toast.error('Có lỗi khi tải danh sách sản phẩm');
+      console.error('Error loading data:', error);
+      toast.error('Không thể tải dữ liệu');
+      throw error; // Re-throw for lazy loading error handling
     }
   };
 
-  useEffect(() => {
-    loadProducts();
-    loadWarehouses();
-  }, []);
+  // Lazy loading configuration
+  const lazyData = useRouteBasedLazyData({
+    inventory: {
+      loadFunction: loadData
+    },
+    imports: {
+      loadFunction: async () => {
+        // ImportSlips component will handle its own data loading
+        // This is just to ensure the tab is loaded when accessed
+        return { loaded: true };
+      }
+    }
+  });
+  
+  // Permission checks removed - let backend handle authorization
+  const canManageImports = true; // Always allow import management - backend will handle access control
+  const canApproveImports = true; // Always allow import approval - backend will handle access control
+
+
 
   const getStatusBadge = (stock: number) => {
     if (stock === 0) {
@@ -201,6 +215,49 @@ const Inventory = () => {
     });
   }, [filteredProducts, sortConfig, warehouses]);
 
+  // Warehouse sorting logic
+  const sortedWarehouses = React.useMemo(() => {
+    if (!warehouseSortConfig) return warehouses;
+
+    return [...warehouses].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (warehouseSortConfig.key) {
+        case 'code':
+          aValue = a.code;
+          bValue = b.code;
+          break;
+        case 'name':
+          aValue = a.name;
+          bValue = b.name;
+          break;
+        case 'description':
+          aValue = a.description || '';
+          bValue = b.description || '';
+          break;
+        case 'address':
+          aValue = a.address || '';
+          bValue = b.address || '';
+          break;
+        case 'createdAt':
+          aValue = new Date(a.createdAt);
+          bValue = new Date(b.createdAt);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return warehouseSortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return warehouseSortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [warehouses, warehouseSortConfig]);
+
   // Pagination logic
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -229,6 +286,19 @@ const Inventory = () => {
     });
   };
 
+  // Handle warehouse sorting
+  const handleWarehouseSort = (key: string) => {
+    setWarehouseSortConfig(prevConfig => {
+      if (!prevConfig || prevConfig.key !== key) {
+        return { key, direction: 'asc' };
+      }
+      if (prevConfig.direction === 'asc') {
+        return { key, direction: 'desc' };
+      }
+      return null; // Remove sorting
+    });
+  };
+
   // Get sort icon
   const getSortIcon = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) {
@@ -239,44 +309,38 @@ const Inventory = () => {
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
-  const loadWarehouses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setWarehouses(data || []);
-    } catch (error) {
-      console.error('Error loading warehouses:', error);
+  // Get warehouse sort icon
+  const getWarehouseSortIcon = (key: string) => {
+    if (!warehouseSortConfig || warehouseSortConfig.key !== key) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
     }
+    return warehouseSortConfig.direction === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1" />
+      : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
+
   const createWarehouse = async () => {
-    if (!newWarehouse.name || !newWarehouse.code) {
-      toast.error("Tên kho và mã kho là bắt buộc");
+    if (!newWarehouse.name) {
+      toast.error("Tên kho là bắt buộc");
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('warehouses')
-        .insert([{
-          name: newWarehouse.name,
-          code: newWarehouse.code,
-          description: newWarehouse.description,
-          address: newWarehouse.address,
-          province_code: newWarehouse.addressData.province_code,
-          province_name: newWarehouse.addressData.province_name,
-          district_code: newWarehouse.addressData.district_code,
-          district_name: newWarehouse.addressData.district_name,
-          ward_code: newWarehouse.addressData.ward_code,
-          ward_name: newWarehouse.addressData.ward_name,
-          address_detail: newWarehouse.addressData.address_detail,
-        }]);
-
-      if (error) throw error;
+      await warehouseApi.createWarehouse({
+        name: newWarehouse.name,
+        ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
+        description: newWarehouse.description,
+        address: newWarehouse.address,
+        // Temporarily commented - BE not ready for address components
+        // province_code: newWarehouse.addressData.province_code,
+        // province_name: newWarehouse.addressData.province_name,
+        // district_code: newWarehouse.addressData.district_code,
+        // district_name: newWarehouse.addressData.district_name,
+        // ward_code: newWarehouse.addressData.ward_code,
+        // ward_name: newWarehouse.addressData.ward_name,
+        // address_detail: newWarehouse.addressData.address_detail,
+      });
 
       toast.success("Đã tạo kho mới");
       setNewWarehouse({ 
@@ -284,17 +348,18 @@ const Inventory = () => {
         code: "", 
         description: "", 
         address: "",
-        addressData: {
-          province_code: '',
-          province_name: '',
-          district_code: '',
-          district_name: '',
-          ward_code: '',
-          ward_name: '',
-          address_detail: ''
-        }
+        // Temporarily commented - BE not ready for address components
+        // addressData: {
+        //   province_code: '',
+        //   province_name: '',
+        //   district_code: '',
+        //   district_name: '',
+        //   ward_code: '',
+        //   ward_name: '',
+        //   address_detail: ''
+        // }
       });
-      loadWarehouses();
+      loadData(); // Reload data
     } catch (error: any) {
       console.error('Error creating warehouse:', error);
       toast.error(error.message || "Không thể tạo kho");
@@ -303,15 +368,10 @@ const Inventory = () => {
 
   const deleteWarehouse = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('warehouses')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await warehouseApi.deleteWarehouse(id);
 
       toast.success("Đã xóa kho");
-      loadWarehouses();
+      loadData(); // Reload data
     } catch (error: any) {
       console.error('Error deleting warehouse:', error);
       toast.error(error.message || "Không thể xóa kho");
@@ -325,15 +385,16 @@ const Inventory = () => {
       code: warehouse.code,
       description: warehouse.description || "",
       address: warehouse.address || "",
-      addressData: {
-        province_code: warehouse.province_code || '',
-        province_name: warehouse.province_name || '',
-        district_code: warehouse.district_code || '',
-        district_name: warehouse.district_name || '',
-        ward_code: warehouse.ward_code || '',
-        ward_name: warehouse.ward_name || '',
-        address_detail: warehouse.address_detail || ''
-      }
+      // Temporarily commented - BE not ready for address components
+      // addressData: {
+      //   province_code: warehouse.province_code || '',
+      //   province_name: warehouse.province_name || '',
+      //   district_code: warehouse.district_code || '',
+      //   district_name: warehouse.district_name || '',
+      //   ward_code: warehouse.ward_code || '',
+      //   ward_name: warehouse.ward_name || '',
+      //   address_detail: warehouse.address_detail || ''
+      // }
     });
     setIsEditingWarehouse(true);
   };
@@ -345,48 +406,45 @@ const Inventory = () => {
       code: "", 
       description: "", 
       address: "",
-      addressData: {
-        province_code: '',
-        province_name: '',
-        district_code: '',
-        district_name: '',
-        ward_code: '',
-        ward_name: '',
-        address_detail: ''
-      }
+      // Temporarily commented - BE not ready for address components
+      // addressData: {
+      //   province_code: '',
+      //   province_name: '',
+      //   district_code: '',
+      //   district_name: '',
+      //   ward_code: '',
+      //   ward_name: '',
+      //   address_detail: ''
+      // }
     });
     setIsEditingWarehouse(false);
   };
 
   const updateWarehouse = async () => {
-    if (!newWarehouse.name || !newWarehouse.code) {
-      toast.error("Tên kho và mã kho là bắt buộc");
+    if (!newWarehouse.name) {
+      toast.error("Tên kho là bắt buộc");
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('warehouses')
-        .update({
-          name: newWarehouse.name,
-          code: newWarehouse.code,
-          description: newWarehouse.description,
-          address: newWarehouse.address,
-          province_code: newWarehouse.addressData.province_code,
-          province_name: newWarehouse.addressData.province_name,
-          district_code: newWarehouse.addressData.district_code,
-          district_name: newWarehouse.addressData.district_name,
-          ward_code: newWarehouse.addressData.ward_code,
-          ward_name: newWarehouse.addressData.ward_name,
-          address_detail: newWarehouse.addressData.address_detail,
-        })
-        .eq('id', editingWarehouse.id);
-
-      if (error) throw error;
+      await warehouseApi.updateWarehouse(editingWarehouse.id, {
+        name: newWarehouse.name,
+        ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
+        description: newWarehouse.description,
+        address: newWarehouse.address,
+        // Temporarily commented - BE not ready for address components
+        // province_code: newWarehouse.addressData.province_code,
+        // province_name: newWarehouse.addressData.province_name,
+        // district_code: newWarehouse.addressData.district_code,
+        // district_name: newWarehouse.addressData.district_name,
+        // ward_code: newWarehouse.addressData.ward_code,
+        // ward_name: newWarehouse.addressData.ward_name,
+        // address_detail: newWarehouse.addressData.address_detail,
+      });
 
       toast.success("Đã cập nhật thông tin kho");
       cancelEditWarehouse();
-      loadWarehouses();
+      loadData(); // Reload data
     } catch (error: any) {
       console.error('Error updating warehouse:', error);
       toast.error(error.message || "Không thể cập nhật kho");
@@ -394,19 +452,17 @@ const Inventory = () => {
   };
 
   const handleImportComplete = async (importedData: any[]) => {
-    console.log('Imported data:', importedData);
-    
     try {
-      // Save imported products to Supabase
+      // Save imported products to API
       for (const item of importedData) {
         if (item.status === 'valid') {
-          await supabase.from('products').insert({
+          await productApi.createProduct({
             name: item.productName,
             code: item.productCode,
             category: item.category,
             current_stock: item.quantity,
             cost_price: item.costPrice,
-            unit_price: item.sellPrice,
+            unit_price: item.price,
             location: item.location,
             min_stock_level: 10
           });
@@ -414,7 +470,7 @@ const Inventory = () => {
       }
       
       toast.success('Đã nhập sản phẩm thành công!');
-      loadProducts(); // Refresh products list
+      loadData(); // Refresh data
     } catch (error) {
       console.error('Error importing products:', error);
       toast.error('Có lỗi khi nhập sản phẩm');
@@ -422,39 +478,34 @@ const Inventory = () => {
   };
 
   const addProduct = async () => {
-    if (!newProduct.name || !newProduct.code) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+    if (!newProduct.name) {
+      toast.error('Tên sản phẩm là bắt buộc');
+      return;
+    }
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast.error('Giá bán phải lớn hơn 0');
       return;
     }
 
     try {
       setIsAddingProduct(true);
 
-      const { error } = await supabase.from('products').insert({
+      await productApi.createProduct({
         name: newProduct.name,
-        code: newProduct.code,
+        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
-        current_stock: 0, // Module A: Thêm sản phẩm chỉ thêm vào danh mục, chưa nhập kho
-        cost_price: newProduct.costPrice,
-        unit_price: newProduct.sellPrice,
         unit: newProduct.unit,
-        barcode: newProduct.barcode || null,
-        status: newProduct.status,
-        min_stock_level: 10
+        price: newProduct.price
       });
 
-      if (error) {
-        throw error;
-      }
-
       toast.success('Đã thêm sản phẩm vào danh mục!');
-      loadProducts(); // Refresh products list
+      loadData(); // Refresh data
       setNewProduct({
         name: '',
         code: '',
         category: '',
         costPrice: 0,
-        sellPrice: 0,
+        price: 0,
         unit: 'cái',
         barcode: '',
         status: 'active'
@@ -489,7 +540,7 @@ const Inventory = () => {
         'Loại': product.category || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.unit_price || 0,
+        'Giá bán (VND)': product.price || 0,
         'Kho': warehouse?.name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
                      product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
@@ -498,7 +549,7 @@ const Inventory = () => {
 
       // Only add cost price if user can view it
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.cost_price || 0;
+        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -545,6 +596,18 @@ const Inventory = () => {
     
     toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
   };
+
+  const inventoryState = lazyData.getDataState('inventory');
+  
+  if (inventoryState.isLoading || inventoryState.error) {
+    return (
+      <Loading 
+        message="Đang tải dữ liệu kho..."
+        error={inventoryState.error}
+        onRetry={() => lazyData.reloadData('inventory')}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -609,7 +672,7 @@ const Inventory = () => {
             <TabsTrigger value="inventory">Báo cáo tồn kho</TabsTrigger>
             <TabsTrigger value="products">Danh sách sản phẩm</TabsTrigger>
             <TabsTrigger value="warehouses">
-              <Warehouse className="w-4 h-4 mr-2" />
+              <WarehouseIcon className="w-4 h-4 mr-2" />
               Quản lý kho
             </TabsTrigger>
             <TabsTrigger value="imports">
@@ -642,7 +705,7 @@ const Inventory = () => {
               warehouses={warehouses}
               canViewCostPrice={canViewCostPrice}
               canManageProducts={canManageProducts}
-              onProductsUpdate={loadProducts}
+              onProductsUpdate={loadData}
             />
           </TabsContent>
 
@@ -651,7 +714,7 @@ const Inventory = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Warehouse className="w-5 h-5" />
+                  <WarehouseIcon className="w-5 h-5" />
                   Quản Lý Kho
                 </CardTitle>
                 <CardDescription>Tạo và quản lý các kho hàng</CardDescription>
@@ -674,12 +737,12 @@ const Inventory = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="warehouse-code">Mã kho *</Label>
+                        <Label htmlFor="warehouse-code">Mã kho (tùy chọn)</Label>
                         <Input
                           id="warehouse-code"
                           value={newWarehouse.code}
                           onChange={(e) => setNewWarehouse(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Nhập mã kho"
+                          placeholder="Để trống để hệ thống tự tạo"
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -692,6 +755,17 @@ const Inventory = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
+                        <Label htmlFor="warehouse-address">Địa chỉ kho</Label>
+                        <Input
+                          id="warehouse-address"
+                          value={newWarehouse.address}
+                          onChange={(e) => setNewWarehouse(prev => ({ ...prev, address: e.target.value }))}
+                          placeholder="Nhập địa chỉ kho"
+                        />
+                      </div>
+                      
+                      {/* Temporarily commented - BE not ready for address components */}
+                      {/* <div className="md:col-span-2">
                         <Label>Địa chỉ kho</Label>
                         <AddressComponent
                           value={newWarehouse.addressData}
@@ -704,7 +778,7 @@ const Inventory = () => {
                           }}
                           required
                         />
-                      </div>
+                      </div> */}
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
                       {isEditingWarehouse ? (
@@ -732,30 +806,60 @@ const Inventory = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                       <TableHead>Mã Kho</TableHead>
-                         <TableHead>Tên Kho</TableHead>
-                         <TableHead>Mô Tả</TableHead>
-                         <TableHead>Địa Chỉ</TableHead>
-                         <TableHead>Ngày Tạo</TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('code')}
+                         >
+                           Mã Kho
+                           {getWarehouseSortIcon('code')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('name')}
+                         >
+                           Tên Kho
+                           {getWarehouseSortIcon('name')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('description')}
+                         >
+                           Mô Tả
+                           {getWarehouseSortIcon('description')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('address')}
+                         >
+                           Địa Chỉ
+                           {getWarehouseSortIcon('address')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('createdAt')}
+                         >
+                           Ngày Tạo
+                           {getWarehouseSortIcon('createdAt')}
+                         </TableHead>
                          {canManageWarehouses && <TableHead>Thao Tác</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {warehouses.length === 0 ? (
+                      {sortedWarehouses.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={canManageWarehouses ? 6 : 5} className="text-center py-8 text-muted-foreground">
                             Chưa có kho nào
                           </TableCell>
                         </TableRow>
                       ) : (
-                        warehouses.map((warehouse) => (
+                        sortedWarehouses.map((warehouse) => (
                           <TableRow key={warehouse.id}>
                             <TableCell className="font-medium">{warehouse.code}</TableCell>
                             <TableCell>{warehouse.name}</TableCell>
                             <TableCell>{warehouse.description || '-'}</TableCell>
                             <TableCell>{warehouse.address || '-'}</TableCell>
                             <TableCell>
-                              {new Date(warehouse.created_at).toLocaleDateString('vi-VN')}
+                              {new Date(warehouse.createdAt).toLocaleDateString('vi-VN')}
                              </TableCell>
                              {canManageWarehouses && (
                                <TableCell>
@@ -793,10 +897,21 @@ const Inventory = () => {
 
           {/* Import Slips Tab */}
           <TabsContent value="imports" className="space-y-6">
-            <ImportSlips 
-              canManageImports={canManageImports}
-              canApproveImports={canApproveImports}
-            />
+            {(() => {
+              const importsState = lazyData.getDataState('imports');
+              if (importsState.isLoading) {
+                return <Loading message="Đang tải dữ liệu nhập kho..." />;
+              }
+              if (importsState.error) {
+                return <Loading error={importsState.error} onRetry={() => lazyData.reloadData('imports')} />;
+              }
+              return (
+                <ImportSlips 
+                  canManageImports={canManageImports}
+                  canApproveImports={canApproveImports}
+                />
+              );
+            })()}
           </TabsContent>
 
           {/* Inventory History Tab */}
@@ -816,3 +931,4 @@ const Inventory = () => {
 };
 
 export default Inventory;
+

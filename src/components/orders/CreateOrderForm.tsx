@@ -8,9 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Trash2, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { customerApi } from "@/api/customer.api";
+import { productApi } from "@/api/product.api";
+import { warehouseApi } from "@/api/warehouse.api";
+import { orderApi } from "@/api/order.api";
 
 interface CreateOrderFormProps {
   open: boolean;
@@ -73,18 +77,14 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const loadData = async () => {
     try {
       const [customersRes, productsRes, warehousesRes] = await Promise.all([
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('products').select('*').order('name'),
-        supabase.from('warehouses').select('*').order('name')
+        customerApi.getCustomers({ page: 1, limit: 1000 }),
+        productApi.getProducts({ page: 1, limit: 1000 }),
+        warehouseApi.getWarehouses({ page: 1, limit: 1000 })
       ]);
 
-      if (customersRes.error) throw customersRes.error;
-      if (productsRes.error) throw productsRes.error;
-      if (warehousesRes.error) throw warehousesRes.error;
-
-      setCustomers(customersRes.data || []);
-      setProducts(productsRes.data || []);
-      setWarehouses(warehousesRes.data || []);
+      setCustomers(customersRes.customers || []);
+      setProducts(productsRes.products || []);
+      setWarehouses(warehousesRes.warehouses || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -185,69 +185,41 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       const { subtotal, total } = calculateTotals();
       const paidAmount = newOrder.initial_payment || 0;
 
-      // Create order
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          order_number: `DH${String(Date.now()).slice(-6)}`,
-          customer_id: newOrder.customer_id || null,
-          customer_name: newOrder.customer_name,
-          customer_phone: newOrder.customer_phone,
-          customer_address: newOrder.customer_address,
-          total_amount: total,
-          paid_amount: paidAmount,
-          debt_amount: total - paidAmount,
-          status: 'pending', // Trạng thái pending ban đầu
-          order_status: 'new',
-          payment_status: paidAmount === 0 ? 'unpaid' : (paidAmount >= total ? 'paid' : 'partially_paid'),
-          completion_status: 'active',
-          order_type: newOrder.order_type,
-          notes: newOrder.notes,
-          contract_number: newOrder.contract_number,
-          purchase_order_number: newOrder.purchase_order_number,
-          vat_invoice_email: newOrder.vat_invoice_email,
-          initial_payment: paidAmount,
-          created_by: user?.id
-        })
-        .select()
-        .single();
+      // Create order via backend API
+      const orderData = await orderApi.createOrder({
+        customer_id: newOrder.customer_id || "",
+        customer_name: newOrder.customer_name,
+        customer_phone: newOrder.customer_phone,
+        customer_address: newOrder.customer_address,
+        order_type: newOrder.order_type as any,
+        notes: newOrder.notes,
+        contract_number: newOrder.contract_number,
+        purchase_order_number: newOrder.purchase_order_number,
+        // VAT Information
+        vat_tax_code: newOrder.vat_tax_code,
+        vat_company_name: newOrder.vat_company_name,
+        vat_company_address: newOrder.vat_company_address,
+        vat_invoice_email: newOrder.vat_invoice_email,
+        // Shipping Information
+        shipping_recipient_name: newOrder.shipping_recipient_name,
+        shipping_recipient_phone: newOrder.shipping_recipient_phone,
+        shipping_address: newOrder.shipping_address,
+        // Payment Information
+        initial_payment: newOrder.initial_payment,
+        initial_payment_method: newOrder.initial_payment_method,
+        initial_payment_bank: newOrder.initial_payment_bank,
+        items: newOrder.items.map(it => ({
+          product_id: it.product_id,
+          product_name: it.product_name,
+          product_code: it.product_code,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+        })),
+      });
 
-      if (orderError) throw orderError;
+      // Items are included in order payload; adjust if BE requires separate calls
 
-      // Create order items
-      for (const item of newOrder.items) {
-        const { error: itemError } = await supabase
-          .from('order_items')
-          .insert({
-            order_id: orderData.id,
-            product_id: item.product_id,
-            product_code: item.product_code,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.total_price,
-            vat_rate: item.vat_rate,
-            vat_amount: item.vat_amount,
-            warehouse_id: item.warehouse_id
-          });
-        
-        if (itemError) throw itemError;
-      }
-
-      // Create initial payment if any
-      if (paidAmount > 0) {
-        const { error: paymentError } = await supabase
-          .from('payments')
-          .insert({
-            order_id: orderData.id,
-            amount: paidAmount,
-            payment_method: newOrder.initial_payment_method,
-            notes: 'Thanh toán ban đầu khi tạo đơn',
-            created_by: user?.id
-          });
-        
-        if (paymentError) throw paymentError;
-      }
+      // TODO: initial payment can be handled via payments API if available
 
       toast({
         title: "Thành công",
@@ -614,3 +586,4 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 };
 
 export default CreateOrderForm;
+

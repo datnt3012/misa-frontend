@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { Package, AlertTriangle, Upload } from "lucide-react";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
 
@@ -343,3 +343,4 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
     </Dialog>
   );
 };
+

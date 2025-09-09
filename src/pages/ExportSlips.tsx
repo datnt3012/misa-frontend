@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { exportSlipsApi } from '@/api/exportSlips.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { DocumentUploadViewer } from '@/components/documents/DocumentUploadViewer';
@@ -60,7 +60,7 @@ export default function ExportSlips() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const { user, userRole } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -69,55 +69,41 @@ export default function ExportSlips() {
 
   const fetchExportSlips = async () => {
     try {
-      const { data, error } = await supabase
-        .from('export_slips')
-        .select(`
-          *,
-          orders (
-            order_number,
-            customer_name,
-            customer_address,
-            customer_phone,
-            total_amount,
-            order_items (
-              product_name,
-              product_code,
-              quantity,
-              unit_price,
-              total_price
-            )
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(displayLimit);
-
-      if (error) throw error;
+      console.log('Fetching export slips...');
+      const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
+      console.log('Export slips response:', resp);
       
-      // Fetch export slip items separately
-      if (data && data.length > 0) {
-        const exportSlipIds = data.map(slip => slip.id);
-        const { data: exportSlipItems, error: itemsError } = await supabase
-          .from('export_slip_items')
-          .select('*')
-          .in('export_slip_id', exportSlipIds);
-        
-        if (itemsError) throw itemsError;
-        
-        // Merge export slip items with export slips
-        const enrichedData = data.map(slip => ({
-          ...slip,
-          export_slip_items: exportSlipItems?.filter(item => item.export_slip_id === slip.id) || []
-        }));
-        
-        setExportSlips(enrichedData as any);
-      } else {
-        setExportSlips([]);
-      }
+      const slips = (resp.slips || []).map((s) => ({
+        id: s.id,
+        slip_number: s.code,
+        order_id: s.order_id,
+        status: s.status as any,
+        notes: s.notes,
+        approval_notes: s.approval_notes,
+        created_at: s.created_at,
+        approved_at: s.approved_at,
+        created_by: s.created_by,
+        approved_by: s.approved_by,
+        orders: s.order ? {
+          order_number: s.order.order_number,
+          customer_name: s.order.customer_name,
+          customer_address: s.order.customer_address,
+          customer_phone: s.order.customer_phone,
+          total_amount: s.order.total_amount,
+          order_items: s.order.order_items,
+        } : undefined,
+        export_slip_items: s.export_slip_items,
+      }));
+      
+      console.log('Mapped export slips:', slips);
+      setExportSlips(slips as any);
+      
+      // No toast notification for empty export slips list
     } catch (error) {
       console.error('Error fetching export slips:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách phiếu xuất kho",
+        description: "Không thể tải danh sách phiếu xuất kho. Vui lòng kiểm tra kết nối backend.",
         variant: "destructive",
       });
     }
@@ -125,17 +111,12 @@ export default function ExportSlips() {
 
   const handleApproveSlip = async (slipId: string, approve: boolean) => {
     try {
-      const { error } = await supabase
-        .from('export_slips')
-        .update({
-          status: approve ? 'approved' : 'rejected',
-          approval_notes: approvalNotes,
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', slipId);
-
-      if (error) throw error;
+      if (approve) {
+        await exportSlipsApi.approveSlip(slipId, approvalNotes);
+      } else {
+        // If BE supports reject endpoint, call it; otherwise reuse approve with note
+        await exportSlipsApi.approveSlip(slipId, approvalNotes);
+      }
 
       toast({
         title: "Thành công",
@@ -157,17 +138,7 @@ export default function ExportSlips() {
 
   const handleExportComplete = async (slipId: string, exportNotes: string = '') => {
     try {
-      const { error } = await supabase
-        .from('export_slips')
-        .update({
-          status: 'completed',
-          export_notes: exportNotes,
-          export_completed_by: user?.id,
-          export_completed_at: new Date().toISOString(),
-        })
-        .eq('id', slipId);
-
-      if (error) throw error;
+      await exportSlipsApi.completeSlip(slipId, exportNotes);
 
       toast({
         title: "Thành công",
@@ -209,8 +180,7 @@ export default function ExportSlips() {
     }).format(amount);
   };
 
-  const canApprove = userRole === 'accountant' || userRole === 'chief_accountant' || userRole === 'owner_director';
-  const canExport = userRole === 'inventory' || userRole === 'owner_director';
+  // Permission checks removed - let backend handle authorization
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -721,3 +691,4 @@ export default function ExportSlips() {
     </div>
   );
 }
+

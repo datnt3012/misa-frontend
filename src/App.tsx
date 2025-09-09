@@ -19,6 +19,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./hooks/useAuth";
 import { NotificationProvider } from "./hooks/useNotifications";
+import { ApiErrorMonitor } from "./components/ApiErrorMonitor";
+import "./utils/test-fallback"; // Auto-test fallback system
 
 const queryClient = new QueryClient();
 
@@ -93,6 +95,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        <ApiErrorMonitor />
       </TooltipProvider>
     </NotificationProvider>
     </AuthProvider>
