@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X, Edit, Trash2 } from "lucide-react";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { orderTagsApi } from "@/api/orderTags.api";
 
 interface OrderTagsManagerProps {
   orderId: string;
@@ -23,6 +23,8 @@ interface OrderTag {
   name: string;
   color: string;
   description?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
@@ -48,36 +50,29 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
 
   const loadTags = async () => {
     try {
-      const { data, error } = await supabase
-        .from('order_tags')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setAllTags(data || []);
+      const tags = await orderTagsApi.getAllTags();
+      setAllTags(tags);
     } catch (error) {
       console.error('Error loading tags:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải danh sách nhãn",
+        variant: "destructive",
+      });
     }
   };
 
   const loadAssignedTags = async () => {
     try {
-      const { data, error } = await supabase
-        .from('order_tag_assignments')
-        .select(`
-          order_tags (
-            id,
-            name,
-            color,
-            description
-          )
-        `)
-        .eq('order_id', orderId);
-
-      if (error) throw error;
-      setAssignedTags(data?.map((item: any) => item.order_tags) || []);
+      const assignedTags = await orderTagsApi.getAssignedTags(orderId);
+      setAssignedTags(assignedTags);
     } catch (error) {
       console.error('Error loading assigned tags:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải nhãn đã gán",
+        variant: "destructive",
+      });
     }
   };
 
@@ -86,20 +81,13 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('order_tags')
-        .insert({
-          name: newTag.name.trim(),
-          color: newTag.color,
-          description: newTag.description.trim() || null,
-          created_by: user?.id,
-        })
-        .select()
-        .single();
+      const createdTag = await orderTagsApi.createTag({
+        name: newTag.name.trim(),
+        color: newTag.color,
+        description: newTag.description.trim() || undefined,
+      });
 
-      if (error) throw error;
-
-      setAllTags([...allTags, data]);
+      setAllTags([...allTags, createdTag]);
       setNewTag({ name: '', color: '#64748b', description: '' });
       setShowNewTagForm(false);
       
@@ -122,15 +110,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   const assignTag = async (tagId: string) => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('order_tag_assignments')
-        .insert({
-          order_id: orderId,
-          tag_id: tagId,
-          assigned_by: user?.id,
-        });
-
-      if (error) throw error;
+      await orderTagsApi.assignTag(orderId, tagId);
 
       const tag = allTags.find(t => t.id === tagId);
       if (tag) {
@@ -158,13 +138,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   const removeTag = async (tagId: string) => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('order_tag_assignments')
-        .delete()
-        .eq('order_id', orderId)
-        .eq('tag_id', tagId);
-
-      if (error) throw error;
+      await orderTagsApi.removeTag(orderId, tagId);
 
       setAssignedTags(assignedTags.filter(tag => tag.id !== tagId));
       

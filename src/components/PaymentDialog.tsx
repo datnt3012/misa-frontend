@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { paymentsApi } from "@/api/payments.api";
 import { DollarSign, Clock, Upload, X, FileText, Image } from "lucide-react";
 
 interface PaymentDialogProps {
@@ -58,19 +59,15 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   const loadPaymentHistory = async () => {
     try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          creator_profile:profiles!payments_created_by_fkey (full_name)
-        `)
-        .eq('order_id', order.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setPaymentHistory(data || []);
-    } catch (error) {
+      const payments = await paymentsApi.getPaymentsByOrder(order.id);
+      setPaymentHistory(payments);
+    } catch (error: any) {
       console.error('Error loading payment history:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải lịch sử thanh toán",
+        variant: "destructive",
+      });
     }
   };
 
@@ -89,33 +86,17 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       const amount = parseFloat(paymentAmount);
       
       // Add payment record
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .insert({
-          order_id: order.id,
-          amount: amount,
-          payment_method: paymentMethod,
-          payment_date: new Date().toISOString().split('T')[0],
-          notes: paymentNotes,
-          created_by: user?.id
-        });
+      await paymentsApi.createPayment({
+        order_id: order.id,
+        amount: amount,
+        payment_method: paymentMethod,
+        payment_date: new Date().toISOString().split('T')[0],
+        notes: paymentNotes,
+        created_by: user?.id || ''
+      });
 
-      if (paymentError) throw paymentError;
-
-      // Add to order status history for payment tracking
-      const { error: historyError } = await supabase
-        .from('order_status_history')
-        .insert({
-          order_id: order.id,
-          old_status: order.status,
-          new_status: order.status, // Keep same status
-          old_paid_amount: paidAmount,
-          new_paid_amount: paidAmount + amount,
-          notes: `Thanh toán ${formatCurrency(amount)} qua ${getPaymentMethodText(paymentMethod)}${bankAccount && paymentMethod === 'bank_transfer' ? ` (${bankAccount})` : ''}${paymentNotes ? ` - ${paymentNotes}` : ''}`,
-          changed_by: user?.id
-        });
-
-      if (historyError) throw historyError;
+      // TODO: Add to order status history for payment tracking
+      // This would require a separate API endpoint for order status history
 
       toast({
         title: "Thành công",
