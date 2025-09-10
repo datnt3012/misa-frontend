@@ -46,6 +46,7 @@ export interface Order {
     firstName?: string | null;
     lastName?: string | null;
   };
+  tags?: string[];
 }
 
 export interface CreateOrderRequest {
@@ -91,6 +92,7 @@ export interface UpdateOrderRequest {
   notes?: string;
   contract_number?: string;
   purchase_order_number?: string;
+  tags?: string[];
 }
 
 export interface CreateOrderItemRequest {
@@ -127,6 +129,16 @@ export const orderApi = {
 
     const response = await api.get<any>(url);
     const data = response?.data || response;
+    
+    // Debug: Log raw response to see tags structure
+    if (data && data.rows && data.rows.length > 0) {
+      console.log('🔍 Raw order API response (first order):', {
+        order_id: data.rows[0].id,
+        tags: data.rows[0].tags,
+        tag_names: data.rows[0].tags || [],
+        all_keys: Object.keys(data.rows[0])
+      });
+    }
 
     const normalizeItem = (it: any) => ({
       id: it.id,
@@ -162,6 +174,7 @@ export const orderApi = {
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
       } : undefined,
+      tags: Array.isArray(row.tags) ? row.tags : undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       items: Array.isArray(row.details)
@@ -236,6 +249,7 @@ export const orderApi = {
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
       } : undefined,
+      tags: Array.isArray(row.tags) ? row.tags : undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       items: Array.isArray(row.details)
@@ -263,7 +277,12 @@ export const orderApi = {
 
   // Update order
   updateOrder: async (id: string, data: UpdateOrderRequest): Promise<Order> => {
-    return api.patch<Order>(API_ENDPOINTS.ORDERS.UPDATE(id), data);
+    try {
+      const response = await api.patch<Order>(API_ENDPOINTS.ORDERS.UPDATE(id), data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
   },
 
   // Delete order

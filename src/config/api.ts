@@ -82,6 +82,12 @@ export const API_ENDPOINTS = {
     ITEMS: (id: string) => `/orders/${id}/items`,
   },
   
+  // Order Tags (handled via order API)
+  ORDER_TAGS: {
+    // Tags are managed through order API updates
+    // No separate endpoints needed
+  },
+  
   // Export Slips
   EXPORT_SLIPS: {
     LIST: '/export-slips',

@@ -30,32 +30,22 @@ export interface OrderTagAssignment {
 }
 
 export const orderTagsApi = {
-  // Get all available tags
+  // Get all available tags (frontend-defined)
   getAllTags: async (): Promise<OrderTag[]> => {
-    try {
-      // For now, return predefined tags since we don't have API endpoint
-      return getPredefinedTags();
-    } catch (error) {
-      console.error('Error loading tags:', error);
-      return getPredefinedTags(); // Fallback to predefined tags
-    }
+    return getPredefinedTags();
   },
 
-  // Get assigned tags for an order
+  // Get assigned tags for an order (from order data)
   getAssignedTags: async (orderId: string): Promise<OrderTag[]> => {
-    try {
-      // For now, return empty array since we don't have API endpoint
-      // This would be replaced with actual API call when available
-      return [];
-    } catch (error) {
-      console.error('Error loading assigned tags:', error);
-      return [];
-    }
+    // Tags are already included in order data via order_tag_assignments
+    // This function is kept for compatibility but returns empty array
+    // The actual tags are passed via currentTags prop in OrderTagsManager
+    return [];
   },
 
-  // Create a new tag
+  // Create a new tag (frontend-only, not persisted)
   createTag: async (tagData: CreateOrderTagRequest): Promise<OrderTag> => {
-    // For now, simulate creation
+    // Since backend doesn't support creating tags, we create them locally
     const newTag: OrderTag = {
       id: `tag_${Date.now()}`,
       name: tagData.name,
@@ -66,28 +56,90 @@ export const orderTagsApi = {
     return newTag;
   },
 
-  // Assign tag to order
+  // Assign tag to order (update order with new tag)
   assignTag: async (orderId: string, tagId: string): Promise<OrderTagAssignment> => {
-    // For now, simulate assignment
-    const assignment: OrderTagAssignment = {
-      id: `assignment_${Date.now()}`,
-      order_id: orderId,
-      tag_id: tagId,
-      created_at: new Date().toISOString(),
-    };
-    return assignment;
+    try {
+      // Get current order to update its tags
+      const { orderApi } = await import('./order.api');
+      const currentOrder = await orderApi.getOrder(orderId);
+      
+      // Get the tag to assign
+      const allTags = getPredefinedTags();
+      const tagToAssign = allTags.find(t => t.id === tagId);
+      
+      if (!tagToAssign) {
+        throw new Error(`Tag with id ${tagId} not found`);
+      }
+      
+      // Get current tags from order (compare by name with FE tags)
+      const currentTags = currentOrder.tags || [];
+      const currentTagNames = currentTags;
+      
+      // Check if tag is already assigned (compare by name)
+      const isAlreadyAssigned = currentTagNames.includes(tagToAssign.name);
+      
+      if (isAlreadyAssigned) {
+        return {
+          id: `assignment_${Date.now()}`,
+          order_id: orderId,
+          tag_id: tagId,
+          created_at: new Date().toISOString(),
+        };
+      }
+      
+      // Add tag name to current tags
+      const updatedTags = [...currentTagNames, tagToAssign.name];
+      
+      // Update order via API with tags array
+      await orderApi.updateOrder(orderId, { 
+        tags: updatedTags 
+      });
+      
+      return {
+        id: `assignment_${Date.now()}`,
+        order_id: orderId,
+        tag_id: tagId,
+        created_at: new Date().toISOString(),
+      };
+    } catch (error) {
+      // Throw error instead of fallback to simulation
+      throw new Error(`Failed to assign tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   },
 
-  // Remove tag from order
+  // Remove tag from order (update order to remove tag)
   removeTag: async (orderId: string, tagId: string): Promise<void> => {
-    // For now, simulate removal
-    console.log(`Removing tag ${tagId} from order ${orderId}`);
+    try {
+      // Get current order to update its tags
+      const { orderApi } = await import('./order.api');
+      const currentOrder = await orderApi.getOrder(orderId);
+      
+      // Get the tag to remove
+      const allTags = getPredefinedTags();
+      const tagToRemove = allTags.find(t => t.id === tagId);
+      
+      if (!tagToRemove) {
+        return;
+      }
+      
+      // Remove tag name from current tags (compare by name)
+      const currentTags = currentOrder.tags || [];
+      const updatedTags = currentTags.filter(tagName => tagName !== tagToRemove.name);
+      
+      // Update order with removed tag
+      await orderApi.updateOrder(orderId, { 
+        tags: updatedTags 
+      });
+    } catch (error) {
+      // Throw error instead of simulation
+      throw new Error(`Failed to remove tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   },
 
-  // Delete tag
+  // Delete tag (frontend-only, not persisted)
   deleteTag: async (tagId: string): Promise<void> => {
-    // For now, simulate deletion
-    console.log(`Deleting tag ${tagId}`);
+    // Since backend doesn't support deleting tags, we just log it
+    // Tags are predefined and cannot be deleted
   },
 };
 

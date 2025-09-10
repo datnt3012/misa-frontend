@@ -194,6 +194,15 @@ const Orders: React.FC = () => {
   console.log('Filtered orders:', filteredOrders);
   console.log('Orders length:', orders.length);
   console.log('Filtered orders length:', filteredOrders.length);
+  
+  // Debug tags
+  if (orders.length > 0) {
+    console.log('First order tags debug:', {
+      order_id: orders[0].id,
+      tags: orders[0].tags,
+      tag_names: orders[0].tags || []
+    });
+  }
 
   // Calculate totals
   const totals = filteredOrders.reduce((acc, order) => ({
@@ -359,8 +368,24 @@ const Orders: React.FC = () => {
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => {
-                    const tags = order.order_tag_assignments?.map((assignment: any) => assignment.order_tags) || [];
-                    const hasReconciliation = tags.some((tag: any) => tag.name === 'Đã đối soát');
+                    // Convert tag names to tag objects for display
+                    const tagNames = order.tags || [];
+                    const allPredefinedTags = [
+                      { id: 'tag_chua_doi_soat', name: 'Chưa đối soát', color: '#ef4444' },
+                      { id: 'tag_da_doi_soat', name: 'Đã đối soát', color: '#10b981' },
+                      { id: 'tag_khach_moi', name: 'Khách mới', color: '#3b82f6' },
+                      { id: 'tag_khach_quay_lai', name: 'Khách hàng quay lại', color: '#8b5cf6' },
+                      { id: 'tag_uu_tien', name: 'Ưu tiên', color: '#f59e0b' },
+                      { id: 'tag_loi', name: 'Lỗi', color: '#dc2626' },
+                    ];
+                    
+                    const tags = tagNames.map(tagName => 
+                      allPredefinedTags.find(tag => tag.name === tagName)
+                    ).filter(Boolean);
+                    
+                    const specialTags = tags.filter((t: any) => t.name === 'Đã đối soát' || t.name === 'Chưa đối soát');
+                    const otherTags = tags.filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
+                    const hasReconciliation = specialTags.some((tag: any) => tag.name === 'Đã đối soát');
                     
                     return (
                       <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
@@ -376,18 +401,35 @@ const Orders: React.FC = () => {
                              <div className="text-xs text-muted-foreground">
                                {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
                              </div>
-                             <div>
-                               <Badge 
-                                 variant={hasReconciliation ? "default" : "secondary"}
-                                 className={cn(
-                                   "text-xs",
-                                   hasReconciliation 
-                                     ? "bg-blue-100 text-blue-800 hover:bg-blue-100" 
-                                     : "bg-red-100 text-red-800 hover:bg-red-100"
-                                 )}
-                               >
-                                 {hasReconciliation ? "Đã đối soát" : "Chưa đối soát"}
-                               </Badge>
+                             <div className="flex gap-1 flex-wrap">
+                               {specialTags.length > 0 ? (
+                                 specialTags.map((tag: any, idx: number) => (
+                                   <Badge
+                                     key={idx}
+                                     variant={tag.name === 'Đã đối soát' ? 'default' : 'secondary'}
+                                     className={cn(
+                                       'text-xs',
+                                       tag.name === 'Đã đối soát'
+                                         ? 'bg-blue-100 text-blue-800 hover:bg-blue-100'
+                                         : 'bg-red-100 text-red-800 hover:bg-red-100'
+                                     )}
+                                   >
+                                     {tag.name}
+                                   </Badge>
+                                 ))
+                               ) : (
+                                 <Badge 
+                                   variant={hasReconciliation ? 'default' : 'secondary'}
+                                   className={cn(
+                                     'text-xs',
+                                     hasReconciliation 
+                                       ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' 
+                                       : 'bg-red-100 text-red-800 hover:bg-red-100'
+                                   )}
+                                 >
+                                   {hasReconciliation ? 'Đã đối soát' : 'Chưa đối soát'}
+                                 </Badge>
+                               )}
                              </div>
                            </div>
                          </TableCell>
@@ -408,7 +450,7 @@ const Orders: React.FC = () => {
                                </div>
                              )}
                              <div className="flex flex-wrap gap-1 mt-1">
-                               {tags.map((tag: any, index: number) => tag && (
+                               {otherTags.map((tag: any, index: number) => tag && (
                                  <Badge 
                                    key={index}
                                    variant="outline"
@@ -593,7 +635,27 @@ const Orders: React.FC = () => {
           onOpenChange={setShowTagsManager}
           onTagsUpdated={() => {
             fetchOrders();
+            // Also refresh the selected order data
+            if (selectedOrder) {
+              orderApi.getOrder(selectedOrder.id).then(updatedOrder => {
+                setSelectedOrder(updatedOrder);
+              }).catch(error => {
+                // If individual order fetch fails, just refresh the list
+                fetchOrders();
+              });
+            }
           }}
+          currentTags={selectedOrder.tags?.map(tagName => {
+            const allPredefinedTags = [
+              { id: 'tag_chua_doi_soat', name: 'Chưa đối soát', color: '#ef4444' },
+              { id: 'tag_da_doi_soat', name: 'Đã đối soát', color: '#10b981' },
+              { id: 'tag_khach_moi', name: 'Khách mới', color: '#3b82f6' },
+              { id: 'tag_khach_quay_lai', name: 'Khách hàng quay lại', color: '#8b5cf6' },
+              { id: 'tag_uu_tien', name: 'Ưu tiên', color: '#f59e0b' },
+              { id: 'tag_loi', name: 'Lỗi', color: '#dc2626' },
+            ];
+            return allPredefinedTags.find(tag => tag.name === tagName);
+          }).filter(Boolean) || []}
         />
       )}
 

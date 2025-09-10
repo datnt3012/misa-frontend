@@ -16,6 +16,13 @@ interface OrderTagsManagerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTagsUpdated: () => void;
+  onAssignedTagsChange?: (tags: OrderTag[]) => void;
+  currentTags?: Array<{
+    id: string;
+    name: string;
+    color: string;
+    description?: string;
+  }>;
 }
 
 interface OrderTag {
@@ -32,6 +39,8 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   open,
   onOpenChange,
   onTagsUpdated,
+  onAssignedTagsChange,
+  currentTags = [],
 }) => {
   const [allTags, setAllTags] = useState<OrderTag[]>([]);
   const [assignedTags, setAssignedTags] = useState<OrderTag[]>([]);
@@ -44,16 +53,28 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   useEffect(() => {
     if (open) {
       loadTags();
-      loadAssignedTags();
     }
   }, [open, orderId]);
+
+  // Separate useEffect to handle currentTags updates
+  useEffect(() => {
+    if (open && currentTags) {
+      const assignedTagsFromProps = currentTags.map(tag => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color,
+        description: tag.description,
+      }));
+      setAssignedTags(assignedTagsFromProps);
+      onAssignedTagsChange?.(assignedTagsFromProps);
+    }
+  }, [currentTags, open]);
 
   const loadTags = async () => {
     try {
       const tags = await orderTagsApi.getAllTags();
       setAllTags(tags);
     } catch (error) {
-      console.error('Error loading tags:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải danh sách nhãn",
@@ -66,6 +87,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     try {
       const assignedTags = await orderTagsApi.getAssignedTags(orderId);
       setAssignedTags(assignedTags);
+      onAssignedTagsChange?.(assignedTags);
     } catch (error) {
       console.error('Error loading assigned tags:', error);
       toast({
@@ -87,13 +109,14 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
         description: newTag.description.trim() || undefined,
       });
 
+      // Add to local state (not persisted to backend)
       setAllTags([...allTags, createdTag]);
       setNewTag({ name: '', color: '#64748b', description: '' });
       setShowNewTagForm(false);
       
       toast({
         title: "Thành công",
-        description: "Đã tạo nhãn mới",
+        description: "Đã tạo nhãn mới (chỉ trong phiên làm việc hiện tại)",
       });
     } catch (error) {
       console.error('Error creating tag:', error);
@@ -109,22 +132,55 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
 
   const assignTag = async (tagId: string) => {
     setLoading(true);
+    let hasError = false;
+    let errorMessage = '';
+    
     try {
       await orderTagsApi.assignTag(orderId, tagId);
-
+      
       const tag = allTags.find(t => t.id === tagId);
       if (tag) {
-        setAssignedTags([...assignedTags, tag]);
+        // Enforce mutual exclusivity between "Đã đối soát" and "Chưa đối soát"
+        const isDaDoiSoat = tag.name === 'Đã đối soát';
+        const isChuaDoiSoat = tag.name === 'Chưa đối soát';
+        let updated = [...assignedTags, tag];
+        
+        if (isDaDoiSoat || isChuaDoiSoat) {
+          const oppositeName = isDaDoiSoat ? 'Chưa đối soát' : 'Đã đối soát';
+          // Find opposite tag in current assigned tags (not in updated array)
+          const opposite = assignedTags.find(t => t.name === oppositeName);
+          if (opposite) {
+            try {
+              // Remove opposite tag both in UI and via API
+              await orderTagsApi.removeTag(orderId, opposite.id);
+              // Remove from updated array
+              updated = updated.filter(t => t.id !== opposite.id);
+            } catch (removeError) {
+              hasError = true;
+              errorMessage = 'Đã gán nhãn nhưng không thể bỏ nhãn đối nghịch';
+            }
+          }
+        }
+        setAssignedTags(updated);
+        onAssignedTagsChange?.(updated);
       }
       
-      toast({
-        title: "Thành công",
-        description: "Đã gán nhãn cho đơn hàng",
-      });
+      if (!hasError) {
+        toast({
+          title: "Thành công",
+          description: "Đã gán nhãn cho đơn hàng",
+        });
+      } else {
+        toast({
+          title: "Cảnh báo",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
       
       onTagsUpdated();
     } catch (error) {
-      console.error('Error assigning tag:', error);
+      hasError = true;
       toast({
         title: "Lỗi",
         description: "Không thể gán nhãn",
@@ -139,8 +195,10 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     setLoading(true);
     try {
       await orderTagsApi.removeTag(orderId, tagId);
-
-      setAssignedTags(assignedTags.filter(tag => tag.id !== tagId));
+      
+      const updated = assignedTags.filter(tag => tag.id !== tagId);
+      setAssignedTags(updated);
+      onAssignedTagsChange?.(updated);
       
       toast({
         title: "Thành công",
@@ -149,7 +207,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       
       onTagsUpdated();
     } catch (error) {
-      console.error('Error removing tag:', error);
       toast({
         title: "Lỗi",
         description: "Không thể bỏ nhãn",
@@ -183,7 +240,10 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                   >
                     {tag.name}
                     <button
-                      onClick={() => removeTag(tag.id)}
+                      onClick={() => {
+                        console.log(`🖱️  Clicked to remove tag: ${tag.name} (${tag.id})`);
+                        removeTag(tag.id);
+                      }}
                       className="ml-1 hover:bg-black/20 rounded p-0.5"
                       disabled={loading}
                     >
@@ -206,7 +266,10 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                   key={tag.id}
                   variant="outline"
                   className="cursor-pointer hover:bg-muted"
-                  onClick={() => assignTag(tag.id)}
+                  onClick={() => {
+                    console.log(`🖱️  Clicked on tag: ${tag.name} (${tag.id})`);
+                    assignTag(tag.id);
+                  }}
                   style={{ borderColor: tag.color, color: tag.color }}
                 >
                   <Plus className="w-3 h-3 mr-1" />
