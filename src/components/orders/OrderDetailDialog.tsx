@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
+import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
 
 interface OrderDetailDialogProps {
@@ -18,7 +18,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   open,
   onOpenChange,
 }) => {
-  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [orderDetails, setOrderDetails] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -33,37 +33,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (
-            name,
-            phone,
-            address,
-            customer_code
-          ),
-          order_items (
-            id,
-            product_code,
-            product_name,
-            quantity,
-            unit_price,
-            total_price
-          ),
-          order_tag_assignments (
-            order_tags (
-              id,
-              name,
-              color
-            )
-          )
-        `)
-        .eq('id', order.id)
-        .single();
-
-      if (error) throw error;
-      setOrderDetails(data);
+      const orderData = await orderApi.getOrder(order.id);
+      console.log('Order data received:', orderData);
+      console.log('Order items:', orderData.items);
+      setOrderDetails(orderData);
     } catch (error) {
       console.error('Error loading order details:', error);
       toast({
@@ -76,11 +49,12 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | string | undefined | null) => {
+    const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
-    }).format(amount);
+    }).format(numAmount);
   };
 
   const getStatusBadge = (status: string) => {
@@ -126,7 +100,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     );
   }
 
-  const tags = orderDetails.order_tag_assignments?.map((assignment: any) => assignment.order_tags) || [];
+  // Tags functionality will be implemented later when backend supports it
+  const tags: any[] = [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,7 +121,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
-                <div className="text-base">{orderDetails.customer_phone || '-'}</div>
+                <div className="text-base">{orderDetails.customer_phone || 'Chưa có SĐT'}</div>
               </div>
 
               <div>
@@ -169,24 +144,24 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Ghi chú:</label>
-                <div className="text-base">{orderDetails.notes || '-'}</div>
+                <div className="text-base">{orderDetails.notes || 'Không có ghi chú'}</div>
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
-                <div className="text-base">{orderDetails.customers?.customer_code || '-'}</div>
+                <div className="text-base">{orderDetails.customer?.id || orderDetails.customer_id || 'Chưa có mã'}</div>
               </div>
 
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Email:</label>
-                <div className="text-base">{orderDetails.vat_invoice_email || '-'}</div>
+                <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
               </div>
 
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Ghi chú nội bộ:</label>
-                <div className="text-base">-</div>
+                <div className="text-base">{orderDetails.notes || 'Không có ghi chú'}</div>
               </div>
             </div>
           </div>
@@ -202,17 +177,17 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             <div className="grid grid-cols-2 gap-6">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Tên người nhận hàng:</label>
-                <div className="text-base font-medium">{orderDetails.customer_name}</div>
+                <div className="text-base font-medium">{orderDetails.customer_name || 'Chưa có tên'}</div>
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">SĐT người nhận hàng:</label>
-                <div className="text-base">{orderDetails.customer_phone || '-'}</div>
+                <div className="text-base">{orderDetails.customer_phone || 'Chưa có SĐT'}</div>
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Địa chỉ:</label>
               <div className="text-base text-blue-600 underline cursor-pointer">
-                {orderDetails.customer_address || orderDetails.customers?.address || '-'}
+                {orderDetails.customer_address || orderDetails.customers?.address || 'Chưa có địa chỉ'}
               </div>
             </div>
           </div>
@@ -238,22 +213,30 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderDetails.order_items?.map((item: any, index: number) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{item.product_code}</div>
-                        <div className="text-sm text-muted-foreground">{item.product_name}</div>
-                        <div className="text-xs text-blue-600">Ghi chú:</div>
-                      </div>
+                {orderDetails.items && orderDetails.items.length > 0 ? (
+                  orderDetails.items.map((item: OrderItem, index: number) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-medium">{item.product_code || 'N/A'}</div>
+                          <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
+                          <div className="text-xs text-blue-600">ID: {item.product_id || 'N/A'}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">-</TableCell>
+                      <TableCell className="text-center">{item.quantity}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Không có sản phẩm nào trong đơn hàng
                     </TableCell>
-                    <TableCell className="text-center">-</TableCell>
-                    <TableCell className="text-center">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
 
@@ -261,7 +244,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <div className="w-64 space-y-2">
                 <div className="flex justify-between">
                   <span>Tổng</span>
-                  <span className="font-medium">{orderDetails.order_items?.reduce((sum: number, item: any) => sum + item.quantity, 0)}</span>
+                  <span className="font-medium">{orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + item.quantity, 0)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold">
                   <span>Tổng tiền:</span>
@@ -285,14 +268,22 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 {getPaymentStatusBadge(orderDetails.payment_status || 'unpaid')}
               </div>
               <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
+                <span>{orderDetails.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng'}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Người tạo đơn:</span>
                 <span>{orderDetails.profiles?.full_name || 'Hệ thống'}</span>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Số đơn hàng:</span>
+                <span className="font-mono">{orderDetails.order_number || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Ngày tạo:</span>
-                <span>{new Date(orderDetails.created_at).toLocaleDateString('vi-VN')}</span>
+                <span>{orderDetails.created_at ? new Date(orderDetails.created_at).toLocaleDateString('vi-VN') : 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Tổng tiền:</span>
@@ -306,6 +297,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <span className="text-sm text-muted-foreground">Còn nợ:</span>
                 <span className="text-red-600">{formatCurrency(orderDetails.debt_amount)}</span>
               </div>
+              {orderDetails.contract_number && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
+                  <span className="font-mono">{orderDetails.contract_number}</span>
+                </div>
+              )}
+              {orderDetails.purchase_order_number && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Số PO:</span>
+                  <span className="font-mono">{orderDetails.purchase_order_number}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

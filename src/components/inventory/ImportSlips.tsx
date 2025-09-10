@@ -656,7 +656,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                       </div>
                     </TableCell>
                     <TableCell className="text-center">{getStatusBadge(slip.status)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm text-center">{format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm text-center">{slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center space-x-1">
                         <Button
@@ -722,7 +722,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               <div>
                 <Label className="font-medium text-sm">Ngày tạo:</Label>
                 <p className="text-sm text-muted-foreground">
-                  {selectedSlip && format(new Date(selectedSlip.created_at), 'dd/MM/yyyy HH:mm')}
+                  {selectedSlip?.created_at ? format(new Date(selectedSlip.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
                 </p>
               </div>
             </div>
@@ -818,7 +818,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         {movement.movement_type === 'stock_in' ? '+' : '-'}{movement.quantity}
                       </TableCell>
                       <TableCell>{movement.profiles?.full_name || 'Hệ thống'}</TableCell>
-                      <TableCell>{format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
+                      <TableCell>{movement.created_at ? format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                       <TableCell>{movement.notes || '-'}</TableCell>
                     </TableRow>
                   ))}

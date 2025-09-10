@@ -254,7 +254,7 @@ const InventoryHistory = () => {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
-                        {format(new Date(movement.created_at), "dd/MM/yyyy HH:mm", { locale: vi })}
+                        {movement.created_at ? format(new Date(movement.created_at), "dd/MM/yyyy HH:mm", { locale: vi }) : 'N/A'}
                       </span>
                     </TableCell>
                     <TableCell>

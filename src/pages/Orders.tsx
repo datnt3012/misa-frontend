@@ -16,41 +16,8 @@ import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import CreatorDisplay from "@/components/orders/CreatorDisplay";
 
-// Component to display creator name
-const CreatorDisplay: React.FC<{ createdBy: string }> = ({ createdBy }) => {
-  const [creatorName, setCreatorName] = useState<string>("");
-
-  useEffect(() => {
-    const getCreatorName = async () => {
-      if (!createdBy) {
-        setCreatorName("-");
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', createdBy)
-          .single();
-
-        if (!error && data?.full_name) {
-          setCreatorName(data.full_name);
-        } else {
-          setCreatorName("-");
-        }
-      } catch (error) {
-        console.error('Error fetching creator name:', error);
-        setCreatorName("-");
-      }
-    };
-
-    getCreatorName();
-  }, [createdBy]);
-
-  return <div className="text-sm">{creatorName}</div>;
-};
 
 const Orders: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -74,36 +41,10 @@ const Orders: React.FC = () => {
   // Handle creating export slip
   const handleCreateExportSlip = async (order: any) => {
     try {
-      // Check if export slip already exists
-      const { data: existingSlip } = await supabase
-        .from('export_slips')
-        .select('id')
-        .eq('order_id', order.id)
-        .single();
-
-      if (existingSlip) {
-        toast({
-          title: "Thông báo",
-          description: "Phiếu xuất kho đã tồn tại cho đơn hàng này",
-          variant: "default",
-        });
-        return;
-      }
-
-      // Create new export slip
-      const { error } = await supabase
-        .from('export_slips')
-        .insert({
-          order_id: order.id,
-          slip_number: `PX${Date.now()}`,
-          created_by: user?.id
-        });
-
-      if (error) throw error;
-
+      // TODO: Implement export slip creation with backend API
       toast({
-        title: "Thành công",
-        description: "Đã tạo phiếu xuất kho",
+        title: "Thông báo",
+        description: "Chức năng tạo phiếu xuất kho đang được phát triển",
         variant: "default",
       });
 
@@ -134,7 +75,10 @@ const Orders: React.FC = () => {
       const params: any = { page: 1, limit: 1000 };
       if (statusFilter !== 'all') params.status = statusFilter;
       if (searchTerm) params.search = searchTerm;
+      console.log('Fetching orders with params:', params);
       const resp = await orderApi.getOrders(params);
+      console.log('Orders response:', resp);
+      console.log('Orders array:', resp.orders);
       setOrders(resp.orders || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -148,8 +92,12 @@ const Orders: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN').format(amount);
+  const formatCurrency = (amount: number | string | undefined | null) => {
+    const numAmount = Number(amount) || 0;
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(numAmount);
   };
 
   // Mask phone number - hide 4 middle digits
@@ -175,10 +123,7 @@ const Orders: React.FC = () => {
   // Handle quick note update
   const handleQuickNote = async (orderId: string, note: string) => {
     try {
-      await supabase
-        .from('orders')
-        .update({ notes: note })
-        .eq('id', orderId);
+      await orderApi.updateOrder(orderId, { notes: note });
       
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -238,12 +183,17 @@ const Orders: React.FC = () => {
     
     const matchesCreator = creatorFilter === "all" || order.created_by === creatorFilter;
     
-    const orderDate = new Date(order.created_at);
+    const orderDate = order.created_at ? new Date(order.created_at) : new Date();
     const matchesStartDate = !startDate || orderDate >= new Date(startDate);
     const matchesEndDate = !endDate || orderDate <= new Date(endDate + 'T23:59:59');
     
     return matchesSearch && matchesStatus && matchesCreator && matchesStartDate && matchesEndDate;
   });
+
+  console.log('Orders state:', orders);
+  console.log('Filtered orders:', filteredOrders);
+  console.log('Orders length:', orders.length);
+  console.log('Filtered orders length:', filteredOrders.length);
 
   // Calculate totals
   const totals = filteredOrders.reduce((acc, order) => ({
@@ -424,7 +374,7 @@ const Orders: React.FC = () => {
                                {order.order_number}
                              </div>
                              <div className="text-xs text-muted-foreground">
-                               {format(new Date(order.created_at), 'dd/MM/yyyy HH:mm')}
+                               {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
                              </div>
                              <div>
                                <Badge 
@@ -452,6 +402,11 @@ const Orders: React.FC = () => {
                              <div className="text-sm text-muted-foreground">
                                {formatAddress(order.customer_address)}
                              </div>
+                             {order.notes && (
+                               <div className="text-xs text-blue-600 italic">
+                                 Ghi chú: {order.notes}
+                               </div>
+                             )}
                              <div className="flex flex-wrap gap-1 mt-1">
                                {tags.map((tag: any, index: number) => tag && (
                                  <Badge 
@@ -470,11 +425,14 @@ const Orders: React.FC = () => {
                            {/* Products Column */}
                            <TableCell className="py-4 border-r border-slate-200 align-top text-center">
                              <div className="space-y-3">
-                               {order.order_items?.map((item: any, index: number) => (
+                               {order.items?.map((item: any, index: number) => (
                                  <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                   <div className="font-medium text-slate-900">{item.product_name}</div>
+                                   <div className="font-medium text-slate-900">{item.product_name || 'N/A'}</div>
                                  </div>
                                ))}
+                               {(!order.items || order.items.length === 0) && (
+                                 <div className="text-sm text-muted-foreground">Không có sản phẩm</div>
+                               )}
                              </div>
                            </TableCell>
                           
@@ -483,22 +441,28 @@ const Orders: React.FC = () => {
                             {/* Price Column */}
                             <TableCell className="py-4 border-r border-slate-200 align-top text-center">
                               <div className="space-y-3">
-                                {order.order_items?.map((item: any, index: number) => (
+                                {order.items?.map((item: any, index: number) => (
                                   <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
                                     <div className="font-medium text-slate-900">{formatCurrency(item.unit_price)}</div>
                                   </div>
                                 ))}
+                                {(!order.items || order.items.length === 0) && (
+                                  <div className="text-sm text-muted-foreground">-</div>
+                                )}
                               </div>
                             </TableCell>
                            
                             {/* Quantity Column */}
                             <TableCell className="py-4 border-r border-slate-200 align-top text-center">
                               <div className="space-y-3">
-                                {order.order_items?.map((item: any, index: number) => (
+                                {order.items?.map((item: any, index: number) => (
                                   <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                    <div className="font-medium text-slate-900">{item.quantity}</div>
+                                    <div className="font-medium text-slate-900">{item.quantity || 0}</div>
                                   </div>
                                 ))}
+                                {(!order.items || order.items.length === 0) && (
+                                  <div className="text-sm text-muted-foreground">-</div>
+                                )}
                               </div>
                             </TableCell>
                            
@@ -534,7 +498,7 @@ const Orders: React.FC = () => {
                           
                            {/* Creator Column */}
                            <TableCell className="py-4 border-r border-slate-200">
-                             <CreatorDisplay createdBy={order.created_by} />
+                             <CreatorDisplay createdBy={order.created_by} creatorInfo={order.creator_info} />
                            </TableCell>
                           
                           {/* Remove date column - now in ID */}
