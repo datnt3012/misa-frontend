@@ -192,6 +192,25 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   };
 
   const removeTag = async (tagId: string) => {
+    // Check if trying to remove reconciliation tags when only one exists
+    const tagToRemove = assignedTags.find(tag => tag.id === tagId);
+    if (tagToRemove && (tagToRemove.name === 'Đã đối soát' || tagToRemove.name === 'Chưa đối soát')) {
+      // Count how many reconciliation tags exist
+      const reconciliationTags = assignedTags.filter(tag => 
+        tag.name === 'Đã đối soát' || tag.name === 'Chưa đối soát'
+      );
+      
+      // If only one reconciliation tag exists, don't allow removal
+      if (reconciliationTags.length === 1) {
+        toast({
+          title: "Không thể bỏ nhãn",
+          description: "Đơn hàng phải có ít nhất một nhãn đối soát (Đã đối soát hoặc Chưa đối soát)",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       await orderTagsApi.removeTag(orderId, tagId);

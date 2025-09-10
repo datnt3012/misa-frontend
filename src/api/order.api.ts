@@ -71,6 +71,8 @@ export interface CreateOrderRequest {
   initial_payment?: number;
   initial_payment_method?: string;
   initial_payment_bank?: string;
+  // Tags
+  tags?: string[];
   items: {
     product_id: string;
     product_name: string;

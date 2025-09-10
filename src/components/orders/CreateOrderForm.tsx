@@ -208,6 +208,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         initial_payment: newOrder.initial_payment,
         initial_payment_method: newOrder.initial_payment_method,
         initial_payment_bank: newOrder.initial_payment_bank,
+        // Default tag for new orders
+        tags: ["Chưa đối soát"],
         items: newOrder.items.map(it => ({
           product_id: it.product_id,
           product_name: it.product_name,
