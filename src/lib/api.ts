@@ -31,7 +31,12 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
 
     // Don't retry logout requests on 401 - just let them fail
-    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/logout')) {
+    // Also don't retry refresh token requests to prevent infinite loops
+    if (error.response?.status === 401 && 
+        !originalRequest._retry && 
+        !originalRequest.url?.includes('/auth/logout') &&
+        !originalRequest.url?.includes('/auth/refresh')) {
+      
       originalRequest._retry = true;
 
       try {

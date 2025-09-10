@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { paymentsApi } from "@/api/payments.api";
+import { getErrorMessage } from "@/lib/error-utils";
 import { DollarSign, Clock, Upload, X, FileText, Image } from "lucide-react";
 
 interface PaymentDialogProps {
@@ -48,7 +49,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const { user } = useAuth();
 
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-  const paidAmount = Number(order?.paid_amount) || 0;
+  const paidAmount = Number(order?.initial_payment || order?.paid_amount) || 0;
   const debtAmount = Math.max(0, totalAmount - paidAmount);
 
   useEffect(() => {
@@ -62,11 +63,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       const payments = await paymentsApi.getPaymentsByOrder(order.id);
       setPaymentHistory(payments);
     } catch (error: any) {
-      console.error('Error loading payment history:', error);
       toast({
-        title: "Lỗi",
-        description: "Không thể tải lịch sử thanh toán",
-        variant: "destructive",
+        title: "Thông báo",
+        description: "Tính năng thanh toán chưa được hỗ trợ bởi backend",
+        variant: "default",
       });
     }
   };
@@ -85,24 +85,20 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     try {
       const amount = parseFloat(paymentAmount);
       
-      // Add payment record
-      await paymentsApi.createPayment({
-        order_id: order.id,
-        amount: amount,
-        payment_method: paymentMethod,
-        payment_date: new Date().toISOString().split('T')[0],
-        notes: paymentNotes,
-        created_by: user?.id || ''
+      // Update order's initialPayment instead of creating payment record
+      const { orderApi } = await import('@/api/order.api');
+      const currentInitialPayment = order.initial_payment || 0;
+      const newInitialPayment = currentInitialPayment + amount;
+      
+      await orderApi.updateOrder(order.id, {
+        initialPayment: newInitialPayment
       });
-
-      // TODO: Add to order status history for payment tracking
-      // This would require a separate API endpoint for order status history
 
       toast({
         title: "Thành công",
         description: amount >= 0 
-          ? `Đã ghi nhận thanh toán ${formatCurrency(amount)} và tự động ghi nhận doanh thu`
-          : `Đã điều chỉnh thanh toán ${formatCurrency(amount)} (giảm doanh thu)`,
+          ? `Đã cập nhật thanh toán: ${formatCurrency(newInitialPayment)}`
+          : `Đã điều chỉnh thanh toán: ${formatCurrency(newInitialPayment)}`,
       });
 
       onUpdate();
@@ -114,10 +110,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setPaymentMethod('cash');
       setBankAccount('');
     } catch (error: any) {
-      console.error('Error adding payment:', error);
       toast({
-        title: "Lỗi", 
-        description: error.message || "Không thể thêm thanh toán",
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể thêm thanh toán"),
         variant: "destructive",
       });
     } finally {

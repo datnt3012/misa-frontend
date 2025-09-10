@@ -18,11 +18,13 @@ export interface Order {
   order_number: string;
   customer_id: string;
   customer_name: string;
+  customer_code?: string;
   customer_phone?: string;
   customer_address?: string;
   status: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   order_type: 'sale' | 'return';
   total_amount: number;
+  initial_payment?: number;
   paid_amount: number;
   debt_amount: number;
   debt_date?: string;
@@ -36,6 +38,7 @@ export interface Order {
   items?: OrderItem[];
   customer?: {
     id: string;
+    code?: string;
     name: string;
     email?: string;
     phone?: string;
@@ -52,6 +55,7 @@ export interface Order {
 export interface CreateOrderRequest {
   customer_id: string;
   customer_name: string;
+  customer_code?: string;
   customer_phone?: string;
   customer_address?: string;
   order_type: 'sale' | 'return';
@@ -88,6 +92,7 @@ export interface UpdateOrderRequest {
   customer_address?: string;
   status?: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   order_type?: 'sale' | 'return';
+  initialPayment?: number;
   paid_amount?: number;
   debt_amount?: number;
   debt_date?: string;
@@ -159,11 +164,13 @@ export const orderApi = {
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
       customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
       customer_name: row.customer?.name ?? row.customer_name ?? '',
+      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
       customer_address: row.customer?.address ?? row.customer_address ?? '',
       status: row.status ?? 'draft',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
+      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',
@@ -188,6 +195,7 @@ export const orderApi = {
             : [],
       customer: row.customer ? {
         id: row.customer.id,
+        code: row.customer.code,
         name: row.customer.name,
         email: row.customer.email,
         phone: row.customer.phoneNumber ?? row.customer.phone,
@@ -234,11 +242,13 @@ export const orderApi = {
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
       customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
       customer_name: row.customer?.name ?? row.customer_name ?? '',
+      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
       customer_address: row.customer?.address ?? row.customer_address ?? '',
       status: row.status ?? 'draft',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
+      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',
@@ -263,6 +273,7 @@ export const orderApi = {
             : [],
       customer: row.customer ? {
         id: row.customer.id,
+        code: row.customer.code,
         name: row.customer.name,
         email: row.customer.email,
         phone: row.customer.phoneNumber ?? row.customer.phone,

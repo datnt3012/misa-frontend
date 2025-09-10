@@ -4,22 +4,33 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+// Tag management is not available in this dialog
 import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-utils";
+// Tag management is not available in this dialog
 
 interface OrderDetailDialogProps {
   order: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOrderUpdated?: () => void;
 }
 
 export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   order,
   open,
   onOpenChange,
+  onOrderUpdated,
 }) => {
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
+  const [editValues, setEditValues] = useState<{[key: string]: any}>({});
+  // Tags are display-only here
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,14 +45,108 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     setLoading(true);
     try {
       const orderData = await orderApi.getOrder(order.id);
-      console.log('Order data received:', orderData);
-      console.log('Order items:', orderData.items);
       setOrderDetails(orderData);
     } catch (error) {
-      console.error('Error loading order details:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải chi tiết đơn hàng",
+        description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const handleUpdateStatusDirect = async (newStatus: string) => {
+    if (!orderDetails) return;
+    
+    setLoading(true);
+    try {
+      await orderApi.updateOrder(orderDetails.id, {
+        status: newStatus as any
+      });
+      
+      // Refresh order details from API
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      // Notify parent component to refresh order list
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật trạng thái đơn hàng",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật trạng thái"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Removed tag update logic
+
+  const startEditing = (field: string, currentValue: any) => {
+    setEditingFields(prev => ({ ...prev, [field]: true }));
+    setEditValues(prev => ({ ...prev, [field]: currentValue }));
+  };
+
+  const cancelEditing = (field: string) => {
+    setEditingFields(prev => ({ ...prev, [field]: false }));
+    setEditValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[field];
+      return newValues;
+    });
+  };
+
+  const saveField = async (field: string) => {
+    if (!orderDetails) return;
+    
+    setLoading(true);
+    try {
+      const updateData: any = {};
+      const value = editValues[field];
+      // Translate UI snake_case to API camelCase for updates
+      if (field === 'initial_payment') {
+        updateData.initialPayment = value;
+      } else {
+        updateData[field] = value;
+      }
+      
+      await orderApi.updateOrder(orderDetails.id, updateData);
+      
+      // Refresh order details from API
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      setEditingFields(prev => ({ ...prev, [field]: false }));
+      setEditValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[field];
+        return newValues;
+      });
+      
+      // Notify parent component to refresh order list
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật thông tin đơn hàng",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật thông tin"),
         variant: "destructive",
       });
     } finally {
@@ -55,6 +160,50 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       style: 'currency',
       currency: 'VND'
     }).format(numAmount);
+  };
+
+  const renderEditableField = (field: string, label: string, value: any, type: 'text' | 'textarea' = 'text') => {
+    const isEditing = editingFields[field];
+    const editValue = editValues[field] ?? value;
+
+    return (
+      <div>
+        <label className="text-sm font-medium text-muted-foreground">{label}:</label>
+        <div className="flex items-center gap-2 mt-1">
+          {isEditing ? (
+            <div className="flex items-center gap-2 flex-1">
+              {type === 'textarea' ? (
+                <Textarea
+                  value={editValue || ''}
+                  onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                  className="flex-1"
+                  rows={2}
+                />
+              ) : (
+                <Input
+                  value={editValue || ''}
+                  onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                  className="flex-1"
+                />
+              )}
+              <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                Lưu
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                Hủy
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1">
+              <div className="text-base flex-1">{value || 'Chưa có thông tin'}</div>
+              <Button size="sm" variant="outline" onClick={() => startEditing(field, value)}>
+                Sửa
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const getStatusBadge = (status: string) => {
@@ -85,6 +234,28 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
 
+  // Convert tags from string array to OrderTag objects for display
+  const getTagsForDisplay = () => {
+    if (!orderDetails?.tags || !Array.isArray(orderDetails.tags)) return [];
+    
+    const predefinedTags = [
+      { id: 'returning_customer', name: 'Khách hàng quay lại', color: '#3B82F6' },
+      { id: 'priority', name: 'Ưu tiên', color: '#EF4444' },
+      { id: 'reconciled', name: 'Đã đối soát', color: '#10B981' },
+      { id: 'error', name: 'Lỗi', color: '#F59E0B' },
+      { id: 'unreconciled', name: 'Chưa đối soát', color: '#6B7280' },
+      { id: 'new_customer', name: 'Khách mới', color: '#8B5CF6' },
+    ];
+    
+    return orderDetails.tags.map(tagName => {
+      const predefinedTag = predefinedTags.find(t => t.name === tagName);
+      return predefinedTag || { id: tagName, name: tagName, color: '#6B7280' };
+    });
+  };
+  
+  // Only show non-reconciliation tags in this dialog
+  const getOtherTags = () => getTagsForDisplay().filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
+
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,8 +271,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     );
   }
 
-  // Tags functionality will be implemented later when backend supports it
-  const tags: any[] = [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,44 +283,34 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           {/* Customer Information */}
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Họ tên:</label>
-                <div className="text-base font-medium">{orderDetails.customer_name}</div>
-              </div>
+              {renderEditableField('customer_name', 'Họ tên', orderDetails.customer_name)}
+              {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
               
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
-                <div className="text-base">{orderDetails.customer_phone || 'Chưa có SĐT'}</div>
-              </div>
+               <div>
+                 <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
+                 <div className="flex gap-2 flex-wrap mt-1">
+                   {getOtherTags().length > 0 ? (
+                     getOtherTags().map((tag: any) => (
+                       <Badge 
+                         key={tag.id} 
+                         style={{ backgroundColor: tag.color, color: 'white' }}
+                       >
+                         {tag.name}
+                       </Badge>
+                     ))
+                   ) : (
+                     <Badge variant="secondary">Không có nhãn khác</Badge>
+                   )}
+                 </div>
+               </div>
 
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
-                <div className="flex gap-2 flex-wrap mt-1">
-                  {tags.length > 0 ? (
-                    tags.map((tag: any) => (
-                      <Badge 
-                        key={tag.id} 
-                        style={{ backgroundColor: tag.color, color: 'white' }}
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))
-                  ) : (
-                    <Badge variant="destructive">Chưa đối soát</Badge>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Ghi chú:</label>
-                <div className="text-base">{orderDetails.notes || 'Không có ghi chú'}</div>
-              </div>
+              {renderEditableField('notes', 'Ghi chú', orderDetails.notes, 'textarea')}
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
-                <div className="text-base">{orderDetails.customer?.id || orderDetails.customer_id || 'Chưa có mã'}</div>
+                <div className="text-base">{orderDetails.customer?.code || orderDetails.customer_code || 'Chưa có mã'}</div>
               </div>
 
               <div>
@@ -159,10 +318,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Ghi chú nội bộ:</label>
-                <div className="text-base">{orderDetails.notes || 'Không có ghi chú'}</div>
-              </div>
+              {renderEditableField('customer_address', 'Địa chỉ', orderDetails.customer_address)}
             </div>
           </div>
 
@@ -175,21 +331,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <h3 className="text-lg font-semibold">Vận chuyển</h3>
             </div>
             <div className="grid grid-cols-2 gap-6">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Tên người nhận hàng:</label>
-                <div className="text-base font-medium">{orderDetails.customer_name || 'Chưa có tên'}</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">SĐT người nhận hàng:</label>
-                <div className="text-base">{orderDetails.customer_phone || 'Chưa có SĐT'}</div>
-              </div>
+              {renderEditableField('receiver_name', 'Tên người nhận hàng', orderDetails.receiver_name)}
+              {renderEditableField('receiver_phone', 'SĐT người nhận hàng', orderDetails.receiver_phone)}
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Địa chỉ:</label>
-              <div className="text-base text-blue-600 underline cursor-pointer">
-                {orderDetails.customer_address || orderDetails.customers?.address || 'Chưa có địa chỉ'}
-              </div>
-            </div>
+            {renderEditableField('receiver_address', 'Địa chỉ giao hàng', orderDetails.receiver_address, 'textarea')}
           </div>
 
           <Separator />
@@ -259,10 +404,28 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           {/* Order Status and Info */}
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
-                {getStatusBadge(orderDetails.order_status || orderDetails.status)}
-              </div>
+               <div className="flex justify-between items-center">
+                 <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
+                 <Select 
+                   value={orderDetails.order_status || orderDetails.status || 'pending'}
+                   onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
+                 >
+                   <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
+                     <div className="cursor-pointer">
+                       {getStatusBadge(orderDetails.order_status || orderDetails.status)}
+                     </div>
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="pending">Chờ xử lý</SelectItem>
+                     <SelectItem value="confirmed">Đã xác nhận</SelectItem>
+                     <SelectItem value="processing">Đang xử lý</SelectItem>
+                     <SelectItem value="picked">Đã lấy hàng</SelectItem>
+                     <SelectItem value="shipped">Đã giao</SelectItem>
+                     <SelectItem value="delivered">Đã nhận</SelectItem>
+                     <SelectItem value="cancelled">Đã hủy</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
                 {getPaymentStatusBadge(orderDetails.payment_status || 'unpaid')}
@@ -289,31 +452,98 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <span className="text-sm text-muted-foreground">Tổng tiền:</span>
                 <span className="font-medium">{formatCurrency(orderDetails.total_amount)}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
-                <span className="text-green-600">{formatCurrency(orderDetails.paid_amount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Còn nợ:</span>
-                <span className="text-red-600">{formatCurrency(orderDetails.debt_amount)}</span>
-              </div>
-              {orderDetails.contract_number && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
-                  <span className="font-mono">{orderDetails.contract_number}</span>
+                <div className="flex items-center gap-2">
+                  {editingFields['initial_payment'] ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={editValues['initial_payment'] ?? (orderDetails.initial_payment || orderDetails.paid_amount || 0)}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, initial_payment: Number(e.target.value) }))}
+                        className="w-32"
+                      />
+                      <Button size="sm" onClick={() => saveField('initial_payment')} disabled={loading}>
+                        Lưu
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => cancelEditing('initial_payment')}>
+                        Hủy
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>
+                      <Button size="sm" variant="outline" onClick={() => startEditing('initial_payment', orderDetails.initial_payment || orderDetails.paid_amount || 0)}>
+                        Sửa
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-              {orderDetails.purchase_order_number && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Số PO:</span>
-                  <span className="font-mono">{orderDetails.purchase_order_number}</span>
+              </div>
+              {/* Reconciliation tags are not shown in this dialog */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
+                <div className="flex items-center gap-2">
+                  {editingFields['contract_number'] ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editValues['contract_number'] ?? orderDetails.contract_number || ''}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, contract_number: e.target.value }))}
+                        className="w-40"
+                        placeholder="Nhập số hợp đồng"
+                      />
+                      <Button size="sm" onClick={() => saveField('contract_number')} disabled={loading}>
+                        Lưu
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_number')}>
+                        Hủy
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono">{orderDetails.contract_number || 'Chưa có'}</span>
+                      <Button size="sm" variant="outline" onClick={() => startEditing('contract_number', orderDetails.contract_number || '')}>
+                        Sửa
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Số PO:</span>
+                <div className="flex items-center gap-2">
+                  {editingFields['purchase_order_number'] ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editValues['purchase_order_number'] ?? orderDetails.purchase_order_number || ''}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, purchase_order_number: e.target.value }))}
+                        className="w-40"
+                        placeholder="Nhập số PO"
+                      />
+                      <Button size="sm" onClick={() => saveField('purchase_order_number')} disabled={loading}>
+                        Lưu
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => cancelEditing('purchase_order_number')}>
+                        Hủy
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono">{orderDetails.purchase_order_number || 'Chưa có'}</span>
+                      <Button size="sm" variant="outline" onClick={() => startEditing('purchase_order_number', orderDetails.purchase_order_number || '')}>
+                        Sửa
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
+           </div>
+         </div>
+       </DialogContent>
+
+      {/* Tags manager intentionally removed in this dialog */}
+     </Dialog>
+   );
+ };
 

@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
+import { getErrorMessage } from "@/lib/error-utils";
 
 
 const Orders: React.FC = () => {
@@ -61,9 +62,12 @@ const Orders: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
+  }, [sortField, sortDirection]);
+
+  useEffect(() => {
     const interval = setInterval(fetchOrders, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [sortField, sortDirection]);
+  }, []); // Only run once on mount
 
   const fetchCreators = async () => {
     setCreators([]); // Not implemented on BE yet
@@ -139,6 +143,29 @@ const Orders: React.FC = () => {
     }
   };
 
+  // Handle order status update
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      await orderApi.updateOrder(orderId, { status: newStatus as any });
+      
+      // Update local state
+      setOrders(prev => prev.map(order => 
+        order.id === orderId ? { ...order, status: newStatus } : order
+      ));
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật trạng thái đơn hàng",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật trạng thái"),
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -207,7 +234,7 @@ const Orders: React.FC = () => {
   // Calculate totals
   const totals = filteredOrders.reduce((acc, order) => ({
     totalAmount: acc.totalAmount + (order.total_amount || 0),
-    paidAmount: acc.paidAmount + (order.paid_amount || 0),
+    paidAmount: acc.paidAmount + (order.initial_payment || order.paid_amount || 0),
     debtAmount: acc.debtAmount + (order.debt_amount || 0),
   }), { totalAmount: 0, paidAmount: 0, debtAmount: 0 });
 
@@ -513,10 +540,10 @@ const Orders: React.FC = () => {
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
-                                  {formatCurrency(order.paid_amount)}
+                                  {formatCurrency(order.initial_payment || order.paid_amount)}
                                 </div>
                                 <div className="text-sm font-medium text-purple-600">
-                                  {formatCurrency(order.total_amount - order.paid_amount)}
+                                  {formatCurrency(order.total_amount - (order.initial_payment || order.paid_amount))}
                                 </div>
                               </div>
                             </TableCell>
@@ -547,7 +574,25 @@ const Orders: React.FC = () => {
                           
                            {/* Status Column */}
                            <TableCell className="py-4 border-r border-slate-200">
-                             {getStatusBadge(order.status)}
+                             <Select
+                               value={order.status || 'pending'}
+                               onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
+                             >
+                               <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
+                                 <div className="cursor-pointer">
+                                   {getStatusBadge(order.status)}
+                                 </div>
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="pending">Chờ xử lý</SelectItem>
+                                 <SelectItem value="confirmed">Đã xác nhận</SelectItem>
+                                 <SelectItem value="processing">Đang xử lý</SelectItem>
+                                 <SelectItem value="picked">Đã lấy hàng</SelectItem>
+                                 <SelectItem value="shipped">Đã giao</SelectItem>
+                                 <SelectItem value="delivered">Đã nhận</SelectItem>
+                                 <SelectItem value="cancelled">Đã hủy</SelectItem>
+                               </SelectContent>
+                             </Select>
                            </TableCell>
                          
                          {/* Actions Column */}
@@ -625,6 +670,12 @@ const Orders: React.FC = () => {
         order={selectedOrder}
         open={showOrderDetailDialog}
         onOpenChange={setShowOrderDetailDialog}
+        onOrderUpdated={() => {
+          fetchOrders();
+          if (selectedOrder) {
+            orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
+          }
+        }}
       />
 
       {/* Order Tags Manager */}

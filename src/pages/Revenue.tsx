@@ -77,9 +77,10 @@ export default function Revenue() {
         }
 
         // Add paid amount to revenue
-        monthlyRevenue[key].revenue += order.paid_amount || 0;
+        const paidAmount = order.initial_payment || order.paid_amount || 0;
+        monthlyRevenue[key].revenue += paidAmount;
         monthlyRevenue[key].orderCount += 1;
-        totalRevenue += order.paid_amount || 0;
+        totalRevenue += paidAmount;
 
         // Add debt amount
         monthlyRevenue[key].debt += order.debt_amount || 0;

@@ -10,6 +10,7 @@ import { Plus, X, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { orderTagsApi } from "@/api/orderTags.api";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface OrderTagsManagerProps {
   orderId: string;
@@ -77,7 +78,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     } catch (error) {
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách nhãn",
+        description: getErrorMessage(error, "Không thể tải danh sách nhãn"),
         variant: "destructive",
       });
     }
@@ -183,7 +184,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       hasError = true;
       toast({
         title: "Lỗi",
-        description: "Không thể gán nhãn",
+        description: getErrorMessage(error, "Không thể gán nhãn"),
         variant: "destructive",
       });
     } finally {
@@ -228,7 +229,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     } catch (error) {
       toast({
         title: "Lỗi",
-        description: "Không thể bỏ nhãn",
+        description: getErrorMessage(error, "Không thể bỏ nhãn"),
         variant: "destructive",
       });
     } finally {

@@ -15,6 +15,7 @@ import { customerApi } from "@/api/customer.api";
 import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface CreateOrderFormProps {
   open: boolean;
@@ -230,10 +231,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
       onOrderCreated();
     } catch (error) {
-      console.error('Error creating order:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tạo đơn hàng",
+        description: getErrorMessage(error, "Không thể tạo đơn hàng"),
         variant: "destructive",
       });
     } finally {
