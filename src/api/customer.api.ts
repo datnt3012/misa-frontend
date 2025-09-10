@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from '@/config/api';
 
 export interface Customer {
   id: string;
+  customer_code?: string;
   name: string;
   email?: string;
   phoneNumber?: string;
@@ -48,19 +49,24 @@ export const customerApi = {
     const response = await api.get<any>(url);
     const data = response?.data || response;
 
-    const normalize = (row: any): Customer => ({
-      id: row.id,
-      name: row.name,
-      email: row.email ?? null,
-      phoneNumber: row.phoneNumber ?? row.phone ?? null,
-      address: row.address ?? null,
-      userId: row.userId ?? null,
-      isDeleted: row.isDeleted ?? false,
-      createdAt: row.createdAt ?? row.created_at ?? '',
-      updatedAt: row.updatedAt ?? row.updated_at ?? '',
-      deletedAt: row.deletedAt ?? row.deleted_at ?? null,
-      user: row.user ?? null,
-    });
+    const normalize = (row: any): Customer => {
+      const normalized = {
+        id: row.id,
+        customer_code: row.code ?? row.customer_code ?? row.customerCode ?? null,
+        name: row.name,
+        email: row.email ?? null,
+        phoneNumber: row.phoneNumber ?? row.phone ?? null,
+        address: row.address ?? null,
+        userId: row.userId ?? null,
+        isDeleted: row.isDeleted ?? false,
+        createdAt: row.createdAt ?? row.created_at ?? '',
+        updatedAt: row.updatedAt ?? row.updated_at ?? '',
+        deletedAt: row.deletedAt ?? row.deleted_at ?? null,
+        user: row.user ?? null,
+      };
+      console.log('Normalizing customer:', { original: row.code, normalized: normalized.customer_code });
+      return normalized;
+    };
 
     if (data && Array.isArray(data.rows)) {
       return {

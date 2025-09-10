@@ -19,6 +19,7 @@ import {
   Trash2
 } from "lucide-react";
 import { customerApi } from "@/api/customer.api";
+import { orderApi, Order } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { Loading } from "@/components/ui/loading";
@@ -45,13 +46,13 @@ import { vi } from "date-fns/locale";
 
 interface Customer {
   id: string;
-  customer_code: string;
+  customer_code?: string;
   name: string;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  created_at: string;
-  updated_at: string;
+  phoneNumber?: string;
+  email?: string;
+  address?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Order {
@@ -137,21 +138,31 @@ const Customers = () => {
       }
     } else if (action === 'view' && customerId) {
       // Find customer and open detail dialog
+      console.log('Looking for customer with ID:', customerId);
+      console.log('Available customers:', customers.map(c => ({ id: c.id, name: c.name })));
       const customer = customers.find(c => c.id === customerId);
       if (customer) {
-        handleViewCustomerDetail(customer);
+      console.log('Found customer:', customer);
+      console.log('Customer createdAt:', customer.createdAt);
+      handleViewCustomerDetail(customer);
+      } else {
+        console.log('Customer not found');
       }
     }
   }, [customers, searchParams]);
 
   const fetchCustomerOrders = async (customerId: string) => {
     try {
+      console.log('Fetching orders for customer:', customerId);
       // Use backend API to fetch customer orders
       const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000 });
       const allOrders = ordersResponse.orders || [];
+      console.log('All orders fetched:', allOrders.length);
+      console.log('Sample order customer_id:', allOrders[0]?.customer_id);
       
       // Filter orders for this customer
       const customerOrders = allOrders.filter(order => order.customer_id === customerId);
+      console.log('Filtered customer orders:', customerOrders.length);
       setCustomerOrders(customerOrders);
 
       // Calculate customer stats
@@ -208,11 +219,14 @@ const Customers = () => {
   };
 
   const handleEditCustomer = (customer: Customer) => {
+    console.log('Editing customer:', customer);
+    console.log('Customer customer_code:', customer.customer_code);
+    console.log('Customer phoneNumber:', customer.phoneNumber);
     setEditingCustomer(customer);
     setEditCustomer({
-      customer_code: customer.customer_code,
+      customer_code: customer.customer_code || "",
       name: customer.name,
-      phone: customer.phone || "",
+      phone: customer.phoneNumber || "",
       email: customer.email || "",
       address: customer.address || ""
     });
@@ -301,7 +315,7 @@ const Customers = () => {
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.customer_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phone?.includes(searchTerm) ||
+    customer.phoneNumber?.includes(searchTerm) ||
     customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -462,10 +476,10 @@ const Customers = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {customer.phone && (
+                {customer.phoneNumber && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Phone className="h-4 w-4" />
-                    {customer.phone}
+                    {customer.phoneNumber}
                   </div>
                 )}
                 {customer.email && (
@@ -482,7 +496,7 @@ const Customers = () => {
                 )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  Tham gia: {customer.created_at ? format(new Date(customer.created_at), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
+                  Tham gia: {customer.createdAt && customer.createdAt !== '' ? format(new Date(customer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
                 </div>
               </CardContent>
             </Card>
@@ -611,10 +625,10 @@ const Customers = () => {
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        {selectedCustomer.phone && (
+                        {selectedCustomer.phoneNumber && (
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{selectedCustomer.phone}</span>
+                            <span>{selectedCustomer.phoneNumber}</span>
                           </div>
                         )}
                         {selectedCustomer.email && (
@@ -633,7 +647,7 @@ const Customers = () => {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>Tham gia: {selectedCustomer.created_at ? format(new Date(selectedCustomer.created_at), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}</span>
+                          <span>Tham gia: {selectedCustomer.createdAt && selectedCustomer.createdAt !== '' ? format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}</span>
                         </div>
                       </div>
                     </div>
