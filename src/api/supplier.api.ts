@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from '@/config/api';
 
 export interface Supplier {
   id: string;
+  code: string;
   name: string;
   contact_phone: string;
   email?: string;
@@ -32,6 +33,7 @@ export interface UpdateSupplierRequest {
 
 const normalize = (row: any): Supplier => ({
   id: row.id,
+  code: row.code ?? '',
   name: row.name,
   contact_phone: row.contact_phone ?? row.phoneNumber ?? row.phone ?? '',
   email: row.email ?? undefined,

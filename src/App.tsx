@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
+import Suppliers from "./pages/Suppliers";
 import Revenue from "./pages/Revenue";
 import Settings from "./pages/Settings";
 import ExportSlips from "./pages/ExportSlips";
@@ -64,6 +65,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Layout><Customers /></Layout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/suppliers" 
+              element={
+                <ProtectedRoute>
+                  <Layout><Suppliers /></Layout>
                 </ProtectedRoute>
               } 
             />

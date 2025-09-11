@@ -12,7 +12,8 @@ import {
   Bell,
   User,
   LogOut,
-  Users
+  Users,
+  Building2
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +43,7 @@ const Layout = ({ children }: LayoutProps) => {
     { name: "Quản Lý Kho", href: "/inventory", icon: Package },
     { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
     { name: "Khách Hàng", href: "/customers", icon: Users },
+    { name: "Nhà Cung Cấp", href: "/suppliers", icon: Building2 },
     { name: "Doanh Thu", href: "/revenue", icon: TrendingUp },
     { name: "Phiếu Xuất", href: "/export-slips", icon: Package },
     { name: "Cài Đặt", href: "/settings", icon: Settings },
