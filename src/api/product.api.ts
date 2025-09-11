@@ -42,6 +42,8 @@ export interface UpdateProductRequest {
   category?: string;
   unit?: string;
   price?: number;
+  costPrice?: number;
+  barcode?: string;
 }
 
 export interface ProductImportRequest {

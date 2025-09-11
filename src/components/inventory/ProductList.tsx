@@ -272,6 +272,8 @@ const ProductList: React.FC<ProductListProps> = ({
         category: newProduct.category,
         unit: newProduct.unit,
         price: newProduct.price,
+        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }), // Include costPrice if provided
+        ...(newProduct.barcode && { barcode: newProduct.barcode }), // Include barcode if provided
       });
 
       toast.success('Đã cập nhật sản phẩm!');
@@ -328,7 +330,7 @@ const ProductList: React.FC<ProductListProps> = ({
         'Loại': product.category || '',
         'Đơn vị': product.unit || 'cái',
         'Giá bán (VND)': product.price || 0,
-        'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
+        'Cập nhật': product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : ''
       };
 
       if (canViewCostPrice) {
@@ -836,7 +838,7 @@ const ProductList: React.FC<ProductListProps> = ({
             <TableBody>
               {paginatedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 7 : 6) : (canViewCostPrice ? 6 : 5)} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 8 : 7) : (canViewCostPrice ? 7 : 6)} className="text-center py-8 text-muted-foreground">
                     {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
                   </TableCell>
                 </TableRow>
@@ -857,7 +859,7 @@ const ProductList: React.FC<ProductListProps> = ({
                       })()}
                     </TableCell>
                     <TableCell>
-                      {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
+                      {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                     {canManageProducts && (
                       <TableCell>
