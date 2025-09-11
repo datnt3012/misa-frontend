@@ -94,7 +94,40 @@ const normalize = (row: any): ExportSlip => ({
   } : undefined,
 });
 
+export interface CreateExportSlipRequest {
+  order_id: string;
+  notes?: string;
+  items: Array<{
+    product_id: string;
+    product_name: string;
+    product_code: string;
+    requested_quantity: number;
+    unit_price: number;
+  }>;
+}
+
 export const exportSlipsApi = {
+  // Create new export slip
+  createSlip: async (data: CreateExportSlipRequest): Promise<ExportSlip> => {
+    const slipData = {
+      orderId: data.order_id,
+      type: 'export',
+      status: 'pending',
+      description: data.notes || 'Export slip',
+      details: data.items.map(item => ({
+        productId: item.product_id,
+        productName: item.product_name,
+        productCode: item.product_code,
+        quantity: item.requested_quantity,
+        unitPrice: item.unit_price.toString(),
+        totalPrice: (item.requested_quantity * item.unit_price).toString()
+      }))
+    };
+
+    const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, slipData);
+    return normalize(response.data || response);
+  },
+
   getSlips: async (params?: { page?: number; limit?: number; status?: string; search?: string }): Promise<{ slips: ExportSlip[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));

@@ -17,6 +17,15 @@ export interface Product {
   deletedAt?: string;
 }
 
+export interface ProductWithStock extends Product {
+  current_stock: number;
+  location?: string;
+  updated_at?: string;
+  warehouse_id?: string;
+  warehouse_name?: string;
+  warehouse_code?: string;
+}
+
 export interface CreateProductRequest {
   code?: string;
   name: string;

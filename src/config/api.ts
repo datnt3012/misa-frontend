@@ -73,6 +73,22 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/customers/${id}`,
   },
   
+  // Suppliers
+  SUPPLIERS: {
+    LIST: '/suppliers',
+    CREATE: '/suppliers',
+    UPDATE: (id: string) => `/suppliers/${id}`,
+    DELETE: (id: string) => `/suppliers/${id}`,
+  },
+  
+  // Stock Levels
+  STOCK_LEVELS: {
+    LIST: '/stock-levels',
+    CREATE: '/stock-levels',
+    UPDATE: (id: string) => `/stock-levels/${id}`,
+    DELETE: (id: string) => `/stock-levels/${id}`,
+  },
+  
   // Orders
   ORDERS: {
     LIST: '/orders',

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import * as XLSX from 'xlsx';
 import { toast } from "sonner";
 import React from "react";
+import { stockLevelsApi, StockLevel } from "@/api/stockLevels.api";
+import { ProductWithStock } from "@/api/product.api";
 
 interface InventoryStockProps {
   products: any[];
@@ -22,7 +24,62 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   warehouses,
   canViewCostPrice
 }) => {
+  const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Load stock levels
+  const loadStockLevels = async () => {
+    try {
+      setLoading(true);
+      const response = await stockLevelsApi.getStockLevels({ 
+        page: 1, 
+        limit: 1000,
+        includeDeleted: false 
+      });
+      setStockLevels(response.stockLevels || []);
+    } catch (error) {
+      console.error('Error loading stock levels:', error);
+      toast.error('Không thể tải dữ liệu tồn kho');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load stock levels on component mount
+  useEffect(() => {
+    loadStockLevels();
+  }, []);
+
+  // Create products with stock information - one row per warehouse
+  const productsWithStock: ProductWithStock[] = products.flatMap(product => {
+    // Find stock levels for this product
+    const productStockLevels = stockLevels.filter(stock => stock.productId === product.id);
+    
+    // If no stock levels, return one row with zero stock
+    if (productStockLevels.length === 0) {
+      return [{
+        ...product,
+        current_stock: 0,
+        location: 'Chưa có tồn kho',
+        updated_at: product.updatedAt,
+        warehouse_id: '',
+        warehouse_name: '',
+        warehouse_code: ''
+      }];
+    }
+    
+    // Create one row for each warehouse
+    return productStockLevels.map(stock => ({
+      ...product,
+      current_stock: stock.quantity,
+      location: stock.warehouse ? `${stock.warehouse.name} (${stock.warehouse.code})` : 'Không xác định',
+      updated_at: stock.updatedAt,
+      warehouse_id: stock.warehouseId,
+      warehouse_name: stock.warehouse?.name || '',
+      warehouse_code: stock.warehouse?.code || ''
+    }));
+  });
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
@@ -40,7 +97,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     }
   };
 
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = productsWithStock.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -52,21 +109,15 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     const matchesCategory = filterCategory === "all" || 
                            (product.category && product.category.toLowerCase().includes(filterCategory.toLowerCase()));
 
-    const matchesWarehouse = filterWarehouse === "all" ||
-                            warehouses.find(w => 
-                              (product.location?.includes(`(${w.code})`) || product.location?.includes(w.code)) &&
-                              w.id === filterWarehouse
-                            );
+    const matchesWarehouse = filterWarehouse === "all" || product.warehouse_id === filterWarehouse;
     
     return matchesSearch && matchesStatus && matchesCategory && matchesWarehouse;
   });
 
   // Get unique categories and warehouses for filters
-  const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+  const uniqueCategories = [...new Set(productsWithStock.map(p => p.category).filter(Boolean))].sort();
   const usedWarehouses = warehouses.filter(w => 
-    products.some(p => 
-      p.location?.includes(`(${w.code})`) || p.location?.includes(w.code)
-    )
+    productsWithStock.some(p => p.warehouse_id === w.id)
   );
 
   // Sorting logic
@@ -103,14 +154,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           bValue = b.price;
           break;
         case 'warehouse':
-          const warehouseA = warehouses.find(w => 
-            a.location?.includes(`(${w.code})`) || a.location?.includes(w.code)
-          );
-          const warehouseB = warehouses.find(w => 
-            b.location?.includes(`(${w.code})`) || b.location?.includes(w.code)
-          );
-          aValue = warehouseA?.name || a.location || '';
-          bValue = warehouseB?.name || b.location || '';
+          aValue = a.warehouse_name || a.location || '';
+          bValue = b.warehouse_name || b.location || '';
           break;
         case 'updated_at':
           aValue = new Date(a.updated_at);
@@ -186,10 +231,6 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
 
   const exportToExcel = () => {
     const exportData = sortedProducts.map((product, index) => {
-      const warehouse = warehouses.find(w => 
-        product.location?.includes(`(${w.code})`) || product.location?.includes(w.code)
-      );
-      
       const exportItem: any = {
         'STT': index + 1,
         'Mã sản phẩm': product.code,
@@ -198,7 +239,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
         'Giá bán (VND)': product.price || 0,
-        'Kho': warehouse?.name || product.location || '',
+        'Kho': product.warehouse_name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
                      product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
         'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
@@ -245,6 +286,25 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     XLSX.writeFile(wb, filename);
     toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
   };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Báo Cáo Tồn Kho</CardTitle>
+          <CardDescription>Đang tải dữ liệu tồn kho...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Đang tải dữ liệu tồn kho...</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -463,14 +523,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                       </div>
                     </TableCell>
                     <TableCell>
-                      {/* Hiển thị tên kho */}
-                      {(() => {
-                        const warehouse = warehouses.find(w => 
-                          product.location?.includes(`(${w.code})`) || 
-                          product.location?.includes(w.code)
-                        );
-                        return warehouse?.name || product.location || '-';
-                      })()}
+                      {product.warehouse_name || product.location || '-'}
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(product.current_stock)}

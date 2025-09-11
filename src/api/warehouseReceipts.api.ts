@@ -37,7 +37,48 @@ export interface WarehouseReceipt {
   items?: WarehouseReceiptItem[];
 }
 
+export interface CreateWarehouseReceiptRequest {
+  warehouseId: string;
+  supplierId: string;
+  code: string;
+  description?: string;
+  status?: string;
+  type: string;
+  details: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  isDeleted?: boolean;
+}
+
 export const warehouseReceiptsApi = {
+  // Create new warehouse receipt
+  createReceipt: async (data: CreateWarehouseReceiptRequest): Promise<WarehouseReceipt> => {
+    const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, data);
+    const receiptData = response?.data || response;
+    
+    return {
+      id: receiptData.id,
+      code: receiptData.code,
+      warehouse_id: receiptData.warehouseId,
+      supplier_id: receiptData.supplierId,
+      description: receiptData.description,
+      status: receiptData.status || 'pending',
+      type: receiptData.type,
+      total_amount: Number(receiptData.totalAmount || 0),
+      created_at: receiptData.createdAt || receiptData.created_at,
+      updated_at: receiptData.updatedAt || receiptData.updated_at,
+      items: receiptData.details?.map((detail: any) => ({
+        id: detail.id,
+        product_id: detail.productId,
+        quantity: Number(detail.quantity),
+        unit_price: Number(detail.unitPrice),
+        total_price: Number(detail.totalPrice || detail.quantity * detail.unitPrice),
+      })) || []
+    };
+  },
+
   getReceipts: async (params?: { page?: number; limit?: number; search?: string; warehouse_id?: string; status?: string }): Promise<{ receipts: WarehouseReceipt[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
@@ -56,7 +97,7 @@ export const warehouseReceiptsApi = {
     const normalize = (row: any): WarehouseReceipt => ({
       id: row.id,
       code: row.code ?? row.slip_number ?? '',
-      warehouse_id: row.warehouseId ?? row.warehouse_id ?? '',
+      warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
       supplier_id: row.supplierId ?? row.supplier_id ?? undefined,
       supplier_name: row.supplier?.name ?? row.supplier_name ?? undefined,
       supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
@@ -122,6 +163,74 @@ export const warehouseReceiptsApi = {
       total: Number(response?.total ?? 0),
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? 0),
+    };
+  },
+
+  // Approve warehouse receipt
+  approveReceipt: async (id: string): Promise<WarehouseReceipt> => {
+    const response = await api.patch<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), {
+      status: 'approved'
+    });
+    const receiptData = response?.data || response;
+    
+    return {
+      id: receiptData.id,
+      code: receiptData.code,
+      warehouse_id: receiptData.warehouseId,
+      supplier_id: receiptData.supplierId,
+      description: receiptData.description,
+      status: receiptData.status || 'approved',
+      type: receiptData.type,
+      total_amount: Number(receiptData.totalAmount || 0),
+      created_at: receiptData.createdAt || receiptData.created_at,
+      updated_at: receiptData.updatedAt || receiptData.updated_at,
+      items: receiptData.details?.map((detail: any) => ({
+        id: detail.id,
+        product_id: detail.productId,
+        quantity: Number(detail.quantity),
+        unit_price: Number(detail.unitPrice),
+        total_price: Number(detail.totalPrice || detail.quantity * detail.unitPrice),
+      })) || []
+    };
+  },
+
+  // Reject warehouse receipt
+  rejectReceipt: async (id: string): Promise<WarehouseReceipt> => {
+    const response = await api.patch<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), {
+      status: 'rejected'
+    });
+    const receiptData = response?.data || response;
+    
+    return {
+      id: receiptData.id,
+      code: receiptData.code,
+      warehouse_id: receiptData.warehouseId,
+      supplier_id: receiptData.supplierId,
+      description: receiptData.description,
+      status: receiptData.status || 'rejected',
+      type: receiptData.type,
+      total_amount: Number(receiptData.totalAmount || 0),
+      created_at: receiptData.createdAt || receiptData.created_at,
+      updated_at: receiptData.updatedAt || receiptData.updated_at,
+      items: receiptData.details?.map((detail: any) => ({
+        id: detail.id,
+        product_id: detail.productId,
+        quantity: Number(detail.quantity),
+        unit_price: Number(detail.unitPrice),
+        total_price: Number(detail.totalPrice || detail.quantity * detail.unitPrice),
+      })) || []
+    };
+  },
+
+  // Delete warehouse receipt
+  deleteReceipt: async (id: string, hard: boolean = false): Promise<{ message: string }> => {
+    const url = hard 
+      ? `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.DELETE(id)}?hard=true`
+      : API_ENDPOINTS.WAREHOUSE_RECEIPTS.DELETE(id);
+    
+    const response = await api.delete<any>(url);
+    return {
+      message: response?.message || (hard ? 'Phiếu nhập kho đã được xóa vĩnh viễn' : 'Phiếu nhập kho đã được xóa')
     };
   },
 };
