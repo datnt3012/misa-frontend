@@ -331,7 +331,8 @@ const Orders: React.FC = () => {
   }), { totalAmount: 0, paidAmount: 0, debtAmount: 0 });
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">📋 DANH SÁCH ĐƠN HÀNG</h1>
@@ -904,10 +905,11 @@ const Orders: React.FC = () => {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
+       </Dialog>
+       </div>
+     </div>
+   );
+ };
 
 export default Orders;
 

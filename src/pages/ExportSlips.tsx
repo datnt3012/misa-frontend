@@ -181,8 +181,6 @@ export default function ExportSlips() {
   };
 
   // Permission checks removed - let backend handle authorization
-  const canApprove = true; // Always allow approval - backend will handle access control
-  const canExport = true; // Always allow export - backend will handle access control
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -255,7 +253,7 @@ export default function ExportSlips() {
     });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">Quản Lý Phiếu Xuất Kho</h1>
         <p className="text-muted-foreground">

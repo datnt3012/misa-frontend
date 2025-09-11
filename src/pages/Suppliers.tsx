@@ -9,7 +9,19 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
-import { supplierApi, Supplier } from '@/api/supplier.api';
+import { supplierApi } from '@/api/supplier.api';
+
+interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  contact_phone: string;
+  email: string;
+  address: string;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface CreateSupplierRequest {
   name: string;
@@ -187,7 +199,8 @@ const Suppliers: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Quản lý Nhà cung cấp</h1>
@@ -465,6 +478,7 @@ const Suppliers: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 };

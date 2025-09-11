@@ -40,11 +40,6 @@ const Inventory = () => {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stockStats, setStockStats] = useState({
-    inStock: 0,
-    lowStock: 0,
-    outOfStock: 0
-  });
   const [newWarehouse, setNewWarehouse] = useState({ 
     name: "", 
     code: "", 
@@ -109,7 +104,7 @@ const Inventory = () => {
       loadFunction: async () => {
         // ImportSlips component will handle its own data loading
         // This is just to ensure the tab is loaded when accessed
-        return;
+        return { loaded: true };
       }
     }
   });
@@ -134,14 +129,30 @@ const Inventory = () => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
+    const matchesStatus = filterStatus === "all" || 
+                         (filterStatus === "in-stock" && product.current_stock >= 10) ||
+                         (filterStatus === "low-stock" && product.current_stock > 0 && product.current_stock < 10) ||
+                         (filterStatus === "out-of-stock" && product.current_stock === 0);
+    
     const matchesCategory = filterCategory === "all" || 
                            (product.category && product.category.toLowerCase().includes(filterCategory.toLowerCase()));
+
+    const matchesWarehouse = filterWarehouse === "all" ||
+                            warehouses.find(w => 
+                              (product.location?.includes(`(${w.code})`) || product.location?.includes(w.code)) &&
+                              w.id === filterWarehouse
+                            );
     
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesStatus && matchesCategory && matchesWarehouse;
   });
 
-  // Get unique categories for filters
+  // Get unique categories and warehouses for filters
   const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+  const usedWarehouses = warehouses.filter(w => 
+    products.some(p => 
+      p.location?.includes(`(${w.code})`) || p.location?.includes(w.code)
+    )
+  );
 
   // Sorting logic
   const sortedProducts = React.useMemo(() => {
@@ -164,13 +175,31 @@ const Inventory = () => {
           aValue = a.category || '';
           bValue = b.category || '';
           break;
-        case 'price':
-          aValue = a.price;
-          bValue = b.price;
+        case 'current_stock':
+          aValue = a.current_stock;
+          bValue = b.current_stock;
           break;
-        case 'updatedAt':
-          aValue = new Date(a.updatedAt);
-          bValue = new Date(b.updatedAt);
+        case 'cost_price':
+          aValue = a.cost_price;
+          bValue = b.cost_price;
+          break;
+        case 'unit_price':
+          aValue = a.unit_price;
+          bValue = b.unit_price;
+          break;
+        case 'warehouse':
+          const warehouseA = warehouses.find(w => 
+            a.location?.includes(`(${w.code})`) || a.location?.includes(w.code)
+          );
+          const warehouseB = warehouses.find(w => 
+            b.location?.includes(`(${w.code})`) || b.location?.includes(w.code)
+          );
+          aValue = warehouseA?.name || a.location || '';
+          bValue = warehouseB?.name || b.location || '';
+          break;
+        case 'updated_at':
+          aValue = new Date(a.updated_at);
+          bValue = new Date(b.updated_at);
           break;
         default:
           return 0;
@@ -481,14 +510,22 @@ const Inventory = () => {
   const exportToExcel = () => {
     // Prepare data for export
     const exportData = sortedProducts.map((product, index) => {
+      const warehouse = warehouses.find(w => 
+        product.location?.includes(`(${w.code})`) || product.location?.includes(w.code)
+      );
+      
       const exportItem: any = {
         'STT': index + 1,
         'Mã sản phẩm': product.code,
         'Tên sản phẩm': product.name,
         'Loại': product.category || '',
+        'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
         'Giá bán (VND)': product.price || 0,
-        'Cập nhật': product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : ''
+        'Kho': warehouse?.name || product.location || '',
+        'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
+                     product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
+        'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
       };
 
       // Only add cost price if user can view it
@@ -554,7 +591,7 @@ const Inventory = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Tồn Kho</h1>
@@ -580,7 +617,7 @@ const Inventory = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {stockStats.inStock}
+                {products.filter(p => p.current_stock >= 10).length}
               </div>
             </CardContent>
           </Card>
@@ -592,7 +629,7 @@ const Inventory = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {stockStats.lowStock}
+                {products.filter(p => p.current_stock > 0 && p.current_stock < 10).length}
               </div>
             </CardContent>
           </Card>
@@ -604,7 +641,7 @@ const Inventory = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {stockStats.outOfStock}
+                {products.filter(p => p.current_stock === 0).length}
               </div>
             </CardContent>
           </Card>
@@ -639,7 +676,6 @@ const Inventory = () => {
               products={products}
               warehouses={warehouses}
               canViewCostPrice={canViewCostPrice}
-              onStatsUpdate={setStockStats}
             />
           </TabsContent>
 

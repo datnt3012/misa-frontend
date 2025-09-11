@@ -17,14 +17,12 @@ interface InventoryStockProps {
   products: any[];
   warehouses: any[];
   canViewCostPrice: boolean;
-  onStatsUpdate?: (stats: { inStock: number; lowStock: number; outOfStock: number }) => void;
 }
 
 const InventoryStock: React.FC<InventoryStockProps> = ({
   products,
   warehouses,
-  canViewCostPrice,
-  onStatsUpdate
+  canViewCostPrice
 }) => {
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,18 +80,6 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       warehouse_code: stock.warehouse?.code || ''
     }));
   });
-
-  // Calculate stock statistics and update parent
-  useEffect(() => {
-    if (onStatsUpdate && productsWithStock.length > 0) {
-      const stats = {
-        inStock: productsWithStock.filter(p => p.current_stock >= 10).length,
-        lowStock: productsWithStock.filter(p => p.current_stock > 0 && p.current_stock < 10).length,
-        outOfStock: productsWithStock.filter(p => p.current_stock === 0).length
-      };
-      onStatsUpdate(stats);
-    }
-  }, [productsWithStock, onStatsUpdate]);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
