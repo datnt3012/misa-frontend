@@ -487,7 +487,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   {editingFields['contract_number'] ? (
                     <div className="flex items-center gap-2">
                       <Input
-                        value={editValues['contract_number'] ?? orderDetails.contract_number || ''}
+                        value={editValues['contract_number'] ?? (orderDetails.contract_number || '')}
                         onChange={(e) => setEditValues(prev => ({ ...prev, contract_number: e.target.value }))}
                         className="w-40"
                         placeholder="Nhập số hợp đồng"
@@ -515,7 +515,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   {editingFields['purchase_order_number'] ? (
                     <div className="flex items-center gap-2">
                       <Input
-                        value={editValues['purchase_order_number'] ?? orderDetails.purchase_order_number || ''}
+                        value={editValues['purchase_order_number'] ?? (orderDetails.purchase_order_number || '')}
                         onChange={(e) => setEditValues(prev => ({ ...prev, purchase_order_number: e.target.value }))}
                         className="w-40"
                         placeholder="Nhập số PO"

@@ -64,10 +64,7 @@ const Orders: React.FC = () => {
     fetchOrders();
   }, [sortField, sortDirection]);
 
-  useEffect(() => {
-    const interval = setInterval(fetchOrders, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, []); // Only run once on mount
+  // Removed automatic refresh - only reload on user actions
 
   const fetchCreators = async () => {
     setCreators([]); // Not implemented on BE yet
