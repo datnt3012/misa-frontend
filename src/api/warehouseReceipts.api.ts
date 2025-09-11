@@ -39,7 +39,7 @@ export interface WarehouseReceipt {
 
 export interface CreateWarehouseReceiptRequest {
   warehouseId: string;
-  supplierId: string;
+  supplierId: string; // Required by backend
   code: string;
   description?: string;
   status?: string;

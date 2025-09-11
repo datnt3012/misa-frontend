@@ -18,6 +18,7 @@ import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
 import { productApi } from '@/api/product.api';
 import { warehouseApi } from '@/api/warehouse.api';
 import { supplierApi, Supplier } from '@/api/supplier.api';
+import { generateImportSlipCode } from '@/utils/importSlipUtils';
 import { stockLevelsApi } from '@/api/stockLevels.api';
 
 interface ImportSlip {
@@ -301,8 +302,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         if (!supplierId) return;
       }
 
-      // Generate slip number (mock for now)
-      const slipNumber = `IMP-${Date.now()}`;
+      // Generate slip number using utility function
+      const slipNumber = generateImportSlipCode();
       
       const totalAmount = currentItems.reduce((sum, item) => sum + item.total_price, 0);
 

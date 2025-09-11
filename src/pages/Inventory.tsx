@@ -452,29 +452,10 @@ const Inventory = () => {
   };
 
   const handleImportComplete = async (importedData: any[]) => {
-    try {
-      // Save imported products to API
-      for (const item of importedData) {
-        if (item.status === 'valid') {
-          await productApi.createProduct({
-            name: item.productName,
-            code: item.productCode,
-            category: item.category,
-            current_stock: item.quantity,
-            cost_price: item.costPrice,
-            unit_price: item.price,
-            location: item.location,
-            min_stock_level: 10
-          });
-        }
-      }
-      
-      toast.success('Đã nhập sản phẩm thành công!');
-      loadData(); // Refresh data
-    } catch (error) {
-      console.error('Error importing products:', error);
-      toast.error('Có lỗi khi nhập sản phẩm');
-    }
+    // Excel import now only creates warehouse receipts, not products
+    // Products already exist in the system, we just create import receipts
+    // Toast message is already shown in ExcelImport component
+    loadData(); // Refresh data
   };
 
   const addProduct = async () => {
