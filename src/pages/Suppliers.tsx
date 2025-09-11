@@ -9,19 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
-import { supplierApi } from '@/api/supplier.api';
-
-interface Supplier {
-  id: string;
-  code: string;
-  name: string;
-  contact_phone: string;
-  email: string;
-  address: string;
-  isDeleted: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import { supplierApi, Supplier } from '@/api/supplier.api';
 
 interface CreateSupplierRequest {
   name: string;

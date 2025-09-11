@@ -471,7 +471,7 @@ const Orders: React.FC = () => {
       <Card className="shadow-sm border">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="border-b bg-slate-50/50">
                   <TableHead className="w-12 py-3 border-r border-slate-200">
@@ -483,7 +483,7 @@ const Orders: React.FC = () => {
                     />
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px]" 
                     onClick={() => handleSort("order_number")}
                   >
                     <div className="flex items-center gap-1">
@@ -492,7 +492,7 @@ const Orders: React.FC = () => {
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px]" 
                     onClick={() => handleSort("customer_name")}
                   >
                     <div className="flex items-center gap-1">
@@ -500,14 +500,14 @@ const Orders: React.FC = () => {
                       {getSortIcon("customer_name")}
                     </div>
                   </TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">Sản phẩm</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">Giá</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">SL</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">Thanh toán</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200">Ghi chú</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200">Người tạo đơn</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200">Trạng thái</TableHead>
-                  <TableHead className="text-right py-3 font-medium text-slate-700">Thao tác</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[100px]">Sản phẩm</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[100px]">Giá</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px]">SL</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[120px]">Thanh toán</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px]">Ghi chú</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px]">Người tạo đơn</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[100px]">Trạng thái</TableHead>
+                  <TableHead className="text-right py-3 font-medium text-slate-700 min-w-[100px]">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

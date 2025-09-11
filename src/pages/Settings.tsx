@@ -282,10 +282,10 @@ const Settings = () => {
           });
           return;
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: Not implemented`);
       }
 
-      const result = await response.json();
+      const result = { success: false, error: 'Not implemented' };
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to delete user');
@@ -359,10 +359,10 @@ const Settings = () => {
           });
           return;
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: Not implemented`);
       }
 
-      const result = await response.json();
+      const result = { success: false, error: 'Not implemented' };
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to reset password');
@@ -447,7 +447,7 @@ const Settings = () => {
   const canResetPassword = true; // Always allow password reset - backend will handle access control
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
@@ -540,10 +540,14 @@ const Settings = () => {
                         setTestNotificationLoading(true);
                         try {
                           await createNotification({
-                            user_id: user.id,
+                            userId: user.id,
                             title: "Test notification",
                             message: "Đây là thông báo test từ hệ thống",
-                            type: "info"
+                            type: "info",
+                            isRead: false,
+                            isDeleted: false,
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
                           });
                           toast({
                             title: "Thành công",

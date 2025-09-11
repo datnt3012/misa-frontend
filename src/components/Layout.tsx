@@ -190,7 +190,7 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
 
         {/* Page Content */}
-        <main>{children}</main>
+        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

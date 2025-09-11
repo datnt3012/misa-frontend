@@ -19,7 +19,7 @@ import {
   Trash2
 } from "lucide-react";
 import { customerApi } from "@/api/customer.api";
-import { orderApi, Order } from "@/api/order.api";
+import { orderApi, Order as ApiOrder } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { Loading } from "@/components/ui/loading";
@@ -247,7 +247,7 @@ const Customers = () => {
       });
 
       // Reload customers to get updated data
-      await fetchCustomers();
+      await lazyData.reloadData('customers');
       setIsEditDialogOpen(false);
       setEditingCustomer(null);
       // Clear URL parameters
@@ -255,7 +255,7 @@ const Customers = () => {
       
       toast({
         title: "Thành công",
-        description: `Đã cập nhật thông tin khách hàng ${data.name}`,
+        description: `Đã cập nhật thông tin khách hàng ${editingCustomer.name}`,
       });
     } catch (error) {
       console.error('Error updating customer:', error);
@@ -332,7 +332,7 @@ const Customers = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Khách Hàng</h1>
@@ -734,7 +734,7 @@ const Customers = () => {
                                 {Number(order.total_amount).toLocaleString('vi-VN')} ₫
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number(order.initial_payment || order.paid_amount).toLocaleString('vi-VN')} ₫
+                                {Number(order.paid_amount).toLocaleString('vi-VN')} ₫
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className={Number(order.debt_amount) > 0 ? 'text-red-600' : 'text-green-600'}>

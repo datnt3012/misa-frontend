@@ -717,7 +717,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                       <CardTitle className="text-base">Danh sách sản phẩm</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <Table>
+                      <div className="overflow-x-auto">
+                        <Table className="min-w-full">
                         <TableHeader>
                           <TableRow>
                             <TableHead>Mã SP</TableHead>
@@ -750,7 +751,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             </TableRow>
                           ))}
                         </TableBody>
-                      </Table>
+                        </Table>
+                      </div>
                       <div className="mt-4 text-right">
                         <strong>Tổng tiền: {formatCurrency(currentItems.reduce((sum, item) => sum + item.total_price, 0))}</strong>
                       </div>
@@ -775,7 +777,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       <Card className="shadow-sm">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead className="font-semibold text-center">Số phiếu</TableHead>
