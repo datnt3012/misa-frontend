@@ -5,34 +5,33 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, TrendingUp, TrendingDown, Package } from "lucide-react";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { warehouseReceiptsApi, WarehouseReceipt } from "@/api/warehouseReceipts.api";
+import { warehouseApi } from "@/api/warehouse.api";
 
 interface InventoryMovement {
   id: string;
   product_id: string;
+  product_code: string;
+  product_name: string;
   quantity: number;
   movement_type: string;
   reference_type: string;
   reference_id: string;
   warehouse_id: string;
+  warehouse_name: string;
+  warehouse_code: string;
   notes: string;
   created_at: string;
   created_by: string;
-  products: {
-    name: string;
-    code: string;
-  };
-  warehouses?: {
-    name: string;
-    code: string;
-  };
+  status: string;
+  slip_number: string;
 }
 
 const InventoryHistory = () => {
-  const [movements, setMovements] = useState<any[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -42,18 +41,43 @@ const InventoryHistory = () => {
   const loadMovements = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('inventory_movements')
-        .select(`
-          *,
-          products!inner(name, code),
-          warehouses(name, code)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-      setMovements(data || []);
+      const response = await warehouseReceiptsApi.getReceipts({ 
+        page: 1, 
+        limit: 1000 
+      });
+      
+      // Transform warehouse receipts to inventory movements
+      const transformedMovements: InventoryMovement[] = [];
+      
+      response.receipts.forEach(receipt => {
+        if (receipt.items && receipt.items.length > 0) {
+          receipt.items.forEach(item => {
+            transformedMovements.push({
+              id: `${receipt.id}-${item.id}`,
+              product_id: item.product_id,
+              product_code: item.product?.code || '',
+              product_name: item.product?.name || '',
+              quantity: item.quantity,
+              movement_type: 'in', // Warehouse receipts are always imports
+              reference_type: 'warehouse_receipt',
+              reference_id: receipt.id,
+              warehouse_id: receipt.warehouse_id,
+              warehouse_name: receipt.warehouse?.name || '',
+              warehouse_code: receipt.warehouse?.code || '',
+              notes: receipt.description || '',
+              created_at: receipt.created_at,
+              created_by: 'Hệ thống',
+              status: receipt.status,
+              slip_number: receipt.code
+            });
+          });
+        }
+      });
+      
+      // Sort by created_at descending
+      transformedMovements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setMovements(transformedMovements);
     } catch (error) {
       console.error('Error loading inventory movements:', error);
       toast.error('Có lỗi khi tải lịch sử xuất nhập kho');
@@ -64,13 +88,8 @@ const InventoryHistory = () => {
 
   const loadWarehouses = async () => {
     try {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setWarehouses(data || []);
+      const response = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
+      setWarehouses(response.warehouses || []);
     } catch (error) {
       console.error('Error loading warehouses:', error);
     }
@@ -106,10 +125,12 @@ const InventoryHistory = () => {
     }
   };
 
-  const getReferenceDisplay = (referenceType: string, referenceId: string) => {
+  const getReferenceDisplay = (referenceType: string, referenceId: string, slipNumber: string) => {
     if (!referenceType) return "Điều chỉnh thủ công";
     
     switch (referenceType) {
+      case 'warehouse_receipt':
+        return `Phiếu nhập ${slipNumber}`;
       case 'order':
         return `Đơn hàng #${referenceId.slice(-8)}`;
       case 'export_slip':
@@ -125,8 +146,9 @@ const InventoryHistory = () => {
 
   const filteredMovements = movements.filter(movement => {
     const matchesSearch = 
-      movement.products.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      movement.products.code.toLowerCase().includes(searchTerm.toLowerCase());
+      movement.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      movement.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      movement.slip_number.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = filterType === "all" || 
                        (filterType === "in" && (movement.movement_type === 'in' || movement.quantity > 0)) ||
@@ -170,7 +192,7 @@ const InventoryHistory = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm theo sản phẩm, mã hoặc người thao tác..."
+              placeholder="Tìm kiếm theo sản phẩm, mã hoặc số phiếu..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -211,7 +233,8 @@ const InventoryHistory = () => {
                 <TableHead>Loại giao dịch</TableHead>
                 <TableHead className="text-right">Số lượng</TableHead>
                 <TableHead>Kho</TableHead>
-                <TableHead>Người thao tác</TableHead>
+                <TableHead>Số phiếu</TableHead>
+                <TableHead>Trạng thái</TableHead>
                 <TableHead>Thời gian</TableHead>
                 <TableHead>Ghi chú</TableHead>
               </TableRow>
@@ -219,7 +242,7 @@ const InventoryHistory = () => {
             <TableBody>
               {filteredMovements.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-32">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground h-32">
                     Không có dữ liệu lịch sử xuất nhập kho
                   </TableCell>
                 </TableRow>
@@ -228,9 +251,9 @@ const InventoryHistory = () => {
                   <TableRow key={movement.id}>
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="font-medium">{movement.products.name}</div>
+                        <div className="font-medium">{movement.product_name}</div>
                         <div className="text-sm text-muted-foreground">
-                          Mã: {movement.products.code}
+                          Mã: {movement.product_code}
                         </div>
                       </div>
                     </TableCell>
@@ -244,13 +267,24 @@ const InventoryHistory = () => {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">
-                        {movement.warehouses?.name || "Không xác định"}
+                        {movement.warehouse_name || "Không xác định"}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm">
-                        Hệ thống
+                      <span className="text-sm font-medium text-primary">
+                        {movement.slip_number}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        movement.status === 'approved' ? 'default' :
+                        movement.status === 'pending' ? 'secondary' :
+                        movement.status === 'rejected' ? 'destructive' : 'outline'
+                      }>
+                        {movement.status === 'approved' ? 'Đã duyệt' :
+                         movement.status === 'pending' ? 'Chờ duyệt' :
+                         movement.status === 'rejected' ? 'Đã từ chối' : movement.status}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">

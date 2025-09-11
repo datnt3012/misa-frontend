@@ -488,7 +488,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                 </TableRow>
               ) : (
                 paginatedProducts.map((product) => (
-                  <TableRow key={product.id}>
+                  <TableRow key={`${product.id}-${product.warehouse_id || 'no-warehouse'}`}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
                     <TableCell>{product.category || '-'}</TableCell>
