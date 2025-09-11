@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
@@ -14,6 +14,7 @@ import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
@@ -36,6 +37,9 @@ const Orders: React.FC = () => {
   const [showTagsManager, setShowTagsManager] = useState(false);
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -57,6 +61,97 @@ const Orders: React.FC = () => {
         description: "Không thể tạo phiếu xuất kho",
         variant: "destructive",
       });
+    }
+  };
+
+  // Handle checkbox selection
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedOrders.length === orders.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(orders.map(order => order.id));
+    }
+  };
+
+  // Handle delete orders
+  const handleDeleteOrders = async () => {
+    if (selectedOrders.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn đơn hàng cần xóa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const deletePromises = selectedOrders.map(orderId => 
+        orderApi.deleteOrder(orderId)
+      );
+      
+      await Promise.all(deletePromises);
+      
+      toast({
+        title: "Thành công",
+        description: `Đã xóa ${selectedOrders.length} đơn hàng`,
+      });
+      
+      setSelectedOrders([]);
+      setShowDeleteDialog(false);
+      fetchOrders();
+    } catch (error) {
+      console.error("Error deleting orders:", error);
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể xóa đơn hàng"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle delete single order
+  const handleDeleteSingleOrder = async () => {
+    if (!orderToDelete) {
+      toast({
+        title: "Lỗi",
+        description: "Không tìm thấy đơn hàng cần xóa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await orderApi.deleteOrder(orderToDelete.id);
+      
+      toast({
+        title: "Thành công",
+        description: `Đã xóa đơn hàng ${orderToDelete.order_number}`,
+      });
+      
+      setOrderToDelete(null);
+      setShowDeleteDialog(false);
+      fetchOrders();
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể xóa đơn hàng"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -339,6 +434,39 @@ const Orders: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Action Bar */}
+      {selectedOrders.length > 0 && (
+        <Card className="shadow-sm border bg-blue-50">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-blue-700">
+                  Đã chọn {selectedOrders.length} đơn hàng
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={() => setShowDeleteDialog(true)}
+                  variant="destructive"
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  <Package className="w-4 h-4 mr-2" />
+                  Xóa
+                </Button>
+                <Button 
+                  onClick={() => setSelectedOrders([])}
+                  variant="outline"
+                  size="sm"
+                >
+                  Bỏ chọn
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Orders Table */}
       <Card className="shadow-sm border">
         <CardContent className="p-0">
@@ -347,7 +475,12 @@ const Orders: React.FC = () => {
               <TableHeader>
                 <TableRow className="border-b bg-slate-50/50">
                   <TableHead className="w-12 py-3 border-r border-slate-200">
-                    <input type="checkbox" className="rounded" />
+                    <input 
+                      type="checkbox" 
+                      className="rounded" 
+                      checked={selectedOrders.length === orders.length && orders.length > 0}
+                      onChange={handleSelectAll}
+                    />
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200" 
@@ -414,7 +547,12 @@ const Orders: React.FC = () => {
                     return (
                       <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
                         <TableCell className="py-4 border-r border-slate-200">
-                          <input type="checkbox" className="rounded" />
+                          <input 
+                            type="checkbox" 
+                            className="rounded" 
+                            checked={selectedOrders.includes(order.id)}
+                            onChange={() => handleSelectOrder(order.id)}
+                          />
                         </TableCell>
                          {/* ID Column */}
                          <TableCell className="py-4 border-r border-slate-200">
@@ -638,6 +776,16 @@ const Orders: React.FC = () => {
                                   <Package className="w-4 h-4 mr-2" />
                                   Tạo phiếu xuất kho
                                 </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setOrderToDelete(order);
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  className="cursor-pointer hover:bg-muted text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Xóa đơn hàng
+                                </DropdownMenuItem>
                              </DropdownMenuContent>
                            </DropdownMenu>
                          </TableCell>
@@ -716,6 +864,47 @@ const Orders: React.FC = () => {
           fetchOrders();
         }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => {
+        setShowDeleteDialog(open);
+        if (!open) {
+          setOrderToDelete(null);
+          setSelectedOrders([]);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa đơn hàng</DialogTitle>
+            <DialogDescription>
+              {orderToDelete ? (
+                <>Bạn có chắc chắn muốn xóa đơn hàng <strong>{orderToDelete.order_number}</strong>? Hành động này không thể hoàn tác.</>
+              ) : (
+                <>Bạn có chắc chắn muốn xóa {selectedOrders.length} đơn hàng đã chọn? Hành động này không thể hoàn tác.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setOrderToDelete(null);
+                setSelectedOrders([]);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={orderToDelete ? handleDeleteSingleOrder : handleDeleteOrders}
+              disabled={loading}
+            >
+              {loading ? "Đang xóa..." : "Xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -53,36 +53,14 @@ export interface Order {
 }
 
 export interface CreateOrderRequest {
-  customer_id: string;
-  customer_name: string;
-  customer_code?: string;
-  customer_phone?: string;
-  customer_address?: string;
-  order_type: 'sale' | 'return';
-  notes?: string;
-  contract_number?: string;
-  purchase_order_number?: string;
-  // VAT Information
-  vat_tax_code?: string;
-  vat_company_name?: string;
-  vat_company_address?: string;
-  vat_invoice_email?: string;
-  // Shipping Information
-  shipping_recipient_name?: string;
-  shipping_recipient_phone?: string;
-  shipping_address?: string;
-  // Payment Information
-  initial_payment?: number;
-  initial_payment_method?: string;
-  initial_payment_bank?: string;
-  // Tags
-  tags?: string[];
-  items: {
-    product_id: string;
-    product_name: string;
-    product_code: string;
+  customerId: string;
+  paymentMethod: string;
+  totalAmount: number;
+  details: {
+    productId: string;
     quantity: number;
-    unit_price: number;
+    unitPrice: number;
+    warehouseId: string;
   }[];
 }
 
@@ -285,7 +263,67 @@ export const orderApi = {
 
   // Create order
   createOrder: async (data: CreateOrderRequest): Promise<Order> => {
-    return api.post<Order>(API_ENDPOINTS.ORDERS.CREATE, data);
+    const response = await api.post<any>(API_ENDPOINTS.ORDERS.CREATE, data);
+    // Debug: Log response to see what backend returns
+    console.log('Create order response:', response);
+    
+    // Normalize the response to ensure consistent field mapping
+    const normalizeItem = (it: any) => ({
+      id: it.id,
+      order_id: it.order_id ?? it.orderId ?? '',
+      product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
+      product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
+      product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      quantity: Number(it.quantity ?? 0),
+      unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+      total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+      created_at: it.created_at ?? it.createdAt ?? '',
+    });
+
+    const normalizeOrder = (row: any): Order => ({
+      id: row.id,
+      order_number: row.order_number ?? row.orderNumber ?? row.code ?? row.number ?? '',
+      customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
+      customer_name: row.customer?.name ?? row.customer_name ?? '',
+      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
+      customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
+      customer_address: row.customer?.address ?? row.customer_address ?? '',
+      status: row.status ?? 'draft',
+      order_type: row.order_type ?? row.type ?? 'sale',
+      total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
+      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
+      paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
+      debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
+      notes: row.notes ?? row.note ?? row.description ?? '',
+      contract_number: row.contract_number ?? row.contractNumber ?? undefined,
+      purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
+      created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
+      creator_info: row.creator ? {
+        id: row.creator.id,
+        email: row.creator.email,
+        firstName: row.creator.firstName,
+        lastName: row.creator.lastName,
+      } : undefined,
+      tags: Array.isArray(row.tags) ? row.tags : undefined,
+      created_at: row.created_at ?? row.createdAt ?? '',
+      updated_at: row.updated_at ?? row.updatedAt ?? '',
+      items: Array.isArray(row.details)
+        ? row.details.map(normalizeItem)
+        : Array.isArray(row.items)
+          ? row.items.map(normalizeItem)
+          : Array.isArray(row.order_items)
+            ? row.order_items.map(normalizeItem)
+            : [],
+      customer: row.customer ? {
+        id: row.customer.id,
+        code: row.customer.code,
+        name: row.customer.name,
+        email: row.customer.email,
+        phone: row.customer.phoneNumber ?? row.customer.phone,
+      } : undefined,
+    } as Order);
+
+    return normalizeOrder(response);
   },
 
   // Update order

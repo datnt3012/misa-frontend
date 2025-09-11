@@ -47,6 +47,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [newOrder, setNewOrder] = useState({
     customer_id: "",
     customer_name: "",
+    customer_code: "",
     customer_phone: "",
     customer_address: "",
     order_type: "sale",
@@ -108,7 +109,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         total_price: 0,
         vat_rate: 0,
         vat_amount: 0,
-        warehouse_id: ""
+        warehouse_id: warehouses.length === 1 ? warehouses[0].id : ""
       }]
     }));
   };
@@ -132,7 +133,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           if (product) {
             items[index].product_code = product.code;
             items[index].product_name = product.name;
-            items[index].unit_price = product.unit_price;
+            items[index].unit_price = product.price;
+            
+            // Auto-fill warehouse if only one warehouse available
+            if (warehouses.length === 1 && !items[index].warehouse_id) {
+              items[index].warehouse_id = warehouses[0].id;
+            }
           }
         }
         
@@ -153,6 +159,15 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   };
 
   const handleSubmit = async () => {
+    if (!newOrder.customer_id) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn khách hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newOrder.customer_name) {
       toast({
         title: "Lỗi",
@@ -164,8 +179,42 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
     if (newOrder.items.length === 0) {
       toast({
-        title: "Lỗi", 
+        title: "Lỗi",
         description: "Vui lòng thêm ít nhất một sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate all items have required fields
+    const invalidItems = newOrder.items.filter(item => 
+      !item.product_id || !item.product_name || !item.product_code || 
+      !item.quantity || !item.unit_price || !item.warehouse_id
+    );
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { total } = calculateTotals();
+    if (total < 0) {
+      toast({
+        title: "Lỗi",
+        description: "Tổng tiền không được âm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const paymentMethod = newOrder.initial_payment_method || "cash";
+    if (paymentMethod.length < 1 || paymentMethod.length > 20) {
+      toast({
+        title: "Lỗi",
+        description: "Phương thức thanh toán phải có độ dài từ 1-20 ký tự",
         variant: "destructive",
       });
       return;
@@ -188,35 +237,14 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
       // Create order via backend API
       const orderData = await orderApi.createOrder({
-        customer_id: newOrder.customer_id || "",
-        customer_name: newOrder.customer_name,
-        customer_phone: newOrder.customer_phone,
-        customer_address: newOrder.customer_address,
-        order_type: newOrder.order_type as any,
-        notes: newOrder.notes,
-        contract_number: newOrder.contract_number,
-        purchase_order_number: newOrder.purchase_order_number,
-        // VAT Information
-        vat_tax_code: newOrder.vat_tax_code,
-        vat_company_name: newOrder.vat_company_name,
-        vat_company_address: newOrder.vat_company_address,
-        vat_invoice_email: newOrder.vat_invoice_email,
-        // Shipping Information
-        shipping_recipient_name: newOrder.shipping_recipient_name,
-        shipping_recipient_phone: newOrder.shipping_recipient_phone,
-        shipping_address: newOrder.shipping_address,
-        // Payment Information
-        initial_payment: newOrder.initial_payment,
-        initial_payment_method: newOrder.initial_payment_method,
-        initial_payment_bank: newOrder.initial_payment_bank,
-        // Default tag for new orders
-        tags: ["Chưa đối soát"],
-        items: newOrder.items.map(it => ({
-          product_id: it.product_id,
-          product_name: it.product_name,
-          product_code: it.product_code,
+        customerId: newOrder.customer_id || "",
+        paymentMethod: newOrder.initial_payment_method || "cash",
+        totalAmount: total,
+        details: newOrder.items.map(it => ({
+          productId: it.product_id,
           quantity: it.quantity,
-          unit_price: it.unit_price,
+          unitPrice: it.unit_price,
+          warehouseId: it.warehouse_id,
         })),
       });
 
@@ -224,9 +252,20 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
       // TODO: initial payment can be handled via payments API if available
 
+      // Debug: Log order data to see what fields are available
+      console.log('Order created successfully:', orderData);
+
+      // Get order code from response
+      const orderCode = orderData.order_number || 
+                       orderData.orderNumber || 
+                       orderData.code || 
+                       orderData.number || 
+                       orderData.id || 
+                       'thành công';
+
       toast({
         title: "Thành công",
-        description: `Đã tạo đơn hàng ${orderData.order_number}`,
+        description: `Đã tạo đơn hàng ${orderCode}`,
       });
 
       onOrderCreated();
@@ -271,8 +310,15 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         ...prev,
                         customer_id: value,
                         customer_name: customer?.name || "",
-                        customer_phone: customer?.phone || "",
-                        customer_address: customer?.address || ""
+                        customer_code: customer?.customer_code || "",
+                        customer_phone: customer?.phoneNumber || "",
+                        customer_address: customer?.address || "",
+                        vat_invoice_email: customer?.email || "",
+                        vat_company_name: customer?.name || "",
+                        vat_company_address: customer?.address || "",
+                        shipping_recipient_name: customer?.name || "",
+                        shipping_recipient_phone: customer?.phoneNumber || "",
+                        shipping_address: customer?.address || ""
                       }));
                     }}
                   >
@@ -373,7 +419,26 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           {/* Shipping Information */}
           <Card>
             <CardHeader>
-              <CardTitle>Thông tin vận chuyển</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Thông tin vận chuyển</CardTitle>
+                {newOrder.customer_name && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setNewOrder(prev => ({
+                        ...prev,
+                        shipping_recipient_name: prev.customer_name,
+                        shipping_recipient_phone: prev.customer_phone,
+                        shipping_address: prev.customer_address
+                      }));
+                    }}
+                  >
+                    Copy từ khách hàng
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
