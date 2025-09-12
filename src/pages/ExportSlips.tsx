@@ -69,9 +69,7 @@ export default function ExportSlips() {
 
   const fetchExportSlips = async () => {
     try {
-      console.log('Fetching export slips...');
       const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
-      console.log('Export slips response:', resp);
       
       const slips = (resp.slips || []).map((s) => ({
         id: s.id,
@@ -95,7 +93,6 @@ export default function ExportSlips() {
         export_slip_items: s.export_slip_items,
       }));
       
-      console.log('Mapped export slips:', slips);
       setExportSlips(slips as any);
       
       // No toast notification for empty export slips list

@@ -261,7 +261,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                     {tag.name}
                     <button
                       onClick={() => {
-                        console.log(`🖱️  Clicked to remove tag: ${tag.name} (${tag.id})`);
                         removeTag(tag.id);
                       }}
                       className="ml-1 hover:bg-black/20 rounded p-0.5"
@@ -287,7 +286,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                   variant="outline"
                   className="cursor-pointer hover:bg-muted"
                   onClick={() => {
-                    console.log(`🖱️  Clicked on tag: ${tag.name} (${tag.id})`);
                     assignTag(tag.id);
                   }}
                   style={{ borderColor: tag.color, color: tag.color }}

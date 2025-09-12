@@ -66,76 +66,55 @@ const SettingsContent = () => {
     loadCurrentUserRole();
   }, []);
 
-  // Debug userRoles state changes
-  useEffect(() => {
-    console.log('userRoles state changed:', userRoles);
-  }, [userRoles]);
 
   const loadCurrentUserRole = async () => {
     // Backend API call will be implemented later
-    console.log('Loading current user role - backend API not implemented yet');
   };
 
   const loadUsers = async () => {
     try {
-      console.log('Loading users from backend...');
       const response = await usersApi.getUsers({ limit: 100 });
-      console.log('Backend users response:', response);
       const users = response.users || [];
       setUsers(users);
       
       // Extract unique roles from users data
       const uniqueRoles = users.reduce((acc: any[], user: any) => {
-        console.log('Processing user:', user.email, 'Role:', user.role);
         if (user.role && !acc.find(role => role.id === user.role.id)) {
           acc.push(user.role);
         }
         return acc;
       }, []);
       
-      console.log('All extracted roles:', uniqueRoles);
       if (uniqueRoles.length > 0) {
         setUserRoles(uniqueRoles);
-        console.log('Set userRoles state with:', uniqueRoles);
-      } else {
-        console.log('No roles extracted from users, keeping existing roles or empty array');
       }
     } catch (error) {
       console.error('Error loading users from backend:', error);
       // Only use backend data - no fallback
       setUsers([]);
       setUserRoles([]);
-      console.log('Backend users endpoint not available');
     }
   };
 
   const loadUserRoles = async () => {
     try {
-      console.log('Loading roles from /roles endpoint...');
       const roles = await usersApi.getUserRoles();
-      console.log('Roles response from /roles endpoint:', roles);
       if (roles && roles.length > 0) {
         setUserRoles(roles);
-        console.log('Set userRoles state with roles from /roles endpoint:', roles);
-      } else {
-        console.log('No roles returned from /roles endpoint');
       }
     } catch (error) {
       console.error('Error loading roles from /roles endpoint:', error);
       // Only use backend data - no fallback
       // Roles will be extracted from users data if available
-      console.log('Backend /roles endpoint not available, will use roles from users data');
     }
   };
 
   const loadEmailPreferences = async () => {
     // Backend API call will be implemented later
-    console.log('Loading email preferences - backend API not implemented yet');
   };
 
   const updateEmailPreferences = async (newPrefs: Partial<EmailPreferences>) => {
     // Backend API call will be implemented later
-    console.log('Updating email preferences - backend API not implemented yet');
     const updatedPrefs = { ...emailPreferences, ...newPrefs };
     setEmailPreferences(updatedPrefs);
     toast({
@@ -166,7 +145,6 @@ const SettingsContent = () => {
     try {
       setLoading(true);
       // Backend API call will be implemented later
-      console.log('Changing password - backend API not implemented yet');
       
       toast({
         title: "Thông báo",
@@ -188,12 +166,8 @@ const SettingsContent = () => {
   };
 
   const handleCreateUser = async () => {
-    console.log('=== START handleCreateUser ===');
-    console.log('Email:', newUserEmail);
-    console.log('Password length:', newUserPassword.length);
     
     if (!newUserEmail.trim() || !newUserPassword.trim()) {
-      console.log('=== VALIDATION ERROR: Missing email or password ===');
       toast({
         title: "Lỗi",
         description: "Vui lòng nhập đầy đủ thông tin tài khoản và mật khẩu",
@@ -203,7 +177,6 @@ const SettingsContent = () => {
     }
 
     if (newUserPassword.length < 6) {
-      console.log('=== VALIDATION ERROR: Password too short ===');
       toast({
         title: "Lỗi",
         description: "Mật khẩu phải có ít nhất 6 ký tự",
@@ -265,14 +238,12 @@ const SettingsContent = () => {
       setDeleteUserLoading(userId);
       
       // Backend API call will be implemented later
-      console.log('Getting session - backend API not implemented yet');
       const session = null; // Placeholder
       if (!session) {
         throw new Error('User not authenticated');
       }
 
       // Backend API call will be implemented later
-      console.log('Deleting user via edge function - backend API not implemented yet');
       const response = { ok: false, status: 501 }; // Placeholder
 
       if (!response.ok) {
@@ -342,14 +313,12 @@ const SettingsContent = () => {
       setResetPasswordLoading(true);
 
       // Backend API call will be implemented later
-      console.log('Getting session - backend API not implemented yet');
       const session = null; // Placeholder
       if (!session) {
         throw new Error('User not authenticated');
       }
 
       // Backend API call will be implemented later
-      console.log('Resetting user password via edge function - backend API not implemented yet');
       const response = { ok: false, status: 501 }; // Placeholder
 
       if (!response.ok) {
@@ -1021,7 +990,9 @@ const SettingsContent = () => {
 
           {/* Role Permissions Management Tab */}
           <TabsContent value="permissions">
-            <RolePermissionsManager onRoleUpdate={loadUserRoles} />
+            <PermissionGuard requiredPermissions={['permissions.read']}>
+              <RolePermissionsManager onRoleUpdate={loadUserRoles} />
+            </PermissionGuard>
           </TabsContent>
         </Tabs>
       </div>

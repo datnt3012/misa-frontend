@@ -314,7 +314,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
                 orderId={order?.id}
                 documentType="status_update"
                 label="Tải lên tài liệu liên quan"
-                onDocumentUploaded={(doc) => console.log('Document uploaded:', doc)}
+                onDocumentUploaded={(doc) => {}}
               />
             </div>
           </div>

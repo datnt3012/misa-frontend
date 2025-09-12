@@ -137,10 +137,7 @@ export const exportSlipsApi = {
     queryParams.append('type', 'export'); // Filter for export type only
     
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`;
-    console.log('Export Slips API URL:', url);
-
     const response = await api.get<any>(url);
-    console.log('Export Slips API Response:', response);
     const data = response?.data || response;
     if (data && Array.isArray(data.rows)) {
       return {

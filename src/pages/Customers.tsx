@@ -139,31 +139,21 @@ const CustomersContent = () => {
       }
     } else if (action === 'view' && customerId) {
       // Find customer and open detail dialog
-      console.log('Looking for customer with ID:', customerId);
-      console.log('Available customers:', customers.map(c => ({ id: c.id, name: c.name })));
       const customer = customers.find(c => c.id === customerId);
       if (customer) {
-      console.log('Found customer:', customer);
-      console.log('Customer createdAt:', customer.createdAt);
-      handleViewCustomerDetail(customer);
-      } else {
-        console.log('Customer not found');
+        handleViewCustomerDetail(customer);
       }
     }
   }, [customers, searchParams]);
 
   const fetchCustomerOrders = async (customerId: string) => {
     try {
-      console.log('Fetching orders for customer:', customerId);
       // Use backend API to fetch customer orders
       const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000 });
       const allOrders = ordersResponse.orders || [];
-      console.log('All orders fetched:', allOrders.length);
-      console.log('Sample order customer_id:', allOrders[0]?.customer_id);
       
       // Filter orders for this customer
       const customerOrders = allOrders.filter(order => order.customer_id === customerId);
-      console.log('Filtered customer orders:', customerOrders.length);
       setCustomerOrders(customerOrders);
 
       // Calculate customer stats
@@ -220,9 +210,6 @@ const CustomersContent = () => {
   };
 
   const handleEditCustomer = (customer: Customer) => {
-    console.log('Editing customer:', customer);
-    console.log('Customer customer_code:', customer.customer_code);
-    console.log('Customer phoneNumber:', customer.phoneNumber);
     setEditingCustomer(customer);
     setEditCustomer({
       customer_code: customer.customer_code || "",

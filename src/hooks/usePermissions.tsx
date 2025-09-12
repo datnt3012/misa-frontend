@@ -75,7 +75,7 @@ export function usePermissions() {
     fetchUserRole();
   }, [user, authLoading]);
 
-  const hasPermission = (permission: string): boolean => {
+  const hasPermission = (permission: string, isPageAccess: boolean = false): boolean => {
     if (!user || loading || authLoading) {
       return false;
     }
@@ -152,6 +152,15 @@ export function usePermissions() {
       
       return relatedPermissions;
     };
+
+    // Helper function to get fallback permission (VIEW -> READ)
+    const getFallbackPermission = (permission: string): string => {
+      // If permission ends with VIEW, try READ as fallback
+      if (permission.endsWith('_VIEW')) {
+        return permission.replace('_VIEW', '_READ');
+      }
+      return permission;
+    };
     
     // Only keep truly special cases that can't be auto-generated
     const specialPermissionMap: Record<string, string[]> = {
@@ -176,7 +185,39 @@ export function usePermissions() {
       const [module, action] = permission.split('.');
       if (module && action) {
         // Use dynamic permission finding for complex modules
-        return findRelatedPermissions(module, action);
+        const mappedPermissions = findRelatedPermissions(module, action);
+        
+        // If no permissions found, apply specific fallback logic
+        if (mappedPermissions.length === 0) {
+          // Only apply fallback logic for page access, not for action access
+          if (isPageAccess) {
+            // Check if module has VIEW action available
+            const hasViewAction = findRelatedPermissions(module, 'view').length > 0;
+            
+            if (hasViewAction) {
+              // Module has VIEW action (like products) - require VIEW for page access
+              if (action === 'view') {
+                // For view action, try READ as fallback only if no VIEW found
+                const readPermissions = findRelatedPermissions(module, 'read');
+                if (readPermissions.length > 0) {
+                  return readPermissions;
+                }
+              }
+              // For other actions in modules with VIEW, don't fallback to READ
+            } else {
+              // Module doesn't have VIEW action (like permissions) - allow READ for page access
+              if (action !== 'view') {
+                const readPermissions = findRelatedPermissions(module, 'read');
+                if (readPermissions.length > 0) {
+                  return readPermissions;
+                }
+              }
+            }
+          }
+          // For action access (API calls), don't apply any fallback - require exact permission
+        }
+        
+        return mappedPermissions;
       }
       
       // Fallback: return the permission as-is
@@ -190,7 +231,7 @@ export function usePermissions() {
     return hasAccess;
   };
 
-  const hasAnyPermission = (permissionList: string[]): boolean => {
+  const hasAnyPermission = (permissionList: string[], isPageAccess: boolean = true): boolean => {
     if (!user || loading || authLoading) {
       return false;
     }
@@ -210,7 +251,7 @@ export function usePermissions() {
     }
     
     // Check if user has any of the required permissions using permission mapping
-    const hasAccess = permissionList.some(permission => hasPermission(permission));
+    const hasAccess = permissionList.some(permission => hasPermission(permission, isPageAccess));
     return hasAccess;
   };
 
@@ -221,6 +262,35 @@ export function usePermissions() {
     return permissionList.every(permission => permissions.includes(permission));
   };
 
+  // Check action access (for API calls) - no fallback, require exact permission
+  const hasActionPermission = (permission: string): boolean => {
+    return hasPermission(permission, false); // isPageAccess = false
+  };
+
+  const hasAnyActionPermission = (permissionList: string[]): boolean => {
+    return hasAnyPermission(permissionList, false); // isPageAccess = false
+  };
+
+  // Get error message for permission check
+  const getPermissionErrorMessage = (permissionList: string[]): string => {
+    if (!user || loading || authLoading) {
+      return 'Đang kiểm tra quyền truy cập...';
+    }
+    
+    if (!userRole || !permissions || permissions.length === 0) {
+      return 'Không thể tải thông tin quyền truy cập';
+    }
+    
+    // Check if user has any of the required permissions
+    const hasAccess = permissionList.some(permission => hasPermission(permission));
+    
+    if (!hasAccess) {
+      return `Bạn cần một trong các quyền sau: ${permissionList.join(', ')}`;
+    }
+    
+    return '';
+  };
+
   return {
     userRole,
     permissions,
@@ -228,6 +298,9 @@ export function usePermissions() {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
+    hasActionPermission,
+    hasAnyActionPermission,
+    getPermissionErrorMessage,
     isAdmin: userRole?.code === 'ADMIN' || userRole?.name?.toLowerCase().includes('admin'),
   };
 }

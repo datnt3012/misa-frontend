@@ -22,9 +22,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { user } = useAuth();
 
   const loadNotifications = async () => {
-    console.log("Loading notifications...");
     const response = await notificationApi.getNotifications({ limit: 50 });
-    console.log("Notifications data:", response);
     setNotifications(response.notifications || []);
   };
 

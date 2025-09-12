@@ -17,7 +17,7 @@ export function PermissionGuard({
   fallback,
   showFallback = true 
 }: PermissionGuardProps) {
-  const { hasAnyPermission, loading, userRole } = usePermissions();
+  const { hasAnyPermission, loading, userRole, getPermissionErrorMessage } = usePermissions();
 
   if (loading) {
     return (
@@ -31,6 +31,7 @@ export function PermissionGuard({
   }
 
   const hasPermission = hasAnyPermission(requiredPermissions);
+  const errorMessage = getPermissionErrorMessage(requiredPermissions);
 
   if (!hasPermission) {
     if (fallback) {
@@ -50,7 +51,7 @@ export function PermissionGuard({
             </div>
             <CardTitle className="text-xl">Không có quyền truy cập</CardTitle>
             <CardDescription>
-              Bạn cần quyền truy cập để xem trang này
+              {errorMessage || 'Bạn cần quyền truy cập để xem trang này'}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">

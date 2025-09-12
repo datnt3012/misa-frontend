@@ -26,13 +26,11 @@ export const authApi = {
 
   // Logout
   logout: async (): Promise<void> => {
-    console.log('Calling logout API:', API_ENDPOINTS.AUTH.LOGOUT);
     // Only call logout API if we have a token
     const token = localStorage.getItem('access_token');
     if (token) {
       return api.post<void>(API_ENDPOINTS.AUTH.LOGOUT);
     } else {
-      console.log('No access token found, skipping logout API call');
       return Promise.resolve();
     }
   },

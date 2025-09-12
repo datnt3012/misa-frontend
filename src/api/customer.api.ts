@@ -64,7 +64,6 @@ export const customerApi = {
         deletedAt: row.deletedAt ?? row.deleted_at ?? null,
         user: row.user ?? null,
       };
-      console.log('Normalizing customer:', { original: row.code, normalized: normalized.customer_code });
       return normalized;
     };
 

@@ -252,8 +252,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
       // TODO: initial payment can be handled via payments API if available
 
-      // Debug: Log order data to see what fields are available
-      console.log('Order created successfully:', orderData);
 
       // Get order code from response
       const orderCode = orderData.order_number || 

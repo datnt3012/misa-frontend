@@ -41,7 +41,6 @@ export const notificationApi = {
         ? `${API_ENDPOINTS.NOTIFICATIONS.LIST}?${queryParams.toString()}`
         : API_ENDPOINTS.NOTIFICATIONS.LIST;
 
-      console.log('Fetching notifications from:', url);
       return api.get<{ notifications: Notification[]; total: number; page: number; limit: number }>(url);
     },
     {

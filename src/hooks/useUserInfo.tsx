@@ -27,9 +27,7 @@ export const useUserInfo = (userId: string | null) => {
 
       try {
         // Get all users and find the one with matching ID
-        console.log('useUserInfo: Calling authApi.getUsers()');
         const response = await authApi.getUsers();
-        console.log('useUserInfo: API response:', response);
         
         // Handle different response structures
         let users = [];
@@ -43,10 +41,7 @@ export const useUserInfo = (userId: string | null) => {
           users = response.rows;
         }
         
-        console.log('useUserInfo: Extracted users:', users);
-        console.log('useUserInfo: Looking for userId:', userId);
         const user = users.find(u => u.id === userId);
-        console.log('useUserInfo: Found user:', user);
         
         if (user) {
           setUserInfo({

@@ -172,10 +172,7 @@ const OrdersContent: React.FC = () => {
       const params: any = { page: 1, limit: 1000 };
       if (statusFilter !== 'all') params.status = statusFilter;
       if (searchTerm) params.search = searchTerm;
-      console.log('Fetching orders with params:', params);
       const resp = await orderApi.getOrders(params);
-      console.log('Orders response:', resp);
-      console.log('Orders array:', resp.orders);
       setOrders(resp.orders || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -310,19 +307,6 @@ const OrdersContent: React.FC = () => {
     return matchesSearch && matchesStatus && matchesCreator && matchesStartDate && matchesEndDate;
   });
 
-  console.log('Orders state:', orders);
-  console.log('Filtered orders:', filteredOrders);
-  console.log('Orders length:', orders.length);
-  console.log('Filtered orders length:', filteredOrders.length);
-  
-  // Debug tags
-  if (orders.length > 0) {
-    console.log('First order tags debug:', {
-      order_id: orders[0].id,
-      tags: orders[0].tags,
-      tag_names: orders[0].tags || []
-    });
-  }
 
   // Calculate totals
   const totals = filteredOrders.reduce((acc, order) => ({

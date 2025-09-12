@@ -175,7 +175,11 @@ export const usersApi = {
       return data.rows.map(normalize);
     }
 
-    return (data || []).map(normalize);
+    if (Array.isArray(data)) {
+      return data.map(normalize);
+    }
+
+    return [];
   },
 
   // Create user

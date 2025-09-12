@@ -95,9 +95,6 @@ function RevenueContent() {
         return dateA - dateB;
       });
 
-      console.log('Revenue Data:', revenueArray);
-      console.log('Total Revenue:', totalRevenue);
-      console.log('Total Debt:', totalDebt);
       
       setRevenueData(revenueArray);
       setDebtData({
