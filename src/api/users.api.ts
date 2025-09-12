@@ -99,8 +99,6 @@ export const usersApi = {
     const response = await api.get<any>(url);
     const data = response?.data || response;
     
-    console.log('Raw users API response:', response);
-    console.log('Processed data:', data);
 
     const normalize = (row: any): User => ({
       id: row.id,

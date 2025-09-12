@@ -32,29 +32,16 @@ export function usePermissions() {
 
       try {
         setLoading(true);
-        console.log('🔍 Current user:', user);
-        console.log('🔍 User roleId:', user.roleId);
-        
         const roles = await usersApi.getUserRoles();
-        console.log('🔍 All available roles:', roles);
         
         // Find user's role by roleId
         const userRoleData = roles.find(role => role.id === user.roleId);
         
         if (userRoleData) {
-          console.log('🔍 Found user role:', userRoleData);
-          console.log('🔍 User role permissions:', userRoleData.permissions);
           setUserRole(userRoleData);
           setPermissions(userRoleData.permissions || []);
         } else {
-          console.warn('🔍 User role not found for roleId:', user.roleId);
-          console.log('🔍 Available roles:', roles);
-          console.log('🔍 User object details:', {
-            id: user.id,
-            roleId: user.roleId,
-            email: user.email,
-            name: user.name
-          });
+          console.warn('User role not found for roleId:', user.roleId);
           
           // Try to find role by name or code as fallback - only admin-like roles
           const fallbackRole = roles.find(role => 
@@ -69,11 +56,9 @@ export function usePermissions() {
           );
           
           if (fallbackRole) {
-            console.log('🔍 Found fallback admin role:', fallbackRole);
             setUserRole(fallbackRole);
             setPermissions(fallbackRole.permissions || []);
           } else {
-            console.log('🔍 No fallback role found, setting empty permissions');
             setUserRole(null);
             setPermissions([]);
           }
@@ -91,29 +76,14 @@ export function usePermissions() {
   }, [user, authLoading]);
 
   const hasPermission = (permission: string): boolean => {
-    console.log('🔍 hasPermission called with:', permission);
-    console.log('🔍 User state:', { user: !!user, loading, authLoading });
-    console.log('🔍 User object:', user);
-    console.log('🔍 UserRole:', userRole);
-    console.log('🔍 Permissions:', permissions);
-    
     if (!user || loading || authLoading) {
-      console.log('🔍 Permission check failed: no user or loading', { user: !!user, loading, authLoading });
       return false;
     }
     
     // Check if userRole and permissions are loaded
     if (!userRole || !permissions || permissions.length === 0) {
-      console.log('🔍 Permission check failed: userRole or permissions not loaded', { 
-        userRole: !!userRole, 
-        permissions: permissions?.length || 0 
-      });
       return false;
     }
-    
-    console.log('🔍 Checking permission:', permission);
-    console.log('🔍 User role:', userRole);
-    console.log('🔍 User permissions:', permissions);
     
     // Allow admin access to everything
     const isAdmin = userRole?.code?.toLowerCase() === 'admin' || 
@@ -125,22 +95,7 @@ export function usePermissions() {
                    userRole?.name?.toLowerCase().includes('super') ||
                    userRole?.name?.toLowerCase().includes('root');
     
-    console.log('🔍 Admin check details:', { 
-      code: userRole?.code, 
-      name: userRole?.name, 
-      isAdmin,
-      codeCheck: userRole?.code?.toLowerCase() === 'admin',
-      nameIncludesAdmin: userRole?.name?.toLowerCase().includes('admin'),
-      nameIncludesOwner: userRole?.name?.toLowerCase().includes('owner'),
-      nameIncludesDirector: userRole?.name?.toLowerCase().includes('director'),
-      nameIncludesChief: userRole?.name?.toLowerCase().includes('chief'),
-      nameIncludesManager: userRole?.name?.toLowerCase().includes('manager'),
-      nameIncludesSuper: userRole?.name?.toLowerCase().includes('super'),
-      nameIncludesRoot: userRole?.name?.toLowerCase().includes('root')
-    });
-    
     if (isAdmin) {
-      console.log('🔍 Admin access granted for permission:', permission);
       return true;
     }
     
@@ -232,33 +187,16 @@ export function usePermissions() {
     const mappedPermissions = getMappedPermissions(permission);
     const hasAccess = mappedPermissions.some(perm => permissions.includes(perm));
     
-    console.log('🔍 Permission mapping details:');
-    console.log('  - Original permission:', permission);
-    console.log('  - Mapped permissions:', mappedPermissions);
-    console.log('  - User permissions:', permissions);
-    console.log('  - Has access:', hasAccess);
-    console.log('  - Permission checks:', mappedPermissions.map(perm => ({
-      permission: perm,
-      hasPermission: permissions.includes(perm)
-    })));
-    
     return hasAccess;
   };
 
   const hasAnyPermission = (permissionList: string[]): boolean => {
-    console.log('🔍 hasAnyPermission called with:', permissionList);
-    console.log('🔍 User state:', { user: !!user, loading, authLoading });
-    console.log('🔍 UserRole:', userRole);
-    console.log('🔍 Permissions:', permissions);
-    
     if (!user || loading || authLoading) {
-      console.log('🔍 hasAnyPermission failed: no user or loading');
       return false;
     }
     
     // Check if userRole and permissions are loaded
     if (!userRole || !permissions || permissions.length === 0) {
-      console.log('🔍 hasAnyPermission failed: userRole or permissions not loaded');
       return false;
     }
     
@@ -267,20 +205,12 @@ export function usePermissions() {
                    userRole?.name?.toLowerCase().includes('admin') ||
                    userRole?.name?.toLowerCase().includes('owner');
     
-    console.log('🔍 Admin check in hasAnyPermission:', { 
-      code: userRole?.code, 
-      name: userRole?.name, 
-      isAdmin 
-    });
-    
     if (isAdmin) {
-      console.log('🔍 Admin access granted in hasAnyPermission');
       return true;
     }
     
     // Check if user has any of the required permissions using permission mapping
     const hasAccess = permissionList.some(permission => hasPermission(permission));
-    console.log('🔍 hasAnyPermission result:', hasAccess);
     return hasAccess;
   };
 

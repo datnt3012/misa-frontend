@@ -14,24 +14,32 @@ import { Shield, Plus, Edit, Trash2, Save, X, Users, Settings, Package, Shopping
 import { useToast } from '@/hooks/use-toast';
 import { usersApi, UserRole, Permission } from '@/api/users.api';
 
-// Icon mapping for different resources
-const getResourceIcon = (resource: string) => {
+// Icon mapping for different modules
+const getResourceIcon = (module: string) => {
   const iconMap: Record<string, any> = {
-    'products': Package,
-    'inventory': Package,
-    'orders': ShoppingCart,
-    'customers': Users,
-    'suppliers': Building2,
-    'revenue': TrendingUp,
-    'users': Users,
-    'roles': Shield,
-    'settings': Settings,
-    'warehouses': Building2,
-    'categories': Package,
-    'organizations': Building2,
-    'profiles': Users,
+    'Products': Package,
+    'Stock Levels': Package,
+    'Warehouses': Building2,
+    'Warehouse Receipts': Package,
+    'Export Slips': FileText,
+    'Orders': ShoppingCart,
+    'Customers': Users,
+    'Suppliers': Building2,
+    'Reports': TrendingUp,
+    'Revenue': TrendingUp,
+    'Settings': Settings,
+    'Roles': Shield,
+    'Permissions': Shield,
+    'Users': Users,
+    'Organizations': Building2,
+    'Profiles': Users,
+    'Notifications': Settings,
+    'Categories': Package,
+    'Dashboard': TrendingUp,
+    'Inventory': Package,
+    'Other': Shield,
   };
-  return iconMap[resource] || Shield;
+  return iconMap[module] || Shield;
 };
 
 interface RolePermissionsManagerProps {
@@ -85,7 +93,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     try {
       setLoading(true);
       const rolesData = await usersApi.getUserRoles();
-      console.log('🔍 Loaded roles data:', rolesData);
       setRoles(rolesData);
     } catch (error) {
       console.error('Error loading roles:', error);
@@ -213,8 +220,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
   };
 
   const openEditDialog = (role: UserRole) => {
-    console.log('🔍 Opening edit dialog for role:', role);
-    console.log('🔍 Role permissions:', role.permissions);
     setSelectedRole(role);
     setEditRole({
       name: role.name,
@@ -294,20 +299,76 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     }
   };
 
-  // Group permissions by resource (category)
+  // Group permissions by module extracted from code (MODULE_ACTION format)
   const getPermissionCategories = () => {
     const categories: Record<string, Permission[]> = {};
     
     permissions.forEach(permission => {
       if (!permission.isDeleted && permission.isActive) {
-        const resource = permission.resource;
-        if (!categories[resource]) {
-          categories[resource] = [];
+        // Extract module from permission code (MODULE_ACTION format)
+        const module = extractModuleFromCode(permission.code);
+        if (!categories[module]) {
+          categories[module] = [];
         }
-        categories[resource].push(permission);
+        categories[module].push(permission);
       }
     });
-    return categories;
+    
+    // Sort categories by name for consistent display
+    const sortedCategories: Record<string, Permission[]> = {};
+    Object.keys(categories).sort().forEach(key => {
+      sortedCategories[key] = categories[key];
+    });
+    
+    return sortedCategories;
+  };
+
+  // Extract module from permission code (MODULE_ACTION format)
+  const extractModuleFromCode = (code: string): string => {
+    // Split by underscore and take the first part as module
+    const parts = code.split('_');
+    if (parts.length >= 2) {
+      const module = parts[0];
+      // Convert to human-readable format
+      return formatModuleName(module);
+    }
+    
+    // If no underscore, try to extract from resource field as fallback
+    const permission = permissions.find(p => p.code === code);
+    if (permission?.resource) {
+      return formatModuleName(permission.resource);
+    }
+    
+    // If still no module found, put in "Other" category
+    return 'Other';
+  };
+
+  // Format module name to be more human-readable
+  const formatModuleName = (module: string): string => {
+    const moduleMap: Record<string, string> = {
+      'PRODUCTS': 'Products',
+      'STOCK_LEVELS': 'Stock Levels',
+      'WAREHOUSES': 'Warehouses',
+      'WAREHOUSE_RECEIPTS': 'Warehouse Receipts',
+      'EXPORT_SLIPS': 'Export Slips',
+      'ORDERS': 'Orders',
+      'CUSTOMERS': 'Customers',
+      'SUPPLIERS': 'Suppliers',
+      'REPORTS': 'Reports',
+      'REVENUE': 'Revenue',
+      'SETTINGS': 'Settings',
+      'ROLES': 'Roles',
+      'PERMISSIONS': 'Permissions',
+      'USERS': 'Users',
+      'ORGANIZATIONS': 'Organizations',
+      'PROFILES': 'Profiles',
+      'NOTIFICATIONS': 'Notifications',
+      'CATEGORIES': 'Categories',
+      'DASHBOARD': 'Dashboard',
+      'INVENTORY': 'Inventory',
+    };
+    
+    return moduleMap[module.toUpperCase()] || module.charAt(0).toUpperCase() + module.slice(1).toLowerCase();
   };
 
   // Convert backend permission to frontend format

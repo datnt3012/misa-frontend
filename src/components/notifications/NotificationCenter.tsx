@@ -18,8 +18,6 @@ export const NotificationCenter = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
 
-  console.log("NotificationCenter - notifications:", notifications);
-  console.log("NotificationCenter - unreadCount:", unreadCount);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {

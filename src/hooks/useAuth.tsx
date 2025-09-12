@@ -57,12 +57,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(storedSessionData);
           setUserRole(storedRole);
           setLoading(false);
-          console.log('User session restored from localStorage');
           return;
         } else {
           // Session expired, remove it
           localStorage.removeItem('user-session');
-          console.log('Session expired, removed from localStorage');
         }
       } catch (error) {
         console.error('Error parsing stored session:', error);
@@ -79,7 +77,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(adminSessionData);
         setUserRole(adminRole);
         setLoading(false);
-        console.log('Admin session restored from localStorage');
         return;
       } catch (error) {
         console.error('Error parsing admin session:', error);
@@ -89,7 +86,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // No valid session found
     setLoading(false);
-    console.log('No valid session found');
 
     return () => {
       mounted = false;
@@ -111,21 +107,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserRole(null);
 
       // Try real backend authentication first
-      console.log('Attempting login with backend...');
 
       const response = await authApi.login({ email: emailOrUsername, password });
 
       // Handle both API response format and direct response
       const result = response.data || response;
       
-      // Debug: Log the full response to understand the structure
-      console.log('Login API response:', response);
-      console.log('Login result:', result);
-      console.log('Response status:', response.status);
-      console.log('Response success:', response.success);
-      console.log('Result code:', result?.code);
-      console.log('Result data:', result?.data);
-      console.log('Result data user:', result?.data?.user);
 
       // Check if HTTP request was successful (status 200-299)
       if (response.status < 200 || response.status >= 300) {
@@ -134,7 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('HTTP request failed:', errorMessage);
         return { error: { message: errorMessage } };
       }
-      console.log('✅ HTTP status check passed');
 
       // Check if request manager marked it as successful
       // Only check if success property exists and is explicitly false
@@ -143,7 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Request manager marked as failed:', errorMessage);
         return { error: { message: errorMessage } };
       }
-      console.log('✅ Request manager check passed');
 
       // Check if server response indicates failure
       // Backend API returns { code, message, data } format
@@ -153,7 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Server returned failure:', errorMessage);
         return { error: { message: errorMessage } };
       }
-      console.log('✅ Server response code check passed');
 
       // Also check for legacy statusCode field
       // Accept both 200 and 201 as success codes
@@ -162,7 +146,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Server returned failure:', errorMessage);
         return { error: { message: errorMessage } };
       }
-      console.log('✅ Legacy statusCode check passed');
 
       // Also check for legacy success field
       if (result && result.success === false) {
@@ -170,16 +153,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Server returned failure:', errorMessage);
         return { error: { message: errorMessage } };
       }
-      console.log('✅ Legacy success field check passed');
 
       // Handle API response format: { access_token, refresh_token, user } (directly in result)
-      console.log('Checking result.data:', result?.data);
-      console.log('Checking result.user:', result?.user);
-      console.log('Checking result.access_token:', result?.access_token);
       
       // Check if we have the required data directly in result
       if (result && result.access_token && result.user) {
-        console.log('API response has user data. Creating session from API response.');
 
         // Create session from API response
         const sessionData = {
@@ -206,7 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userRole: result.user.roleId // Use roleId as userRole
         }));
 
-        console.log('User state updated and tokens stored in localStorage');
 
       } else {
         console.error('Unexpected response format:', result);
@@ -251,12 +228,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    console.log('Starting logout process...');
     
     // Call logout API first (but don't block on it)
     try {
       await authApi.logout();
-      console.log('Logout API call completed');
     } catch (error) {
       console.warn('Logout API error (continuing with local logout):', error);
       // Continue with local logout even if API fails
@@ -271,7 +246,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setUserRole(null);
     
-    console.log('Local logout completed - all session data cleared');
   };
 
   const value = {
