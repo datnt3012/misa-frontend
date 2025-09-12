@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
+import { PermissionGuard } from '@/components/PermissionGuard';
 import { supplierApi } from '@/api/supplier.api';
 
 interface Supplier {
@@ -39,7 +40,7 @@ interface UpdateSupplierRequest {
   address?: string;
 }
 
-const Suppliers: React.FC = () => {
+const SuppliersContent: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -480,6 +481,14 @@ const Suppliers: React.FC = () => {
       </Dialog>
       </div>
     </div>
+  );
+};
+
+const Suppliers: React.FC = () => {
+  return (
+    <PermissionGuard requiredPermissions={['suppliers.view']}>
+      <SuppliersContent />
+    </PermissionGuard>
   );
 };
 

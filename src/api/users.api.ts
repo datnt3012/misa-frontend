@@ -1,6 +1,20 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
+// Convert backend permission codes to frontend format
+const convertBackendPermissionToFrontend = (backendCode: string): string => {
+  // Use the actual permission code from backend API
+  // Convert from format like "SETTINGS_READ" to "settings.view"
+  return backendCode.toLowerCase().replace(/_/g, '.');
+};
+
+// Convert frontend permission format to backend format
+const convertFrontendPermissionToBackend = (frontendCode: string): string => {
+  // Convert from format like "settings.view" to "SETTINGS_READ"
+  // This should match the actual permission codes from backend API
+  return frontendCode.toUpperCase().replace(/\./g, '_');
+};
+
 export interface User {
   id: string;
   email: string;
@@ -45,8 +59,23 @@ export interface UpdateUserRequest {
 export interface UserRole {
   id: string;
   name: string;
+  code?: string;
   description?: string;
   permissions?: string[];
+}
+
+export interface Permission {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  resource: string;
+  action: string;
+  isActive: boolean;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export const usersApi = {
@@ -114,18 +143,35 @@ export const usersApi = {
 
   // Get user roles
   getUserRoles: async (): Promise<UserRole[]> => {
-    const response = await api.get<any>(API_ENDPOINTS.ROLES.LIST);
+    // Use noPaging=true to get all roles
+    const response = await api.get<any>(`${API_ENDPOINTS.ROLES.LIST}?noPaging=true`);
     const data = response?.data || response;
     
-    console.log('Raw roles API response:', response);
-    console.log('Processed roles data:', data);
-
-    const normalize = (row: any): UserRole => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      permissions: row.permissions || [],
-    });
+    const normalize = (row: any): UserRole => {
+      
+      // Convert backend permissions format to frontend format
+      let permissions: string[] = [];
+      if (row.permissions && Array.isArray(row.permissions)) {
+        permissions = row.permissions.map((perm: any) => {
+          // Use the actual permission code from backend
+          if (typeof perm === 'string') {
+            return perm;
+          } else if (perm.code) {
+            return perm.code;
+          }
+          return perm;
+        }).filter(Boolean);
+      }
+      
+      
+      return {
+        id: row.id,
+        name: row.name,
+        code: row.code,
+        description: row.description,
+        permissions: permissions,
+      };
+    };
 
     if (data && Array.isArray(data.rows)) {
       return data.rows.map(normalize);
@@ -191,5 +237,76 @@ export const usersApi = {
   // Delete user
   deleteUser: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.USERS.DELETE(id));
+  },
+
+  // Role management
+  createRole: async (roleData: { name: string; description?: string; permissions: string[] }): Promise<UserRole> => {
+    // Convert frontend permissions to backend format
+    const permissionCodes = roleData.permissions.map(convertFrontendPermissionToBackend);
+    
+    // Generate a code from name (simple approach)
+    const code = roleData.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    
+    const response = await api.post<any>(API_ENDPOINTS.ROLES.LIST, {
+      name: roleData.name,
+      code: code,
+      description: roleData.description || '',
+      permissionCodes: permissionCodes
+    });
+    const data = response?.data || response;
+
+    return {
+      id: data.id,
+      name: data.name,
+      code: data.code,
+      description: data.description,
+      permissions: roleData.permissions, // Return frontend format
+    };
+  },
+
+  updateRole: async (id: string, roleData: { name?: string; description?: string; permissions?: string[] }): Promise<UserRole> => {
+    const backendData: any = {};
+    if (roleData.name) {
+      backendData.name = roleData.name;
+      // Update code when name changes
+      backendData.code = roleData.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    }
+    if (roleData.description) backendData.description = roleData.description;
+    if (roleData.permissions) {
+      backendData.permissionCodes = roleData.permissions.map(convertFrontendPermissionToBackend);
+    }
+    
+    const response = await api.patch<any>(`${API_ENDPOINTS.ROLES.LIST}/${id}`, backendData);
+    const data = response?.data || response;
+
+    return {
+      id: data.id,
+      name: data.name,
+      code: data.code,
+      description: data.description,
+      permissions: roleData.permissions || [], // Return frontend format
+    };
+  },
+
+  deleteRole: async (id: string): Promise<{ message: string }> => {
+    return api.delete<{ message: string }>(`${API_ENDPOINTS.ROLES.LIST}/${id}`);
+  },
+
+  // Get all available permissions
+  getPermissions: async (): Promise<Permission[]> => {
+    // Try with a large limit to get all permissions
+    const response = await api.get<any>(`/permissions?limit=1000&noPaging=true`);
+    const data = response?.data || response;
+    
+    // Handle different response structures
+    if (Array.isArray(data)) {
+      return data;
+    } else if (data?.rows && Array.isArray(data.rows)) {
+      return data.rows;
+    } else if (data?.data && Array.isArray(data.data)) {
+      return data.data;
+    }
+    
+    return [];
   },
 };

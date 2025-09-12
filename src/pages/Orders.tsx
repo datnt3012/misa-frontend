@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
@@ -21,7 +22,7 @@ import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { getErrorMessage } from "@/lib/error-utils";
 
 
-const Orders: React.FC = () => {
+const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -910,6 +911,14 @@ const Orders: React.FC = () => {
      </div>
    );
  };
+
+const Orders: React.FC = () => {
+  return (
+    <PermissionGuard requiredPermissions={['orders.view']}>
+      <OrdersContent />
+    </PermissionGuard>
+  );
+};
 
 export default Orders;
 

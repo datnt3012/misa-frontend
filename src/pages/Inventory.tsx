@@ -14,6 +14,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/hooks/useAuth";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { Loading } from "@/components/ui/loading";
 import { toast } from "sonner";
 import ExcelImport from "@/components/inventory/ExcelImport";
@@ -27,7 +28,7 @@ import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 
 import React from "react";
 
-const Inventory = () => {
+const InventoryContent = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -908,6 +909,14 @@ const Inventory = () => {
         </Tabs>
       </div>
     </div>
+  );
+};
+
+const Inventory = () => {
+  return (
+    <PermissionGuard requiredPermissions={['inventory.view']}>
+      <InventoryContent />
+    </PermissionGuard>
   );
 };
 

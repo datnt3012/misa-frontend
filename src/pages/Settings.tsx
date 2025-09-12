@@ -11,9 +11,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2 } from "lucide-react";
 import UserSettings from "@/components/UserSettings";
+import RolePermissionsManager from "@/components/settings/RolePermissionsManager";
 import { usersApi, User, UserRole } from "@/api/users.api";
 
 // UserRole interface imported from users.api.ts
@@ -24,7 +26,7 @@ interface EmailPreferences {
   receive_payment_updates: boolean;
 }
 
-const Settings = () => {
+const SettingsContent = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -458,7 +460,7 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="password" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="password" className="flex items-center gap-2">
               <Key className="w-4 h-4" />
               Đổi mật khẩu
@@ -470,6 +472,10 @@ const Settings = () => {
             <TabsTrigger value="roles" className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
               Phân quyền
+            </TabsTrigger>
+            <TabsTrigger value="permissions" className="flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Quản lý quyền
             </TabsTrigger>
           </TabsList>
 
@@ -1012,9 +1018,22 @@ const Settings = () => {
             </div>
             </TabsContent>
           )}
+
+          {/* Role Permissions Management Tab */}
+          <TabsContent value="permissions">
+            <RolePermissionsManager onRoleUpdate={loadUserRoles} />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+};
+
+const Settings = () => {
+  return (
+    <PermissionGuard requiredPermissions={['settings.view']}>
+      <SettingsContent />
+    </PermissionGuard>
   );
 };
 

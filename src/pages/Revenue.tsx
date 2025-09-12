@@ -11,6 +11,7 @@ import { CalendarIcon, Filter, Download, TrendingUp, AlertCircle, DollarSign } f
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { PermissionGuard } from '@/components/PermissionGuard';
 import { customerApi } from '@/api/customer.api';
 import { orderApi } from '@/api/order.api';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +26,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export default function Revenue() {
+function RevenueContent() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date>();
@@ -447,6 +448,14 @@ export default function Revenue() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function Revenue() {
+  return (
+    <PermissionGuard requiredPermissions={['revenue.view']}>
+      <RevenueContent />
+    </PermissionGuard>
   );
 }
 

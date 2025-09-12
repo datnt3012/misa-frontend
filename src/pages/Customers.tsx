@@ -18,6 +18,7 @@ import {
   Edit,
   Trash2
 } from "lucide-react";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { customerApi } from "@/api/customer.api";
 import { orderApi, Order } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
@@ -72,7 +73,7 @@ interface CustomerStats {
   current_debt: number;
 }
 
-const Customers = () => {
+const CustomersContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -758,6 +759,14 @@ const Customers = () => {
         </Dialog>
       </div>
     </div>
+  );
+};
+
+const Customers = () => {
+  return (
+    <PermissionGuard requiredPermissions={['customers.view']}>
+      <CustomersContent />
+    </PermissionGuard>
   );
 };
 

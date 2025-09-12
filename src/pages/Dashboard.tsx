@@ -8,6 +8,7 @@ import { productApi } from "@/api/product.api";
 import { orderApi } from "@/api/order.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
 import { useAuth } from "@/hooks/useAuth";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { Loading } from "@/components/ui/loading";
 import { format } from "date-fns";
@@ -20,7 +21,7 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-const Dashboard = () => {
+const DashboardContent = () => {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
@@ -654,6 +655,14 @@ const Dashboard = () => {
         </Tabs>
       </div>
     </div>
+  );
+};
+
+const Dashboard = () => {
+  return (
+    <PermissionGuard requiredPermissions={['inventory.view', 'orders.view']}>
+      <DashboardContent />
+    </PermissionGuard>
   );
 };
 
