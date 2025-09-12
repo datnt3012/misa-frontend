@@ -252,8 +252,7 @@ export const usersApi = {
     const response = await api.post<any>(API_ENDPOINTS.ROLES.LIST, {
       name: roleData.name,
       code: code,
-      description: roleData.description || '',
-      permissionCodes: permissionCodes
+      description: roleData.description || ''
     });
     const data = response?.data || response;
 
@@ -274,9 +273,7 @@ export const usersApi = {
       backendData.code = roleData.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
     }
     if (roleData.description) backendData.description = roleData.description;
-    if (roleData.permissions) {
-      backendData.permissionCodes = roleData.permissions.map(convertFrontendPermissionToBackend);
-    }
+    // Note: Permissions are managed separately, not in role update
     
     const response = await api.patch<any>(`${API_ENDPOINTS.ROLES.LIST}/${id}`, backendData);
     const data = response?.data || response;
@@ -292,6 +289,14 @@ export const usersApi = {
 
   deleteRole: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(`${API_ENDPOINTS.ROLES.LIST}/${id}`);
+  },
+
+  // Assign permissions to role
+  assignPermissionsToRole: async (roleId: string, permissions: string[]): Promise<{ message: string }> => {
+    const permissionCodes = permissions.map(convertFrontendPermissionToBackend);
+    return api.post<{ message: string }>(`${API_ENDPOINTS.ROLES.LIST}/${roleId}/permissions`, {
+      permissionCodes: permissionCodes
+    });
   },
 
   // Get all available permissions

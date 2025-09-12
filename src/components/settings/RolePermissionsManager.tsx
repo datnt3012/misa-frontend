@@ -127,7 +127,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
 
     try {
       setLoading(true);
-      await usersApi.createRole(newRole);
+      const createdRole = await usersApi.createRole(newRole);
+      
+      // Assign permissions to the created role
+      if (newRole.permissions.length > 0) {
+        await usersApi.assignPermissionsToRole(createdRole.id, newRole.permissions);
+      }
+      
       toast({
         title: "Thành công",
         description: `Đã tạo vai trò "${newRole.name}" với ${newRole.permissions.length} quyền`,
@@ -171,6 +177,12 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     try {
       setLoading(true);
       await usersApi.updateRole(selectedRole.id, editRole);
+      
+      // Update permissions for the role
+      if (editRole.permissions.length > 0) {
+        await usersApi.assignPermissionsToRole(selectedRole.id, editRole.permissions);
+      }
+      
       toast({
         title: "Thành công",
         description: `Đã cập nhật vai trò "${editRole.name}" với ${editRole.permissions.length} quyền`,
