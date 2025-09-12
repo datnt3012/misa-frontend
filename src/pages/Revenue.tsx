@@ -76,11 +76,11 @@ export default function Revenue() {
           };
         }
 
-        // Add paid amount to revenue
-        const paidAmount = order.initial_payment || order.paid_amount || 0;
-        monthlyRevenue[key].revenue += paidAmount;
+        // Add total amount to revenue (use total_amount as revenue)
+        const orderAmount = order.total_amount || 0;
+        monthlyRevenue[key].revenue += orderAmount;
         monthlyRevenue[key].orderCount += 1;
-        totalRevenue += paidAmount;
+        totalRevenue += orderAmount;
 
         // Add debt amount
         monthlyRevenue[key].debt += order.debt_amount || 0;
@@ -94,6 +94,10 @@ export default function Revenue() {
         return dateA - dateB;
       });
 
+      console.log('Revenue Data:', revenueArray);
+      console.log('Total Revenue:', totalRevenue);
+      console.log('Total Debt:', totalDebt);
+      
       setRevenueData(revenueArray);
       setDebtData({
         totalRevenue,
@@ -367,7 +371,15 @@ export default function Revenue() {
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} />
+              <YAxis tickFormatter={(value) => {
+                if (value >= 1000000) {
+                  return `${(value / 1000000).toFixed(1)}M`;
+                } else if (value >= 1000) {
+                  return `${(value / 1000).toFixed(0)}K`;
+                } else {
+                  return value.toString();
+                }
+              }} />
               <Tooltip formatter={(value) => formatCurrency(value as number)} />
               <Bar dataKey="revenue" fill="hsl(var(--primary))" name="Doanh thu" />
               <Bar dataKey="debt" fill="hsl(var(--destructive))" name="Công nợ" />
@@ -389,7 +401,15 @@ export default function Revenue() {
             <LineChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} />
+              <YAxis tickFormatter={(value) => {
+                if (value >= 1000000) {
+                  return `${(value / 1000000).toFixed(1)}M`;
+                } else if (value >= 1000) {
+                  return `${(value / 1000).toFixed(0)}K`;
+                } else {
+                  return value.toString();
+                }
+              }} />
               <Tooltip formatter={(value) => formatCurrency(value as number)} />
               <Line 
                 type="monotone" 
