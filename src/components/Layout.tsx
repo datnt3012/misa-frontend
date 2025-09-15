@@ -41,6 +41,7 @@ const Layout = ({ children }: LayoutProps) => {
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Quản Lý Kho", href: "/inventory", icon: Package },
+    { name: "Danh Mục", href: "/categories", icon: Package },
     { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
     { name: "Khách Hàng", href: "/customers", icon: Users },
     { name: "Nhà Cung Cấp", href: "/suppliers", icon: Building2 },

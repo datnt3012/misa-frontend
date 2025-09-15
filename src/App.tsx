@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
+import Categories from "./pages/Categories";
 import Orders from "./pages/Orders";
 import Customers from "./pages/Customers";
 import Suppliers from "./pages/Suppliers";
@@ -49,6 +50,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Layout><Inventory /></Layout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/categories" 
+              element={
+                <ProtectedRoute>
+                  <Layout><Categories /></Layout>
                 </ProtectedRoute>
               } 
             />

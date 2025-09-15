@@ -57,6 +57,15 @@ export const API_ENDPOINTS = {
     EXPORT: '/products/export',
   },
   
+  // Categories
+  CATEGORIES: {
+    LIST: '/categories',
+    GET: (id: string) => `/categories/${id}`,
+    CREATE: '/categories',
+    UPDATE: (id: string) => `/categories/${id}`,
+    DELETE: (id: string) => `/categories/${id}`,
+  },
+  
   // Inventory
   INVENTORY: {
     LIST: '/inventory',
