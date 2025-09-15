@@ -625,8 +625,11 @@ const SettingsContent = () => {
           </TabsContent>
 
           {/* User Roles Tab - For Admin and Owner Director */}
-          {canViewPasswordReset && (
-            <TabsContent value="roles">
+          <TabsContent value="roles">
+            <PermissionGuard 
+              requiredPermissions={['USERS_READ', 'ROLES_READ']}
+              requireAll={true}
+            >
             <div className="space-y-6">
               {/* Reset User Password - Only for Admin */}
               {canResetPassword && (
@@ -985,12 +988,12 @@ const SettingsContent = () => {
                 </CardContent>
               </Card>
             </div>
-            </TabsContent>
-          )}
+            </PermissionGuard>
+          </TabsContent>
 
           {/* Role Permissions Management Tab */}
           <TabsContent value="permissions">
-            <PermissionGuard requiredPermissions={['permissions.read']}>
+            <PermissionGuard requiredPermissions={['PERMISSIONS_READ']}>
               <RolePermissionsManager onRoleUpdate={loadUserRoles} />
             </PermissionGuard>
           </TabsContent>
@@ -1002,7 +1005,7 @@ const SettingsContent = () => {
 
 const Settings = () => {
   return (
-    <PermissionGuard requiredPermissions={['settings.view']}>
+    <PermissionGuard requiredPermissions={['SETTINGS_VIEW']}>
       <SettingsContent />
     </PermissionGuard>
   );

@@ -30,6 +30,7 @@ export interface User {
     id: string;
     name: string;
     description?: string;
+    permissions?: string[];
   };
   createdAt: string;
   updatedAt: string;
@@ -137,6 +138,36 @@ export const usersApi = {
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? users.length ?? 0),
     };
+  },
+
+  // Get user by ID
+  getUserById: async (userId: string): Promise<User> => {
+    const response = await api.get<any>(`${API_ENDPOINTS.USERS.LIST}/${userId}`);
+    const data = response?.data || response;
+    
+    const normalize = (row: any): User => ({
+      id: row.id,
+      email: row.email ?? '',
+      firstName: row.firstName ?? row.first_name,
+      lastName: row.lastName ?? row.last_name,
+      phoneNumber: row.phoneNumber ?? row.phone_number,
+      address: row.address,
+      avatarUrl: row.avatarUrl ?? row.avatar_url,
+      isActive: Boolean(row.isActive ?? row.is_active),
+      isDeleted: Boolean(row.isDeleted ?? row.is_deleted),
+      roleId: row.roleId ?? row.role_id ?? '',
+      role: row.role ? {
+        id: row.role.id,
+        name: row.role.name,
+        description: row.role.description,
+        permissions: row.role.permissions || [], // Include permissions if available
+      } : undefined,
+      createdAt: row.createdAt ?? row.created_at ?? '',
+      updatedAt: row.updatedAt ?? row.updated_at ?? '',
+      deletedAt: row.deletedAt ?? row.deleted_at,
+    });
+
+    return normalize(data);
   },
 
   // Get user roles

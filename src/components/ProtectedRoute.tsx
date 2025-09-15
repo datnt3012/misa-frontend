@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+import { UnauthorizedPage } from '@/components/UnauthorizedPage';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -25,14 +26,14 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
 
   if (requiredRole && userRole !== requiredRole) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Không có quyền truy cập</h1>
-          <p className="text-muted-foreground mt-2">
-            Bạn cần quyền {requiredRole} để truy cập trang này
-          </p>
-        </div>
-      </div>
+      <UnauthorizedPage
+        title="Không có quyền truy cập"
+        message={`Bạn cần quyền ${requiredRole} để truy cập trang này`}
+        error={`Vai trò hiện tại: ${userRole || 'Không xác định'}`}
+        showBackButton={false}
+        showRetryButton={false}
+        showContactMessage={false}
+      />
     );
   }
 

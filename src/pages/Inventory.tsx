@@ -13,9 +13,12 @@ import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse as
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { Loading } from "@/components/ui/loading";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Lock } from "lucide-react";
 import { toast } from "sonner";
 import ExcelImport from "@/components/inventory/ExcelImport";
 // import AddressComponent from "@/components/common/AddressComponent"; // Temporarily commented - BE not ready
@@ -41,6 +44,16 @@ const InventoryContent = () => {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorStates, setErrorStates] = useState({
+    products: null as string | null,
+    warehouses: null as string | null
+  });
+
+  // Permission checks
+  const { hasPermission } = usePermissions();
+  const canViewProducts = hasPermission('PRODUCTS_READ');
+  const canViewWarehouses = hasPermission('WAREHOUSES_READ');
+
   const [newWarehouse, setNewWarehouse] = useState({ 
     name: "", 
     code: "", 
@@ -81,17 +94,78 @@ const InventoryContent = () => {
 
   const loadData = async () => {
     try {
-      // Load products and warehouses in parallel
-      const [productsResponse, warehousesResponse] = await Promise.all([
-        productApi.getProducts({ page: 1, limit: 1000 }),
-        warehouseApi.getWarehouses({ page: 1, limit: 1000 })
-      ]);
+      const promises: Promise<any>[] = [];
+      const promiseLabels: string[] = [];
+      
+      // Check permissions and set error states if no permissions
+      if (!canViewProducts) {
+        setErrorStates(prev => ({ 
+          ...prev, 
+          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)' 
+        }));
+      } else {
+        promises.push(
+          productApi.getProducts({ page: 1, limit: 1000 }).catch(error => {
+            console.log('Products API failed (likely no permission):', error);
+            if (error?.response?.status === 403) {
+              setErrorStates(prev => ({ 
+                ...prev, 
+                products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)' 
+              }));
+            }
+            return { products: [] };
+          })
+        );
+        promiseLabels.push('products');
+      }
+      
+      if (!canViewWarehouses) {
+        setErrorStates(prev => ({ 
+          ...prev, 
+          warehouses: 'Không có quyền xem dữ liệu kho (cần Read Warehouses)' 
+        }));
+      } else {
+        promises.push(
+          warehouseApi.getWarehouses({ page: 1, limit: 1000 }).catch(error => {
+            console.log('Warehouses API failed (likely no permission):', error);
+            if (error?.response?.status === 403) {
+              setErrorStates(prev => ({ 
+                ...prev, 
+                warehouses: 'Không có quyền truy cập dữ liệu kho (cần Read Warehouses)' 
+              }));
+            }
+            return { warehouses: [] };
+          })
+        );
+        promiseLabels.push('warehouses');
+      }
 
-      setProducts(productsResponse.products || []);
-      setWarehouses(warehousesResponse.warehouses || []);
+      if (promises.length > 0) {
+        const responses = await Promise.all(promises);
+        
+        // Process responses
+        let productsResponse = { products: [] };
+        let warehousesResponse = { warehouses: [] };
+        
+        responses.forEach((response, index) => {
+          const label = promiseLabels[index];
+          if (label === 'products') {
+            productsResponse = response;
+          } else if (label === 'warehouses') {
+            warehousesResponse = response;
+          }
+        });
+
+        setProducts(productsResponse.products || []);
+        setWarehouses(warehousesResponse.warehouses || []);
+      } else {
+        // No permissions to load any data
+        setProducts([]);
+        setWarehouses([]);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
-      toast.error('Không thể tải dữ liệu');
+      // Don't show toast here - let the lazy loading error handling show the proper error interface
       throw error; // Re-throw for lazy loading error handling
     }
   };
@@ -105,7 +179,7 @@ const InventoryContent = () => {
       loadFunction: async () => {
         // ImportSlips component will handle its own data loading
         // This is just to ensure the tab is loaded when accessed
-        return { loaded: true };
+        // No return value needed
       }
     }
   });
@@ -579,14 +653,44 @@ const InventoryContent = () => {
     toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
   };
 
+  // Component to show permission error for summary cards
+  const PermissionErrorCard = ({ title, error }: { title: string; error: string | null }) => {
+    if (!error) return null;
+    
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Lock className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              {error}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const inventoryState = lazyData.getDataState('inventory');
   
-  if (inventoryState.isLoading || inventoryState.error) {
+  if (inventoryState.isLoading) {
     return (
       <Loading 
         message="Đang tải dữ liệu kho..."
+      />
+    );
+  }
+
+  if (inventoryState.error) {
+    return (
+      <Loading 
         error={inventoryState.error}
         onRetry={() => lazyData.reloadData('inventory')}
+        isUnauthorized={inventoryState.error.includes('403') || inventoryState.error.includes('401')}
       />
     );
   }
@@ -601,51 +705,67 @@ const InventoryContent = () => {
 
         {/* Thống kê nhanh */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tổng Sản Phẩm</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{products.length}</div>
-            </CardContent>
-          </Card>
+          {errorStates.products ? (
+            <PermissionErrorCard title="Tổng Sản Phẩm" error={errorStates.products} />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tổng Sản Phẩm</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{products.length}</div>
+              </CardContent>
+            </Card>
+          )}
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Còn Hàng</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {products.filter(p => p.current_stock >= 10).length}
-              </div>
-            </CardContent>
-          </Card>
+          {errorStates.products ? (
+            <PermissionErrorCard title="Còn Hàng" error={errorStates.products} />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Còn Hàng</CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {products.filter(p => p.current_stock >= 10).length}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sắp Hết</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {products.filter(p => p.current_stock > 0 && p.current_stock < 10).length}
-              </div>
-            </CardContent>
-          </Card>
+          {errorStates.products ? (
+            <PermissionErrorCard title="Sắp Hết" error={errorStates.products} />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sắp Hết</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {products.filter(p => p.current_stock > 0 && p.current_stock < 10).length}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Hết Hàng</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {products.filter(p => p.current_stock === 0).length}
-              </div>
-            </CardContent>
-          </Card>
+          {errorStates.products ? (
+            <PermissionErrorCard title="Hết Hàng" error={errorStates.products} />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Hết Hàng</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {products.filter(p => p.current_stock === 0).length}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Tabs for different sections */}
@@ -671,28 +791,36 @@ const InventoryContent = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Inventory Stock Tab */}
-          <TabsContent value="inventory" className="space-y-6">
-            <InventoryStock 
-              products={products}
-              warehouses={warehouses}
-              canViewCostPrice={canViewCostPrice}
-            />
-          </TabsContent>
+           {/* Inventory Stock Tab */}
+           <TabsContent value="inventory" className="space-y-6">
+             <PermissionGuard 
+               requiredPermissions={['INVENTORY_VIEW', 'PRODUCTS_VIEW', 'WAREHOUSES_VIEW']}
+               requireAll={true}
+             >
+               <InventoryStock 
+                 products={products}
+                 warehouses={warehouses}
+                 canViewCostPrice={canViewCostPrice}
+               />
+             </PermissionGuard>
+           </TabsContent>
 
           {/* Products List Tab */}
           <TabsContent value="products" className="space-y-6">
-            <ProductList 
-              products={products}
-              warehouses={warehouses}
-              canViewCostPrice={canViewCostPrice}
-              canManageProducts={canManageProducts}
-              onProductsUpdate={loadData}
-            />
+            <PermissionGuard requiredPermissions={['PRODUCTS_VIEW']}>
+              <ProductList 
+                products={products}
+                warehouses={warehouses}
+                canViewCostPrice={canViewCostPrice}
+                canManageProducts={canManageProducts}
+                onProductsUpdate={loadData}
+              />
+            </PermissionGuard>
           </TabsContent>
 
           {/* Warehouses Management Tab */}
           <TabsContent value="warehouses" className="space-y-6">
+            <PermissionGuard requiredPermissions={['WAREHOUSES_VIEW']}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -875,36 +1003,52 @@ const InventoryContent = () => {
                 </div>
               </CardContent>
             </Card>
+            </PermissionGuard>
           </TabsContent>
 
-          {/* Import Slips Tab */}
-          <TabsContent value="imports" className="space-y-6">
-            {(() => {
-              const importsState = lazyData.getDataState('imports');
-              if (importsState.isLoading) {
-                return <Loading message="Đang tải dữ liệu nhập kho..." />;
-              }
-              if (importsState.error) {
-                return <Loading error={importsState.error} onRetry={() => lazyData.reloadData('imports')} />;
-              }
-              return (
-                <ImportSlips 
-                  canManageImports={canManageImports}
-                  canApproveImports={canApproveImports}
-                />
-              );
-            })()}
-          </TabsContent>
+           {/* Import Slips Tab */}
+           <TabsContent value="imports" className="space-y-6">
+             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
+               {(() => {
+                 const importsState = lazyData.getDataState('imports');
+                 if (importsState.isLoading) {
+                   return <Loading message="Đang tải dữ liệu nhập kho..." />;
+                 }
+                 if (importsState.error) {
+                   return (
+                     <Loading 
+                       error={importsState.error} 
+                       onRetry={() => lazyData.reloadData('imports')}
+                       isUnauthorized={importsState.error.includes('403') || importsState.error.includes('401')}
+                     />
+                   );
+                 }
+                 return (
+                   <ImportSlips 
+                     canManageImports={canManageImports}
+                     canApproveImports={canApproveImports}
+                   />
+                 );
+               })()}
+             </PermissionGuard>
+           </TabsContent>
 
           {/* Inventory History Tab */}
           <TabsContent value="history" className="space-y-6">
-            <InventoryHistory />
+            <PermissionGuard 
+              requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW', 'EXPORT_SLIPS_VIEW']}
+              requireAll={true}
+            >
+              <InventoryHistory />
+            </PermissionGuard>
           </TabsContent>
 
 
           {/* Excel Import Tab */}
           <TabsContent value="import" className="space-y-6">
-            <ExcelImport onImportComplete={handleImportComplete} />
+            <PermissionGuard requiredPermissions={['PRODUCTS_CREATE']}>
+              <ExcelImport onImportComplete={handleImportComplete} />
+            </PermissionGuard>
           </TabsContent>
         </Tabs>
       </div>
@@ -913,11 +1057,7 @@ const InventoryContent = () => {
 };
 
 const Inventory = () => {
-  return (
-    <PermissionGuard requiredPermissions={['inventory.view']}>
-      <InventoryContent />
-    </PermissionGuard>
-  );
+  return <InventoryContent />;
 };
 
 export default Inventory;

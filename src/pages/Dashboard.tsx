@@ -8,11 +8,14 @@ import { productApi } from "@/api/product.api";
 import { orderApi } from "@/api/order.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { Loading } from "@/components/ui/loading";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Lock } from "lucide-react";
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('vi-VN', {
@@ -21,8 +24,56 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
+// Component to display permission error messages
+const PermissionErrorCard = ({ title, error, loading }: { title: string; error: string | null; loading: boolean }) => {
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            <span className="text-sm text-muted-foreground">Đang tải...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Lock className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              {error}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return null;
+};
+
 const DashboardContent = () => {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  
+  // Permission checks for different data sections
+  const canViewOrders = hasPermission('ORDERS_READ');
+  const canViewProducts = hasPermission('PRODUCTS_READ');
+  const canViewInventory = hasPermission('INVENTORY_READ');
+  const canViewRevenue = hasPermission('ORDERS_READ');
+  
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
     totalDebt: 0,
@@ -37,23 +88,104 @@ const DashboardContent = () => {
   const [orderStatus, setOrderStatus] = useState<any[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [productStockData, setProductStockData] = useState<any[]>([]);
-
-  // Permission checks removed - let backend handle authorization
-  const canViewProfit = true; // Always show profit data - backend will handle access control
-  const canViewRevenue = true; // Always show revenue data - backend will handle access control
+  
+  // Track loading and error states for different sections
+  const [loadingStates, setLoadingStates] = useState({
+    orders: false,
+    products: false,
+    inventory: false,
+    revenue: false
+  });
+  const [errorStates, setErrorStates] = useState({
+    orders: null as string | null,
+    products: null as string | null,
+    inventory: null as string | null,
+    revenue: null as string | null
+  });
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch from backend APIs
-      const [ordersResp, productsResp, stockLevelsResp] = await Promise.all([
-        orderApi.getOrders({ page: 1, limit: 1000 }),
-        productApi.getProducts({ page: 1, limit: 1000 }),
-        stockLevelsApi.getStockLevels({ page: 1, limit: 1000, includeDeleted: false })
-      ]);
+      setLoadingStates({ orders: true, products: true, inventory: true, revenue: true });
+      setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
       
-      const allOrders = ordersResp.orders || [];
-      const products = productsResp.products || [];
-      const stockLevels = stockLevelsResp.stockLevels || [];
+      // Fetch data based on permissions
+      const promises: Promise<any>[] = [];
+      const promiseLabels: string[] = [];
+      
+      if (canViewOrders) {
+        promises.push(orderApi.getOrders({ page: 1, limit: 1000 }));
+        promiseLabels.push('orders');
+      }
+      
+      if (canViewProducts) {
+        promises.push(productApi.getProducts({ page: 1, limit: 1000 }));
+        promiseLabels.push('products');
+      }
+      
+      if (canViewInventory) {
+        promises.push(stockLevelsApi.getStockLevels({ page: 1, limit: 1000, includeDeleted: false }));
+        promiseLabels.push('inventory');
+      }
+      
+      // If no permissions, set empty data and return
+      if (promises.length === 0) {
+        setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
+        setErrorStates({ 
+          orders: 'Không có quyền xem dữ liệu đơn hàng (cần Read Orders)', 
+          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)', 
+          inventory: 'Không có quyền xem dữ liệu tồn kho (cần Read Inventory)',
+          revenue: 'Không có quyền xem dữ liệu doanh thu (cần Read Orders)'
+        });
+        return;
+      }
+      
+      const responses = await Promise.allSettled(promises);
+      
+      // Process responses and handle errors
+      let allOrders: any[] = [];
+      let products: any[] = [];
+      let stockLevels: any[] = [];
+      
+      responses.forEach((response, index) => {
+        const label = promiseLabels[index];
+        
+        if (response.status === 'fulfilled') {
+          const data = response.value;
+          if (label === 'orders') {
+            allOrders = data.orders || [];
+            setLoadingStates(prev => ({ ...prev, orders: false }));
+          } else if (label === 'products') {
+            products = data.products || [];
+            setLoadingStates(prev => ({ ...prev, products: false }));
+          } else if (label === 'inventory') {
+            stockLevels = data.stockLevels || [];
+            setLoadingStates(prev => ({ ...prev, inventory: false }));
+          }
+        } else {
+          // Handle API errors
+          const error = response.reason;
+          let errorMessage = 'Lỗi tải dữ liệu';
+          
+          if (error?.response?.status === 403) {
+            if (label === 'orders') {
+              errorMessage = 'Không có quyền truy cập dữ liệu đơn hàng (cần Read Orders)';
+            } else if (label === 'products') {
+              errorMessage = 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)';
+            } else if (label === 'inventory') {
+              errorMessage = 'Không có quyền truy cập dữ liệu tồn kho (cần Read Inventory)';
+            } else {
+              errorMessage = 'Không có quyền truy cập dữ liệu này';
+            }
+          } else if (error?.response?.status === 401) {
+            errorMessage = 'Phiên đăng nhập đã hết hạn';
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          
+          setErrorStates(prev => ({ ...prev, [label]: errorMessage }));
+          setLoadingStates(prev => ({ ...prev, [label]: false }));
+        }
+      });
 
       // Calculate dashboard metrics
       let totalRevenue = 0;
@@ -272,6 +404,9 @@ const DashboardContent = () => {
       setOrderStatus(orderStatusArray);
       setLowStockProducts(lowStockItems.slice(0, 5)); // Show only top 5
       setProductStockData(productStockChartData);
+      
+      // Set revenue loading to false after processing
+      setLoadingStates(prev => ({ ...prev, revenue: false }));
 
     } catch (error) {
       console.error('❌ Dashboard: Error fetching dashboard data:', error);
@@ -279,6 +414,15 @@ const DashboardContent = () => {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         error: error
+      });
+      
+      // Set all loading states to false and show error
+      setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
+      setErrorStates({ 
+        orders: 'Lỗi tải dữ liệu đơn hàng (cần Read Orders)', 
+        products: 'Lỗi tải dữ liệu sản phẩm (cần Read Products)', 
+        inventory: 'Lỗi tải dữ liệu tồn kho (cần Read Inventory)',
+        revenue: 'Lỗi tải dữ liệu doanh thu (cần Read Orders)'
       });
     }
   };
@@ -320,57 +464,93 @@ const DashboardContent = () => {
 
         {/* Thống kê tổng quan */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Doanh Thu Tháng Hiện Tại</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(dashboardData.currentMonthRevenue)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {getGrowthPercentage() >= 0 ? '+' : ''}{getGrowthPercentage()}% so với tháng trước
-              </p>
-            </CardContent>
-          </Card>
+          {/* Doanh Thu Tháng Hiện Tại */}
+          {errorStates.revenue || loadingStates.revenue ? (
+            <PermissionErrorCard 
+              title="Doanh Thu Tháng Hiện Tại" 
+              error={errorStates.revenue} 
+              loading={loadingStates.revenue} 
+            />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Doanh Thu Tháng Hiện Tại</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(dashboardData.currentMonthRevenue)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {getGrowthPercentage() >= 0 ? '+' : ''}{getGrowthPercentage()}% so với tháng trước
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tổng Đơn Hàng</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardData.totalOrders}</div>
-              <p className="text-xs text-muted-foreground">Tổng cộng tất cả đơn hàng</p>
-            </CardContent>
-          </Card>
+          {/* Tổng Đơn Hàng */}
+          {errorStates.orders || loadingStates.orders ? (
+            <PermissionErrorCard 
+              title="Tổng Đơn Hàng" 
+              error={errorStates.orders} 
+              loading={loadingStates.orders} 
+            />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tổng Đơn Hàng</CardTitle>
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{dashboardData.totalOrders}</div>
+                <p className="text-xs text-muted-foreground">Tổng cộng tất cả đơn hàng</p>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sản Phẩm Tồn Kho</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardData.totalProducts}</div>
-              <p className="text-xs text-muted-foreground">Sản phẩm đang quản lý</p>
-            </CardContent>
-          </Card>
+          {/* Sản Phẩm Tồn Kho */}
+          {errorStates.products || loadingStates.products ? (
+            <PermissionErrorCard 
+              title="Sản Phẩm Tồn Kho" 
+              error={errorStates.products} 
+              loading={loadingStates.products} 
+            />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sản Phẩm Tồn Kho</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{dashboardData.totalProducts}</div>
+                <p className="text-xs text-muted-foreground">Sản phẩm đang quản lý</p>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Công Nợ Tồn Đọng</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {formatCurrency(dashboardData.totalDebt)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Lãi gộp: {formatCurrency(dashboardData.totalProfit)}
-              </p>
-            </CardContent>
-          </Card>
+          {/* Công Nợ Tồn Đọng */}
+          {errorStates.orders || loadingStates.orders ? (
+            <PermissionErrorCard 
+              title="Công Nợ Tồn Đọng" 
+              error={errorStates.orders} 
+              loading={loadingStates.orders} 
+            />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Công Nợ Tồn Đọng</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {formatCurrency(dashboardData.totalDebt)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Lãi gộp: {formatCurrency(dashboardData.totalProfit)}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Biểu đồ và thống kê chi tiết */}
@@ -382,6 +562,22 @@ const DashboardContent = () => {
           </TabsList>
 
           <TabsContent value="revenue" className="space-y-4">
+            {errorStates.revenue || loadingStates.revenue ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Biểu Đồ Doanh Thu 6 Tháng Gần Nhất</CardTitle>
+                  <CardDescription>Theo dõi xu hướng doanh thu theo tháng</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Alert>
+                    <Lock className="h-4 w-4" />
+                    <AlertDescription>
+                      {errorStates.revenue || 'Đang tải dữ liệu doanh thu...'}
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+            ) : (
               <Card>
                 <CardHeader>
                   <CardTitle>Biểu Đồ Doanh Thu 6 Tháng Gần Nhất</CardTitle>
@@ -422,7 +618,8 @@ const DashboardContent = () => {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
-            </TabsContent>
+            )}
+          </TabsContent>
 
           <TabsContent value="inventory" className="space-y-4">
             {/* Detailed Product Stock Chart */}
@@ -432,7 +629,14 @@ const DashboardContent = () => {
                 <CardDescription>Tình trạng tồn kho của từng sản phẩm</CardDescription>
               </CardHeader>
               <CardContent>
-                {productStockData.length > 0 ? (
+                {errorStates.inventory || loadingStates.inventory ? (
+                  <Alert>
+                    <Lock className="h-4 w-4" />
+                    <AlertDescription>
+                      {errorStates.inventory || 'Đang tải dữ liệu tồn kho...'}
+                    </AlertDescription>
+                  </Alert>
+                ) : productStockData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart 
                       data={productStockData} 
@@ -482,7 +686,14 @@ const DashboardContent = () => {
                 <CardDescription>Thông tin chi tiết về tồn kho từng sản phẩm</CardDescription>
               </CardHeader>
               <CardContent>
-                {productStockData.length > 0 ? (
+                {errorStates.inventory || loadingStates.inventory ? (
+                  <Alert>
+                    <Lock className="h-4 w-4" />
+                    <AlertDescription>
+                      {errorStates.inventory || 'Đang tải dữ liệu tồn kho...'}
+                    </AlertDescription>
+                  </Alert>
+                ) : productStockData.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -533,38 +744,49 @@ const DashboardContent = () => {
                   <CardDescription>Phân bổ tình trạng hàng hóa</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={inventoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={90}
-                        dataKey="value"
-                        label={({ name, value }) => value > 0 ? `${name}: ${value}%` : ''}
-                        labelLine={false}
-                      >
-                        {inventoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                  {errorStates.inventory || loadingStates.inventory ? (
+                    <Alert>
+                      <Lock className="h-4 w-4" />
+                      <AlertDescription>
+                        {errorStates.inventory || 'Đang tải dữ liệu tồn kho...'}
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={inventoryData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={90}
+                            dataKey="value"
+                            label={({ name, value }) => value > 0 ? `${name}: ${value}%` : ''}
+                            labelLine={false}
+                          >
+                            {inventoryData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: any, name: string) => [`${value}%`, name]}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 space-y-2">
+                        {inventoryData.map((item, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="text-sm">{item.name}: {item.value}%</span>
+                          </div>
                         ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value: any, name: string) => [`${value}%`, name]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-4 space-y-2">
-                    {inventoryData.map((item, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span className="text-sm">{item.name}: {item.value}%</span>
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -574,27 +796,36 @@ const DashboardContent = () => {
                   <CardDescription>Danh sách hàng sắp hết hoặc hết hàng</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {lowStockProducts.length > 0 ? (
-                      lowStockProducts.map((product, index) => (
-                        <div key={index} className={`flex justify-between items-center p-3 rounded-lg ${
-                          product.status === 'Hết hàng' ? 'bg-red-50' : 'bg-orange-50'
-                        }`}>
-                          <div>
-                            <p className="font-medium">{product.name}</p>
-                            <p className="text-sm text-muted-foreground">Còn lại: {product.stock} sản phẩm</p>
-                          </div>
-                          <span className={`text-sm font-medium ${
-                            product.status === 'Hết hàng' ? 'text-red-600' : 'text-orange-600'
+                  {errorStates.inventory || loadingStates.inventory ? (
+                    <Alert>
+                      <Lock className="h-4 w-4" />
+                      <AlertDescription>
+                        {errorStates.inventory || 'Đang tải dữ liệu tồn kho...'}
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="space-y-3">
+                      {lowStockProducts.length > 0 ? (
+                        lowStockProducts.map((product, index) => (
+                          <div key={index} className={`flex justify-between items-center p-3 rounded-lg ${
+                            product.status === 'Hết hàng' ? 'bg-red-50' : 'bg-orange-50'
                           }`}>
-                            {product.status}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-muted-foreground text-center py-4">Tất cả sản phẩm đều có đủ hàng</p>
-                    )}
-                  </div>
+                            <div>
+                              <p className="font-medium">{product.name}</p>
+                              <p className="text-sm text-muted-foreground">Còn lại: {product.stock} sản phẩm</p>
+                            </div>
+                            <span className={`text-sm font-medium ${
+                              product.status === 'Hết hàng' ? 'text-red-600' : 'text-orange-600'
+                            }`}>
+                              {product.status}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-muted-foreground text-center py-4">Tất cả sản phẩm đều có đủ hàng</p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -607,7 +838,14 @@ const DashboardContent = () => {
                 <CardDescription>Tổng quan tình trạng xử lý đơn hàng</CardDescription>
               </CardHeader>
               <CardContent>
-                {orderStatus.length > 0 && orderStatus.some(item => item.soLuong > 0) ? (
+                {errorStates.orders || loadingStates.orders ? (
+                  <Alert>
+                    <Lock className="h-4 w-4" />
+                    <AlertDescription>
+                      {errorStates.orders || 'Đang tải dữ liệu đơn hàng...'}
+                    </AlertDescription>
+                  </Alert>
+                ) : orderStatus.length > 0 && orderStatus.some(item => item.soLuong > 0) ? (
                   <ResponsiveContainer width="100%" height={300}>
                       <BarChart 
                         data={orderStatus.filter(item => item.soLuong > 0)} 
@@ -660,7 +898,9 @@ const DashboardContent = () => {
 
 const Dashboard = () => {
   return (
-    <PermissionGuard requiredPermissions={['inventory.view', 'orders.view']}>
+    <PermissionGuard 
+      requiredPermissions={['DASHBOARD_VIEW']}
+    >
       <DashboardContent />
     </PermissionGuard>
   );

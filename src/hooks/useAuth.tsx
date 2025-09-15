@@ -172,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Update user state directly from API response
         setUser(result.user);
         setSession(sessionData);
+        setUserRole(result.user.roleId); // Set roleId, will be resolved by usePermissions
 
         // Store tokens directly in localStorage for axios interceptor
         localStorage.setItem('access_token', result.access_token);
@@ -181,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('user-session', JSON.stringify({
           user: result.user,
           session: sessionData,
-          userRole: result.user.roleId // Use roleId as userRole
+          userRole: result.user.roleId // Store roleId, will be resolved by usePermissions
         }));
 
 

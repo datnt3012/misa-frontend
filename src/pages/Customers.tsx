@@ -751,7 +751,7 @@ const CustomersContent = () => {
 
 const Customers = () => {
   return (
-    <PermissionGuard requiredPermissions={['customers.view']}>
+    <PermissionGuard requiredPermissions={['CUSTOMERS_VIEW']}>
       <CustomersContent />
     </PermissionGuard>
   );

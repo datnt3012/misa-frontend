@@ -486,7 +486,7 @@ const SuppliersContent: React.FC = () => {
 
 const Suppliers: React.FC = () => {
   return (
-    <PermissionGuard requiredPermissions={['suppliers.view']}>
+    <PermissionGuard requiredPermissions={['SUPPLIERS_VIEW']}>
       <SuppliersContent />
     </PermissionGuard>
   );

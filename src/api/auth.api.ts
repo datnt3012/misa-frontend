@@ -45,6 +45,11 @@ export const authApi = {
     return api.get<User>(API_ENDPOINTS.AUTH.PROFILE);
   },
 
+  // Get current user info (preferred method)
+  getMe: async (): Promise<User> => {
+    return api.get<User>(API_ENDPOINTS.AUTH.ME);
+  },
+
   // Forgot password
   forgotPassword: async (data: ForgotPasswordRequest): Promise<{ message: string }> => {
     return api.post<{ message: string }>(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, data);

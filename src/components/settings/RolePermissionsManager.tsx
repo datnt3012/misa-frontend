@@ -355,7 +355,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     return 'Other';
   };
 
-  // Format module name to be more human-readable
+  // Format module name to be more human-readable in English
   const formatModuleName = (module: string): string => {
     const moduleMap: Record<string, string> = {
       'PRODUCTS': 'Products',

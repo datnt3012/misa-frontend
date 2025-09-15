@@ -35,13 +35,17 @@ export const useLazyData = (config: LazyDataConfig) => {
     const dataConfig = config[key];
     if (!dataConfig) return;
 
-    // Don't load if already loading or loaded
-    if (dataStates[key]?.isLoading || dataStates[key]?.hasLoaded) return;
-
-    setDataStates(prev => ({
-      ...prev,
-      [key]: { ...prev[key], isLoading: true, error: null }
-    }));
+    // Check current state before proceeding
+    setDataStates(prev => {
+      // Don't load if already loading or loaded
+      if (prev[key]?.isLoading || prev[key]?.hasLoaded) return prev;
+      
+      // Start loading
+      return {
+        ...prev,
+        [key]: { ...prev[key], isLoading: true, error: null }
+      };
+    });
 
     try {
       await dataConfig.loadFunction();
@@ -60,7 +64,7 @@ export const useLazyData = (config: LazyDataConfig) => {
         }
       }));
     }
-  }, [config, dataStates]);
+  }, [config]);
 
   const reloadData = useCallback(async (key: string) => {
     const dataConfig = config[key];
@@ -135,7 +139,7 @@ export const useRouteBasedLazyData = (config: LazyDataConfig) => {
     } else if (pathname.startsWith('/settings')) {
       lazyData.loadData('settings');
     }
-  }, [location.pathname, lazyData]);
+  }, [location.pathname]); // Removed lazyData from dependencies to prevent infinite loops
 
   return lazyData;
 };

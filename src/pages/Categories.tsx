@@ -52,6 +52,7 @@ import { useToast } from '@/hooks/use-toast';
 import { categoriesApi, Category, CreateCategoryRequest, UpdateCategoryRequest } from '@/api/categories.api';
 import { getErrorMessage } from '@/lib/error-utils';
 import { PermissionGuard } from '@/components/PermissionGuard';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const CategoriesContent: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -73,6 +74,14 @@ const CategoriesContent: React.FC = () => {
   });
 
   const { toast } = useToast();
+  
+  // Frontend permission checks for UI controls
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('CATEGORIES_CREATE');
+  const canUpdate = hasPermission('CATEGORIES_UPDATE');
+  const canDelete = hasPermission('CATEGORIES_DELETE');
+
+  // Hybrid permission system: Frontend controls UI visibility, Backend blocks API calls
 
   useEffect(() => {
     fetchCategories();
@@ -141,7 +150,7 @@ const CategoriesContent: React.FC = () => {
         description: "Đã cập nhật danh mục",
       });
       setEditingCategory(null);
-      setEditCategory({ name: '', description: '', isActive: true });
+      setEditCategory({ name: '', description: '' });
       setIsEditDialogOpen(false);
       fetchCategories();
     } catch (error) {
@@ -178,11 +187,10 @@ const CategoriesContent: React.FC = () => {
 
   const openEditDialog = (category: Category) => {
     setEditingCategory(category);
-    setEditCategory({
-      name: category.name,
-      description: category.description || '',
-      isActive: category.isActive
-    });
+      setEditCategory({
+        name: category.name,
+        description: category.description || ''
+      });
     setIsEditDialogOpen(true);
   };
 
@@ -223,10 +231,12 @@ const CategoriesContent: React.FC = () => {
             Quản lý các danh mục sản phẩm trong hệ thống
           </p>
         </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Thêm danh mục
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm danh mục
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -301,7 +311,9 @@ const CategoriesContent: React.FC = () => {
                     <TableHead className="min-w-[250px]">Mô tả</TableHead>
                     <TableHead className="w-[140px]">Trạng thái</TableHead>
                     <TableHead className="w-[120px]">Ngày tạo</TableHead>
-                    <TableHead className="w-[120px] text-right">Thao tác</TableHead>
+                    {(canUpdate || canDelete) && (
+                      <TableHead className="w-[120px] text-right">Thao tác</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -333,24 +345,30 @@ const CategoriesContent: React.FC = () => {
                       <TableCell>
                         {new Date(category.createdAt).toLocaleDateString('vi-VN')}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(category)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openDeleteDialog(category)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {(canUpdate || canDelete) && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {canUpdate && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditDialog(category)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openDeleteDialog(category)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import React from "react";
 import { productApi } from "@/api/product.api";
+import { categoriesApi } from "@/api/categories.api";
 
 interface ProductListProps {
   products: any[];
@@ -65,20 +66,21 @@ const ProductList: React.FC<ProductListProps> = ({
     return matchesSearch && matchesCategory;
   });
 
-  // Get unique categories for filters (from both products and categories table)
-  const uniqueCategories = [...new Set([
-    ...products.map(p => p.category).filter(Boolean),
-    ...categories.map(c => c.name)
-  ])].sort();
+  // Get unique categories for filters (from categories API)
+  const uniqueCategories = categories.map(c => c.name).sort();
 
-  // Load categories from products (extract unique categories)
+  // Load categories from categories API
   const loadCategories = async () => {
     try {
-      // Extract unique categories from products
-      const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
-      setCategories(uniqueCategories.map(name => ({ id: name, name })));
+      // Load categories from categories API
+      const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+      const activeCategories = response.categories.filter(cat => !cat.isDeleted);
+      setCategories(activeCategories);
     } catch (error) {
       console.error('Error loading categories:', error);
+      // Fallback: extract unique categories from products
+      const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
+      setCategories(uniqueCategories.map(name => ({ id: name, name })));
     }
   };
 
@@ -86,7 +88,7 @@ const ProductList: React.FC<ProductListProps> = ({
     loadCategories();
   }, [products]);
 
-  // Save new category (just add to local state for now)
+  // Save new category via categories API
   const saveNewCategory = async (categoryName: string) => {
     if (!categoryName.trim()) return;
     
@@ -95,11 +97,18 @@ const ProductList: React.FC<ProductListProps> = ({
       const existingCategory = categories.find(c => c.name === categoryName.trim());
       
       if (!existingCategory) {
-        // Add to local categories state
-        setCategories(prev => [...prev, { id: categoryName.trim(), name: categoryName.trim() }]);
+        // Create new category via API - backend will handle authorization
+        await categoriesApi.createCategory({
+          name: categoryName.trim(),
+          description: `Category created from product form`
+        });
+        
+        // Reload categories to get the updated list
+        await loadCategories();
       }
     } catch (error) {
       console.error('Error saving category:', error);
+      toast.error('Không thể tạo danh mục mới');
     }
   };
 

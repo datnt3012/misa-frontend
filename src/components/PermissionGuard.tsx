@@ -1,23 +1,23 @@
 import React from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Shield, Lock } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { UnauthorizedPage } from '@/components/UnauthorizedPage';
 
 interface PermissionGuardProps {
   children: React.ReactNode;
   requiredPermissions: string[];
   fallback?: React.ReactNode;
   showFallback?: boolean;
+  requireAll?: boolean; // If true, user needs ALL permissions; if false, user needs ANY permission
 }
 
 export function PermissionGuard({ 
   children, 
   requiredPermissions, 
   fallback,
-  showFallback = true 
+  showFallback = true,
+  requireAll = false
 }: PermissionGuardProps) {
-  const { hasAnyPermission, loading, userRole, getPermissionErrorMessage } = usePermissions();
+  const { hasAnyPermission, hasAllPermissions, loading, userRole, getPermissionErrorMessage } = usePermissions();
 
   if (loading) {
     return (
@@ -30,8 +30,17 @@ export function PermissionGuard({
     );
   }
 
-  const hasPermission = hasAnyPermission(requiredPermissions);
-  const errorMessage = getPermissionErrorMessage(requiredPermissions);
+  const hasPermission = requireAll ? hasAllPermissions(requiredPermissions) : hasAnyPermission(requiredPermissions);
+  const errorMessage = getPermissionErrorMessage(requiredPermissions, requireAll);
+
+  console.log('🔍 PermissionGuard:', { 
+    requiredPermissions, 
+    hasPermission, 
+    userRole: userRole?.name, 
+    userRoleCode: userRole?.code,
+    loading,
+    isAdmin: userRole?.code?.toLowerCase() === 'admin' || userRole?.name?.toLowerCase() === 'owner'
+  });
 
   if (!hasPermission) {
     if (fallback) {
@@ -43,32 +52,14 @@ export function PermissionGuard({
     }
 
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-              <Lock className="h-6 w-6 text-destructive" />
-            </div>
-            <CardTitle className="text-xl">Không có quyền truy cập</CardTitle>
-            <CardDescription>
-              {errorMessage || 'Bạn cần quyền truy cập để xem trang này'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <div className="text-sm text-muted-foreground">
-              <p>Vai trò hiện tại: <strong>{userRole?.name || 'Không xác định'}</strong></p>
-              <p>Quyền cần thiết: {requiredPermissions.join(', ')}</p>
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={() => window.history.back()}
-              className="w-full"
-            >
-              Quay lại
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <UnauthorizedPage
+        title="Không có quyền truy cập"
+        message={errorMessage || 'Bạn cần quyền truy cập để xem trang này'}
+        error={`Vai trò hiện tại: ${userRole?.name || 'Không xác định'}`}
+        showBackButton={false}
+        showRetryButton={false}
+        showContactMessage={false}
+      />
     );
   }
 

@@ -450,7 +450,7 @@ function RevenueContent() {
 
 export default function Revenue() {
   return (
-    <PermissionGuard requiredPermissions={['revenue.view']}>
+    <PermissionGuard requiredPermissions={['REVENUE_VIEW']}>
       <RevenueContent />
     </PermissionGuard>
   );

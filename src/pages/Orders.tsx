@@ -898,7 +898,7 @@ const OrdersContent: React.FC = () => {
 
 const Orders: React.FC = () => {
   return (
-    <PermissionGuard requiredPermissions={['orders.view']}>
+    <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>
       <OrdersContent />
     </PermissionGuard>
   );
