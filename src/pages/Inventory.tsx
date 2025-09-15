@@ -32,6 +32,7 @@ import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import React from "react";
 
 const InventoryContent = () => {
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -50,9 +51,23 @@ const InventoryContent = () => {
   });
 
   // Permission checks
-  const { hasPermission } = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   const canViewProducts = hasPermission('PRODUCTS_READ');
   const canViewWarehouses = hasPermission('WAREHOUSES_READ');
+  
+  // Clear error states when permissions are available
+  useEffect(() => {
+    if (canViewProducts && canViewWarehouses) {
+      setErrorStates({ products: null, warehouses: null });
+    }
+  }, [canViewProducts, canViewWarehouses]);
+
+  // Trigger data fetch when permissions are loaded
+  useEffect(() => {
+    if (!permissionsLoading) {
+      loadData();
+    }
+  }, [permissionsLoading, canViewProducts, canViewWarehouses]);
 
   const [newWarehouse, setNewWarehouse] = useState({ 
     name: "", 
@@ -94,6 +109,11 @@ const InventoryContent = () => {
 
   const loadData = async () => {
     try {
+      // Don't fetch data if permissions are still loading
+      if (permissionsLoading) {
+        return;
+      }
+      
       const promises: Promise<any>[] = [];
       const promiseLabels: string[] = [];
       
@@ -106,7 +126,6 @@ const InventoryContent = () => {
       } else {
         promises.push(
           productApi.getProducts({ page: 1, limit: 1000 }).catch(error => {
-            console.log('Products API failed (likely no permission):', error);
             if (error?.response?.status === 403) {
               setErrorStates(prev => ({ 
                 ...prev, 
@@ -127,7 +146,6 @@ const InventoryContent = () => {
       } else {
         promises.push(
           warehouseApi.getWarehouses({ page: 1, limit: 1000 }).catch(error => {
-            console.log('Warehouses API failed (likely no permission):', error);
             if (error?.response?.status === 403) {
               setErrorStates(prev => ({ 
                 ...prev, 
@@ -164,7 +182,6 @@ const InventoryContent = () => {
         setWarehouses([]);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
       // Don't show toast here - let the lazy loading error handling show the proper error interface
       throw error; // Re-throw for lazy loading error handling
     }
@@ -436,7 +453,6 @@ const InventoryContent = () => {
       });
       loadData(); // Reload data
     } catch (error: any) {
-      console.error('Error creating warehouse:', error);
       toast.error(error.message || "Không thể tạo kho");
     }
   };
@@ -448,7 +464,6 @@ const InventoryContent = () => {
       toast.success("Đã xóa kho");
       loadData(); // Reload data
     } catch (error: any) {
-      console.error('Error deleting warehouse:', error);
       toast.error(error.message || "Không thể xóa kho");
     }
   };
@@ -521,7 +536,6 @@ const InventoryContent = () => {
       cancelEditWarehouse();
       loadData(); // Reload data
     } catch (error: any) {
-      console.error('Error updating warehouse:', error);
       toast.error(error.message || "Không thể cập nhật kho");
     }
   };
@@ -568,7 +582,6 @@ const InventoryContent = () => {
       });
       setIsAddProductDialogOpen(false);
     } catch (error) {
-      console.error('Error adding product:', error);
       toast.error('Có lỗi khi thêm sản phẩm');
     } finally {
       setIsAddingProduct(false);
@@ -676,6 +689,7 @@ const InventoryContent = () => {
   };
 
   const inventoryState = lazyData.getDataState('inventory');
+  
   
   if (inventoryState.isLoading) {
     return (

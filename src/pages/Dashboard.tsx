@@ -66,13 +66,16 @@ const PermissionErrorCard = ({ title, error, loading }: { title: string; error: 
 
 const DashboardContent = () => {
   const { user } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
   
   // Permission checks for different data sections
   const canViewOrders = hasPermission('ORDERS_READ');
   const canViewProducts = hasPermission('PRODUCTS_READ');
   const canViewInventory = hasPermission('INVENTORY_READ');
-  const canViewRevenue = hasPermission('ORDERS_READ');
+  const canViewRevenue = hasPermission('REVENUE_READ');
+  
+  
   
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
@@ -102,9 +105,29 @@ const DashboardContent = () => {
     inventory: null as string | null,
     revenue: null as string | null
   });
+  
+  
+  // Clear error states when permissions are available
+  useEffect(() => {
+    if (canViewOrders && canViewProducts && canViewInventory && canViewRevenue) {
+      setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
+    }
+  }, [canViewOrders, canViewProducts, canViewInventory, canViewRevenue]);
+
+  // Trigger data fetch when permissions are loaded
+  useEffect(() => {
+    if (!permissionsLoading) {
+      fetchDashboardData();
+    }
+  }, [permissionsLoading, canViewOrders, canViewProducts, canViewInventory, canViewRevenue]);
 
   const fetchDashboardData = async () => {
     try {
+      // Don't fetch data if permissions are still loading
+      if (permissionsLoading) {
+        return;
+      }
+      
       setLoadingStates({ orders: true, products: true, inventory: true, revenue: true });
       setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
       
@@ -134,7 +157,7 @@ const DashboardContent = () => {
           orders: 'Không có quyền xem dữ liệu đơn hàng (cần Read Orders)', 
           products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)', 
           inventory: 'Không có quyền xem dữ liệu tồn kho (cần Read Inventory)',
-          revenue: 'Không có quyền xem dữ liệu doanh thu (cần Read Orders)'
+          revenue: 'Không có quyền xem dữ liệu doanh thu (cần Read Revenue)'
         });
         return;
       }
@@ -173,6 +196,8 @@ const DashboardContent = () => {
               errorMessage = 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)';
             } else if (label === 'inventory') {
               errorMessage = 'Không có quyền truy cập dữ liệu tồn kho (cần Read Inventory)';
+            } else if (label === 'revenue') {
+              errorMessage = 'Không có quyền truy cập dữ liệu doanh thu (cần Read Revenue)';
             } else {
               errorMessage = 'Không có quyền truy cập dữ liệu này';
             }
@@ -409,20 +434,13 @@ const DashboardContent = () => {
       setLoadingStates(prev => ({ ...prev, revenue: false }));
 
     } catch (error) {
-      console.error('❌ Dashboard: Error fetching dashboard data:', error);
-      console.error('❌ Dashboard: Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        error: error
-      });
-      
       // Set all loading states to false and show error
       setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
       setErrorStates({ 
         orders: 'Lỗi tải dữ liệu đơn hàng (cần Read Orders)', 
         products: 'Lỗi tải dữ liệu sản phẩm (cần Read Products)', 
         inventory: 'Lỗi tải dữ liệu tồn kho (cần Read Inventory)',
-        revenue: 'Lỗi tải dữ liệu doanh thu (cần Read Orders)'
+        revenue: 'Lỗi tải dữ liệu doanh thu (cần Read Revenue)'
       });
     }
   };
@@ -441,6 +459,7 @@ const DashboardContent = () => {
 
 
   const dashboardState = lazyData.getDataState('dashboard');
+  
   
   if (dashboardState.isLoading || dashboardState.error) {
     return (

@@ -43,10 +43,8 @@ export function usePermissions() {
   // Map role name to permissions array (fallback when API doesn't return permissions)
   const getRolePermissions = (roleName: string): string[] => {
     const role = roleName.toLowerCase();
-    console.log('🔍 getRolePermissions: checking role:', roleName, 'lowercase:', role);
     
     if (role.includes('admin') || role.includes('administrator')) {
-      console.log('🔍 getRolePermissions: matched admin/administrator role');
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ', 'SETTINGS_CREATE', 'SETTINGS_UPDATE', 'SETTINGS_DELETE',
         'ROLES_VIEW', 'ROLES_READ', 'ROLES_CREATE', 'ROLES_UPDATE', 'ROLES_DELETE',
@@ -69,7 +67,6 @@ export function usePermissions() {
     }
     
     if (role.includes('owner') || role.includes('director')) {
-      console.log('🔍 getRolePermissions: matched owner/director role');
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ', 'SETTINGS_CREATE', 'SETTINGS_UPDATE', 'SETTINGS_DELETE',
         'ROLES_VIEW', 'ROLES_READ', 'ROLES_CREATE', 'ROLES_UPDATE', 'ROLES_DELETE',
@@ -91,20 +88,31 @@ export function usePermissions() {
       ];
     }
     
-    if (role.includes('chief') || role.includes('accountant')) {
-      console.log('🔍 getRolePermissions: matched chief/accountant role - Restored PRODUCTS_VIEW for testing');
+    if (role.includes('chief')) {
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ',
-        'PRODUCTS_VIEW', 'PRODUCTS_READ', // Restored to test if this fixes the issue
-        // 'CATEGORIES_VIEW', 'CATEGORIES_READ', // Removed to test permission blocking
+        'PRODUCTS_VIEW', 'PRODUCTS_READ',
+        'CATEGORIES_VIEW', 'CATEGORIES_READ',
         'CUSTOMERS_VIEW', 'CUSTOMERS_READ',
         'SUPPLIERS_VIEW', 'SUPPLIERS_READ',
         'ORDERS_VIEW', 'ORDERS_READ',
-        // 'INVENTORY_VIEW', 'INVENTORY_READ', // Removed to test permission blocking
+        'INVENTORY_VIEW', 'INVENTORY_READ',
         'STOCK_LEVELS_VIEW', 'STOCK_LEVELS_READ',
-        // 'WAREHOUSES_VIEW', 'WAREHOUSES_READ', // Removed to test permission blocking
+        'WAREHOUSES_VIEW', 'WAREHOUSES_READ',
         'EXPORT_SLIPS_VIEW', 'EXPORT_SLIPS_READ',
-        // 'WAREHOUSE_RECEIPTS_VIEW', 'WAREHOUSE_RECEIPTS_READ', // Removed to test permission blocking
+        'WAREHOUSE_RECEIPTS_VIEW', 'WAREHOUSE_RECEIPTS_READ',
+        'REPORTS_VIEW', 'REPORTS_READ', 'REPORTS_CREATE', 'REPORTS_UPDATE', 'REPORTS_DELETE',
+        'REVENUE_VIEW', 'REVENUE_READ', 'REVENUE_CREATE', 'REVENUE_UPDATE', 'REVENUE_DELETE',
+        'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
+      ];
+    }
+    
+    if (role.includes('accountant')) {
+      return [
+        'SETTINGS_VIEW', 'SETTINGS_READ',
+        'CUSTOMERS_VIEW', 'CUSTOMERS_READ',
+        'SUPPLIERS_VIEW', 'SUPPLIERS_READ',
+        'ORDERS_VIEW', 'ORDERS_READ',
         'REPORTS_VIEW', 'REPORTS_READ', 'REPORTS_CREATE', 'REPORTS_UPDATE', 'REPORTS_DELETE',
         'REVENUE_VIEW', 'REVENUE_READ', 'REVENUE_CREATE', 'REVENUE_UPDATE', 'REVENUE_DELETE',
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
@@ -146,7 +154,6 @@ export function usePermissions() {
     }
     
     // For unknown roles, return basic permissions
-    console.log('🔍 getRolePermissions: no role matched, returning basic permissions');
     return [
       'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
     ];
@@ -168,7 +175,6 @@ export function usePermissions() {
 
       // Prevent infinite retries - only retry up to 3 times
       if (hasFetched && retryCount >= 3) {
-        console.log('🔍 usePermissions: Max retries reached, using fallback permissions');
         setLoading(false);
         return;
       }
@@ -177,8 +183,6 @@ export function usePermissions() {
         setLoading(true);
         setHasFetched(true);
         setLastError(null);
-        console.log('🔍 usePermissions: Fetching user roles for user:', user, 'retry:', retryCount);
-        console.log('🔍 usePermissions: user.roleId:', user.roleId);
         
         // Add timeout to prevent hanging API calls
         const timeoutPromise = new Promise((_, reject) => 
@@ -191,59 +195,45 @@ export function usePermissions() {
           timeoutPromise
         ]) as any;
         
-        console.log('🔍 usePermissions: Retrieved response from /auth/me:', response);
-        
         // Handle the response from /auth/me
         if (response && response.data) {
           const userData = response.data;
-          console.log('🔍 usePermissions: Processing user data:', userData);
           
           // The /auth/me endpoint returns user data with role object containing permissions
           if (userData.role && typeof userData.role === 'object') {
-            console.log('🔍 usePermissions: Found user role object:', userData.role);
-            console.log('🔍 usePermissions: Role permissions:', userData.role.permissions);
-            
             // Extract permission codes from the permissions array
             const permissionCodes = userData.role.permissions?.map((perm: any) => perm.code) || [];
-            console.log('🔍 usePermissions: Extracted permission codes:', permissionCodes);
+            
             
             setUserRole(userData.role);
             setPermissions(permissionCodes);
           }
           else {
-            console.warn('🔍 usePermissions: No role object found in user data');
             setUserRole(null);
             setPermissions([]);
           }
         } else {
-          console.warn('🔍 usePermissions: No user data received from /auth/me');
           setUserRole(null);
           setPermissions([]);
         }
       } catch (error) {
-        console.error('🔍 usePermissions: Error fetching user role:', error);
         setLastError(error as Error);
         setRetryCount(prev => prev + 1);
         
         // If we've reached max retries, use fallback immediately
         if (retryCount >= 2) {
-          console.log('🔍 usePermissions: Using fallback permissions after max retries');
           const roleName = getRoleNameFromId(user.roleId);
           if (roleName) {
             const rolePermissions = getRolePermissions(roleName);
-            console.log('🔍 usePermissions: Role permissions from getRolePermissions:', rolePermissions);
             const fallbackRole = {
               id: user.roleId,
               name: roleName,
               code: roleName.toUpperCase(),
               permissions: rolePermissions
             };
-            console.log('🔍 usePermissions: Using fallback role:', fallbackRole);
             setUserRole(fallbackRole);
             setPermissions(rolePermissions);
-            console.log('🔍 usePermissions: Permissions set to state:', rolePermissions);
           } else {
-            console.log('🔍 usePermissions: No fallback role found, setting basic permissions');
             const fallbackRole = {
               id: user.roleId,
               name: 'Unknown Role',
@@ -272,15 +262,13 @@ export function usePermissions() {
       return false;
     }
     
-    // Allow admin access to everything
+    
+    // Allow admin access to everything - only for specific admin roles
     const isAdmin = userRole?.code?.toLowerCase() === 'admin' || 
-                   userRole?.name?.toLowerCase().includes('admin') ||
-                   userRole?.name?.toLowerCase().includes('owner') ||
-                   userRole?.name?.toLowerCase().includes('director') ||
-                   userRole?.name?.toLowerCase().includes('chief') ||
-                   userRole?.name?.toLowerCase().includes('manager') ||
-                   userRole?.name?.toLowerCase().includes('super') ||
-                   userRole?.name?.toLowerCase().includes('root');
+                   userRole?.name?.toLowerCase() === 'admin' ||
+                   userRole?.name?.toLowerCase() === 'owner' ||
+                   userRole?.name?.toLowerCase() === 'administrator';
+    
     
     if (isAdmin) {
       return true;
@@ -432,6 +420,7 @@ export function usePermissions() {
     const isAdmin = userRole?.code?.toLowerCase() === 'admin' || 
                    userRole?.name?.toLowerCase().includes('admin') ||
                    userRole?.name?.toLowerCase().includes('owner');
+    
     
     if (isAdmin) {
       return true;

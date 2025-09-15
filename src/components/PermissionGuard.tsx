@@ -33,14 +33,6 @@ export function PermissionGuard({
   const hasPermission = requireAll ? hasAllPermissions(requiredPermissions) : hasAnyPermission(requiredPermissions);
   const errorMessage = getPermissionErrorMessage(requiredPermissions, requireAll);
 
-  console.log('🔍 PermissionGuard:', { 
-    requiredPermissions, 
-    hasPermission, 
-    userRole: userRole?.name, 
-    userRoleCode: userRole?.code,
-    loading,
-    isAdmin: userRole?.code?.toLowerCase() === 'admin' || userRole?.name?.toLowerCase() === 'owner'
-  });
 
   if (!hasPermission) {
     if (fallback) {
