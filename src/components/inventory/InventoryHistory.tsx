@@ -78,9 +78,9 @@ const InventoryHistory = () => {
       transformedMovements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       setMovements(transformedMovements);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading inventory movements:', error);
-      toast.error('Có lỗi khi tải lịch sử xuất nhập kho');
+      toast.error(error.message || 'Có lỗi khi tải lịch sử xuất nhập kho');
     } finally {
       setLoading(false);
     }

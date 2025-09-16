@@ -108,9 +108,9 @@ export const AddressComponent: React.FC<AddressComponentProps> = ({
           }, { onConflict: 'code' });
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading provinces:', error);
-      toast.error('Không thể tải danh sách tỉnh/thành. Sử dụng dữ liệu cache.');
+      toast.error(error.message || 'Không thể tải danh sách tỉnh/thành. Sử dụng dữ liệu cache.');
       
       // Try to use cached data even if outdated
       const { data: cached } = await supabase

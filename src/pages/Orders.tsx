@@ -59,7 +59,7 @@ const OrdersContent: React.FC = () => {
       console.error('Error creating export slip:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tạo phiếu xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho",
         variant: "destructive",
       });
     }
@@ -95,15 +95,15 @@ const OrdersContent: React.FC = () => {
 
     try {
       setLoading(true);
-      const deletePromises = selectedOrders.map(orderId => 
+      const deletePromises = selectedOrders.map(orderId =>
         orderApi.deleteOrder(orderId)
       );
       
-      await Promise.all(deletePromises);
+      const responses = await Promise.all(deletePromises);
       
       toast({
         title: "Thành công",
-        description: `Đã xóa ${selectedOrders.length} đơn hàng`,
+        description: responses[0]?.message || `Đã xóa ${selectedOrders.length} đơn hàng`,
       });
       
       setSelectedOrders([]);
@@ -113,7 +113,7 @@ const OrdersContent: React.FC = () => {
       console.error("Error deleting orders:", error);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể xóa đơn hàng"),
+        description: error.response?.data?.message || error.message || "Không thể xóa đơn hàng",
         variant: "destructive",
       });
     } finally {
@@ -134,11 +134,11 @@ const OrdersContent: React.FC = () => {
 
     try {
       setLoading(true);
-      await orderApi.deleteOrder(orderToDelete.id);
+      const response = await orderApi.deleteOrder(orderToDelete.id);
       
       toast({
         title: "Thành công",
-        description: `Đã xóa đơn hàng ${orderToDelete.order_number}`,
+        description: response.message || `Đã xóa đơn hàng ${orderToDelete.order_number}`,
       });
       
       setOrderToDelete(null);
@@ -148,7 +148,7 @@ const OrdersContent: React.FC = () => {
       console.error("Error deleting order:", error);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể xóa đơn hàng"),
+        description: error.response?.data?.message || error.message || "Không thể xóa đơn hàng",
         variant: "destructive",
       });
     } finally {
@@ -178,7 +178,7 @@ const OrdersContent: React.FC = () => {
       console.error('Error fetching orders:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách đơn hàng",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách đơn hàng",
         variant: "destructive",
       });
     } finally {
@@ -227,7 +227,7 @@ const OrdersContent: React.FC = () => {
       console.error('Error updating note:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật ghi chú",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật ghi chú",
         variant: "destructive",
       });
     }
@@ -236,7 +236,7 @@ const OrdersContent: React.FC = () => {
   // Handle order status update
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      await orderApi.updateOrder(orderId, { status: newStatus as any });
+      const response = await orderApi.updateOrder(orderId, { status: newStatus as any });
       
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -245,12 +245,12 @@ const OrdersContent: React.FC = () => {
       
       toast({
         title: "Thành công",
-        description: "Đã cập nhật trạng thái đơn hàng",
+        description: response.message || "Đã cập nhật trạng thái đơn hàng",
       });
     } catch (error) {
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể cập nhật trạng thái"),
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
     }

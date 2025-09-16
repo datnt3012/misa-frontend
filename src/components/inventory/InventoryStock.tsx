@@ -38,9 +38,9 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         includeDeleted: false 
       });
       setStockLevels(response.stockLevels || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading stock levels:', error);
-      toast.error('Không thể tải dữ liệu tồn kho');
+      toast.error(error.message || 'Không thể tải dữ liệu tồn kho');
     } finally {
       setLoading(false);
     }

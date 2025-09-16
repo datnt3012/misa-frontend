@@ -69,8 +69,8 @@ const SuppliersContent: React.FC = () => {
     } catch (error) {
       console.error('Error loading suppliers:', error);
       toast({
-        title: "Lỗi tải dữ liệu",
-        description: "Không thể tải danh sách nhà cung cấp",
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách nhà cung cấp",
         variant: "destructive",
       });
     } finally {
@@ -98,10 +98,10 @@ const SuppliersContent: React.FC = () => {
     }
 
     try {
-      await supplierApi.createSupplier(newSupplier);
+      const response = await supplierApi.createSupplier(newSupplier);
       toast({
         title: "Thành công",
-        description: "Tạo nhà cung cấp thành công",
+        description: response.message || "Tạo nhà cung cấp thành công",
       });
       setShowCreateDialog(false);
       setNewSupplier({ name: '', code: '', phoneNumber: '', email: '', address: '' });
@@ -109,8 +109,8 @@ const SuppliersContent: React.FC = () => {
     } catch (error: any) {
       console.error('Error creating supplier:', error);
       toast({
-        title: "Lỗi tạo nhà cung cấp",
-        description: error?.response?.data?.message || "Không thể tạo nhà cung cấp",
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tạo nhà cung cấp",
         variant: "destructive",
       });
     }
@@ -146,10 +146,10 @@ const SuppliersContent: React.FC = () => {
         address: editingSupplier.address
       };
 
-      await supplierApi.updateSupplier(editingSupplier.id, updateData);
+      const response = await supplierApi.updateSupplier(editingSupplier.id, updateData);
       toast({
         title: "Thành công",
-        description: "Cập nhật nhà cung cấp thành công",
+        description: response.message || "Cập nhật nhà cung cấp thành công",
       });
       setShowEditDialog(false);
       setEditingSupplier(null);
@@ -157,8 +157,8 @@ const SuppliersContent: React.FC = () => {
     } catch (error: any) {
       console.error('Error updating supplier:', error);
       toast({
-        title: "Lỗi cập nhật nhà cung cấp",
-        description: error?.response?.data?.message || "Không thể cập nhật nhà cung cấp",
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật nhà cung cấp",
         variant: "destructive",
       });
     }
@@ -170,17 +170,17 @@ const SuppliersContent: React.FC = () => {
     }
 
     try {
-      await supplierApi.deleteSupplier(supplier.id);
+      const response = await supplierApi.deleteSupplier(supplier.id);
       toast({
         title: "Thành công",
-        description: "Xóa nhà cung cấp thành công",
+        description: response.message || "Xóa nhà cung cấp thành công",
       });
       loadSuppliers();
     } catch (error: any) {
       console.error('Error deleting supplier:', error);
       toast({
-        title: "Lỗi xóa nhà cung cấp",
-        description: error?.response?.data?.message || "Không thể xóa nhà cung cấp",
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể xóa nhà cung cấp",
         variant: "destructive",
       });
     }

@@ -434,7 +434,7 @@ const InventoryContent = () => {
         // address_detail: newWarehouse.addressData.address_detail,
       });
 
-      toast.success("Đã tạo kho mới");
+      toast.success(response.message || "Đã tạo kho mới");
       setNewWarehouse({ 
         name: "", 
         code: "", 
@@ -459,9 +459,9 @@ const InventoryContent = () => {
 
   const deleteWarehouse = async (id: string) => {
     try {
-      await warehouseApi.deleteWarehouse(id);
+      const response = await warehouseApi.deleteWarehouse(id);
 
-      toast.success("Đã xóa kho");
+      toast.success(response.message || "Đã xóa kho");
       loadData(); // Reload data
     } catch (error: any) {
       toast.error(error.message || "Không thể xóa kho");
@@ -522,17 +522,9 @@ const InventoryContent = () => {
         ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
         description: newWarehouse.description,
         address: newWarehouse.address,
-        // Temporarily commented - BE not ready for address components
-        // province_code: newWarehouse.addressData.province_code,
-        // province_name: newWarehouse.addressData.province_name,
-        // district_code: newWarehouse.addressData.district_code,
-        // district_name: newWarehouse.addressData.district_name,
-        // ward_code: newWarehouse.addressData.ward_code,
-        // ward_name: newWarehouse.addressData.ward_name,
-        // address_detail: newWarehouse.addressData.address_detail,
       });
 
-      toast.success("Đã cập nhật thông tin kho");
+      toast.success(response.message || "Đã cập nhật thông tin kho");
       cancelEditWarehouse();
       loadData(); // Reload data
     } catch (error: any) {
@@ -541,10 +533,7 @@ const InventoryContent = () => {
   };
 
   const handleImportComplete = async (importedData: any[]) => {
-    // Excel import now only creates warehouse receipts, not products
-    // Products already exist in the system, we just create import receipts
-    // Toast message is already shown in ExcelImport component
-    loadData(); // Refresh data
+    loadData();
   };
 
   const addProduct = async () => {
@@ -568,7 +557,7 @@ const InventoryContent = () => {
         price: newProduct.price
       });
 
-      toast.success('Đã thêm sản phẩm vào danh mục!');
+      toast.success(response.message || 'Đã thêm sản phẩm vào danh mục!');
       loadData(); // Refresh data
       setNewProduct({
         name: '',
@@ -581,8 +570,8 @@ const InventoryContent = () => {
         status: 'active'
       });
       setIsAddProductDialogOpen(false);
-    } catch (error) {
-      toast.error('Có lỗi khi thêm sản phẩm');
+    } catch (error: any) {
+      toast.error(error.message || 'Có lỗi khi thêm sản phẩm');
     } finally {
       setIsAddingProduct(false);
     }

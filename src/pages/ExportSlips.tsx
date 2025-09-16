@@ -13,6 +13,8 @@ import { exportSlipsApi } from '@/api/exportSlips.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { DocumentUploadViewer } from '@/components/documents/DocumentUploadViewer';
+import { PermissionGuard } from '@/components/PermissionGuard';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface ExportSlip {
   id: string;
@@ -51,7 +53,7 @@ interface ExportSlip {
   }>;
 }
 
-export default function ExportSlips() {
+function ExportSlipsContent() {
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
   const [selectedSlip, setSelectedSlip] = useState<ExportSlip | null>(null);
   const [approvalNotes, setApprovalNotes] = useState('');
@@ -62,6 +64,11 @@ export default function ExportSlips() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+
+  // Permission checks
+  const canApprove = hasPermission('WAREHOUSE_RECEIPTS_APPROVE');
+  const canExport = hasPermission('WAREHOUSE_RECEIPTS_EXPORT');
 
   useEffect(() => {
     fetchExportSlips();
@@ -96,11 +103,11 @@ export default function ExportSlips() {
       setExportSlips(slips as any);
       
       // No toast notification for empty export slips list
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching export slips:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách phiếu xuất kho. Vui lòng kiểm tra kết nối backend.",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho. Vui lòng kiểm tra kết nối backend.",
         variant: "destructive",
       });
     }
@@ -108,26 +115,27 @@ export default function ExportSlips() {
 
   const handleApproveSlip = async (slipId: string, approve: boolean) => {
     try {
+      let response;
       if (approve) {
-        await exportSlipsApi.approveSlip(slipId, approvalNotes);
+        response = await exportSlipsApi.approveSlip(slipId, approvalNotes);
       } else {
         // If BE supports reject endpoint, call it; otherwise reuse approve with note
-        await exportSlipsApi.approveSlip(slipId, approvalNotes);
+        response = await exportSlipsApi.approveSlip(slipId, approvalNotes);
       }
 
       toast({
         title: "Thành công",
-        description: `Phiếu xuất kho đã được ${approve ? 'duyệt' : 'từ chối'}`,
+        description: response.message || `Phiếu xuất kho đã được ${approve ? 'duyệt' : 'từ chối'}`,
       });
 
       setIsApprovalDialogOpen(false);
       setApprovalNotes('');
       fetchExportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating export slip:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật phiếu xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật phiếu xuất kho",
         variant: "destructive",
       });
     }
@@ -135,19 +143,19 @@ export default function ExportSlips() {
 
   const handleExportComplete = async (slipId: string, exportNotes: string = '') => {
     try {
-      await exportSlipsApi.completeSlip(slipId, exportNotes);
+      const response = await exportSlipsApi.completeSlip(slipId, exportNotes);
 
       toast({
         title: "Thành công",
-        description: "Đã hoàn thành xuất kho",
+        description: response.message || "Đã hoàn thành xuất kho",
       });
 
       fetchExportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error completing export:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể hoàn thành xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể hoàn thành xuất kho",
         variant: "destructive",
       });
     }
@@ -686,6 +694,17 @@ export default function ExportSlips() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ExportSlips() {
+  return (
+    <PermissionGuard 
+      requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW', 'WAREHOUSE_RECEIPTS_READ']}
+      requireAll={true}
+    >
+      <ExportSlipsContent />
+    </PermissionGuard>
   );
 }
 

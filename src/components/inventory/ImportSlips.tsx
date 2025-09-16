@@ -130,9 +130,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         warehouses: undefined,
       }));
       setImportSlips(list);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading import slips:', error);
-      toast.error('Không thể tải danh sách phiếu nhập kho');
+      toast.error(error.message || 'Không thể tải danh sách phiếu nhập kho');
     } finally {
       setLoading(false);
     }
@@ -151,11 +151,11 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     try {
       const response = await supplierApi.getSuppliers({ page: 1, limit: 1000 });
       setSuppliers(response.suppliers || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading suppliers:', error);
       // Fallback to empty array if API fails
       setSuppliers([]);
-      toast.error('Không thể tải danh sách nhà cung cấp');
+      toast.error(error.message || 'Không thể tải danh sách nhà cung cấp');
     }
   };
 
@@ -190,9 +190,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       setSuppliers(prev => [...prev, newSupplier]);
       
       return newSupplier.id;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating supplier:', error);
-      toast.error('Không thể tạo nhà cung cấp mới');
+      toast.error(error.message || 'Không thể tạo nhà cung cấp mới');
       return null;
     }
   };
@@ -325,7 +325,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
       // Call real API
       const newReceipt = await warehouseReceiptsApi.createReceipt(slipData);
-      toast.success(`Tạo phiếu nhập kho ${newReceipt.code} thành công`);
+      toast.success(newReceipt.message || `Tạo phiếu nhập kho ${newReceipt.code} thành công`);
       setShowCreateDialog(false);
       setNewSlip({
         supplier_id: '',
@@ -339,9 +339,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       });
       setCurrentItems([]);
       loadImportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating import slip:', error);
-      toast.error('Không thể tạo phiếu nhập kho');
+      toast.error(error.message || 'Không thể tạo phiếu nhập kho');
     }
   };
 
@@ -390,33 +390,33 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Only approve the warehouse receipt if all stock updates succeed
       const approvedReceipt = await warehouseReceiptsApi.approveReceipt(slipId);
       
-      toast.success(`Đã phê duyệt phiếu nhập kho ${approvedReceipt.code} và cập nhật tồn kho`);
+      toast.success(approvedReceipt.message || `Đã phê duyệt phiếu nhập kho ${approvedReceipt.code} và cập nhật tồn kho`);
       loadImportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error approving import slip:', error);
-      toast.error('Không thể phê duyệt phiếu nhập kho: ' + (error as any)?.message || 'Lỗi không xác định');
+      toast.error(error.message || 'Không thể phê duyệt phiếu nhập kho');
     }
   };
 
   const rejectImportSlip = async (slipId: string) => {
     try {
-      await warehouseReceiptsApi.rejectReceipt(slipId);
-      toast.success('Đã từ chối phiếu nhập kho');
+      const response = await warehouseReceiptsApi.rejectReceipt(slipId);
+      toast.success(response.message || 'Đã từ chối phiếu nhập kho');
       loadImportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error rejecting import slip:', error);
-      toast.error('Không thể từ chối phiếu nhập kho');
+      toast.error(error.message || 'Không thể từ chối phiếu nhập kho');
     }
   };
 
   const deleteImportSlip = async (slipId: string) => {
     try {
-      await warehouseReceiptsApi.deleteReceipt(slipId);
-      toast.success('Đã xóa phiếu nhập kho');
+      const response = await warehouseReceiptsApi.deleteReceipt(slipId);
+      toast.success(response.message || 'Đã xóa phiếu nhập kho');
       loadImportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting import slip:', error);
-      toast.error('Không thể xóa phiếu nhập kho');
+      toast.error(error.message || 'Không thể xóa phiếu nhập kho');
     }
   };
 

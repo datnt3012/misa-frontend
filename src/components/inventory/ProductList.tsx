@@ -106,9 +106,9 @@ const ProductList: React.FC<ProductListProps> = ({
         // Reload categories to get the updated list
         await loadCategories();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving category:', error);
-      toast.error('Không thể tạo danh mục mới');
+      toast.error(error.message || 'Không thể tạo danh mục mới');
     }
   };
 
@@ -223,7 +223,7 @@ const ProductList: React.FC<ProductListProps> = ({
         price: newProduct.price
       });
 
-      toast.success('Đã thêm sản phẩm vào danh mục!');
+      toast.success(response.message || 'Đã thêm sản phẩm vào danh mục!');
       onProductsUpdate();
       setNewProduct({
         name: '',
@@ -235,9 +235,9 @@ const ProductList: React.FC<ProductListProps> = ({
         barcode: ''
       });
       setIsAddProductDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding product:', error);
-      toast.error('Có lỗi khi thêm sản phẩm');
+      toast.error(error.message || 'Có lỗi khi thêm sản phẩm');
     } finally {
       setIsAddingProduct(false);
     }
@@ -285,7 +285,7 @@ const ProductList: React.FC<ProductListProps> = ({
         ...(newProduct.barcode && { barcode: newProduct.barcode }), // Include barcode if provided
       });
 
-      toast.success('Đã cập nhật sản phẩm!');
+      toast.success(response.message || 'Đã cập nhật sản phẩm!');
       onProductsUpdate();
       setEditingProduct(null);
       setNewProduct({
@@ -298,9 +298,9 @@ const ProductList: React.FC<ProductListProps> = ({
         barcode: ''
       });
       setIsEditProductDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating product:', error);
-      toast.error('Có lỗi khi cập nhật sản phẩm');
+      toast.error(error.message || 'Có lỗi khi cập nhật sản phẩm');
     } finally {
       setIsEditingProduct(false);
     }
@@ -312,13 +312,13 @@ const ProductList: React.FC<ProductListProps> = ({
     }
 
     try {
-      await productApi.deleteProduct(productId);
+      const response = await productApi.deleteProduct(productId);
 
-      toast.success('Đã xóa sản phẩm!');
+      toast.success(response.message || 'Đã xóa sản phẩm!');
       onProductsUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting product:', error);
-      toast.error('Có lỗi khi xóa sản phẩm');
+      toast.error(error.message || 'Có lỗi khi xóa sản phẩm');
     }
   };
 

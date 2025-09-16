@@ -53,6 +53,7 @@ import { categoriesApi, Category, CreateCategoryRequest, UpdateCategoryRequest }
 import { getErrorMessage } from '@/lib/error-utils';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
+import { UnauthorizedPage } from '@/components/UnauthorizedPage';
 
 const CategoriesContent: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -96,7 +97,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error fetching categories:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách danh mục",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách danh mục",
         variant: "destructive",
       });
     } finally {
@@ -115,10 +116,10 @@ const CategoriesContent: React.FC = () => {
     }
 
     try {
-      await categoriesApi.createCategory(newCategory);
+      const response = await categoriesApi.createCategory(newCategory);
       toast({
         title: "Thành công",
-        description: "Đã thêm danh mục mới",
+        description: response.message || "Đã thêm danh mục mới",
       });
       setNewCategory({ name: '', description: '' });
       setIsAddDialogOpen(false);
@@ -127,7 +128,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error creating category:', error);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể thêm danh mục"),
+        description: error.response?.data?.message || error.message || "Không thể thêm danh mục",
         variant: "destructive",
       });
     }
@@ -144,10 +145,10 @@ const CategoriesContent: React.FC = () => {
     }
 
     try {
-      await categoriesApi.updateCategory(editingCategory.id, editCategory);
+      const response = await categoriesApi.updateCategory(editingCategory.id, editCategory);
       toast({
         title: "Thành công",
-        description: "Đã cập nhật danh mục",
+        description: response.message || "Đã cập nhật danh mục",
       });
       setEditingCategory(null);
       setEditCategory({ name: '', description: '' });
@@ -157,7 +158,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error updating category:', error);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể cập nhật danh mục"),
+        description: error.response?.data?.message || error.message || "Không thể cập nhật danh mục",
         variant: "destructive",
       });
     }
@@ -167,10 +168,10 @@ const CategoriesContent: React.FC = () => {
     if (!categoryToDelete) return;
 
     try {
-      await categoriesApi.deleteCategory(categoryToDelete.id);
+      const response = await categoriesApi.deleteCategory(categoryToDelete.id);
       toast({
         title: "Thành công",
-        description: "Đã xóa danh mục",
+        description: response.message || "Đã xóa danh mục",
       });
       setCategoryToDelete(null);
       setIsDeleteDialogOpen(false);
@@ -179,7 +180,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error deleting category:', error);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể xóa danh mục"),
+        description: error.response?.data?.message || error.message || "Không thể xóa danh mục",
         variant: "destructive",
       });
     }
@@ -484,7 +485,10 @@ const CategoriesContent: React.FC = () => {
 
 export default function Categories() {
   return (
-    <PermissionGuard requiredPermissions={['CATEGORIES_VIEW']}>
+    <PermissionGuard 
+      requiredPermissions={['CATEGORIES_VIEW', 'CATEGORIES_READ']}
+      requireAll={true}
+    >
       <CategoriesContent />
     </PermissionGuard>
   );
