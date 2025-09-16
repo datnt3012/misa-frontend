@@ -19,7 +19,7 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { Loading } from "@/components/ui/loading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock } from "lucide-react";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import ExcelImport from "@/components/inventory/ExcelImport";
 // import AddressComponent from "@/components/common/AddressComponent"; // Temporarily commented - BE not ready
 import ProductList from "@/components/inventory/ProductList";
@@ -28,6 +28,7 @@ import ImportSlips from "@/components/inventory/ImportSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
 import { productApi, type Product } from "@/api/product.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 import React from "react";
 
@@ -98,9 +99,9 @@ const InventoryContent = () => {
           ...prev, 
           warehouses: errorMessage
         }));
-        toast.error(errorMessage);
+        toast({ title: "Lỗi", description: convertPermissionCodesInMessage(errorMessage), variant: "destructive" });
       } else {
-        toast.error(error.response?.data?.message || error.message || 'Không thể tải danh sách kho');
+        toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Không thể tải danh sách kho'), variant: "destructive" });
       }
     }
   };
@@ -137,6 +138,7 @@ const InventoryContent = () => {
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const { user } = useAuth();
+  const { toast } = useToast();
 
   // Permission checks removed - let backend handle authorization
   const canViewCostPrice = true; // Always show cost price - backend will handle access control
@@ -450,12 +452,12 @@ const InventoryContent = () => {
 
   const createWarehouse = async () => {
     if (!newWarehouse.name) {
-      toast.error("Tên kho là bắt buộc");
+      toast({ title: "Lỗi", description: "Tên kho là bắt buộc", variant: "destructive" });
       return;
     }
 
     try {
-      await warehouseApi.createWarehouse({
+      const createResp: any = await warehouseApi.createWarehouse({
         name: newWarehouse.name,
         ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
         description: newWarehouse.description,
@@ -470,7 +472,7 @@ const InventoryContent = () => {
         // address_detail: newWarehouse.addressData.address_detail,
       });
 
-      toast.success(response.message || "Đã tạo kho mới");
+      toast({ title: "Thành công", description: createResp?.message || "Đã tạo kho mới" });
       setNewWarehouse({ 
         name: "", 
         code: "", 
@@ -489,18 +491,18 @@ const InventoryContent = () => {
       });
       loadData(); // Reload data
     } catch (error: any) {
-      toast.error(error.message || "Không thể tạo kho");
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
   };
 
   const deleteWarehouse = async (id: string) => {
     try {
-      const response = await warehouseApi.deleteWarehouse(id);
+      const resp = await warehouseApi.deleteWarehouse(id);
 
-      toast.success(response.message || "Đã xóa kho");
+      toast({ title: "Thành công", description: resp.message || "Đã xóa kho" });
       loadData(); // Reload data
     } catch (error: any) {
-      toast.error(error.message || "Không thể xóa kho");
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa kho"), variant: "destructive" });
     }
   };
 
@@ -548,23 +550,23 @@ const InventoryContent = () => {
 
   const updateWarehouse = async () => {
     if (!newWarehouse.name) {
-      toast.error("Tên kho là bắt buộc");
+      toast({ title: "Lỗi", description: "Tên kho là bắt buộc", variant: "destructive" });
       return;
     }
 
     try {
-      await warehouseApi.updateWarehouse(editingWarehouse.id, {
+      const updateResp: any = await warehouseApi.updateWarehouse(editingWarehouse.id, {
         name: newWarehouse.name,
         ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
         description: newWarehouse.description,
         address: newWarehouse.address,
       });
-
-      toast.success(response.message || "Đã cập nhật thông tin kho");
+      
+      toast({ title: "Thành công", description: updateResp?.message || "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
       loadData(); // Reload data
     } catch (error: any) {
-      toast.error(error.message || "Không thể cập nhật kho");
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
   };
 
@@ -574,26 +576,26 @@ const InventoryContent = () => {
 
   const addProduct = async () => {
     if (!newProduct.name) {
-      toast.error('Tên sản phẩm là bắt buộc');
+      toast({ title: "Lỗi", description: 'Tên sản phẩm là bắt buộc', variant: "destructive" });
       return;
     }
     if (!newProduct.price || newProduct.price <= 0) {
-      toast.error('Giá bán phải lớn hơn 0');
+      toast({ title: "Lỗi", description: 'Giá bán phải lớn hơn 0', variant: "destructive" });
       return;
     }
 
     try {
       setIsAddingProduct(true);
 
-      await productApi.createProduct({
+      const createProductResp: any = await productApi.createProduct({
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
         unit: newProduct.unit,
         price: newProduct.price
       });
-
-      toast.success(response.message || 'Đã thêm sản phẩm vào danh mục!');
+      
+      toast({ title: "Thành công", description: createProductResp?.message || 'Đã thêm sản phẩm vào danh mục!' });
       loadData(); // Refresh data
       setNewProduct({
         name: '',
@@ -607,7 +609,7 @@ const InventoryContent = () => {
       });
       setIsAddProductDialogOpen(false);
     } catch (error: any) {
-      toast.error(error.message || 'Có lỗi khi thêm sản phẩm');
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm'), variant: "destructive" });
     } finally {
       setIsAddingProduct(false);
     }
@@ -688,7 +690,7 @@ const InventoryContent = () => {
     // Write and download file
     XLSX.writeFile(wb, filename);
     
-    toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
+    toast({ title: "Thành công", description: `Đã xuất ${exportData.length} sản phẩm ra file Excel` });
   };
 
   // Component to show permission error for summary cards

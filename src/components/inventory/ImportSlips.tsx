@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2 } from 'lucide-react';
 // // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
 import { productApi } from '@/api/product.api';
@@ -102,6 +102,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const [currentItems, setCurrentItems] = useState<ImportSlipItem[]>([]);
   const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadImportSlips();
@@ -134,7 +135,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     } catch (error: any) {
       console.error('Error loading import slips:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách phiếu nhập kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -158,7 +159,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Fallback to empty array if API fails
       setSuppliers([]);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách nhà cung cấp';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
@@ -196,7 +197,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     } catch (error: any) {
       console.error('Error creating supplier:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo nhà cung cấp mới';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
       return null;
     }
   };
@@ -249,7 +250,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const addItemToSlip = () => {
     if (!newItem.product_id || newItem.quantity <= 0) {
-      toast.error('Vui lòng chọn sản phẩm và nhập số lượng hợp lệ');
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn sản phẩm và nhập số lượng hợp lệ', variant: 'destructive' });
       return;
     }
 
@@ -284,12 +285,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const createImportSlip = async () => {
     if ((!newSlip.supplier_id && !newSlip.supplier_name) || currentItems.length === 0) {
-      toast.error('Vui lòng chọn nhà cung cấp và thêm ít nhất một sản phẩm');
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn nhà cung cấp và thêm ít nhất một sản phẩm', variant: 'destructive' });
       return;
     }
 
     if (!newSlip.warehouse_id) {
-      toast.error('Vui lòng chọn kho nhập');
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn kho nhập', variant: 'destructive' });
       return;
     }
 
@@ -329,7 +330,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
       // Call real API
       const newReceipt = await warehouseReceiptsApi.createReceipt(slipData);
-      toast.success(newReceipt.message || `Tạo phiếu nhập kho ${newReceipt.code} thành công`);
+      toast({ title: 'Thành công', description: newReceipt.message || `Tạo phiếu nhập kho ${newReceipt.code} thành công` });
       setShowCreateDialog(false);
       setNewSlip({
         supplier_id: '',
@@ -346,7 +347,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     } catch (error: any) {
       console.error('Error creating import slip:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo phiếu nhập kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
@@ -361,13 +362,13 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       const receipt = receiptDetails.receipts.find(r => r.id === slipId);
       
       if (!receipt) {
-        toast.error('Không tìm thấy phiếu nhập kho');
+        toast({ title: 'Lỗi', description: 'Không tìm thấy phiếu nhập kho', variant: 'destructive' });
         return;
       }
 
       // Check if receipt has items
       if (!receipt.items || receipt.items.length === 0) {
-        toast.error('Phiếu nhập kho không có sản phẩm nào');
+        toast({ title: 'Lỗi', description: 'Phiếu nhập kho không có sản phẩm nào', variant: 'destructive' });
         return;
       }
 
@@ -395,36 +396,36 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Only approve the warehouse receipt if all stock updates succeed
       const approvedReceipt = await warehouseReceiptsApi.approveReceipt(slipId);
       
-      toast.success(approvedReceipt.message || `Đã phê duyệt phiếu nhập kho ${approvedReceipt.code} và cập nhật tồn kho`);
+      toast({ title: 'Thành công', description: approvedReceipt.message || `Đã phê duyệt phiếu nhập kho ${approvedReceipt.code} và cập nhật tồn kho` });
       loadImportSlips();
     } catch (error: any) {
       console.error('Error approving import slip:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể phê duyệt phiếu nhập kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
   const rejectImportSlip = async (slipId: string) => {
     try {
       const response = await warehouseReceiptsApi.rejectReceipt(slipId);
-      toast.success(response.message || 'Đã từ chối phiếu nhập kho');
+      toast({ title: 'Thành công', description: response.message || 'Đã từ chối phiếu nhập kho' });
       loadImportSlips();
     } catch (error: any) {
       console.error('Error rejecting import slip:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể từ chối phiếu nhập kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
   const deleteImportSlip = async (slipId: string) => {
     try {
       const response = await warehouseReceiptsApi.deleteReceipt(slipId);
-      toast.success(response.message || 'Đã xóa phiếu nhập kho');
+      toast({ title: 'Thành công', description: response.message || 'Đã xóa phiếu nhập kho' });
       loadImportSlips();
     } catch (error: any) {
       console.error('Error deleting import slip:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể xóa phiếu nhập kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 

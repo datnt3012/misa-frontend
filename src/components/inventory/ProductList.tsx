@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import React from "react";
 import { productApi } from "@/api/product.api";
@@ -34,6 +34,7 @@ const ProductList: React.FC<ProductListProps> = ({
   canManageProducts,
   onProductsUpdate
 }) => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
@@ -110,7 +111,7 @@ const ProductList: React.FC<ProductListProps> = ({
     } catch (error: any) {
       console.error('Error saving category:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo danh mục mới';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
@@ -201,11 +202,11 @@ const ProductList: React.FC<ProductListProps> = ({
 
   const addProduct = async () => {
     if (!newProduct.name) {
-      toast.error('Tên sản phẩm là bắt buộc');
+      toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
       return;
     }
     if (!newProduct.price || newProduct.price <= 0) {
-      toast.error('Giá bán phải lớn hơn 0');
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0', variant: 'destructive' });
       return;
     }
 
@@ -225,7 +226,7 @@ const ProductList: React.FC<ProductListProps> = ({
         price: newProduct.price
       });
 
-      toast.success(response.message || 'Đã thêm sản phẩm vào danh mục!');
+      toast({ title: 'Thành công', description: response.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
       setNewProduct({
         name: '',
@@ -240,7 +241,7 @@ const ProductList: React.FC<ProductListProps> = ({
     } catch (error: any) {
       console.error('Error adding product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setIsAddingProduct(false);
     }
@@ -262,11 +263,11 @@ const ProductList: React.FC<ProductListProps> = ({
 
   const updateProduct = async () => {
     if (!newProduct.name) {
-      toast.error('Tên sản phẩm là bắt buộc');
+      toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
       return;
     }
     if (!newProduct.price || newProduct.price <= 0) {
-      toast.error('Giá bán phải lớn hơn 0');
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0', variant: 'destructive' });
       return;
     }
 
@@ -288,7 +289,7 @@ const ProductList: React.FC<ProductListProps> = ({
         ...(newProduct.barcode && { barcode: newProduct.barcode }), // Include barcode if provided
       });
 
-      toast.success(response.message || 'Đã cập nhật sản phẩm!');
+      toast({ title: 'Thành công', description: response.message || 'Đã cập nhật sản phẩm!' });
       onProductsUpdate();
       setEditingProduct(null);
       setNewProduct({
@@ -304,7 +305,7 @@ const ProductList: React.FC<ProductListProps> = ({
     } catch (error: any) {
       console.error('Error updating product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi cập nhật sản phẩm';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setIsEditingProduct(false);
     }
@@ -318,12 +319,12 @@ const ProductList: React.FC<ProductListProps> = ({
     try {
       const response = await productApi.deleteProduct(productId);
 
-      toast.success(response.message || 'Đã xóa sản phẩm!');
+      toast({ title: 'Thành công', description: response.message || 'Đã xóa sản phẩm!' });
       onProductsUpdate();
     } catch (error: any) {
       console.error('Error deleting product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi xóa sản phẩm';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
@@ -383,7 +384,7 @@ const ProductList: React.FC<ProductListProps> = ({
     const filename = `Danh_sach_san_pham_${dateStr}_${timeStr}.xlsx`;
 
     XLSX.writeFile(wb, filename);
-    toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
+    toast({ title: 'Thành công', description: `Đã xuất ${exportData.length} sản phẩm ra file Excel` });
   };
 
   return (
