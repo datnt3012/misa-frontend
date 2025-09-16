@@ -11,11 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2 } from "lucide-react";
 import UserSettings from "@/components/UserSettings";
 import RolePermissionsManager from "@/components/settings/RolePermissionsManager";
 import { usersApi, User, UserRole } from "@/api/users.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 // UserRole interface imported from users.api.ts
 
@@ -57,6 +59,7 @@ const SettingsContent = () => {
   const [usersLoaded, setUsersLoaded] = useState(false);
   const [rolesLoaded, setRolesLoaded] = useState(false);
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -113,7 +116,7 @@ const SettingsContent = () => {
       console.error('❌ Error loading users from backend:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể tải danh sách người dùng",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tải danh sách người dùng"),
         variant: "destructive",
       });
       // Only use backend data - no fallback
@@ -183,7 +186,7 @@ const SettingsContent = () => {
     } catch (error: any) {
       toast({
         title: "Lỗi",
-        description: error.message || "Không thể đổi mật khẩu",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể đổi mật khẩu"),
         variant: "destructive",
       });
     } finally {
@@ -219,7 +222,7 @@ const SettingsContent = () => {
         throw new Error('Vai trò không hợp lệ');
       }
 
-      await usersApi.createUser({
+      const resp = await usersApi.createUser({
         email: newUserEmail,
         password: newUserPassword,
         firstName: newUserName || newUserEmail.split('@')[0],
@@ -228,7 +231,7 @@ const SettingsContent = () => {
 
       toast({
         title: "Thành công",
-        description: "Đã tạo tài khoản người dùng mới",
+        description: resp?.message || "Đã tạo tài khoản người dùng mới",
       });
 
       // Reset form
@@ -244,8 +247,8 @@ const SettingsContent = () => {
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast({
-        title: "Thông báo",
-        description: "Chức năng tạo người dùng chưa được triển khai trên backend",
+        title: "Lỗi",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo người dùng"),
         variant: "destructive",
       });
     } finally {
@@ -276,7 +279,7 @@ const SettingsContent = () => {
         if (response.status === 403) {
           toast({
             title: "Không có quyền",
-            description: "Bạn không có quyền thực hiện hành động này",
+            description: convertPermissionCodesInMessage("Bạn không có quyền thực hiện hành động này"),
             variant: "destructive",
           });
           return;
@@ -299,7 +302,7 @@ const SettingsContent = () => {
     } catch (error: any) {
       toast({
         title: "Lỗi",
-        description: error.message || "Không thể xóa tài khoản người dùng",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa tài khoản người dùng"),
         variant: "destructive",
       });
     } finally {
@@ -351,7 +354,7 @@ const SettingsContent = () => {
         if (response.status === 403) {
           toast({
             title: "Không có quyền",
-            description: "Bạn không có quyền thực hiện hành động này",
+            description: convertPermissionCodesInMessage("Bạn không có quyền thực hiện hành động này"),
             variant: "destructive",
           });
           return;
@@ -378,7 +381,7 @@ const SettingsContent = () => {
       console.error('Reset user password error:', error);
       toast({
         title: "Lỗi",
-        description: error.message || "Không thể đổi mật khẩu nhân viên",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể đổi mật khẩu nhân viên"),
         variant: "destructive",
       });
     } finally {
@@ -412,8 +415,8 @@ const SettingsContent = () => {
 
     } catch (error: any) {
       toast({
-        title: "Thông báo",
-        description: "Chức năng cập nhật vai trò chưa được triển khai trên backend",
+        title: "Lỗi",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật vai trò người dùng"),
         variant: "destructive",
       });
     } finally {
@@ -439,9 +442,9 @@ const SettingsContent = () => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
 
-  // Permission checks removed - let backend handle authorization
-  const canViewPasswordReset = true; // Always show password reset - backend will handle access control
-  const canResetPassword = true; // Always allow password reset - backend will handle access control
+  // Chỉ cho phép Admin xem và thao tác đổi mật khẩu nhân viên (Owner không được phép)
+  const canViewPasswordReset = isAdmin;
+  const canResetPassword = isAdmin;
 
   return (
     <div className="min-h-screen bg-background p-6">
