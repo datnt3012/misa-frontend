@@ -91,7 +91,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải dữ liệu",
+        description: error.response?.data?.message || error.message || "Không thể tải dữ liệu",
         variant: "destructive",
       });
     }

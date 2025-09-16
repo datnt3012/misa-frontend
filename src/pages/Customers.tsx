@@ -22,8 +22,7 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { customerApi } from "@/api/customer.api";
 import { orderApi, Order } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
-import { useRouteBasedLazyData } from "@/hooks/useLazyData";
-import { Loading } from "@/components/ui/loading";
+import { usePermissions } from "@/hooks/usePermissions";
 import { 
   Dialog,
   DialogContent,
@@ -104,25 +103,33 @@ const CustomersContent = () => {
     address: ""
   });
 
-  // Lazy loading configuration
-  const lazyData = useRouteBasedLazyData({
-    customers: {
-      loadFunction: async () => {
-        try {
-          const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
-          setCustomers(resp.customers || []);
-        } catch (error) {
-          console.error('Error fetching customers:', error);
-          toast({
-            title: "Lỗi",
-            description: "Không thể tải danh sách khách hàng",
-            variant: "destructive",
-          });
-          throw error; // Re-throw for lazy loading error handling
-        }
-      }
+  // Check permissions
+  const { hasPermission } = usePermissions();
+  const canReadCustomers = hasPermission('CUSTOMERS_READ');
+  const canManageCustomers = hasPermission('CUSTOMERS_MANAGE');
+
+  // Load customers data
+  const loadCustomers = async () => {
+    try {
+      setIsLoading(true);
+      const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
+      setCustomers(resp.customers || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách khách hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
+
+  // Load data when permissions are available
+  useEffect(() => {
+    loadCustomers();
+  }, [canReadCustomers]);
 
   // Restore form state from URL parameters after page reload
   useEffect(() => {
@@ -170,7 +177,7 @@ const CustomersContent = () => {
       console.error('Error fetching customer orders:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải lịch sử đơn hàng",
+        description: error.response?.data?.message || error.message || "Không thể tải lịch sử đơn hàng",
         variant: "destructive",
       });
     }
@@ -203,7 +210,7 @@ const CustomersContent = () => {
       console.error('Error adding customer:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể thêm khách hàng",
+        description: error.response?.data?.message || error.message || "Không thể thêm khách hàng",
         variant: "destructive",
       });
     }
@@ -235,7 +242,7 @@ const CustomersContent = () => {
       });
 
       // Reload customers to get updated data
-      await fetchCustomers();
+      await loadCustomers();
       setIsEditDialogOpen(false);
       setEditingCustomer(null);
       // Clear URL parameters
@@ -249,7 +256,7 @@ const CustomersContent = () => {
       console.error('Error updating customer:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật thông tin khách hàng",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật thông tin khách hàng",
         variant: "destructive",
       });
     }
@@ -273,7 +280,7 @@ const CustomersContent = () => {
       console.error('Error deleting customer:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể xóa khách hàng. Có thể khách hàng đã có đơn hàng.",
+        description: error.response?.data?.message || error.message || "Không thể xóa khách hàng. Có thể khách hàng đã có đơn hàng.",
         variant: "destructive",
       });
     }
@@ -307,15 +314,19 @@ const CustomersContent = () => {
     customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const customersState = lazyData.getDataState('customers');
-  
-  if (customersState.isLoading || customersState.error) {
+  // Show loading state
+  if (isLoading) {
     return (
-      <Loading 
-        message="Đang tải danh sách khách hàng..."
-        error={customersState.error}
-        onRetry={() => lazyData.reloadData('customers')}
-      />
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Đang tải danh sách khách hàng...</p>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -751,7 +762,7 @@ const CustomersContent = () => {
 
 const Customers = () => {
   return (
-    <PermissionGuard requiredPermissions={['CUSTOMERS_VIEW']}>
+    <PermissionGuard requiredPermissions={['CUSTOMERS_VIEW']} requireAll={false}>
       <CustomersContent />
     </PermissionGuard>
   );

@@ -16,8 +16,7 @@ import { customerApi } from '@/api/customer.api';
 import { orderApi } from '@/api/order.api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { useRouteBasedLazyData } from '@/hooks/useLazyData';
-import { Loading } from '@/components/ui/loading';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', {
@@ -36,6 +35,20 @@ function RevenueContent() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+
+  // Check permissions
+  const canReadRevenue = hasPermission('REVENUE_READ');
+  const canViewProfit = hasPermission('REVENUE_PROFIT_VIEW');
+  
+  // Check user role for profit access - only owner and chief_accountant
+  const isOwner = user?.role === 'owner' || user?.roleCode === 'OWNER';
+  const isChiefAccountant = user?.role === 'chief_accountant' || user?.roleCode === 'CHIEF_ACCOUNTANT';
+  
+  // Only allow if user data is loaded AND (has permission OR is owner/chief_accountant)
+  const canAccessProfit = user && (
+    canViewProfit || isOwner || isChiefAccountant
+  );
 
   const fetchCustomers = async () => {
     try {
@@ -107,23 +120,30 @@ function RevenueContent() {
 
     } catch (error) {
       console.error('Error fetching revenue data:', error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể tải dữ liệu doanh thu",
-        variant: "destructive",
-      });
+        toast({
+          title: "Lỗi",
+          description: error.response?.data?.message || error.message || "Không thể tải dữ liệu doanh thu",
+          variant: "destructive",
+        });
       throw error; // Re-throw for lazy loading error handling
     }
   };
 
-  // Lazy loading configuration
-  const lazyData = useRouteBasedLazyData({
-    revenue: {
-      loadFunction: async () => {
-        await Promise.all([fetchCustomers(), fetchRevenueData()]);
-      }
+  // Load data when permissions are available
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([fetchCustomers(), fetchRevenueData()]);
+    } catch (error) {
+      console.error('Error loading revenue data:', error);
+    } finally {
+      setLoading(false);
     }
-  });
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [canReadRevenue]);
 
   const getMonthIndex = (monthName: string) => {
     const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
@@ -146,15 +166,19 @@ function RevenueContent() {
     fetchRevenueData();
   };
 
-  const revenueState = lazyData.getDataState('revenue');
-  
-  if (revenueState.isLoading || revenueState.error) {
+  // Show loading state
+  if (loading) {
     return (
-      <Loading 
-        message="Đang tải dữ liệu doanh thu..."
-        error={revenueState.error}
-        onRetry={() => lazyData.reloadData('revenue')}
-      />
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Đang tải dữ liệu doanh thu...</p>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -302,20 +326,22 @@ function RevenueContent() {
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Tổng Lãi
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(debtData.totalProfit || 0)}</div>
-            <p className="text-xs text-muted-foreground">
-              {debtData.profitMargin ? `Tỷ suất lãi: ${debtData.profitMargin.toFixed(1)}%` : 'Chưa có dữ liệu'}
-            </p>
-          </CardContent>
-        </Card>
+         {canAccessProfit && (
+           <Card>
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+               <CardTitle className="text-sm font-medium">
+                 Tổng Lãi
+               </CardTitle>
+               <DollarSign className="h-4 w-4 text-muted-foreground" />
+             </CardHeader>
+             <CardContent>
+               <div className="text-2xl font-bold text-green-600">{formatCurrency(debtData.totalProfit || 0)}</div>
+               <p className="text-xs text-muted-foreground">
+                 {debtData.profitMargin ? `Tỷ suất lãi: ${debtData.profitMargin.toFixed(1)}%` : 'Chưa có dữ liệu'}
+               </p>
+             </CardContent>
+           </Card>
+         )}
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

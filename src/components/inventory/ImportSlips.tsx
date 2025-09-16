@@ -18,6 +18,7 @@ import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
 import { productApi } from '@/api/product.api';
 import { warehouseApi } from '@/api/warehouse.api';
 import { supplierApi, Supplier } from '@/api/supplier.api';
+import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
 import { generateImportSlipCode } from '@/utils/importSlipUtils';
 import { stockLevelsApi } from '@/api/stockLevels.api';
 
@@ -132,7 +133,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       setImportSlips(list);
     } catch (error: any) {
       console.error('Error loading import slips:', error);
-      toast.error(error.message || 'Không thể tải danh sách phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách phiếu nhập kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     } finally {
       setLoading(false);
     }
@@ -155,7 +157,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       console.error('Error loading suppliers:', error);
       // Fallback to empty array if API fails
       setSuppliers([]);
-      toast.error(error.message || 'Không thể tải danh sách nhà cung cấp');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách nhà cung cấp';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 
@@ -192,7 +195,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       return newSupplier.id;
     } catch (error: any) {
       console.error('Error creating supplier:', error);
-      toast.error(error.message || 'Không thể tạo nhà cung cấp mới');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo nhà cung cấp mới';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
       return null;
     }
   };
@@ -341,7 +345,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       loadImportSlips();
     } catch (error: any) {
       console.error('Error creating import slip:', error);
-      toast.error(error.message || 'Không thể tạo phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo phiếu nhập kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 
@@ -394,7 +399,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       loadImportSlips();
     } catch (error: any) {
       console.error('Error approving import slip:', error);
-      toast.error(error.message || 'Không thể phê duyệt phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể phê duyệt phiếu nhập kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 
@@ -405,7 +411,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       loadImportSlips();
     } catch (error: any) {
       console.error('Error rejecting import slip:', error);
-      toast.error(error.message || 'Không thể từ chối phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể từ chối phiếu nhập kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 
@@ -416,7 +423,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       loadImportSlips();
     } catch (error: any) {
       console.error('Error deleting import slip:', error);
-      toast.error(error.message || 'Không thể xóa phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể xóa phiếu nhập kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 

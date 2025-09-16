@@ -12,7 +12,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { useNotifications } from "@/hooks/useNotifications";
 import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2 } from "lucide-react";
 import UserSettings from "@/components/UserSettings";
 import RolePermissionsManager from "@/components/settings/RolePermissionsManager";
@@ -40,7 +39,6 @@ const SettingsContent = () => {
   const [createUserLoading, setCreateUserLoading] = useState(false);
   const [deleteUserLoading, setDeleteUserLoading] = useState<string | null>(null);
   const [updateRoleLoading, setUpdateRoleLoading] = useState<string | null>(null);
-  const [testNotificationLoading, setTestNotificationLoading] = useState(false);
   const [tempRoleValues, setTempRoleValues] = useState<Record<string, string>>({});
   const [editingRole, setEditingRole] = useState<string | null>(null);
   // Permission checks removed - let backend handle authorization
@@ -55,16 +53,37 @@ const SettingsContent = () => {
   const [newUserPasswordReset, setNewUserPasswordReset] = useState("");
   const [confirmUserPasswordReset, setConfirmUserPasswordReset] = useState("");
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("password");
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [rolesLoaded, setRolesLoaded] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
-  const { createNotification } = useNotifications();
 
   useEffect(() => {
-    loadUsers();
-    loadUserRoles();
     loadEmailPreferences();
     loadCurrentUserRole();
   }, []);
+
+  // Handle tab changes for lazy loading
+  useEffect(() => {
+    console.log('🔍 Tab change detected:', { activeTab, usersLoaded, rolesLoaded });
+    
+    if (activeTab === "roles" && !usersLoaded) {
+      console.log('🔍 Loading users for roles tab...');
+      loadUsers();
+      setUsersLoaded(true);
+    }
+    if (activeTab === "roles" && !rolesLoaded) {
+      console.log('🔍 Loading roles for roles tab...');
+      loadUserRoles();
+      setRolesLoaded(true);
+    }
+    if (activeTab === "permissions" && !rolesLoaded) {
+      console.log('🔍 Loading roles for permissions tab...');
+      loadUserRoles();
+      setRolesLoaded(true);
+    }
+  }, [activeTab, usersLoaded, rolesLoaded]);
 
 
   const loadCurrentUserRole = async () => {
@@ -73,7 +92,9 @@ const SettingsContent = () => {
 
   const loadUsers = async () => {
     try {
+      console.log('🔍 Loading users...');
       const response = await usersApi.getUsers({ limit: 100 });
+      console.log('✅ Users API response:', response);
       const users = response.users || [];
       setUsers(users);
       
@@ -88,8 +109,13 @@ const SettingsContent = () => {
       if (uniqueRoles.length > 0) {
         setUserRoles(uniqueRoles);
       }
-    } catch (error) {
-      console.error('Error loading users from backend:', error);
+    } catch (error: any) {
+      console.error('❌ Error loading users from backend:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách người dùng",
+        variant: "destructive",
+      });
       // Only use backend data - no fallback
       setUsers([]);
       setUserRoles([]);
@@ -428,7 +454,7 @@ const SettingsContent = () => {
           <p className="text-muted-foreground">Quản lý tài khoản và phân quyền hệ thống</p>
         </div>
 
-        <Tabs defaultValue="password" className="w-full">
+        <Tabs defaultValue="password" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="password" className="flex items-center gap-2">
               <Key className="w-4 h-4" />
@@ -507,43 +533,6 @@ const SettingsContent = () => {
                   </Button>
                 </div>
 
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-green-800 mb-2">Test Notification</h4>
-                  <Button 
-                    onClick={async () => {
-                      if (user?.id) {
-                        setTestNotificationLoading(true);
-                        try {
-                          await createNotification({
-                            user_id: user.id,
-                            title: "Test notification",
-                            message: "Đây là thông báo test từ hệ thống",
-                            type: "info"
-                          });
-                          toast({
-                            title: "Thành công",
-                            description: "Đã tạo thông báo test",
-                          });
-                        } catch (error: any) {
-                          toast({
-                            title: "Lỗi",
-                            description: "Không thể tạo thông báo test",
-                            variant: "destructive",
-                          });
-                        } finally {
-                          setTestNotificationLoading(false);
-                        }
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    disabled={testNotificationLoading}
-                    className="animate-fade-in"
-                  >
-                    {testNotificationLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {testNotificationLoading ? "Đang tạo..." : "Tạo thông báo test"}
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -968,25 +957,6 @@ const SettingsContent = () => {
                 </CardContent>
               </Card>
 
-              {/* Admin Info */}
-              <Card className="border-blue-200 bg-blue-50">
-                <CardHeader>
-                  <CardTitle className="text-blue-800">Thông tin quản trị</CardTitle>
-                </CardHeader>
-                <CardContent className="text-blue-700">
-                  <p className="text-sm">
-                    <strong>Tài khoản admin mặc định:</strong> anh.hxt@gmail.com
-                  </p>
-                  <p className="text-sm mt-1">
-                    Chỉ tài khoản admin mới có thể quản lý phân quyền người dùng.
-                  </p>
-                  {!canResetPassword && (
-                    <p className="text-sm mt-2 text-amber-600">
-                      Bạn không có quyền quản lý phân quyền hệ thống.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
             </div>
             </PermissionGuard>
           </TabsContent>

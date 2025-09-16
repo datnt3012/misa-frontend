@@ -90,7 +90,7 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
       console.error('Error loading export slips:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách phiếu xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho",
         variant: "destructive",
       });
     } finally {

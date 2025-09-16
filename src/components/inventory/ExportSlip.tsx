@@ -167,7 +167,7 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       console.error('Error updating export slip:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật phiếu xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật phiếu xuất kho",
         variant: "destructive",
       });
     }
@@ -198,7 +198,7 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       console.error('Error marking export as completed:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật trạng thái xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái xuất kho",
         variant: "destructive",
       });
     }

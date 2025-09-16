@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { warehouseReceiptsApi, WarehouseReceipt } from "@/api/warehouseReceipts.api";
 import { warehouseApi } from "@/api/warehouse.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 interface InventoryMovement {
   id: string;
@@ -62,8 +63,8 @@ const InventoryHistory = () => {
               reference_type: 'warehouse_receipt',
               reference_id: receipt.id,
               warehouse_id: receipt.warehouse_id,
-              warehouse_name: receipt.warehouse?.name || '',
-              warehouse_code: receipt.warehouse?.code || '',
+              warehouse_name: 'Kho không xác định',
+              warehouse_code: '',
               notes: receipt.description || '',
               created_at: receipt.created_at,
               created_by: 'Hệ thống',
@@ -80,7 +81,8 @@ const InventoryHistory = () => {
       setMovements(transformedMovements);
     } catch (error: any) {
       console.error('Error loading inventory movements:', error);
-      toast.error(error.message || 'Có lỗi khi tải lịch sử xuất nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi tải lịch sử xuất nhập kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     } finally {
       setLoading(false);
     }

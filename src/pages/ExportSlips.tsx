@@ -700,8 +700,8 @@ function ExportSlipsContent() {
 export default function ExportSlips() {
   return (
     <PermissionGuard 
-      requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW', 'WAREHOUSE_RECEIPTS_READ']}
-      requireAll={true}
+      requiredPermissions={['EXPORT_SLIPS_VIEW']}
+      requireAll={false}
     >
       <ExportSlipsContent />
     </PermissionGuard>

@@ -17,6 +17,7 @@ import * as XLSX from 'xlsx';
 import React from "react";
 import { productApi } from "@/api/product.api";
 import { categoriesApi } from "@/api/categories.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 interface ProductListProps {
   products: any[];
@@ -108,7 +109,8 @@ const ProductList: React.FC<ProductListProps> = ({
       }
     } catch (error: any) {
       console.error('Error saving category:', error);
-      toast.error(error.message || 'Không thể tạo danh mục mới');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo danh mục mới';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 
@@ -237,7 +239,8 @@ const ProductList: React.FC<ProductListProps> = ({
       setIsAddProductDialogOpen(false);
     } catch (error: any) {
       console.error('Error adding product:', error);
-      toast.error(error.message || 'Có lỗi khi thêm sản phẩm');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     } finally {
       setIsAddingProduct(false);
     }
@@ -300,7 +303,8 @@ const ProductList: React.FC<ProductListProps> = ({
       setIsEditProductDialogOpen(false);
     } catch (error: any) {
       console.error('Error updating product:', error);
-      toast.error(error.message || 'Có lỗi khi cập nhật sản phẩm');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi cập nhật sản phẩm';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     } finally {
       setIsEditingProduct(false);
     }
@@ -318,7 +322,8 @@ const ProductList: React.FC<ProductListProps> = ({
       onProductsUpdate();
     } catch (error: any) {
       console.error('Error deleting product:', error);
-      toast.error(error.message || 'Có lỗi khi xóa sản phẩm');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi xóa sản phẩm';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     }
   };
 

@@ -484,11 +484,11 @@ const CategoriesContent: React.FC = () => {
 };
 
 export default function Categories() {
-  return (
-    <PermissionGuard 
-      requiredPermissions={['CATEGORIES_VIEW', 'CATEGORIES_READ']}
-      requireAll={true}
-    >
+    return (
+      <PermissionGuard 
+        requiredPermissions={['CATEGORIES_VIEW']}
+        requireAll={false}
+      >
       <CategoriesContent />
     </PermissionGuard>
   );

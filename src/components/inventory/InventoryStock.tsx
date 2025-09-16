@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import React from "react";
 import { stockLevelsApi, StockLevel } from "@/api/stockLevels.api";
 import { ProductWithStock } from "@/api/product.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 interface InventoryStockProps {
   products: any[];
@@ -40,7 +41,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       setStockLevels(response.stockLevels || []);
     } catch (error: any) {
       console.error('Error loading stock levels:', error);
-      toast.error(error.message || 'Không thể tải dữ liệu tồn kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải dữ liệu tồn kho';
+      toast.error(convertPermissionCodesInMessage(errorMessage));
     } finally {
       setLoading(false);
     }

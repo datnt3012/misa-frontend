@@ -17,26 +17,32 @@ import { usersApi, UserRole, Permission } from '@/api/users.api';
 // Icon mapping for different modules
 const getResourceIcon = (module: string) => {
   const iconMap: Record<string, any> = {
-    'Products': Package,
-    'Stock Levels': Package,
-    'Warehouses': Building2,
-    'Warehouse Receipts': Package,
-    'Export Slips': FileText,
+    // Core Business Modules
+    'Dashboard': TrendingUp,
     'Orders': ShoppingCart,
     'Customers': Users,
     'Suppliers': Building2,
+    
+    // Product & Inventory Management
+    'Products': Package,
+    'Categories': Package,
+    'Inventory': Package,
+    'Stock Levels': Package,
+    'Warehouses': Building2,
+    'Warehouse Receipts': Package,
+    
+    // Reports & Analytics
     'Reports': TrendingUp,
     'Revenue': TrendingUp,
-    'Settings': Settings,
+    
+    // System Administration
+    'Users': Users,
     'Roles': Shield,
     'Permissions': Shield,
-    'Users': Users,
     'Organizations': Building2,
     'Profiles': Users,
     'Notifications': Settings,
-    'Categories': Package,
-    'Dashboard': TrendingUp,
-    'Inventory': Package,
+    'Settings': Settings,
     'Other': Shield,
   };
   return iconMap[module] || Shield;
@@ -81,7 +87,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải dữ liệu",
+        description: error.response?.data?.message || error.message || "Không thể tải dữ liệu",
         variant: "destructive",
       });
     } finally {
@@ -98,7 +104,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       console.error('Error loading roles:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách vai trò",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách vai trò",
         variant: "destructive",
       });
     } finally {
@@ -319,6 +325,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       if (!permission.isDeleted && permission.isActive) {
         // Extract module from permission code (MODULE_ACTION format)
         const module = extractModuleFromCode(permission.code);
+        // Skip hidden permissions
+        if (module === 'HIDDEN') {
+          return;
+        }
         if (!categories[module]) {
           categories[module] = [];
         }
@@ -337,6 +347,16 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
 
   // Extract module from permission code (MODULE_ACTION format)
   const extractModuleFromCode = (code: string): string => {
+    // Completely hide EXPORT_SLIPS permissions except VIEW
+    if (code.startsWith('EXPORT_SLIPS_') && !code.includes('VIEW')) {
+      return 'HIDDEN'; // Completely hide non-VIEW export slips permissions
+    }
+    
+    // Map EXPORT_SLIPS_VIEW to its own module
+    if (code.startsWith('EXPORT_SLIPS_VIEW')) {
+      return 'Export Slips';
+    }
+    
     // Split by underscore and take the first part as module
     const parts = code.split('_');
     if (parts.length >= 2) {
@@ -358,26 +378,32 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
   // Format module name to be more human-readable in English
   const formatModuleName = (module: string): string => {
     const moduleMap: Record<string, string> = {
-      'PRODUCTS': 'Products',
-      'STOCK_LEVELS': 'Stock Levels',
-      'WAREHOUSES': 'Warehouses',
-      'WAREHOUSE_RECEIPTS': 'Warehouse Receipts',
-      'EXPORT_SLIPS': 'Export Slips',
+      // Core Business Modules
+      'DASHBOARD': 'Dashboard',
       'ORDERS': 'Orders',
       'CUSTOMERS': 'Customers',
       'SUPPLIERS': 'Suppliers',
+      
+      // Product & Inventory Management
+      'PRODUCTS': 'Products',
+      'CATEGORIES': 'Categories',
+      'INVENTORY': 'Inventory',
+      'STOCK_LEVELS': 'Stock Levels',
+      'WAREHOUSES': 'Warehouses',
+      'WAREHOUSE_RECEIPTS': 'Warehouse Receipts',
+      
+      // Reports & Analytics
       'REPORTS': 'Reports',
       'REVENUE': 'Revenue',
-      'SETTINGS': 'Settings',
+      
+      // System Administration
+      'USERS': 'Users',
       'ROLES': 'Roles',
       'PERMISSIONS': 'Permissions',
-      'USERS': 'Users',
       'ORGANIZATIONS': 'Organizations',
       'PROFILES': 'Profiles',
       'NOTIFICATIONS': 'Notifications',
-      'CATEGORIES': 'Categories',
-      'DASHBOARD': 'Dashboard',
-      'INVENTORY': 'Inventory',
+      'SETTINGS': 'Settings',
     };
     
     return moduleMap[module.toUpperCase()] || module.charAt(0).toUpperCase() + module.slice(1).toLowerCase();
@@ -385,13 +411,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
 
   // Convert backend permission to frontend format
   const convertBackendToFrontend = (permission: Permission): string => {
-    // Use the actual code from the API response
+    // Keep EXPORT_SLIPS_VIEW as is (no mapping needed)
     return permission.code;
   };
 
   // Convert frontend permission to backend format
   const convertFrontendToBackend = (frontendPermission: string): string => {
-    // The frontend permission is already the backend code
+    // Keep all permissions as is (no mapping needed)
     return frontendPermission;
   };
 
@@ -482,21 +508,46 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="grid grid-cols-2 gap-3">
-                          {categoryPermissions.map((permission) => {
-                            const frontendKey = convertBackendToFrontend(permission);
-                            return (
-                              <div key={permission.id} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`new-${permission.id}`}
-                                  checked={newRole.permissions.includes(frontendKey)}
-                                  onCheckedChange={() => togglePermission(frontendKey)}
-                                />
-                                <Label htmlFor={`new-${permission.id}`} className="text-sm">
-                                  {permission.name}
-                                </Label>
-                              </div>
-                            );
-                          })}
+                          {categoryPermissions
+                            .sort((a, b) => {
+                              // Sort by permission type: VIEW, READ, MANAGE, etc.
+                              const getPermissionOrder = (code: string) => {
+                                if (code.includes('_VIEW')) return 1;
+                                if (code.includes('_READ')) return 2;
+                                if (code.includes('_MANAGE')) return 3;
+                                if (code.includes('_CREATE')) return 4;
+                                if (code.includes('_UPDATE')) return 5;
+                                if (code.includes('_DELETE')) return 6;
+                                if (code.includes('_APPROVE')) return 7;
+                                if (code.includes('_EXPORT')) return 8;
+                                return 9;
+                              };
+                              
+                              const orderA = getPermissionOrder(a.code);
+                              const orderB = getPermissionOrder(b.code);
+                              
+                              if (orderA !== orderB) {
+                                return orderA - orderB;
+                              }
+                              
+                              // If same order, sort by name
+                              return a.name.localeCompare(b.name);
+                            })
+                            .map((permission) => {
+                              const frontendKey = convertBackendToFrontend(permission);
+                              return (
+                                <div key={permission.id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`new-${permission.id}`}
+                                    checked={newRole.permissions.includes(frontendKey)}
+                                    onCheckedChange={() => togglePermission(frontendKey)}
+                                  />
+                                  <Label htmlFor={`new-${permission.id}`} className="text-sm">
+                                    {permission.name}
+                                  </Label>
+                                </div>
+                              );
+                            })}
                         </div>
                       </CardContent>
                     </Card>
@@ -668,21 +719,46 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                     </CardHeader>
                     <CardContent className="pt-0">
                       <div className="grid grid-cols-2 gap-3">
-                        {categoryPermissions.map((permission) => {
-                          const frontendKey = convertBackendToFrontend(permission);
-                          return (
-                            <div key={permission.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`edit-${permission.id}`}
-                                checked={editRole.permissions.includes(frontendKey)}
-                                onCheckedChange={() => togglePermission(frontendKey, true)}
-                              />
-                              <Label htmlFor={`edit-${permission.id}`} className="text-sm">
-                                {permission.name}
-                              </Label>
-                            </div>
-                          );
-                        })}
+                        {categoryPermissions
+                          .sort((a, b) => {
+                            // Sort by permission type: VIEW, READ, MANAGE, etc.
+                            const getPermissionOrder = (code: string) => {
+                              if (code.includes('_VIEW')) return 1;
+                              if (code.includes('_READ')) return 2;
+                              if (code.includes('_MANAGE')) return 3;
+                              if (code.includes('_CREATE')) return 4;
+                              if (code.includes('_UPDATE')) return 5;
+                              if (code.includes('_DELETE')) return 6;
+                              if (code.includes('_APPROVE')) return 7;
+                              if (code.includes('_EXPORT')) return 8;
+                              return 9;
+                            };
+                            
+                            const orderA = getPermissionOrder(a.code);
+                            const orderB = getPermissionOrder(b.code);
+                            
+                            if (orderA !== orderB) {
+                              return orderA - orderB;
+                            }
+                            
+                            // If same order, sort by name
+                            return a.name.localeCompare(b.name);
+                          })
+                          .map((permission) => {
+                            const frontendKey = convertBackendToFrontend(permission);
+                            return (
+                              <div key={permission.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`edit-${permission.id}`}
+                                  checked={editRole.permissions.includes(frontendKey)}
+                                  onCheckedChange={() => togglePermission(frontendKey, true)}
+                                />
+                                <Label htmlFor={`edit-${permission.id}`} className="text-sm">
+                                  {permission.name}
+                                </Label>
+                              </div>
+                            );
+                          })}
                       </div>
                     </CardContent>
                     </Card>
