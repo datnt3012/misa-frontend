@@ -104,6 +104,11 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
   const { toast } = useToast();
 
+  const getWarehouseById = (id?: string) => {
+    if (!id) return undefined;
+    return warehouses.find(w => w.id === id);
+  };
+
   useEffect(() => {
     loadImportSlips();
     loadProducts();
@@ -806,7 +811,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     <TableCell className="font-medium text-center">{slip.supplier_name}</TableCell>
                     <TableCell className="text-center">
                       <span className="inline-flex items-center px-2 py-1 rounded-md bg-secondary/50 text-secondary-foreground text-xs font-medium">
-                        {slip.warehouses?.name || 'N/A'}
+                        {getWarehouseById(slip.warehouse_id)?.name || 'N/A'}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-center">{format(new Date(slip.import_date), 'dd/MM/yyyy')}</TableCell>
@@ -888,7 +893,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
             <DialogDescription>
               Nhà cung cấp: {selectedSlip?.supplier_name} | 
               Ngày nhập: {selectedSlip && format(new Date(selectedSlip.import_date), 'dd/MM/yyyy')} | 
-              Kho nhập: {selectedSlip?.warehouses?.name} ({selectedSlip?.warehouses?.code})
+              Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name} ({getWarehouseById(selectedSlip?.warehouse_id)?.code})
             </DialogDescription>
           </DialogHeader>
           
