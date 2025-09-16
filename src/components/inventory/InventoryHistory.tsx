@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, TrendingUp, TrendingDown, Package } from "lucide-react";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { warehouseReceiptsApi, WarehouseReceipt } from "@/api/warehouseReceipts.api";
@@ -38,6 +38,7 @@ const InventoryHistory = () => {
   const [filterType, setFilterType] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const { toast } = useToast();
 
   const loadMovements = async () => {
     try {
@@ -63,7 +64,7 @@ const InventoryHistory = () => {
               reference_type: 'warehouse_receipt',
               reference_id: receipt.id,
               warehouse_id: receipt.warehouse_id,
-              warehouse_name: 'Kho không xác định',
+              warehouse_name: '',
               warehouse_code: '',
               notes: receipt.description || '',
               created_at: receipt.created_at,
@@ -82,7 +83,7 @@ const InventoryHistory = () => {
     } catch (error: any) {
       console.error('Error loading inventory movements:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi tải lịch sử xuất nhập kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -101,6 +102,11 @@ const InventoryHistory = () => {
     loadMovements();
     loadWarehouses();
   }, []);
+
+  const getWarehouseById = (id?: string) => {
+    if (!id) return undefined;
+    return warehouses.find(w => w.id === id);
+  };
 
   const getMovementTypeBadge = (type: string, quantity: number) => {
     if (type === 'in' || quantity > 0) {
@@ -269,7 +275,10 @@ const InventoryHistory = () => {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">
-                        {movement.warehouse_name || "Không xác định"}
+                        {(() => {
+                          const wh = getWarehouseById(movement.warehouse_id);
+                          return wh ? `${wh.name}${wh.code ? ` (${wh.code})` : ''}` : 'Không xác định';
+                        })()}
                       </span>
                     </TableCell>
                     <TableCell>
