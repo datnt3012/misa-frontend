@@ -1,0 +1,13 @@
+# viết docker-compose.yml để build và run ứng dụng
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: misa-application
+    ports:
+      - 8082:8082
+    environment:
+      - NODE_ENV=production
