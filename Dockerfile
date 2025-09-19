@@ -24,7 +24,11 @@ COPY --from=builder /app/dist /app/dist/
 # Set working directory
 WORKDIR /app
 
+# Ensure runtime has scripts and dependencies needed for preview
+COPY --from=builder /app/package*.json /app/
+COPY --from=builder /app/node_modules /app/node_modules
+
 EXPOSE 8082
 
-# Start the application
-CMD ["npm", "run", "start"]
+# Start the production preview server
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "8082", "--strictPort"]
