@@ -10,7 +10,9 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { warehouseReceiptsApi, WarehouseReceipt } from "@/api/warehouseReceipts.api";
 import { warehouseApi } from "@/api/warehouse.api";
+import { usersApi } from "@/api/users.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
+import { useAuth } from "@/hooks/useAuth";
 
 interface InventoryMovement {
   id: string;
@@ -27,6 +29,7 @@ interface InventoryMovement {
   notes: string;
   created_at: string;
   created_by: string;
+  created_by_name?: string;
   status: string;
   slip_number: string;
 }
@@ -38,7 +41,36 @@ const InventoryHistory = () => {
   const [filterType, setFilterType] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [userCache, setUserCache] = useState<{ [key: string]: string }>({});
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Function to get user name from API
+  const getUserName = async (userId: string): Promise<string> => {
+    if (!userId || userId === 'Hệ thống') return 'Hệ thống';
+    
+    // Check cache first
+    if (userCache[userId]) return userCache[userId];
+    
+    try {
+      const userData = await usersApi.getUserById(userId);
+      
+      // Try different field names that might exist
+      const firstName = userData.firstName || userData.first_name || userData.name || userData.fullName || userData.full_name;
+      const lastName = userData.lastName || userData.last_name;
+      
+      const userName = firstName && lastName 
+        ? `${firstName} ${lastName}`.trim()
+        : firstName || lastName || userData.email || 'Không xác định';
+      
+      // Cache the result
+      setUserCache(prev => ({ ...prev, [userId]: userName }));
+      return userName;
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      return 'Không xác định';
+    }
+  };
 
   const loadMovements = async () => {
     try {
@@ -47,6 +79,7 @@ const InventoryHistory = () => {
         page: 1, 
         limit: 1000 
       });
+      
       
       // Transform warehouse receipts to inventory movements
       const transformedMovements: InventoryMovement[] = [];
@@ -68,7 +101,8 @@ const InventoryHistory = () => {
               warehouse_code: '',
               notes: receipt.description || '',
               created_at: receipt.created_at,
-              created_by: 'Hệ thống',
+              created_by: receipt.created_by || user?.id || 'Hệ thống',
+              created_by_name: receipt.created_by_name || 'Đang tải...',
               status: receipt.status,
               slip_number: receipt.code
             });
@@ -80,6 +114,24 @@ const InventoryHistory = () => {
       transformedMovements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       setMovements(transformedMovements);
+      
+      // Load user names for all movements
+      const uniqueUserIds = [...new Set(transformedMovements.map(m => m.created_by).filter(Boolean))];
+      for (const userId of uniqueUserIds) {
+        if (userId && userId !== 'Hệ thống') {
+          try {
+            const userName = await getUserName(userId);
+            // Update the movement with the fetched user name
+            setMovements(prev => prev.map(movement => 
+              movement.created_by === userId 
+                ? { ...movement, created_by_name: userName }
+                : movement
+            ));
+          } catch (error) {
+            console.error(`Error loading user ${userId}:`, error);
+          }
+        }
+      }
     } catch (error: any) {
       console.error('Error loading inventory movements:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi tải lịch sử xuất nhập kho';
@@ -242,6 +294,7 @@ const InventoryHistory = () => {
                 <TableHead className="text-right">Số lượng</TableHead>
                 <TableHead>Kho</TableHead>
                 <TableHead>Số phiếu</TableHead>
+                <TableHead>Người thực hiện</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Thời gian</TableHead>
                 <TableHead>Ghi chú</TableHead>
@@ -250,7 +303,7 @@ const InventoryHistory = () => {
             <TableBody>
               {filteredMovements.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground h-32">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground h-32">
                     Không có dữ liệu lịch sử xuất nhập kho
                   </TableCell>
                 </TableRow>
@@ -284,6 +337,11 @@ const InventoryHistory = () => {
                     <TableCell>
                       <span className="text-sm font-medium text-primary">
                         {movement.slip_number}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">
+                        {movement.created_by_name || 'Đang tải...'}
                       </span>
                     </TableCell>
                     <TableCell>

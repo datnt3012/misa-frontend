@@ -13,7 +13,7 @@ import Customers from "./pages/Customers";
 import Suppliers from "./pages/Suppliers";
 import Revenue from "./pages/Revenue";
 import Settings from "./pages/Settings";
-import ExportSlips from "./pages/ExportSlips";
+import ExportImport from "./pages/ExportImport";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import Layout from "./components/Layout";
@@ -102,10 +102,10 @@ const App = () => (
               } 
             />
             <Route 
-              path="/export-slips" 
+              path="/export-import" 
               element={
                 <ProtectedRoute>
-                  <Layout><ExportSlips /></Layout>
+                  <Layout><ExportImport /></Layout>
                 </ProtectedRoute>
               } 
             />

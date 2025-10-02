@@ -34,6 +34,10 @@ export interface WarehouseReceipt {
   created_at: string;
   updated_at: string;
   approved_at?: string;
+  created_by?: string;
+  created_by_name?: string;
+  approved_by?: string;
+  approved_by_name?: string;
   items?: WarehouseReceiptItem[];
 }
 
@@ -108,6 +112,10 @@ export const warehouseReceiptsApi = {
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       approved_at: row.approved_at ?? row.approvedAt ?? undefined,
+      created_by: row.created_by ?? row.createdBy ?? undefined,
+      created_by_name: row.created_by_name ?? row.createdByName ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
+      approved_by: row.approved_by ?? row.approvedBy ?? undefined,
+      approved_by_name: row.approved_by_name ?? row.approvedByName ?? row.approver?.name ?? row.approver?.full_name ?? undefined,
       items: Array.isArray(row.details)
         ? row.details.map((detail: any) => ({
             id: detail.id,

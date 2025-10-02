@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse as WarehouseIcon, Trash2, Edit, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Download, TrendingDown } from "lucide-react";
+import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse as WarehouseIcon, Trash2, Edit, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/hooks/useAuth";
@@ -20,13 +20,9 @@ import { Loading } from "@/components/ui/loading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import ExcelImport from "@/components/inventory/ExcelImport";
 // import AddressComponent from "@/components/common/AddressComponent"; // Temporarily commented - BE not ready
 import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
-import ImportSlips from "@/components/inventory/ImportSlips";
-import InventoryHistory from "@/components/inventory/InventoryHistory";
-import { OrderExportSlipCreation } from "@/components/inventory/OrderExportSlipCreation";
 import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
@@ -241,19 +237,8 @@ const InventoryContent = () => {
   const lazyData = useRouteBasedLazyData({
     inventory: {
       loadFunction: loadData
-    },
-    imports: {
-      loadFunction: async () => {
-        // ImportSlips component will handle its own data loading
-        // This is just to ensure the tab is loaded when accessed
-        // No return value needed
-      }
     }
   });
-  
-  // Permission checks removed - let backend handle authorization
-  const canManageImports = true; // Always allow import management - backend will handle access control
-  const canApproveImports = true; // Always allow import approval - backend will handle access control
 
 
 
@@ -823,28 +808,12 @@ const InventoryContent = () => {
 
         {/* Tabs for different sections */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="inventory">Báo cáo tồn kho</TabsTrigger>
             <TabsTrigger value="products">Danh sách sản phẩm</TabsTrigger>
             <TabsTrigger value="warehouses">
               <WarehouseIcon className="w-4 h-4 mr-2" />
               Quản lý kho
-            </TabsTrigger>
-            <TabsTrigger value="imports">
-              <Package className="w-4 h-4 mr-2" />
-              Nhập kho
-            </TabsTrigger>
-            <TabsTrigger value="exports">
-              <TrendingDown className="w-4 h-4 mr-2" />
-              Xuất kho
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              <Search className="w-4 h-4 mr-2" />
-              Lịch sử xuất nhập kho
-            </TabsTrigger>
-            <TabsTrigger value="import">
-              <Upload className="w-4 h-4 mr-2" />
-              Nhập từ Excel/CSV
             </TabsTrigger>
           </TabsList>
 
@@ -1063,62 +1032,6 @@ const InventoryContent = () => {
             </PermissionGuard>
           </TabsContent>
 
-           {/* Import Slips Tab */}
-           <TabsContent value="imports" className="space-y-6">
-             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
-               {(() => {
-                 const importsState = lazyData.getDataState('imports');
-                 if (importsState.isLoading) {
-                   return <Loading message="Đang tải dữ liệu nhập kho..." />;
-                 }
-                 if (importsState.error) {
-                   return (
-                     <Loading 
-                       error={importsState.error} 
-                       onRetry={() => lazyData.reloadData('imports')}
-                       isUnauthorized={importsState.error.includes('403') || importsState.error.includes('401')}
-                     />
-                   );
-                 }
-                 return (
-                   <ImportSlips 
-                     canManageImports={canManageImports}
-                     canApproveImports={canApproveImports}
-                   />
-                 );
-               })()}
-             </PermissionGuard>
-           </TabsContent>
-
-           {/* Export Slips Tab */}
-           <TabsContent value="exports" className="space-y-6">
-             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
-               <OrderExportSlipCreation 
-                 onExportSlipCreated={() => {
-                   // Refresh any related data if needed
-                   toast({ title: "Thành công", description: "Đã tạo phiếu xuất kho thành công" });
-                 }}
-               />
-             </PermissionGuard>
-           </TabsContent>
-
-          {/* Inventory History Tab */}
-          <TabsContent value="history" className="space-y-6">
-            <PermissionGuard 
-              requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}
-              requireAll={false}
-            >
-              <InventoryHistory />
-            </PermissionGuard>
-          </TabsContent>
-
-
-          {/* Excel Import Tab */}
-          <TabsContent value="import" className="space-y-6">
-            <PermissionGuard requiredPermissions={['PRODUCTS_CREATE']}>
-              <ExcelImport onImportComplete={handleImportComplete} />
-            </PermissionGuard>
-          </TabsContent>
         </Tabs>
       </div>
     </div>
