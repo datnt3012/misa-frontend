@@ -97,7 +97,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error fetching categories:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể tải danh sách danh mục",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách loại sản phẩm",
         variant: "destructive",
       });
     } finally {
@@ -109,7 +109,7 @@ const CategoriesContent: React.FC = () => {
     if (!newCategory.name.trim()) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng nhập tên danh mục",
+        description: "Vui lòng nhập tên loại sản phẩm",
         variant: "destructive",
       });
       return;
@@ -119,7 +119,7 @@ const CategoriesContent: React.FC = () => {
       const response = await categoriesApi.createCategory(newCategory);
       toast({
         title: "Thành công",
-        description: response.message || "Đã thêm danh mục mới",
+        description: response.message || "Đã thêm loại sản phẩm mới",
       });
       setNewCategory({ name: '', description: '' });
       setIsAddDialogOpen(false);
@@ -128,7 +128,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error creating category:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể thêm danh mục",
+        description: error.response?.data?.message || error.message || "Không thể thêm loại sản phẩm",
         variant: "destructive",
       });
     }
@@ -138,7 +138,7 @@ const CategoriesContent: React.FC = () => {
     if (!editingCategory || !editCategory.name?.trim()) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng nhập tên danh mục",
+        description: "Vui lòng nhập tên loại sản phẩm",
         variant: "destructive",
       });
       return;
@@ -148,7 +148,7 @@ const CategoriesContent: React.FC = () => {
       const response = await categoriesApi.updateCategory(editingCategory.id, editCategory);
       toast({
         title: "Thành công",
-        description: response.message || "Đã cập nhật danh mục",
+        description: response.message || "Đã cập nhật loại sản phẩm",
       });
       setEditingCategory(null);
       setEditCategory({ name: '', description: '' });
@@ -158,7 +158,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error updating category:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể cập nhật danh mục",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật loại sản phẩm",
         variant: "destructive",
       });
     }
@@ -171,7 +171,7 @@ const CategoriesContent: React.FC = () => {
       const response = await categoriesApi.deleteCategory(categoryToDelete.id);
       toast({
         title: "Thành công",
-        description: response.message || "Đã xóa danh mục",
+        description: response.message || "Đã xóa loại sản phẩm",
       });
       setCategoryToDelete(null);
       setIsDeleteDialogOpen(false);
@@ -180,7 +180,7 @@ const CategoriesContent: React.FC = () => {
       console.error('Error deleting category:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể xóa danh mục",
+        description: error.response?.data?.message || error.message || "Không thể xóa loại sản phẩm",
         variant: "destructive",
       });
     }
@@ -216,7 +216,7 @@ const CategoriesContent: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Đang tải danh mục...</p>
+          <p className="text-muted-foreground">Đang tải loại sản phẩm...</p>
         </div>
       </div>
     );
@@ -227,15 +227,15 @@ const CategoriesContent: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Quản lý Danh mục</h1>
+          <h1 className="text-3xl font-bold">Quản lý Loại sản phẩm</h1>
           <p className="text-muted-foreground">
-            Quản lý các danh mục sản phẩm trong hệ thống
+            Quản lý các loại sản phẩm trong hệ thống
           </p>
         </div>
         {canCreate && (
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Thêm danh mục
+            Thêm loại sản phẩm
           </Button>
         )}
       </div>
@@ -282,24 +282,24 @@ const CategoriesContent: React.FC = () => {
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Danh sách danh mục ({filteredCategories.length})
+            Danh sách loại sản phẩm ({filteredCategories.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {filteredCategories.length === 0 ? (
             <div className="text-center py-8">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Không có danh mục nào</h3>
+              <h3 className="text-lg font-semibold mb-2">Không có loại sản phẩm nào</h3>
               <p className="text-muted-foreground mb-4">
                 {searchTerm || statusFilter !== 'all' 
-                  ? 'Không tìm thấy danh mục phù hợp với bộ lọc'
-                  : 'Hãy thêm danh mục đầu tiên để bắt đầu'
+                  ? 'Không tìm thấy loại sản phẩm phù hợp với bộ lọc'
+                  : 'Hãy thêm loại sản phẩm đầu tiên để bắt đầu'
                 }
               </p>
               {!searchTerm && statusFilter === 'all' && (
                 <Button onClick={() => setIsAddDialogOpen(true)}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Thêm danh mục
+                  Thêm loại sản phẩm
                 </Button>
               )}
             </div>
@@ -308,7 +308,7 @@ const CategoriesContent: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[200px]">Tên danh mục</TableHead>
+                    <TableHead className="w-[200px]">Tên loại sản phẩm</TableHead>
                     <TableHead className="min-w-[250px]">Mô tả</TableHead>
                     <TableHead className="w-[140px]">Trạng thái</TableHead>
                     <TableHead className="w-[120px]">Ngày tạo</TableHead>
@@ -383,19 +383,19 @@ const CategoriesContent: React.FC = () => {
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Thêm danh mục mới</DialogTitle>
+            <DialogTitle>Thêm loại sản phẩm mới</DialogTitle>
             <DialogDescription>
-              Tạo danh mục sản phẩm mới trong hệ thống
+              Tạo loại sản phẩm mới trong hệ thống
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="space-y-2">
-              <Label htmlFor="add-name" className="text-sm font-medium">Tên danh mục *</Label>
+              <Label htmlFor="add-name" className="text-sm font-medium">Tên loại sản phẩm *</Label>
               <Input
                 id="add-name"
                 value={newCategory.name}
                 onChange={(e) => setNewCategory(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Nhập tên danh mục..."
+                placeholder="Nhập tên loại sản phẩm..."
               />
             </div>
             <div className="space-y-2">
@@ -404,7 +404,7 @@ const CategoriesContent: React.FC = () => {
                 id="add-description"
                 value={newCategory.description || ''}
                 onChange={(e) => setNewCategory(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Nhập mô tả danh mục..."
+                placeholder="Nhập mô tả loại sản phẩm..."
                 rows={3}
               />
             </div>
@@ -414,7 +414,7 @@ const CategoriesContent: React.FC = () => {
               Hủy
             </Button>
             <Button onClick={handleAddCategory}>
-              Thêm danh mục
+              Thêm loại sản phẩm
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -424,19 +424,19 @@ const CategoriesContent: React.FC = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Chỉnh sửa danh mục</DialogTitle>
+            <DialogTitle>Chỉnh sửa loại sản phẩm</DialogTitle>
             <DialogDescription>
-              Cập nhật thông tin danh mục sản phẩm
+              Cập nhật thông tin loại sản phẩm
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name" className="text-sm font-medium">Tên danh mục *</Label>
+              <Label htmlFor="edit-name" className="text-sm font-medium">Tên loại sản phẩm *</Label>
               <Input
                 id="edit-name"
                 value={editCategory.name || ''}
                 onChange={(e) => setEditCategory(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Nhập tên danh mục..."
+                placeholder="Nhập tên loại sản phẩm..."
               />
             </div>
             <div className="space-y-2">
@@ -445,7 +445,7 @@ const CategoriesContent: React.FC = () => {
                 id="edit-description"
                 value={editCategory.description || ''}
                 onChange={(e) => setEditCategory(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Nhập mô tả danh mục..."
+                placeholder="Nhập mô tả loại sản phẩm..."
                 rows={3}
               />
             </div>
@@ -465,9 +465,9 @@ const CategoriesContent: React.FC = () => {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xác nhận xóa danh mục</AlertDialogTitle>
+            <AlertDialogTitle>Xác nhận xóa loại sản phẩm</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa danh mục "{categoryToDelete?.name}"? 
+              Bạn có chắc chắn muốn xóa loại sản phẩm "{categoryToDelete?.name}"? 
               Hành động này không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
