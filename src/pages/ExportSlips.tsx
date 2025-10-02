@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
 import { orderApi } from '@/api/order.api';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,9 +20,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 function ExportSlipsContent() {
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
-  const [selectedSlip, setSelectedSlip] = useState<ExportSlip | null>(null);
-  const [approvalNotes, setApprovalNotes] = useState('');
-  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
@@ -30,9 +28,63 @@ function ExportSlipsContent() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
 
-  // Permission checks
-  const canApprove = hasPermission('WAREHOUSE_RECEIPTS_APPROVE');
-  const canExport = hasPermission('WAREHOUSE_RECEIPTS_EXPORT');
+  // Status update permissions based on role - Only 3 statuses
+  const canUpdateStatus = hasPermission('WAREHOUSE_RECEIPTS_UPDATE');
+  
+  // More flexible role checking
+  const isWarehouseKeeper = user?.roleId === '0d1e0d2e-7fdc-4af7-88e6-574497282798' || 
+                           user?.role?.name?.toLowerCase().includes('warehouse') ||
+                           user?.role?.name?.toLowerCase().includes('keeper');
+  const isAdmin = user?.roleId === '48cf005a-e5ed-4859-968d-237d1c1edf85' || 
+                 user?.roleId === '1db8203f-8618-4092-9215-5854e6aaa368' ||
+                 user?.role?.name?.toLowerCase().includes('admin') ||
+                 user?.role?.name?.toLowerCase().includes('owner');
+  
+  // Fallback: if user has any update permission, allow basic status updates
+  const hasAnyUpdatePermission = canUpdateStatus || hasPermission('WAREHOUSE_RECEIPTS_UPDATE') || hasPermission('EXPORT_SLIPS_VIEW');
+  
+  console.log('User role info:', {
+    roleId: user?.roleId,
+    roleName: user?.role?.name,
+    isWarehouseKeeper,
+    isAdmin,
+    canUpdateStatus,
+    hasAnyUpdatePermission
+  });
+
+  // Get available status options based on current status and role
+  const getAvailableStatusOptions = (currentStatus: string) => {
+    const options = [];
+    
+    console.log('Getting status options for:', currentStatus);
+    
+    // Only show options that make sense for the current status
+    if (currentStatus === 'pending') {
+      options.push({ 
+        value: 'picked', 
+        label: 'Đã lấy hàng', 
+        description: 'Xác nhận đã lấy hàng từ kho' 
+      });
+      // Only show direct export for admin
+      if (isAdmin) {
+        options.push({ 
+          value: 'exported', 
+          label: 'Đã xuất kho', 
+          description: 'Xuất kho trực tiếp' 
+        });
+      }
+    } else if (currentStatus === 'picked') {
+      options.push({ 
+        value: 'exported', 
+        label: 'Đã xuất kho', 
+        description: 'Xác nhận hàng đã rời khỏi kho' 
+      });
+    }
+    // No options for 'exported' status - it's final
+    
+    console.log('Available options:', options);
+    return options;
+  };
 
   useEffect(() => {
     fetchExportSlips();
@@ -96,6 +148,10 @@ function ExportSlipsContent() {
       
       setExportSlips(slips);
       
+      // Debug: Log export slips data
+      console.log('Export slips loaded:', slips);
+      console.log('First slip status:', slips[0]?.status);
+      
       // No toast notification for empty export slips list
     } catch (error: any) {
       console.error('Error fetching export slips:', error);
@@ -107,49 +163,87 @@ function ExportSlipsContent() {
     }
   };
 
-  const handleApproveSlip = async (slipId: string, approve: boolean) => {
+
+  // Handle status updates based on role permissions
+  const handleStatusUpdate = async (slipId: string, newStatus: string, notes: string = '') => {
     try {
       let response;
-      if (approve) {
-        response = await exportSlipsApi.approveSlip(slipId, approvalNotes);
-      } else {
-        // If BE supports reject endpoint, call it; otherwise reuse approve with note
-        response = await exportSlipsApi.approveSlip(slipId, approvalNotes);
+      
+      switch (newStatus) {
+        case 'picked':
+          response = await exportSlipsApi.markAsPicked(slipId, notes);
+          break;
+        case 'exported':
+          response = await exportSlipsApi.markAsExported(slipId, notes);
+          break;
+        default:
+          throw new Error('Trạng thái không hợp lệ');
       }
 
       toast({
         title: "Thành công",
-        description: response.message || `Phiếu xuất kho đã được ${approve ? 'duyệt' : 'từ chối'}`,
+        description: response.message || `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
       });
 
-      setIsApprovalDialogOpen(false);
-      setApprovalNotes('');
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error updating export slip:', error);
+      console.error('Error updating status:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể cập nhật phiếu xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
     }
   };
 
-  const handleExportComplete = async (slipId: string, exportNotes: string = '') => {
+  // Direct export (Admin/Giám đốc only)
+  const handleDirectExport = async (slipId: string, notes: string = '') => {
     try {
-      const response = await exportSlipsApi.completeSlip(slipId, exportNotes);
+      const response = await exportSlipsApi.directExport(slipId, notes);
 
       toast({
         title: "Thành công",
-        description: response.message || "Đã hoàn thành xuất kho",
+        description: response.message || "Đã xuất kho trực tiếp",
       });
 
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error completing export:', error);
+      console.error('Error direct exporting:', error);
       toast({
         title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể hoàn thành xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể xuất kho trực tiếp",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle status update with selected status
+  const handleStatusUpdateWithSelection = async (slipId: string, newStatus: string, notes: string = '') => {
+    try {
+      let response;
+      
+      switch (newStatus) {
+        case 'picked':
+          response = await exportSlipsApi.markAsPicked(slipId, notes);
+          break;
+        case 'exported':
+          response = await exportSlipsApi.markAsExported(slipId, notes);
+          break;
+        default:
+          throw new Error('Trạng thái không hợp lệ');
+      }
+
+      toast({
+        title: "Thành công",
+        description: response.message || `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
+      });
+
+      fetchExportSlips();
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
     }
@@ -158,15 +252,11 @@ function ExportSlipsContent() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
-      case 'approved':
-        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
-      case 'partial_export':
-        return <Badge variant="outline" className="text-yellow-700 border-yellow-300 bg-yellow-50"><Package className="w-3 h-3 mr-1" />Xuất một phần</Badge>;
-      case 'completed':
-        return <Badge variant="outline" className="text-gray-800 bg-gray-100"><CheckCircle className="w-3 h-3 mr-1" />Hoàn thành</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive">Từ chối</Badge>;
+        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ</Badge>;
+      case 'picked':
+        return <Badge variant="outline" className="text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
+      case 'exported':
+        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -520,28 +610,51 @@ function ExportSlipsContent() {
                         </DialogContent>
                       </Dialog>
                       
-                      {canApprove && slip.status === 'pending' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedSlip(slip);
-                            setIsApprovalDialogOpen(true);
+                      {/* Status Update Dropdown - Only show when status can be updated */}
+                      {getAvailableStatusOptions(slip.status).length > 0 && (
+                        <Select
+                          value=""
+                          onValueChange={(newStatus) => {
+                            console.log('Status changed for slip:', slip.code, 'to:', newStatus);
+                            handleStatusUpdateWithSelection(slip.id, newStatus, '');
                           }}
                         >
-                          <CheckCircle className="w-4 h-4" />
-                        </Button>
-                      )}
-                      
-                      {canExport && slip.status === 'approved' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                          onClick={() => handleExportComplete(slip.id)}
-                        >
-                          <Package className="w-4 h-4" />
-                        </Button>
+                          <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                <ArrowRight className="w-2 h-2 text-white" />
+                              </div>
+                              <SelectValue placeholder="Cập nhật trạng thái" />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent className="min-w-[220px] p-1">
+                            {getAvailableStatusOptions(slip.status).map((option) => (
+                              <SelectItem 
+                                key={option.value} 
+                                value={option.value}
+                                className="cursor-pointer hover:bg-blue-50 focus:bg-blue-50 rounded-md p-2"
+                              >
+                                <div className="flex items-center space-x-3 w-full">
+                                  <div className="flex-shrink-0">
+                                    {option.value === 'picked' ? (
+                                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <Package className="w-3 h-3 text-blue-600" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                                        <CheckCircle className="w-3 h-3 text-green-600" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-900">{option.label}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       )}
                     </div>
                   </TableCell>
@@ -553,144 +666,7 @@ function ExportSlipsContent() {
         </CardContent>
       </Card>
 
-      {/* Approval Dialog */}
-      <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Duyệt phiếu xuất kho</DialogTitle>
-            <DialogDescription>
-              Xác nhận phiếu xuất kho {selectedSlip?.code}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedSlip && (
-            <div className="space-y-6">
-              {/* Order Overview */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-3">Thông tin đơn hàng</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium text-gray-600">Mã đơn hàng:</span>
-                    <span className="ml-2 text-blue-600 font-semibold">{selectedSlip.order?.order_number}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Khách hàng:</span>
-                    <span className="ml-2 font-semibold">{selectedSlip.order?.customer_name}</span>
-                  </div>
-                  {selectedSlip.order?.customer_phone && (
-                    <div>
-                      <span className="font-medium text-gray-600">Số điện thoại:</span>
-                      <span className="ml-2">{selectedSlip.order.customer_phone}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="font-medium text-gray-600">Tổng giá trị:</span>
-                    <span className="ml-2 text-green-600 font-semibold">
-                      {formatCurrency(selectedSlip.order?.total_amount || 0)}
-                    </span>
-                  </div>
-                </div>
-                
-                {selectedSlip.order?.customer_address && (
-                  <div className="mt-3">
-                    <span className="font-medium text-gray-600">Địa chỉ giao hàng:</span>
-                    <p className="mt-1 text-sm bg-white rounded p-2 border">
-                      {selectedSlip.order.customer_address}
-                    </p>
-                  </div>
-                )}
-              </div>
 
-              {/* Product List */}
-              {selectedSlip.order?.order_items && selectedSlip.order.order_items.length > 0 && (
-                <div>
-                  <h4 className="font-semibold mb-3">Danh sách sản phẩm cần xuất</h4>
-                  <div className="border rounded-md overflow-hidden">
-                    <Table>
-                       <TableHeader>
-                         <TableRow>
-                           <TableHead>Tên sản phẩm</TableHead>
-                           <TableHead>Mã SP</TableHead>
-                           <TableHead className="text-right">SL Yêu cầu</TableHead>
-                           <TableHead className="text-right">SL Thực xuất</TableHead>
-                           <TableHead className="text-right">SL Còn lại</TableHead>
-                           <TableHead className="text-right">Đơn giá</TableHead>
-                           <TableHead className="text-right">Thành tiền</TableHead>
-                         </TableRow>
-                       </TableHeader>
-                       <TableBody>
-                         {selectedSlip.order.order_items.map((orderItem, index) => {
-                           // Find corresponding export slip item
-                           const exportItem = selectedSlip.export_slip_items?.find(
-                             item => item.product_code === orderItem.product_code
-                           );
-                           
-                           const requestedQuantity = orderItem.quantity;
-                           const actualQuantity = exportItem?.actual_quantity || 0;
-                           const remainingQuantity = requestedQuantity - actualQuantity;
-                           
-                           return (
-                             <TableRow key={index}>
-                               <TableCell className="font-medium">{orderItem.product_name}</TableCell>
-                               <TableCell>{orderItem.product_code}</TableCell>
-                                <TableCell className="text-right font-medium text-blue-600">{requestedQuantity}</TableCell>
-                                <TableCell className="text-right font-medium text-green-600">{actualQuantity}</TableCell>
-                                <TableCell className="text-right font-medium text-orange-600">{remainingQuantity}</TableCell>
-                               <TableCell className="text-right">{formatCurrency(orderItem.unit_price)}</TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {formatCurrency(actualQuantity * orderItem.unit_price)}
-                                </TableCell>
-                             </TableRow>
-                           );
-                         })}
-                       </TableBody>
-                    </Table>
-                  </div>
-                </div>
-               )}
-
-               {/* Documents - Temporarily disabled */}
-               <div>
-                 <h4 className="font-semibold mb-3">Tài liệu đính kèm</h4>
-                 <div className="text-sm text-muted-foreground">
-                   Chưa có tài liệu đính kèm nào
-                 </div>
-               </div>
-
-               <div>
-                 <Label htmlFor="approval-notes">Ghi chú duyệt phiếu</Label>
-                 <Textarea
-                   id="approval-notes"
-                   value={approvalNotes}
-                   onChange={(e) => setApprovalNotes(e.target.value)}
-                   placeholder="Nhập ghi chú về việc duyệt/từ chối phiếu xuất kho..."
-                   rows={3}
-                 />
-               </div>
-             </div>
-          )}
-
-          <div className="flex space-x-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() => setIsApprovalDialogOpen(false)}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => selectedSlip && handleApproveSlip(selectedSlip.id, false)}
-            >
-              Từ chối
-            </Button>
-            <Button
-              onClick={() => selectedSlip && handleApproveSlip(selectedSlip.id, true)}
-            >
-              Duyệt phiếu
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
