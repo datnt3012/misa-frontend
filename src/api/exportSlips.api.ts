@@ -16,13 +16,18 @@ export interface ExportSlip {
   id: string;
   code: string; // slip number
   order_id: string;
-  status: string;
+  status: 'pending' | 'picked' | 'exported'; // New status values
   notes?: string;
   approval_notes?: string;
+  export_notes?: string;
   created_at: string;
   approved_at?: string;
+  picked_at?: string;
+  exported_at?: string;
   created_by: string;
   approved_by?: string;
+  picked_by?: string;
+  exported_by?: string;
   export_slip_items?: ExportSlipItem[];
   order?: {
     order_number: string;
@@ -38,6 +43,18 @@ export interface ExportSlip {
       total_price?: number;
     }>;
   };
+  creator_profile?: {
+    full_name: string;
+  };
+  approver_profile?: {
+    full_name: string;
+  };
+  picker_profile?: {
+    full_name: string;
+  };
+  exporter_profile?: {
+    full_name: string;
+  };
 }
 
 const normalizeItem = (it: any): ExportSlipItem => ({
@@ -51,56 +68,70 @@ const normalizeItem = (it: any): ExportSlipItem => ({
   unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
 });
 
-const normalize = (row: any): ExportSlip => ({
-  id: row.id,
-  code: row.code ?? row.slip_number ?? '',
-  order_id: row.orderId ?? row.order_id ?? '',
-  status: row.status ?? 'pending',
-  notes: row.description ?? row.notes ?? undefined,
-  approval_notes: row.approval_notes ?? row.approvalNotes ?? undefined,
-  created_at: row.createdAt ?? row.created_at ?? '',
-  approved_at: row.approved_at ?? row.approvedAt ?? undefined,
-  created_by: row.created_by ?? row.createdBy ?? '',
-  approved_by: row.approved_by ?? row.approvedBy ?? undefined,
-  export_slip_items: Array.isArray(row.details)
-    ? row.details.map((detail: any) => ({
-        id: detail.id,
-        product_id: detail.productId ?? detail.product_id,
-        product_name: detail.product?.name ?? detail.product_name ?? '',
-        product_code: detail.product?.code ?? detail.product_code ?? '',
-        requested_quantity: Number(detail.quantity ?? 0),
-        actual_quantity: Number(detail.quantity ?? 0), // Same as requested for now
-        remaining_quantity: 0, // Not available in warehouse receipts
-        unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
-      }))
-    : Array.isArray(row.export_slip_items)
-      ? row.export_slip_items.map(normalizeItem)
-      : undefined,
-  order: row.order ? {
-    order_number: row.order.order_number ?? row.order.orderNumber ?? '',
-    customer_name: row.order.customer_name ?? row.order.customerName ?? '',
-    customer_address: row.order.customer_address ?? row.order.customerAddress ?? undefined,
-    customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? undefined,
-    total_amount: Number(row.totalAmount ?? row.total_amount ?? 0),
-    order_items: Array.isArray(row.order.order_items)
-      ? row.order.order_items.map((oi: any) => ({
-          product_name: oi.product_name ?? oi.productName,
-          product_code: oi.product_code ?? oi.productCode,
-          quantity: Number(oi.quantity ?? 0),
-          unit_price: Number(oi.unit_price ?? oi.unitPrice ?? 0),
-          total_price: Number(oi.total_price ?? oi.totalPrice ?? oi.quantity * (oi.unit_price ?? oi.unitPrice ?? 0)),
+const normalize = (row: any): ExportSlip => {
+  console.log('Normalizing export slip row:', row);
+  console.log('Row order data:', row.order);
+  return {
+    id: row.id,
+    code: row.code ?? row.slip_number ?? '',
+    order_id: row.orderId ?? row.order_id ?? '',
+    status: row.status ?? 'pending',
+    notes: row.description ?? row.notes ?? undefined,
+    approval_notes: row.approval_notes ?? row.approvalNotes ?? undefined,
+    export_notes: row.export_notes ?? row.exportNotes ?? undefined,
+    created_at: row.createdAt ?? row.created_at ?? '',
+    approved_at: row.approved_at ?? row.approvedAt ?? undefined,
+    picked_at: row.picked_at ?? row.pickedAt ?? undefined,
+    exported_at: row.exported_at ?? row.exportedAt ?? undefined,
+    created_by: row.created_by ?? row.createdBy ?? '',
+    approved_by: row.approved_by ?? row.approvedBy ?? undefined,
+    picked_by: row.picked_by ?? row.pickedBy ?? undefined,
+    exported_by: row.exported_by ?? row.exportedBy ?? undefined,
+    export_slip_items: Array.isArray(row.details)
+      ? row.details.map((detail: any) => ({
+          id: detail.id,
+          product_id: detail.productId ?? detail.product_id,
+          product_name: detail.product?.name ?? detail.product_name ?? '',
+          product_code: detail.product?.code ?? detail.product_code ?? '',
+          requested_quantity: Number(detail.quantity ?? 0),
+          actual_quantity: Number(detail.quantity ?? 0), // Same as requested for now
+          remaining_quantity: 0, // Not available in warehouse receipts
+          unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
         }))
-      : undefined,
-  } : undefined,
-});
+      : Array.isArray(row.export_slip_items)
+        ? row.export_slip_items.map(normalizeItem)
+        : undefined,
+    order: row.order ? {
+      order_number: row.order.order_number ?? row.order.orderNumber ?? '',
+      customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
+      customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
+      customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
+      total_amount: Number(row.order.total_amount ?? row.order.totalAmount ?? row.totalAmount ?? row.total_amount ?? 0),
+      order_items: Array.isArray(row.order.order_items)
+        ? row.order.order_items.map((oi: any) => ({
+            product_name: oi.product_name ?? oi.productName,
+            product_code: oi.product_code ?? oi.productCode,
+            quantity: Number(oi.quantity ?? 0),
+            unit_price: Number(oi.unit_price ?? oi.unitPrice ?? 0),
+            total_price: Number(oi.total_price ?? oi.totalPrice ?? oi.quantity * (oi.unit_price ?? oi.unitPrice ?? 0)),
+          }))
+        : undefined,
+    } : undefined,
+    creator_profile: row.creator_profile ?? row.creatorProfile ?? undefined,
+    approver_profile: row.approver_profile ?? row.approverProfile ?? undefined,
+    picker_profile: row.picker_profile ?? row.pickerProfile ?? undefined,
+    exporter_profile: row.exporter_profile ?? row.exporterProfile ?? undefined,
+  };
+};
 
 export interface CreateExportSlipRequest {
   order_id: string;
+  warehouse_id: string;
+  supplier_id: string;
+  code: string;
   notes?: string;
   items: Array<{
     product_id: string;
-    product_name: string;
-    product_code: string;
     requested_quantity: number;
     unit_price: number;
   }>;
@@ -110,17 +141,17 @@ export const exportSlipsApi = {
   // Create new export slip
   createSlip: async (data: CreateExportSlipRequest): Promise<ExportSlip> => {
     const slipData = {
+      warehouseId: data.warehouse_id,
+      supplierId: data.supplier_id,
       orderId: data.order_id,
+      code: data.code,
       type: 'export',
       status: 'pending',
       description: data.notes || 'Export slip',
       details: data.items.map(item => ({
         productId: item.product_id,
-        productName: item.product_name,
-        productCode: item.product_code,
         quantity: item.requested_quantity,
-        unitPrice: item.unit_price.toString(),
-        totalPrice: (item.requested_quantity * item.unit_price).toString()
+        unitPrice: item.unit_price.toString()
       }))
     };
 
@@ -134,9 +165,10 @@ export const exportSlipsApi = {
     if (params?.limit) queryParams.append('limit', String(params.limit));
     if (params?.status) queryParams.append('status', params.status);
     if (params?.search) queryParams.append('keyword', params.search);
-    queryParams.append('type', 'export'); // Filter for export type only
     
+    queryParams.append('type', 'export'); // Filter for export type only
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`;
+    console.log('Fetching export slips from:', url);
     const response = await api.get<any>(url);
     const data = response?.data || response;
     if (data && Array.isArray(data.rows)) {
@@ -156,11 +188,52 @@ export const exportSlipsApi = {
     };
   },
 
+  getSlipByOrderId: async (orderId: string): Promise<ExportSlip | null> => {
+    try {
+      console.log('=== Searching for export slip with orderId:', orderId);
+      
+      // Try to get all export slips with pagination
+      let page = 1;
+      let foundSlip = null;
+      
+      while (!foundSlip) {
+        console.log(`=== Fetching page ${page}...`);
+        const response = await exportSlipsApi.getSlips({ page, limit: 100 });
+        console.log(`=== Found ${response.slips.length} slips on page ${page}`);
+        
+        foundSlip = response.slips.find(slip => slip.order_id === orderId);
+        
+        if (foundSlip) {
+          console.log('=== Found matching export slip:', foundSlip);
+          break;
+        }
+        
+        // If we got fewer slips than requested, we've reached the end
+        if (response.slips.length < 100) {
+          console.log('=== Reached end of results, no matching slip found');
+          break;
+        }
+        
+        page++;
+        
+        // Safety check to prevent infinite loop
+        if (page > 10) {
+          console.log('=== Stopped searching after 10 pages for safety');
+          break;
+        }
+      }
+      
+      return foundSlip || null;
+    } catch (error) {
+      console.error('=== Error getting export slip by order ID:', error);
+      return null;
+    }
+  },
+
   approveSlip: async (id: string, approval_notes?: string): Promise<{ message: string }> => {
     // Update status to approved
-    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
-      status: 'approved',
-      description: approval_notes ? `${approval_notes}` : undefined
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.APPROVE(id), { 
+      approvalNotes: approval_notes
     });
   },
 
@@ -168,7 +241,31 @@ export const exportSlipsApi = {
     // Update status to completed
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
       status: 'completed',
-      description: export_notes ? `${export_notes}` : undefined
+      description: export_notes
+    });
+  },
+
+  // Mark as picked (thủ kho xác nhận đã lấy hàng)
+  markAsPicked: async (id: string, export_notes?: string): Promise<{ message: string }> => {
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
+      status: 'picked',
+      description: export_notes
+    });
+  },
+
+  // Mark as exported (hàng đã rời khỏi kho)
+  markAsExported: async (id: string, export_notes?: string): Promise<{ message: string }> => {
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
+      status: 'exported',
+      description: export_notes
+    });
+  },
+
+  // Direct transition from pending to exported (Admin/Giám đốc only)
+  directExport: async (id: string, export_notes?: string): Promise<{ message: string }> => {
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
+      status: 'exported',
+      description: export_notes
     });
   },
 };

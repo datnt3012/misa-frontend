@@ -59,57 +59,27 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-      // Upload to storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('order-documents')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('order-documents')
-        .getPublicUrl(fileName);
-
-      // Save document info to database if orderId is provided
-      let documentRecord = null;
-      if (orderId) {
-        const { data, error } = await supabase
-          .from('order_documents')
-          .insert({
-            order_id: orderId,
-            document_type: documentType,
-            file_name: file.name,
-            file_url: publicUrl,
-            file_size: file.size,
-            mime_type: file.type,
-            uploaded_by: user.id
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        documentRecord = data;
-      }
-
-      const newDocument = documentRecord || {
+      // TODO: Implement document upload via API when backend supports it
+      // For now, create a mock document to avoid Supabase errors
+      console.log('Document upload not implemented - using API fallback');
+      
+      const mockDocument = {
         id: Date.now().toString(),
         file_name: file.name,
-        file_url: publicUrl,
+        file_url: URL.createObjectURL(file), // Temporary local URL
         file_size: file.size,
         mime_type: file.type,
-        uploaded_at: new Date().toISOString()
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: user.id,
+        document_type: documentType
       };
 
-      setDocuments([...documents, newDocument]);
-      onDocumentUploaded?.(newDocument);
+      setDocuments([...documents, mockDocument]);
+      onDocumentUploaded?.(mockDocument);
 
       toast({
         title: "Thành công",
-        description: "Đã tải lên tài liệu",
+        description: "Đã tải lên tài liệu thành công (chế độ demo)",
       });
 
       // Reset input
@@ -130,30 +100,16 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   const handleDeleteDocument = async (document: any) => {
     try {
-      // Delete from storage
-      const fileName = document.file_url?.split('/').pop();
-      if (fileName) {
-        await supabase.storage
-          .from('order-documents')
-          .remove([`${user?.id}/${fileName}`]);
-      }
-
-      // Delete from database if it has an ID
-      if (document.id && orderId) {
-        const { error } = await supabase
-          .from('order_documents')
-          .delete()
-          .eq('id', document.id);
-
-        if (error) throw error;
-      }
-
+      // TODO: Implement document deletion via API when backend supports it
+      // For now, just remove from local state to avoid Supabase errors
+      console.log('Document deletion not implemented - using API fallback');
+      
       setDocuments(documents.filter(d => d.id !== document.id));
       onDocumentDeleted?.(document.id);
 
       toast({
         title: "Thành công",
-        description: "Đã xóa tài liệu",
+        description: "Đã xóa tài liệu (chế độ demo)",
       });
     } catch (error: any) {
       toast({

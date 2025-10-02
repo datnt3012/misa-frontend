@@ -26,7 +26,8 @@ import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
 import ImportSlips from "@/components/inventory/ImportSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
-import { productApi, type Product } from "@/api/product.api";
+import { OrderExportSlipCreation } from "@/components/inventory/OrderExportSlipCreation";
+import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
@@ -44,7 +45,7 @@ const InventoryContent = () => {
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [activeTab, setActiveTab] = useState("inventory");
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorStates, setErrorStates] = useState({
     products: null as string | null,
@@ -212,7 +213,18 @@ const InventoryContent = () => {
           }
         });
 
-        setProducts(productsResponse.products || []);
+        // Transform products to include stock information (mock data for now)
+        const productsWithStock: ProductWithStock[] = (productsResponse.products || []).map(product => ({
+          ...product,
+          current_stock: Math.floor(Math.random() * 100), // Mock stock data
+          location: `Kho A (KHO-A)`, // Mock location
+          updated_at: product.updatedAt,
+          warehouse_id: 'warehouse-1',
+          warehouse_name: 'Kho A',
+          warehouse_code: 'KHO-A'
+        }));
+        
+        setProducts(productsWithStock);
         setWarehouses(warehousesResponse.warehouses || []);
       } else {
         // No permissions to load any data
@@ -310,12 +322,12 @@ const InventoryContent = () => {
           bValue = b.current_stock;
           break;
         case 'cost_price':
-          aValue = a.cost_price;
-          bValue = b.cost_price;
+          aValue = a.costPrice;
+          bValue = b.costPrice;
           break;
         case 'unit_price':
-          aValue = a.unit_price;
-          bValue = b.unit_price;
+          aValue = a.price;
+          bValue = b.price;
           break;
         case 'warehouse':
           const warehouseA = warehouses.find(w => 
@@ -811,7 +823,7 @@ const InventoryContent = () => {
 
         {/* Tabs for different sections */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="inventory">Báo cáo tồn kho</TabsTrigger>
             <TabsTrigger value="products">Danh sách sản phẩm</TabsTrigger>
             <TabsTrigger value="warehouses">
@@ -821,6 +833,10 @@ const InventoryContent = () => {
             <TabsTrigger value="imports">
               <Package className="w-4 h-4 mr-2" />
               Nhập kho
+            </TabsTrigger>
+            <TabsTrigger value="exports">
+              <TrendingDown className="w-4 h-4 mr-2" />
+              Xuất kho
             </TabsTrigger>
             <TabsTrigger value="history">
               <Search className="w-4 h-4 mr-2" />
@@ -1071,6 +1087,18 @@ const InventoryContent = () => {
                    />
                  );
                })()}
+             </PermissionGuard>
+           </TabsContent>
+
+           {/* Export Slips Tab */}
+           <TabsContent value="exports" className="space-y-6">
+             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
+               <OrderExportSlipCreation 
+                 onExportSlipCreated={() => {
+                   // Refresh any related data if needed
+                   toast({ title: "Thành công", description: "Đã tạo phiếu xuất kho thành công" });
+                 }}
+               />
              </PermissionGuard>
            </TabsContent>
 

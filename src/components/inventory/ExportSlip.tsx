@@ -6,50 +6,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
 import { Package, CheckCircle, XCircle, Clock, FileText, Upload } from "lucide-react";
 import { ExportSlipQuantityDialog } from "@/components/inventory/ExportSlipQuantityDialog";
-import { DocumentUpload } from "@/components/documents/DocumentUpload";
 
-interface ExportSlip {
-  id: string;
-  slip_number: string;
-  status: 'pending' | 'approved' | 'rejected' | 'partial_export' | 'completed';
-  created_by: string;
-  approved_by?: string;
-  notes?: string;
-  approval_notes?: string;
-  created_at: string;
-  approved_at?: string;
-  order: {
-    order_number: string;
-    customer_name: string;
-    order_items: Array<{
-      product_name: string;
-      product_code: string;
-      quantity: number;
-      unit_price: number;
-    }>;
-  };
-  export_slip_items?: Array<{
-    id: string;
-    product_id: string;
-    product_name: string;
-    product_code: string;
-    requested_quantity: number;
-    actual_quantity: number;
-    remaining_quantity: number;
-    unit_price: number;
-  }>;
-  creator_profile?: {
-    full_name: string;
-  };
-  approver_profile?: {
-    full_name: string;
-  };
-}
 
 interface ExportSlipProps {
   orderId: string;
@@ -63,7 +25,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
   const [approvalNotes, setApprovalNotes] = useState('');
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
   const [quantityDialog, setQuantityDialog] = useState(false);
-  const [documents, setDocuments] = useState<any[]>([]);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -73,86 +34,50 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
 
   const loadExportSlip = async () => {
     try {
-      const { data, error } = await supabase
-        .from('export_slips')
-        .select(`
-          *,
-          order:orders (
-            order_number,
-            customer_name,
-            order_items (
-              product_name,
-              product_code,
-              quantity,
-              unit_price
-            )
-          ),
-          export_slip_items (
-            id,
-            product_id,
-            product_name,
-            product_code,
-            requested_quantity,
-            actual_quantity,
-            remaining_quantity,
-            unit_price
-          ),
-          creator_profile:profiles!export_slips_created_by_fkey (full_name),
-          approver_profile:profiles!export_slips_approved_by_fkey (full_name)
-        `)
-        .eq('order_id', orderId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      if (data) {
-        setExportSlip({
-          ...data,
-          status: data.status as 'pending' | 'approved' | 'rejected' | 'partial_export' | 'completed',
-          creator_profile: data.creator_profile || { full_name: 'Không xác định' },
-          approver_profile: data.approver_profile || { full_name: 'Không xác định' },
-          export_slip_items: data.export_slip_items || []
-        } as ExportSlip);
+      console.log('=== Loading export slip for orderId:', orderId);
+      
+      // Get export slip by order ID
+      const slip = await exportSlipsApi.getSlipByOrderId(orderId);
+      console.log('=== Found export slip:', slip);
+      
+      if (slip) {
+        console.log('=== Export slip details:');
+        console.log('- ID:', slip.id);
+        console.log('- Code:', slip.code);
+        console.log('- Status:', slip.status);
+        console.log('- Order ID:', slip.order_id);
+        console.log('- Created by:', slip.created_by);
+        console.log('- Created at:', slip.created_at);
+        console.log('- Items:', slip.export_slip_items);
+        console.log('- Order data:', slip.order);
+        console.log('- Creator profile:', slip.creator_profile);
+        console.log('- Approver profile:', slip.approver_profile);
+        console.log('- Picker profile:', slip.picker_profile);
+        console.log('- Exporter profile:', slip.exporter_profile);
         
-        // Load related documents
-        loadDocuments(data.id);
+        setExportSlip(slip);
       } else {
+        console.log('=== No export slip found for orderId:', orderId);
         setExportSlip(null);
       }
     } catch (error) {
-      console.error('Error loading export slip:', error);
+      console.error('=== Error loading export slip:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải thông tin phiếu xuất kho",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const loadDocuments = async (exportSlipId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('order_documents')
-        .select('*')
-        .eq('order_id', orderId)
-        .eq('document_type', 'export_slip');
-
-      if (error) throw error;
-      setDocuments(data || []);
-    } catch (error) {
-      console.error('Error loading documents:', error);
-    }
-  };
 
   const handleApproval = async () => {
     try {
-      const { error } = await supabase
-        .from('export_slips')
-        .update({
-          status: approvalAction,
-          approved_by: user?.id,
-          approval_notes: approvalNotes,
-          approved_at: new Date().toISOString()
-        })
-        .eq('id', exportSlip?.id);
-
-      if (error) throw error;
+      if (!exportSlip?.id) return;
+      
+      await exportSlipsApi.approveSlip(exportSlip.id, approvalNotes);
 
       toast({
         title: "Thành công",
@@ -173,23 +98,38 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
     }
   };
 
-  const handleMarkAsExported = async () => {
+  const handleMarkAsPicked = async () => {
     try {
-      const { error } = await supabase
-        .from('export_slips')
-        .update({
-          status: 'completed',
-          export_completed_by: user?.id,
-          export_completed_at: new Date().toISOString(),
-          export_notes: 'Đã hoàn thành xuất kho'
-        })
-        .eq('id', exportSlip?.id);
-
-      if (error) throw error;
+      if (!exportSlip?.id) return;
+      
+      await exportSlipsApi.markAsPicked(exportSlip.id, 'Đã lấy hàng từ kho');
 
       toast({
         title: "Thành công",
-        description: "Đã đánh dấu hoàn thành xuất kho",
+        description: "Đã xác nhận lấy hàng. Tồn kho đã được trừ theo số lượng trong phiếu.",
+      });
+
+      loadExportSlip();
+      onUpdate?.();
+    } catch (error) {
+      console.error('Error marking as picked:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái lấy hàng",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMarkAsExported = async () => {
+    try {
+      if (!exportSlip?.id) return;
+      
+      await exportSlipsApi.markAsExported(exportSlip.id, 'Đã hoàn thành xuất kho - hàng đã rời khỏi kho');
+
+      toast({
+        title: "Thành công",
+        description: "Đã hoàn tất xuất kho. Hàng đã rời khỏi kho.",
       });
 
       loadExportSlip();
@@ -210,35 +150,21 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
         return (
           <Badge variant="secondary" className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            Chờ duyệt
+            Chờ
           </Badge>
         );
-      case 'approved':
+      case 'picked':
+        return (
+          <Badge variant="default" className="flex items-center gap-1 bg-blue-100 text-blue-800">
+            <Package className="w-3 h-3" />
+            Đã lấy hàng
+          </Badge>
+        );
+      case 'exported':
         return (
           <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
             <CheckCircle className="w-3 h-3" />
-            Đã duyệt
-          </Badge>
-        );
-      case 'partial_export':
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1 bg-yellow-100 text-yellow-800 border-yellow-300">
-            <Package className="w-3 h-3" />
-            Xuất một phần
-          </Badge>
-        );
-      case 'completed':
-        return (
-          <Badge variant="default" className="flex items-center gap-1 bg-gray-800 text-white">
-            <CheckCircle className="w-3 h-3" />
-            Hoàn thành
-          </Badge>
-        );
-      case 'rejected':
-        return (
-          <Badge variant="destructive" className="flex items-center gap-1">
-            <XCircle className="w-3 h-3" />
-            Đã từ chối
+            Đã xuất kho
           </Badge>
         );
       default:
@@ -258,8 +184,8 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
   };
 
   // Check user roles for different actions
-  const canApprove = user && exportSlip?.status === 'pending';
-  const canExport = user && (exportSlip?.status === 'approved');
+  const canPick = user && exportSlip?.status === 'pending';
+  const canExport = user && (exportSlip?.status === 'picked');
 
   if (loading) {
     return (
@@ -302,17 +228,22 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5" />
-              Phiếu xuất kho {exportSlip.slip_number}
+              Phiếu xuất kho {exportSlip.code}
             </div>
             {getStatusBadge(exportSlip.status)}
           </CardTitle>
-          <CardDescription>
-            Đơn hàng: {exportSlip.order.order_number} - {exportSlip.order.customer_name}
+          <CardDescription className="text-sm text-muted-foreground">
+            Đơn hàng: {exportSlip.order?.order_number || 'Đang tải...'} - {exportSlip.order?.customer_name || 'Đang tải...'}
+            {exportSlip.order?.customer_phone && ` - ${exportSlip.order.customer_phone}`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Export Slip Info */}
           <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <Label className="font-medium">Mã phiếu:</Label>
+              <p>{exportSlip.code}</p>
+            </div>
             <div>
               <Label className="font-medium">Người tạo:</Label>
               <p>{exportSlip.creator_profile?.full_name || 'Không xác định'}</p>
@@ -320,6 +251,10 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
             <div>
               <Label className="font-medium">Ngày tạo:</Label>
               <p>{formatDateTime(exportSlip.created_at)}</p>
+            </div>
+            <div>
+              <Label className="font-medium">Trạng thái:</Label>
+              <div className="mt-1">{getStatusBadge(exportSlip.status)}</div>
             </div>
             {exportSlip.approved_by && (
               <>
@@ -333,7 +268,74 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
                 </div>
               </>
             )}
+            {exportSlip.picked_by && (
+              <>
+                <div>
+                  <Label className="font-medium">Người lấy hàng:</Label>
+                  <p>{exportSlip.picker_profile?.full_name || 'Không xác định'}</p>
+                </div>
+                <div>
+                  <Label className="font-medium">Ngày lấy hàng:</Label>
+                  <p>{exportSlip.picked_at ? formatDateTime(exportSlip.picked_at) : '-'}</p>
+                </div>
+              </>
+            )}
+            {exportSlip.exported_by && (
+              <>
+                <div>
+                  <Label className="font-medium">Người xuất kho:</Label>
+                  <p>{exportSlip.exporter_profile?.full_name || 'Không xác định'}</p>
+                </div>
+                <div>
+                  <Label className="font-medium">Ngày xuất kho:</Label>
+                  <p>{exportSlip.exported_at ? formatDateTime(exportSlip.exported_at) : '-'}</p>
+                </div>
+              </>
+            )}
           </div>
+
+          {/* Order Information */}
+          {exportSlip.order && (
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Thông tin đơn hàng:</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <Label className="font-medium">Số đơn hàng:</Label>
+                  <p>{exportSlip.order.order_number}</p>
+                </div>
+                <div>
+                  <Label className="font-medium">Khách hàng:</Label>
+                  <p>{exportSlip.order.customer_name}</p>
+                </div>
+                {exportSlip.order.customer_phone && (
+                  <div>
+                    <Label className="font-medium">SĐT:</Label>
+                    <p>{exportSlip.order.customer_phone}</p>
+                  </div>
+                )}
+                {exportSlip.order.customer_address && (
+                  <div>
+                    <Label className="font-medium">Địa chỉ:</Label>
+                    <p>{exportSlip.order.customer_address}</p>
+                  </div>
+                )}
+                <div>
+                  <Label className="font-medium">Tổng tiền đơn hàng:</Label>
+                  <p className="font-semibold text-blue-600">{formatCurrency(exportSlip.order.total_amount || 0)}</p>
+                </div>
+                <div>
+                  <Label className="font-medium">Tổng giá trị thực xuất:</Label>
+                  <p className="font-semibold text-green-600">
+                    {formatCurrency(
+                      exportSlip.export_slip_items?.reduce((sum, item) => 
+                        sum + (item.actual_quantity * item.unit_price), 0
+                      ) || 0
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Items to Export */}
           <div>
@@ -352,35 +354,29 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {exportSlip.order.order_items.map((orderItem, index) => {
-                    // Find corresponding export slip item
-                    const exportItem = exportSlip.export_slip_items?.find(
-                      item => item.product_code === orderItem.product_code
-                    );
-                    
-                    // Use order quantities as base
-                    const requestedQuantity = orderItem.quantity;
-                    const actualQuantity = exportItem?.actual_quantity || 0;
-                    const remainingQuantity = requestedQuantity - actualQuantity;
-                    
-                    return (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{orderItem.product_name}</TableCell>
-                        <TableCell>{orderItem.product_code}</TableCell>
-                        <TableCell className="text-right font-medium text-blue-600">
-                          {requestedQuantity}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-green-600">
-                          {actualQuantity}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-orange-600">
-                          {remainingQuantity}
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(orderItem.unit_price)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(orderItem.quantity * orderItem.unit_price)}</TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {exportSlip.export_slip_items?.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{item.product_name}</TableCell>
+                      <TableCell>{item.product_code}</TableCell>
+                      <TableCell className="text-right font-medium text-blue-600">
+                        {item.requested_quantity}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-green-600">
+                        {item.actual_quantity}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-orange-600">
+                        {item.remaining_quantity}
+                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.actual_quantity * item.unit_price)}</TableCell>
+                    </TableRow>
+                  )) || (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
+                        Chưa có sản phẩm nào
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -391,7 +387,7 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
             <div>
               <Label className="font-medium">Ghi chú:</Label>
               <div className="mt-1 p-3 bg-gray-50 rounded-md">
-                <p className="text-sm">{exportSlip.notes}</p>
+                <div className="text-sm whitespace-pre-wrap">{exportSlip.notes}</div>
               </div>
             </div>
           )}
@@ -401,45 +397,21 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
             <div>
               <Label className="font-medium">Ghi chú duyệt:</Label>
               <div className="mt-1 p-3 bg-blue-50 rounded-md">
-                <p className="text-sm">{exportSlip.approval_notes}</p>
+                <div className="text-sm whitespace-pre-wrap">{exportSlip.approval_notes}</div>
               </div>
             </div>
           )}
 
-          {/* Document Upload */}
-          <div>
-            <DocumentUpload
-              orderId={orderId}
-              existingDocuments={documents}
-              onDocumentUploaded={(doc) => setDocuments([...documents, doc])}
-              onDocumentDeleted={(docId) => setDocuments(documents.filter(d => d.id !== docId))}
-              label="Phiếu xuất kho đã ký"
-              documentType="export_slip"
-            />
-          </div>
 
           {/* Action Buttons */}
-          {canApprove && (
+          {canPick && (
             <div className="flex gap-2 pt-4 border-t">
               <Button
-                onClick={() => {
-                  setApprovalAction('approve');
-                  setApprovalDialog(true);
-                }}
-                className="bg-green-600 hover:bg-green-700"
+                onClick={handleMarkAsPicked}
+                className="bg-blue-600 hover:bg-blue-700"
               >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Duyệt phiếu
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setApprovalAction('reject');
-                  setApprovalDialog(true);
-                }}
-              >
-                <XCircle className="w-4 h-4 mr-2" />
-                Từ chối
+                <Package className="w-4 h-4 mr-2" />
+                Xác nhận đã lấy hàng
               </Button>
             </div>
           )}
@@ -473,7 +445,7 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               {approvalAction === 'approve' ? 'Duyệt' : 'Từ chối'} phiếu xuất kho
             </DialogTitle>
             <DialogDescription>
-              Phiếu xuất kho {exportSlip.slip_number}
+              Phiếu xuất kho {exportSlip.code}
             </DialogDescription>
           </DialogHeader>
           

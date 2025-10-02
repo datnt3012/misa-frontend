@@ -40,13 +40,19 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   }, [open, order]);
 
   const loadOrderDetails = async () => {
-    if (!order?.id) return;
+    if (!order?.id) {
+      console.log('No order ID provided');
+      return;
+    }
     
     setLoading(true);
     try {
+      console.log('Loading order details for ID:', order.id);
       const orderData = await orderApi.getOrder(order.id);
+      console.log('Order data loaded:', orderData);
       setOrderDetails(orderData);
     } catch (error) {
+      console.error('Error loading order details:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),

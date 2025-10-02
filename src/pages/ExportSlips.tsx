@@ -9,49 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { exportSlipsApi } from '@/api/exportSlips.api';
+import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
+import { orderApi } from '@/api/order.api';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { DocumentUploadViewer } from '@/components/documents/DocumentUploadViewer';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 
-interface ExportSlip {
-  id: string;
-  slip_number: string;
-  order_id: string;
-  status: 'pending' | 'approved' | 'rejected' | 'partial_export' | 'completed';
-  notes?: string;
-  approval_notes?: string;
-  created_at: string;
-  approved_at?: string;
-  created_by: string;
-  approved_by?: string;
-  orders?: {
-    order_number: string;
-    customer_name: string;
-    customer_address?: string;
-    customer_phone?: string;
-    total_amount: number;
-    order_items: Array<{
-      product_name: string;
-      product_code: string;
-      quantity: number;
-      unit_price: number;
-      total_price: number;
-    }>;
-  };
-  export_slip_items?: Array<{
-    id: string;
-    product_id: string;
-    product_name: string;
-    product_code: string;
-    requested_quantity: number;
-    actual_quantity: number;
-    remaining_quantity: number;
-    unit_price: number;
-  }>;
-}
 
 function ExportSlipsContent() {
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
@@ -78,29 +42,59 @@ function ExportSlipsContent() {
     try {
       const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
       
-      const slips = (resp.slips || []).map((s) => ({
-        id: s.id,
-        slip_number: s.code,
-        order_id: s.order_id,
-        status: s.status as any,
-        notes: s.notes,
-        approval_notes: s.approval_notes,
-        created_at: s.created_at,
-        approved_at: s.approved_at,
-        created_by: s.created_by,
-        approved_by: s.approved_by,
-        orders: s.order ? {
-          order_number: s.order.order_number,
-          customer_name: s.order.customer_name,
-          customer_address: s.order.customer_address,
-          customer_phone: s.order.customer_phone,
-          total_amount: s.order.total_amount,
-          order_items: s.order.order_items,
-        } : undefined,
-        export_slip_items: s.export_slip_items,
+      // Debug log to check data structure
+      console.log('Export slips response:', resp);
+      console.log('First slip order data:', resp.slips?.[0]?.order);
+      console.log('First slip orderId:', resp.slips?.[0]?.order_id);
+      console.log('All slips data:', resp.slips);
+      
+      // If order data is missing, we'll need to fetch it separately
+      const slips = await Promise.all((resp.slips || []).map(async (s) => {
+        let orderData = s.order;
+        
+        // If order data is missing but we have order_id, try to fetch it
+        if (!orderData && s.order_id) {
+          try {
+            console.log('Fetching order data for order_id:', s.order_id);
+            const orderResponse = await orderApi.getOrder(s.order_id);
+            orderData = {
+              order_number: orderResponse.order_number,
+              customer_name: orderResponse.customer_name || 'Không xác định',
+              customer_address: orderResponse.customer_address,
+              customer_phone: orderResponse.customer_phone,
+              total_amount: orderResponse.total_amount,
+              order_items: orderResponse.order_items
+            };
+            console.log('Fetched order data:', orderData);
+          } catch (error) {
+            console.error('Error fetching order data:', error);
+          }
+        }
+        
+        return {
+          id: s.id,
+          code: s.code,
+          order_id: s.order_id,
+          status: s.status as any,
+          notes: s.notes,
+          approval_notes: s.approval_notes,
+          created_at: s.created_at,
+          approved_at: s.approved_at,
+          created_by: s.created_by,
+          approved_by: s.approved_by,
+          order: orderData ? {
+            order_number: orderData.order_number,
+            customer_name: orderData.customer_name,
+            customer_address: orderData.customer_address,
+            customer_phone: orderData.customer_phone,
+            total_amount: orderData.total_amount,
+            order_items: orderData.order_items,
+          } : undefined,
+          export_slip_items: s.export_slip_items,
+        };
       }));
       
-      setExportSlips(slips as any);
+      setExportSlips(slips);
       
       // No toast notification for empty export slips list
     } catch (error: any) {
@@ -211,9 +205,9 @@ function ExportSlipsContent() {
       if (!searchTerm) return true;
       const searchLower = searchTerm.toLowerCase();
       return (
-        slip.slip_number.toLowerCase().includes(searchLower) ||
-        slip.orders?.order_number.toLowerCase().includes(searchLower) ||
-        slip.orders?.customer_name.toLowerCase().includes(searchLower)
+        slip.code.toLowerCase().includes(searchLower) ||
+        slip.order?.order_number.toLowerCase().includes(searchLower) ||
+        slip.order?.customer_name.toLowerCase().includes(searchLower)
       );
     })
     .sort((a, b) => {
@@ -221,20 +215,20 @@ function ExportSlipsContent() {
       
       switch (sortField) {
         case 'slip_number':
-          aValue = a.slip_number;
-          bValue = b.slip_number;
+          aValue = a.code;
+          bValue = b.code;
           break;
         case 'order_number':
-          aValue = a.orders?.order_number || '';
-          bValue = b.orders?.order_number || '';
+          aValue = a.order?.order_number || '';
+          bValue = b.order?.order_number || '';
           break;
         case 'customer_name':
-          aValue = a.orders?.customer_name || '';
-          bValue = b.orders?.customer_name || '';
+          aValue = a.order?.customer_name || '';
+          bValue = b.order?.customer_name || '';
           break;
         case 'total_amount':
-          aValue = a.orders?.total_amount || 0;
-          bValue = b.orders?.total_amount || 0;
+          aValue = a.order?.total_amount || 0;
+          bValue = b.order?.total_amount || 0;
           break;
         case 'status':
           aValue = a.status;
@@ -381,9 +375,9 @@ function ExportSlipsContent() {
               ) : (
                 filteredAndSortedSlips.map((slip) => (
                 <TableRow key={slip.id}>
-                  <TableCell className="font-medium">{slip.slip_number}</TableCell>
-                  <TableCell>{slip.orders?.order_number}</TableCell>
-                  <TableCell>{slip.orders?.customer_name}</TableCell>
+                  <TableCell className="font-medium">{slip.code}</TableCell>
+                  <TableCell>{slip.order?.order_number}</TableCell>
+                  <TableCell>{slip.order?.customer_name}</TableCell>
                   <TableCell>{formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}</TableCell>
                   <TableCell>{getStatusBadge(slip.status)}</TableCell>
                   <TableCell>
@@ -401,7 +395,7 @@ function ExportSlipsContent() {
                           <DialogHeader>
                             <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
                             <DialogDescription>
-                              Thông tin chi tiết phiếu {slip.slip_number}
+                              Thông tin chi tiết phiếu {slip.code}
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-6">
@@ -409,36 +403,36 @@ function ExportSlipsContent() {
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Label className="font-medium">Số phiếu:</Label>
-                                <p className="text-sm">{slip.slip_number}</p>
+                                <p className="text-sm">{slip.code}</p>
                               </div>
                               <div>
                                 <Label className="font-medium">Đơn hàng:</Label>
-                                <p className="text-sm">{slip.orders?.order_number}</p>
+                                <p className="text-sm">{slip.order?.order_number}</p>
                               </div>
                               <div>
                                 <Label className="font-medium">Khách hàng:</Label>
-                                <p className="text-sm">{slip.orders?.customer_name}</p>
+                                <p className="text-sm">{slip.order?.customer_name}</p>
                               </div>
                               <div>
                                 <Label className="font-medium">Trạng thái:</Label>
-                                <p className="text-sm">{getStatusBadge(slip.status)}</p>
+                                <div className="text-sm">{getStatusBadge(slip.status)}</div>
                               </div>
-                              {slip.orders?.customer_address && (
+                              {slip.order?.customer_address && (
                                 <div className="col-span-2">
                                   <Label className="font-medium">Địa chỉ giao hàng:</Label>
-                                  <p className="text-sm">{slip.orders.customer_address}</p>
+                                  <p className="text-sm">{slip.order.customer_address}</p>
                                 </div>
                               )}
-                              {slip.orders?.customer_phone && (
+                              {slip.order?.customer_phone && (
                                 <div>
                                   <Label className="font-medium">Số điện thoại:</Label>
-                                  <p className="text-sm">{slip.orders.customer_phone}</p>
+                                  <p className="text-sm">{slip.order.customer_phone}</p>
                                 </div>
                               )}
                               <div>
                                 <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
                                 <p className="text-sm font-medium text-green-600">
-                                  {formatCurrency(slip.orders?.total_amount || 0)}
+                                  {formatCurrency(slip.order?.total_amount || 0)}
                                 </p>
                               </div>
                               <div>
@@ -450,7 +444,7 @@ function ExportSlipsContent() {
                             </div>
 
                             {/* Product List */}
-                            {slip.orders?.order_items && slip.orders.order_items.length > 0 && (
+                            {slip.order?.order_items && slip.order.order_items.length > 0 && (
                               <div>
                                 <Label className="font-medium block mb-3">Danh sách sản phẩm cần xuất:</Label>
                                 <div className="border rounded-md overflow-hidden">
@@ -467,7 +461,7 @@ function ExportSlipsContent() {
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {slip.orders.order_items.map((orderItem, index) => {
+                                      {slip.order.order_items.map((orderItem, index) => {
                                         // Find corresponding export slip item
                                         const exportItem = slip.export_slip_items?.find(
                                           item => item.product_code === orderItem.product_code
@@ -515,10 +509,12 @@ function ExportSlipsContent() {
                               </div>
                             )}
 
-                            {/* Documents */}
+                            {/* Documents - Temporarily disabled */}
                             <div>
                               <Label className="font-medium block mb-3">Tài liệu đính kèm:</Label>
-                              <DocumentUploadViewer exportSlipId={slip.id} />
+                              <div className="text-sm text-muted-foreground">
+                                Chưa có tài liệu đính kèm nào
+                              </div>
                             </div>
                           </div>
                         </DialogContent>
@@ -563,7 +559,7 @@ function ExportSlipsContent() {
           <DialogHeader>
             <DialogTitle>Duyệt phiếu xuất kho</DialogTitle>
             <DialogDescription>
-              Xác nhận phiếu xuất kho {selectedSlip?.slip_number}
+              Xác nhận phiếu xuất kho {selectedSlip?.code}
             </DialogDescription>
           </DialogHeader>
           
@@ -575,38 +571,38 @@ function ExportSlipsContent() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium text-gray-600">Mã đơn hàng:</span>
-                    <span className="ml-2 text-blue-600 font-semibold">{selectedSlip.orders?.order_number}</span>
+                    <span className="ml-2 text-blue-600 font-semibold">{selectedSlip.order?.order_number}</span>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Khách hàng:</span>
-                    <span className="ml-2 font-semibold">{selectedSlip.orders?.customer_name}</span>
+                    <span className="ml-2 font-semibold">{selectedSlip.order?.customer_name}</span>
                   </div>
-                  {selectedSlip.orders?.customer_phone && (
+                  {selectedSlip.order?.customer_phone && (
                     <div>
                       <span className="font-medium text-gray-600">Số điện thoại:</span>
-                      <span className="ml-2">{selectedSlip.orders.customer_phone}</span>
+                      <span className="ml-2">{selectedSlip.order.customer_phone}</span>
                     </div>
                   )}
                   <div>
                     <span className="font-medium text-gray-600">Tổng giá trị:</span>
                     <span className="ml-2 text-green-600 font-semibold">
-                      {formatCurrency(selectedSlip.orders?.total_amount || 0)}
+                      {formatCurrency(selectedSlip.order?.total_amount || 0)}
                     </span>
                   </div>
                 </div>
                 
-                {selectedSlip.orders?.customer_address && (
+                {selectedSlip.order?.customer_address && (
                   <div className="mt-3">
                     <span className="font-medium text-gray-600">Địa chỉ giao hàng:</span>
                     <p className="mt-1 text-sm bg-white rounded p-2 border">
-                      {selectedSlip.orders.customer_address}
+                      {selectedSlip.order.customer_address}
                     </p>
                   </div>
                 )}
               </div>
 
               {/* Product List */}
-              {selectedSlip.orders?.order_items && selectedSlip.orders.order_items.length > 0 && (
+              {selectedSlip.order?.order_items && selectedSlip.order.order_items.length > 0 && (
                 <div>
                   <h4 className="font-semibold mb-3">Danh sách sản phẩm cần xuất</h4>
                   <div className="border rounded-md overflow-hidden">
@@ -623,7 +619,7 @@ function ExportSlipsContent() {
                          </TableRow>
                        </TableHeader>
                        <TableBody>
-                         {selectedSlip.orders.order_items.map((orderItem, index) => {
+                         {selectedSlip.order.order_items.map((orderItem, index) => {
                            // Find corresponding export slip item
                            const exportItem = selectedSlip.export_slip_items?.find(
                              item => item.product_code === orderItem.product_code
@@ -653,10 +649,12 @@ function ExportSlipsContent() {
                 </div>
                )}
 
-               {/* Documents */}
+               {/* Documents - Temporarily disabled */}
                <div>
                  <h4 className="font-semibold mb-3">Tài liệu đính kèm</h4>
-                 <DocumentUploadViewer exportSlipId={selectedSlip.id} allowUpload={true} />
+                 <div className="text-sm text-muted-foreground">
+                   Chưa có tài liệu đính kèm nào
+                 </div>
                </div>
 
                <div>

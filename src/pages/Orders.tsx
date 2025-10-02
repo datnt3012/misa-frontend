@@ -16,6 +16,7 @@ import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpecificExportSlipCreation";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
@@ -41,28 +42,15 @@ const OrdersContent: React.FC = () => {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
+  const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
   // Handle creating export slip
-  const handleCreateExportSlip = async (order: any) => {
-    try {
-      // TODO: Implement export slip creation with backend API
-      toast({
-        title: "Thông báo",
-        description: "Chức năng tạo phiếu xuất kho đang được phát triển",
-        variant: "default",
-      });
-
-      fetchOrders();
-    } catch (error) {
-      console.error('Error creating export slip:', error);
-      toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho",
-        variant: "destructive",
-      });
-    }
+  const handleCreateExportSlip = (order: any) => {
+    setSelectedOrderForExport(order);
+    setShowExportSlipDialog(true);
   };
 
   // Handle checkbox selection
@@ -103,7 +91,7 @@ const OrdersContent: React.FC = () => {
       
       toast({
         title: "Thành công",
-        description: responses[0]?.message || `Đã xóa ${selectedOrders.length} đơn hàng`,
+        description: `Đã xóa ${selectedOrders.length} đơn hàng`,
       });
       
       setSelectedOrders([]);
@@ -245,7 +233,7 @@ const OrdersContent: React.FC = () => {
       
       toast({
         title: "Thành công",
-        description: response.message || "Đã cập nhật trạng thái đơn hàng",
+        description: "Đã cập nhật trạng thái đơn hàng",
       });
     } catch (error) {
       toast({
@@ -850,6 +838,37 @@ const OrdersContent: React.FC = () => {
           fetchOrders();
         }}
       />
+
+      {/* Export Slip Creation Dialog */}
+      <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu xuất kho</DialogTitle>
+            <DialogDescription>
+              {selectedOrderForExport ? (
+                <>Tạo phiếu xuất kho cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong></>
+              ) : (
+                'Chọn đơn hàng để tạo phiếu xuất kho'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {selectedOrderForExport && (
+              <OrderSpecificExportSlipCreation 
+                orderId={selectedOrderForExport.id}
+                onExportSlipCreated={() => {
+                  setShowExportSlipDialog(false);
+                  setSelectedOrderForExport(null);
+                  toast({
+                    title: "Thành công",
+                    description: `Đã tạo phiếu xuất kho cho đơn hàng ${selectedOrderForExport.order_number}`,
+                  });
+                }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={(open) => {
