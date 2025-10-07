@@ -19,10 +19,14 @@ import {
   Trash2
 } from "lucide-react";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { customerApi } from "@/api/customer.api";
-import { orderApi, Order } from "@/api/order.api";
+import { AddressInfo, customerApi } from "@/api/customer.api";
+import { organizationApi, Organization } from "@/api/organization.api";
+import { orderApi } from "@/api/order.api";
+import { SimpleAddressForm } from "@/components/common/SimpleAddressForm";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Dialog,
   DialogContent,
@@ -46,13 +50,25 @@ import { vi } from "date-fns/locale";
 
 interface Customer {
   id: string;
+  code?: string;
   customer_code?: string;
   name: string;
   phoneNumber?: string;
   email?: string;
   address?: string;
+  userId?: string;
+  isDeleted?: boolean;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
+  user?: any;
+  addressInfo?: any;
+  provinceCode?: string;
+  districtCode?: string;
+  wardCode?: string;
+  provinceName?: string;
+  districtName?: string;
+  wardName?: string;
 }
 
 interface Order {
@@ -75,6 +91,7 @@ interface CustomerStats {
 const CustomersContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [customerStats, setCustomerStats] = useState<CustomerStats>({ total_orders: 0, total_spent: 0, current_debt: 0 });
@@ -86,13 +103,37 @@ const CustomersContent = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast();
 
+  // Format full address with ward/district/province names when available
+  const formatAddress = (c: any) => {
+    const ai = c?.addressInfo || {};
+    const wardNameFromNested = ai?.ward?.name;
+    const districtNameFromNested = ai?.district?.name;
+    const provinceNameFromNested = ai?.province?.name;
+    const parts: string[] = [];
+    if (c?.address) parts.push(c.address);
+    if (wardNameFromNested || ai.wardName || (c as any).wardName) parts.push(wardNameFromNested || ai.wardName || (c as any).wardName);
+    if (districtNameFromNested || ai.districtName || (c as any).districtName) parts.push(districtNameFromNested || ai.districtName || (c as any).districtName);
+    if (provinceNameFromNested || ai.provinceName || (c as any).provinceName) parts.push(provinceNameFromNested || ai.provinceName || (c as any).provinceName);
+    return parts.filter(Boolean).join(', ');
+  };
+
   // Form states
   const [newCustomer, setNewCustomer] = useState({
     customer_code: "",
     name: "",
     phone: "",
     email: "",
-    address: ""
+    address: "",
+    organizationId: "none",
+    addressInfo: {
+      organizationId: "",
+      provinceCode: "",
+      districtCode: "",
+      wardCode: "",
+      provinceName: "",
+      districtName: "",
+      wardName: ""
+    }
   });
 
   const [editCustomer, setEditCustomer] = useState({
@@ -100,7 +141,16 @@ const CustomersContent = () => {
     name: "",
     phone: "",
     email: "",
-    address: ""
+    address: "",
+    addressInfo: {
+      organizationId: "",
+      provinceCode: "",
+      districtCode: "",
+      wardCode: "",
+      provinceName: "",
+      districtName: "",
+      wardName: ""
+    }
   });
 
   // Check permissions
@@ -126,9 +176,39 @@ const CustomersContent = () => {
     }
   };
 
+  // Load provinces data (organizations = provinces)
+  const loadOrganizations = async () => {
+    try {
+      // Fetch provinces from API
+      const response = await fetch('https://provinces.open-api.vn/api/?depth=1');
+      if (!response.ok) throw new Error('API not available');
+      
+      const data = await response.json();
+      const provincesData = data.map((p: any) => ({
+        id: p.code,
+        name: p.name,
+        code: p.code,
+        description: p.name
+      }));
+      setOrganizations(provincesData);
+    } catch (error) {
+      console.error('Error fetching provinces:', error);
+      // Fallback data for common provinces
+      const fallbackProvinces: Organization[] = [
+        { id: 'HN', name: 'Hà Nội', code: 'HN', level: '1' },
+        { id: 'HCM', name: 'TP. Hồ Chí Minh', code: 'HCM', level: '1' },
+        { id: 'DN', name: 'Đà Nẵng', code: 'DN', level: '1' },
+        { id: 'HP', name: 'Hải Phòng', code: 'HP', level: '1' },
+        { id: 'CT', name: 'Cần Thơ', code: 'CT', level: '1' }
+      ];
+      setOrganizations(fallbackProvinces);
+    }
+  };
+
   // Load data when permissions are available
   useEffect(() => {
     loadCustomers();
+    loadOrganizations();
   }, [canReadCustomers]);
 
   // Restore form state from URL parameters after page reload
@@ -189,7 +269,12 @@ const CustomersContent = () => {
         name: newCustomer.name,
         phoneNumber: newCustomer.phone || null,
         email: newCustomer.email || null,
-        address: newCustomer.address || null
+        address: newCustomer.address || null,
+        addressInfo: {
+          provinceCode: newCustomer.addressInfo?.provinceCode || null,
+          districtCode: newCustomer.addressInfo?.districtCode || null,
+          wardCode: newCustomer.addressInfo?.wardCode || null
+        }
       };
 
       // Backend will auto-generate customer code
@@ -197,7 +282,23 @@ const CustomersContent = () => {
       const data = await customerApi.createCustomer(insertData);
 
       setCustomers([data, ...customers]);
-      setNewCustomer({ customer_code: "", name: "", phone: "", email: "", address: "" });
+      setNewCustomer({ 
+        customer_code: "", 
+        name: "", 
+        phone: "", 
+        email: "", 
+        address: "",
+        organizationId: "none",
+        addressInfo: {
+          organizationId: "",
+          provinceCode: "",
+          districtCode: "",
+          wardCode: "",
+          provinceName: "",
+          districtName: "",
+          wardName: ""
+        }
+      });
       setIsAddDialogOpen(false);
       // Clear URL parameters
       setSearchParams({});
@@ -218,12 +319,21 @@ const CustomersContent = () => {
 
   const handleEditCustomer = (customer: Customer) => {
     setEditingCustomer(customer);
-    setEditCustomer({
+      setEditCustomer({
       customer_code: customer.customer_code || "",
       name: customer.name,
       phone: customer.phoneNumber || "",
       email: customer.email || "",
-      address: customer.address || ""
+      address: customer.address || "",
+      addressInfo: customer.addressInfo || {
+        organizationId: "",
+        provinceCode: "",
+        districtCode: "",
+        wardCode: "",
+        provinceName: "",
+        districtName: "",
+        wardName: ""
+      }
     });
     setIsEditDialogOpen(true);
     // Save state to URL
@@ -238,7 +348,12 @@ const CustomersContent = () => {
         name: editCustomer.name,
         phoneNumber: editCustomer.phone || null,
         email: editCustomer.email || null,
-        address: editCustomer.address || null
+        address: editCustomer.address || null,
+        addressInfo: {
+          provinceCode: editCustomer.addressInfo?.provinceCode || null,
+          districtCode: editCustomer.addressInfo?.districtCode || null,
+          wardCode: editCustomer.addressInfo?.wardCode || null
+        }
       });
 
       // Reload customers to get updated data
@@ -250,7 +365,7 @@ const CustomersContent = () => {
       
       toast({
         title: "Thành công",
-        description: `Đã cập nhật thông tin khách hàng ${data.name}`,
+        description: `Đã cập nhật thông tin khách hàng ${editCustomer.name}`,
       });
     } catch (error) {
       console.error('Error updating customer:', error);
@@ -337,7 +452,6 @@ const CustomersContent = () => {
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Khách Hàng</h1>
           <p className="text-muted-foreground">Danh sách và thông tin chi tiết khách hàng</p>
         </div>
-
         {/* Header Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="relative flex-1 max-w-sm">
@@ -413,12 +527,33 @@ const CustomersContent = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="address">Địa chỉ</Label>
-                  <Textarea
-                    id="address"
-                    value={newCustomer.address}
-                    onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
-                    placeholder="Nhập địa chỉ"
+                  <Label>Địa chỉ</Label>
+                  <AddressFormSeparate
+                    value={{
+                      address: newCustomer.address,
+                      provinceCode: newCustomer.addressInfo?.provinceCode,
+                      districtCode: newCustomer.addressInfo?.districtCode,
+                      wardCode: newCustomer.addressInfo?.wardCode,
+                      provinceName: newCustomer.addressInfo?.provinceName,
+                      districtName: newCustomer.addressInfo?.districtName,
+                      wardName: newCustomer.addressInfo?.wardName
+                    }}
+                    onChange={(data) => {
+                      setNewCustomer(prev => ({
+                        ...prev,
+                        address: data.address,
+                        addressInfo: {
+                          ...prev.addressInfo,
+                          provinceCode: data.provinceCode,
+                          districtCode: data.districtCode,
+                          wardCode: data.wardCode,
+                          provinceName: data.provinceName,
+                          districtName: data.districtName,
+                          wardName: data.wardName
+                        }
+                      }));
+                    }}
+                    required={false}
                   />
                 </div>
               </div>
@@ -487,10 +622,10 @@ const CustomersContent = () => {
                     {customer.email}
                   </div>
                 )}
-                {customer.address && (
+                 {(customer.address || (customer as any).addressInfo) && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span className="truncate">{customer.address}</span>
+                     <span className="truncate">{formatAddress(customer)}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -566,12 +701,33 @@ const CustomersContent = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-address">Địa chỉ</Label>
-                <Textarea
-                  id="edit-address"
-                  value={editCustomer.address}
-                  onChange={(e) => setEditCustomer({...editCustomer, address: e.target.value})}
-                  placeholder="Nhập địa chỉ"
+                <Label>Địa chỉ</Label>
+                <AddressFormSeparate
+                  value={{
+                    address: editCustomer.address,
+                    provinceCode: editCustomer.addressInfo?.provinceCode,
+                    districtCode: editCustomer.addressInfo?.districtCode,
+                    wardCode: editCustomer.addressInfo?.wardCode,
+                    provinceName: (editCustomer as any).addressInfo?.province?.name ?? editCustomer.addressInfo?.provinceName,
+                    districtName: (editCustomer as any).addressInfo?.district?.name ?? editCustomer.addressInfo?.districtName,
+                    wardName: (editCustomer as any).addressInfo?.ward?.name ?? editCustomer.addressInfo?.wardName
+                  }}
+                  onChange={(data) => {
+                    setEditCustomer(prev => ({
+                      ...prev,
+                      address: data.address,
+                      addressInfo: {
+                        ...prev.addressInfo,
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode,
+                        provinceName: data.provinceName,
+                        districtName: data.districtName,
+                        wardName: data.wardName
+                      }
+                    }));
+                  }}
+                  required={false}
                 />
               </div>
             </div>
@@ -636,12 +792,12 @@ const CustomersContent = () => {
                             <span>{selectedCustomer.email}</span>
                           </div>
                         )}
-                        {selectedCustomer.address && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            <span>{selectedCustomer.address}</span>
-                          </div>
-                        )}
+                         {(selectedCustomer.address || (selectedCustomer as any).addressInfo) && (
+                           <div className="flex items-center gap-2">
+                             <MapPin className="h-4 w-4 text-muted-foreground" />
+                             <span>{formatAddress(selectedCustomer)}</span>
+                           </div>
+                         )}
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
@@ -733,7 +889,7 @@ const CustomersContent = () => {
                                 {Number(order.total_amount).toLocaleString('vi-VN')} ₫
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number(order.initial_payment || order.paid_amount).toLocaleString('vi-VN')} ₫
+                                {Number((order as any).initial_payment ?? order.paid_amount).toLocaleString('vi-VN')} ₫
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className={Number(order.debt_amount) > 0 ? 'text-red-600' : 'text-green-600'}>

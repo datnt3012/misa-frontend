@@ -1,13 +1,45 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
+export interface AddressOrganizationRef {
+  code: string;
+  name: string;
+  parentCode?: string | null;
+  level?: string;
+  type?: string | null;
+}
+
+export interface AddressInfo {
+  id?: string;
+  entityType?: string;
+  entityId?: string;
+  provinceCode?: string;
+  districtCode?: string;
+  wardCode?: string;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  // nested relations from backend
+  province?: AddressOrganizationRef | null;
+  district?: AddressOrganizationRef | null;
+  ward?: AddressOrganizationRef | null;
+}
+
 export interface Customer {
   id: string;
+  code?: string;
   customer_code?: string;
   name: string;
   email?: string;
   phoneNumber?: string;
-  address?: string;
+  address?: string; // Địa chỉ chi tiết
+  addressInfo?: AddressInfo; // Thông tin địa chỉ (có thể bao gồm quan hệ nested)
+  organizationId?: string; // ID của tổ chức
+  organizationName?: string; // Tên tổ chức
   userId?: string;
   isDeleted: boolean;
   createdAt: string;
@@ -21,6 +53,14 @@ export interface CreateCustomerRequest {
   email?: string;
   phoneNumber?: string;
   address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+  };
 }
 
 export interface UpdateCustomerRequest {
@@ -28,6 +68,14 @@ export interface UpdateCustomerRequest {
   email?: string;
   phoneNumber?: string;
   address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+  };
 }
 
 export const customerApi = {
@@ -48,15 +96,23 @@ export const customerApi = {
 
     const response = await api.get<any>(url);
     const data = response?.data || response;
+    
+    // Debug: Log the actual response structure
+    console.log('🔍 Raw customer API response:', response);
+    console.log('🔍 Customer data structure:', data);
 
     const normalize = (row: any): Customer => {
       const normalized = {
         id: row.id,
+        code: row.code ?? null,
         customer_code: row.code ?? row.customer_code ?? row.customerCode ?? null,
         name: row.name,
         email: row.email ?? null,
         phoneNumber: row.phoneNumber ?? row.phone ?? null,
         address: row.address ?? null,
+        addressInfo: row.addressInfo ?? row.address_info ?? null,
+        organizationId: row.organizationId ?? row.organization_id ?? null,
+        organizationName: row.organizationName ?? row.organization_name ?? null,
         userId: row.userId ?? null,
         isDeleted: row.isDeleted ?? false,
         createdAt: row.createdAt ?? row.created_at ?? '',
@@ -91,7 +147,10 @@ export const customerApi = {
 
   // Create customer
   createCustomer: async (data: CreateCustomerRequest): Promise<Customer> => {
-    return api.post<Customer>(API_ENDPOINTS.CUSTOMERS.CREATE, data);
+    console.log('🔍 Creating customer with data:', data);
+    const response = await api.post<Customer>(API_ENDPOINTS.CUSTOMERS.CREATE, data);
+    console.log('🔍 Create customer response:', response);
+    return response;
   },
 
   // Update customer

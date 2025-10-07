@@ -91,6 +91,14 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/suppliers/${id}`,
   },
   
+  // Organizations
+  ORGANIZATIONS: {
+    LIST: '/organizations',
+    CREATE: '/organizations',
+    UPDATE: (id: string) => `/organizations/${id}`,
+    DELETE: (id: string) => `/organizations/${id}`,
+  },
+  
   // Stock Levels
   STOCK_LEVELS: {
     LIST: '/stock-levels',

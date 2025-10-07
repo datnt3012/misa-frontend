@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
+import { AddressInfo } from "@/api/customer.api";
 import { organizationApi } from "@/api/organization.api";
 
 interface Organization {
@@ -24,29 +24,28 @@ interface District extends Organization {
 interface Ward extends Organization {
 }
 
-interface AddressData {
-  province_code: string;
-  province_name: string;
-  district_code: string;
-  district_name: string;
-  ward_code: string;
-  ward_name: string;
-  address_detail: string;
-  postal_code?: string;
-  latitude?: number;
-  longitude?: number;
-  is_primary?: boolean;
-  is_default?: boolean;
-}
-
-interface AddressComponentProps {
-  value?: Partial<AddressData>;
-  onChange: (address: AddressData) => void;
+interface AddressFormProps {
+  value?: {
+    address?: string;
+    addressInfo?: AddressInfo;
+    latitude?: number;
+    longitude?: number;
+    isPrimary?: boolean;
+    isDefault?: boolean;
+  };
+  onChange: (data: { 
+    address: string; 
+    addressInfo: AddressInfo;
+    latitude?: number;
+    longitude?: number;
+    isPrimary?: boolean;
+    isDefault?: boolean;
+  }) => void;
   disabled?: boolean;
   required?: boolean;
 }
 
-export const AddressComponent: React.FC<AddressComponentProps> = ({
+export const AddressForm: React.FC<AddressFormProps> = ({
   value = {},
   onChange,
   disabled = false,
@@ -57,15 +56,15 @@ export const AddressComponent: React.FC<AddressComponentProps> = ({
   const [wards, setWards] = useState<Ward[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [selectedProvince, setSelectedProvince] = useState(value.province_code || '');
-  const [selectedDistrict, setSelectedDistrict] = useState(value.district_code || '');
-  const [selectedWard, setSelectedWard] = useState(value.ward_code || '');
-  const [addressDetail, setAddressDetail] = useState(value.address_detail || '');
-  const [postalCode, setPostalCode] = useState(value.postal_code || '');
+  const [selectedProvince, setSelectedProvince] = useState(value.addressInfo?.provinceCode || '');
+  const [selectedDistrict, setSelectedDistrict] = useState(value.addressInfo?.districtCode || '');
+  const [selectedWard, setSelectedWard] = useState(value.addressInfo?.wardCode || '');
+  const [addressDetail, setAddressDetail] = useState(value.address || '');
+  const [postalCode, setPostalCode] = useState(value.addressInfo?.postalCode || '');
   const [latitude, setLatitude] = useState(value.latitude || '');
   const [longitude, setLongitude] = useState(value.longitude || '');
-  const [isPrimary, setIsPrimary] = useState(value.is_primary || false);
-  const [isDefault, setIsDefault] = useState(value.is_default || false);
+  const [isPrimary, setIsPrimary] = useState(value.isPrimary || false);
+  const [isDefault, setIsDefault] = useState(value.isDefault || false);
 
   // Load provinces from organization API
   const loadProvinces = async () => {
@@ -127,8 +126,6 @@ export const AddressComponent: React.FC<AddressComponentProps> = ({
 
     } catch (error: any) {
       console.error('Error loading provinces:', error);
-      toast.error(error.message || 'Không thể tải danh sách tỉnh/thành.');
-      
       // Fallback data for common provinces
       const fallbackProvinces: Province[] = [
         {
@@ -215,19 +212,21 @@ export const AddressComponent: React.FC<AddressComponentProps> = ({
     const districtName = districts.find(d => d.code === selectedDistrict)?.name || '';
     const wardName = wards.find(w => w.code === selectedWard)?.name || '';
 
+    const addressInfo: AddressInfo = {
+      provinceCode: selectedProvince || undefined,
+      districtCode: selectedDistrict || undefined,
+      wardCode: selectedWard || undefined,
+      postalCode: postalCode || undefined,
+      isPrimary: isPrimary
+    };
+
     onChange({
-      province_code: selectedProvince,
-      province_name: provinceName,
-      district_code: selectedDistrict,
-      district_name: districtName,
-      ward_code: selectedWard,
-      ward_name: wardName,
-      address_detail: addressDetail,
-      postal_code: postalCode,
+      address: addressDetail,
+      addressInfo,
       latitude: latitude ? Number(latitude) : undefined,
       longitude: longitude ? Number(longitude) : undefined,
-      is_primary: isPrimary,
-      is_default: isDefault
+      isPrimary,
+      isDefault
     });
   }, [selectedProvince, selectedDistrict, selectedWard, addressDetail, postalCode, latitude, longitude, isPrimary, isDefault, provinces, districts, wards, onChange]);
 
@@ -405,5 +404,4 @@ export const AddressComponent: React.FC<AddressComponentProps> = ({
   );
 };
 
-export default AddressComponent;
-
+export default AddressForm;
