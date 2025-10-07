@@ -147,10 +147,28 @@ export const customerApi = {
 
   // Create customer
   createCustomer: async (data: CreateCustomerRequest): Promise<Customer> => {
-    console.log('🔍 Creating customer with data:', data);
-    const response = await api.post<Customer>(API_ENDPOINTS.CUSTOMERS.CREATE, data);
-    console.log('🔍 Create customer response:', response);
-    return response;
+    const res = await api.post<any>(API_ENDPOINTS.CUSTOMERS.CREATE, data);
+    const row = (res?.data ?? res) as any;
+    // Reuse normalize from list
+    const normalized: Customer = {
+      id: row.id,
+      code: row.code ?? null,
+      customer_code: row.code ?? row.customer_code ?? row.customerCode ?? null,
+      name: row.name ?? '',
+      email: row.email ?? null,
+      phoneNumber: row.phoneNumber ?? row.phone ?? null,
+      address: row.address ?? null,
+      addressInfo: row.addressInfo ?? row.address_info ?? null,
+      organizationId: row.organizationId ?? row.organization_id ?? null,
+      organizationName: row.organizationName ?? row.organization_name ?? null,
+      userId: row.userId ?? null,
+      isDeleted: row.isDeleted ?? false,
+      createdAt: row.createdAt ?? row.created_at ?? '',
+      updatedAt: row.updatedAt ?? row.updated_at ?? '',
+      deletedAt: row.deletedAt ?? row.deleted_at ?? null,
+      user: row.user ?? null,
+    };
+    return normalized;
   },
 
   // Update customer

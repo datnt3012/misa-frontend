@@ -422,12 +422,19 @@ const CustomersContent = () => {
     return <Badge variant={statusInfo.variant}>{statusInfo.text}</Badge>;
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.customer_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phoneNumber?.includes(searchTerm) ||
-    customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCustomers = customers.filter(customer => {
+    const name = (customer.name || '').toString();
+    const code = (customer.customer_code || customer.code || '').toString();
+    const phone = (customer.phoneNumber || '').toString();
+    const email = (customer.email || '').toString();
+    const q = (searchTerm || '').toLowerCase();
+    return (
+      name.toLowerCase().includes(q) ||
+      code.toLowerCase().includes(q) ||
+      phone.includes(searchTerm) ||
+      email.toLowerCase().includes(q)
+    );
+  });
 
   // Show loading state
   if (isLoading) {
