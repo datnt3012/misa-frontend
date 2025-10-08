@@ -1,0 +1,57 @@
+.wrapper {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  
+  .label {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #333;
+  }
+  
+  .required {
+    color: #e53935;
+    margin-left: 2px;
+  }
+  
+  .textarea {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color 0.2s;
+  
+    &:focus {
+      border-color: #007bff;
+    }
+  
+    &:disabled {
+      background: #f5f5f5;
+      cursor: not-allowed;
+    }
+  }
+  
+  .textareaError {
+    border-color: #e53935;
+  }
+  
+  .errorText {
+    margin-top: 4px;
+    color: #e53935;
+    font-size: 12px;
+  }
+  
+  .counter {
+    font-size: 12px;
+    color: #999;
+    position: absolute;
+    bottom: 4px;
+    right: 10px;
+  }
+  

@@ -67,16 +67,16 @@ const PermissionErrorCard = ({ title, error, loading }: { title: string; error: 
 const DashboardContent = () => {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading } = usePermissions();
-  
-  
+
+
   // Permission checks for different data sections
   const canViewOrders = hasPermission('ORDERS_READ');
   const canViewProducts = hasPermission('PRODUCTS_READ');
   const canViewInventory = hasPermission('INVENTORY_READ');
   const canViewRevenue = hasPermission('REVENUE_READ');
-  
-  
-  
+
+
+
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
     totalDebt: 0,
@@ -91,7 +91,7 @@ const DashboardContent = () => {
   const [orderStatus, setOrderStatus] = useState<any[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [productStockData, setProductStockData] = useState<any[]>([]);
-  
+
   // Track loading and error states for different sections
   const [loadingStates, setLoadingStates] = useState({
     orders: false,
@@ -105,8 +105,8 @@ const DashboardContent = () => {
     inventory: null as string | null,
     revenue: null as string | null
   });
-  
-  
+
+
   // Clear error states when permissions are available
   useEffect(() => {
     if (canViewOrders && canViewProducts && canViewInventory && canViewRevenue) {
@@ -127,51 +127,51 @@ const DashboardContent = () => {
       if (permissionsLoading) {
         return;
       }
-      
+
       setLoadingStates({ orders: true, products: true, inventory: true, revenue: true });
       setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
-      
+
       // Fetch data based on permissions
       const promises: Promise<any>[] = [];
       const promiseLabels: string[] = [];
-      
+
       if (canViewOrders) {
         promises.push(orderApi.getOrders({ page: 1, limit: 1000 }));
         promiseLabels.push('orders');
       }
-      
+
       if (canViewProducts) {
         promises.push(productApi.getProducts({ page: 1, limit: 1000 }));
         promiseLabels.push('products');
       }
-      
+
       if (canViewInventory) {
         promises.push(stockLevelsApi.getStockLevels({ page: 1, limit: 1000, includeDeleted: false }));
         promiseLabels.push('inventory');
       }
-      
+
       // If no permissions, set empty data and return
       if (promises.length === 0) {
         setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
-        setErrorStates({ 
-          orders: 'Không có quyền xem dữ liệu đơn hàng (cần Read Orders)', 
-          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)', 
+        setErrorStates({
+          orders: 'Không có quyền xem dữ liệu đơn hàng (cần Read Orders)',
+          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)',
           inventory: 'Không có quyền xem dữ liệu tồn kho (cần Read Inventory)',
           revenue: 'Không có quyền xem dữ liệu doanh thu (cần Read Revenue)'
         });
         return;
       }
-      
+
       const responses = await Promise.allSettled(promises);
-      
+
       // Process responses and handle errors
       let allOrders: any[] = [];
       let products: any[] = [];
       let stockLevels: any[] = [];
-      
+
       responses.forEach((response, index) => {
         const label = promiseLabels[index];
-        
+
         if (response.status === 'fulfilled') {
           const data = response.value;
           if (label === 'orders') {
@@ -188,7 +188,7 @@ const DashboardContent = () => {
           // Handle API errors
           const error = response.reason;
           let errorMessage = 'Lỗi tải dữ liệu';
-          
+
           if (error?.response?.status === 403) {
             if (label === 'orders') {
               errorMessage = 'Không có quyền truy cập dữ liệu đơn hàng (cần Read Orders)';
@@ -206,7 +206,7 @@ const DashboardContent = () => {
           } else if (error?.message) {
             errorMessage = error.message;
           }
-          
+
           setErrorStates(prev => ({ ...prev, [label]: errorMessage }));
           setLoadingStates(prev => ({ ...prev, [label]: false }));
         }
@@ -230,7 +230,7 @@ const DashboardContent = () => {
         const orderYear = createdAt.getFullYear();
         const amount = order.total_amount || 0;
         totalRevenue += amount;
-        
+
         // Calculate current and previous month revenue
         if (orderYear === currentYear) {
           if (orderMonth === currentMonth) {
@@ -239,13 +239,13 @@ const DashboardContent = () => {
             previousMonthRevenue += amount;
           }
         }
-        
+
         // Group by month for chart
         const monthKey = format(createdAt, 'MMM-yyyy', { locale: vi });
         if (!monthlyRevenue[monthKey]) {
-          monthlyRevenue[monthKey] = { 
-            month: monthKey, 
-            revenue: 0, 
+          monthlyRevenue[monthKey] = {
+            month: monthKey,
+            revenue: 0,
             profit: 0,
             monthNumber: createdAt.getMonth(),
             year: createdAt.getFullYear()
@@ -295,9 +295,9 @@ const DashboardContent = () => {
       Object.keys(statusCounts).forEach(status => {
         const predefinedStatuses = ['draft', 'processing', 'shipped', 'delivered', 'cancelled', 'pending', 'confirmed', 'picked', 'handover', 'completed', 'shipping'];
         if (!predefinedStatuses.includes(status)) {
-          orderStatusArray.push({ 
-            trangThai: status.charAt(0).toUpperCase() + status.slice(1), 
-            soLuong: statusCounts[status] 
+          orderStatusArray.push({
+            trangThai: status.charAt(0).toUpperCase() + status.slice(1),
+            soLuong: statusCounts[status]
           });
         }
       });
@@ -334,10 +334,10 @@ const DashboardContent = () => {
       Object.keys(productStockTotals).forEach(productId => {
         const product = productMap[productId];
         if (!product) return;
-        
+
         const totalStock = productStockTotals[productId];
         const minStock = product.min_stock_level || 10; // Default minimum stock level
-        
+
         if (totalStock === 0) {
           outOfStock++;
           lowStockItems.push({
@@ -355,7 +355,7 @@ const DashboardContent = () => {
         } else {
           inStock++;
         }
-        
+
         productStockMap[productId] = {
           name: product.name,
           stock: totalStock,
@@ -399,13 +399,13 @@ const DashboardContent = () => {
       const productStockChartData = Object.keys(productStockTotals).map(productId => {
         const product = productMap[productId];
         if (!product) return null;
-        
+
         const totalStock = productStockTotals[productId];
         const minStock = product.min_stock_level || 10;
-        
+
         let status = 'Còn hàng';
         let color = '#22c55e';
-        
+
         if (totalStock === 0) {
           status = 'Hết hàng';
           color = '#ef4444';
@@ -413,7 +413,7 @@ const DashboardContent = () => {
           status = 'Sắp hết';
           color = '#f59e0b';
         }
-        
+
         return {
           name: product.name,
           stock: totalStock,
@@ -429,16 +429,16 @@ const DashboardContent = () => {
       setOrderStatus(orderStatusArray);
       setLowStockProducts(lowStockItems.slice(0, 5)); // Show only top 5
       setProductStockData(productStockChartData);
-      
+
       // Set revenue loading to false after processing
       setLoadingStates(prev => ({ ...prev, revenue: false }));
 
     } catch (error) {
       // Set all loading states to false and show error
       setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
-      setErrorStates({ 
-        orders: 'Lỗi tải dữ liệu đơn hàng (cần Read Orders)', 
-        products: 'Lỗi tải dữ liệu sản phẩm (cần Read Products)', 
+      setErrorStates({
+        orders: 'Lỗi tải dữ liệu đơn hàng (cần Read Orders)',
+        products: 'Lỗi tải dữ liệu sản phẩm (cần Read Products)',
         inventory: 'Lỗi tải dữ liệu tồn kho (cần Read Inventory)',
         revenue: 'Lỗi tải dữ liệu doanh thu (cần Read Revenue)'
       });
@@ -459,11 +459,11 @@ const DashboardContent = () => {
 
 
   const dashboardState = lazyData.getDataState('dashboard');
-  
-  
+
+
   if (dashboardState.isLoading || dashboardState.error) {
     return (
-      <Loading 
+      <Loading
         message="Đang tải dữ liệu dashboard..."
         error={dashboardState.error}
         onRetry={() => lazyData.reloadData('dashboard')}
@@ -485,10 +485,10 @@ const DashboardContent = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Doanh Thu Tháng Hiện Tại */}
           {errorStates.revenue || loadingStates.revenue ? (
-            <PermissionErrorCard 
-              title="Doanh Thu Tháng Hiện Tại" 
-              error={errorStates.revenue} 
-              loading={loadingStates.revenue} 
+            <PermissionErrorCard
+              title="Doanh Thu Tháng Hiện Tại"
+              error={errorStates.revenue}
+              loading={loadingStates.revenue}
             />
           ) : (
             <Card>
@@ -509,10 +509,10 @@ const DashboardContent = () => {
 
           {/* Tổng Đơn Hàng */}
           {errorStates.orders || loadingStates.orders ? (
-            <PermissionErrorCard 
-              title="Tổng Đơn Hàng" 
-              error={errorStates.orders} 
-              loading={loadingStates.orders} 
+            <PermissionErrorCard
+              title="Tổng Đơn Hàng"
+              error={errorStates.orders}
+              loading={loadingStates.orders}
             />
           ) : (
             <Card>
@@ -529,10 +529,10 @@ const DashboardContent = () => {
 
           {/* Sản Phẩm Tồn Kho */}
           {errorStates.products || loadingStates.products ? (
-            <PermissionErrorCard 
-              title="Sản Phẩm Tồn Kho" 
-              error={errorStates.products} 
-              loading={loadingStates.products} 
+            <PermissionErrorCard
+              title="Sản Phẩm Tồn Kho"
+              error={errorStates.products}
+              loading={loadingStates.products}
             />
           ) : (
             <Card>
@@ -549,10 +549,10 @@ const DashboardContent = () => {
 
           {/* Công Nợ Tồn Đọng */}
           {errorStates.orders || loadingStates.orders ? (
-            <PermissionErrorCard 
-              title="Công Nợ Tồn Đọng" 
-              error={errorStates.orders} 
-              loading={loadingStates.orders} 
+            <PermissionErrorCard
+              title="Công Nợ Tồn Đọng"
+              error={errorStates.orders}
+              loading={loadingStates.orders}
             />
           ) : (
             <Card>
@@ -606,14 +606,14 @@ const DashboardContent = () => {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="month" 
+                      <XAxis
+                        dataKey="month"
                         tick={{ fontSize: 12 }}
                         angle={-45}
                         textAnchor="end"
                         height={80}
                       />
-                      <YAxis 
+                      <YAxis
                         tickFormatter={(value) => {
                           if (value >= 1000000) {
                             return `${(value / 1000000).toFixed(1)}M`;
@@ -625,9 +625,9 @@ const DashboardContent = () => {
                         }}
                         tick={{ fontSize: 12 }}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value: any, name: string) => [
-                          formatCurrency(value), 
+                          formatCurrency(value),
                           name === 'revenue' ? 'Doanh thu' : 'Lợi nhuận'
                         ]}
                         labelFormatter={(label) => `Tháng: ${label}`}
@@ -657,31 +657,31 @@ const DashboardContent = () => {
                   </Alert>
                 ) : productStockData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
-                    <BarChart 
-                      data={productStockData} 
+                    <BarChart
+                      data={productStockData}
                       margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
+                      <XAxis
                         dataKey="name"
                         tick={{ fontSize: 10 }}
                         angle={-45}
                         textAnchor="end"
                         height={80}
                       />
-                      <YAxis 
+                      <YAxis
                         tick={{ fontSize: 12 }}
                         allowDecimals={false}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value: any, name: string) => [
-                          `${value} sản phẩm`, 
+                          `${value} sản phẩm`,
                           'Số lượng tồn kho'
                         ]}
                         labelFormatter={(label) => `Sản phẩm: ${label}`}
                       />
-                      <Bar 
-                        dataKey="stock" 
+                      <Bar
+                        dataKey="stock"
                         fill="#3b82f6"
                         name="Số lượng tồn kho"
                       />
@@ -735,9 +735,9 @@ const DashboardContent = () => {
                             <td className="text-right p-2 font-medium">{product.stock}</td>
                             <td className="text-right p-2 text-gray-500">{product.minStock}</td>
                             <td className="text-center p-2">
-                              <span 
+                              <span
                                 className="px-2 py-1 rounded-full text-xs font-medium"
-                                style={{ 
+                                style={{
                                   backgroundColor: `${product.color}20`,
                                   color: product.color
                                 }}
@@ -788,7 +788,7 @@ const DashboardContent = () => {
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip 
+                          <Tooltip
                             formatter={(value: any, name: string) => [`${value}%`, name]}
                           />
                         </PieChart>
@@ -796,8 +796,8 @@ const DashboardContent = () => {
                       <div className="mt-4 space-y-2">
                         {inventoryData.map((item, index) => (
                           <div key={index} className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full" 
+                            <div
+                              className="w-3 h-3 rounded-full"
                               style={{ backgroundColor: item.color }}
                             />
                             <span className="text-sm">{item.name}: {item.value}%</span>
@@ -826,16 +826,14 @@ const DashboardContent = () => {
                     <div className="space-y-3">
                       {lowStockProducts.length > 0 ? (
                         lowStockProducts.map((product, index) => (
-                          <div key={index} className={`flex justify-between items-center p-3 rounded-lg ${
-                            product.status === 'Hết hàng' ? 'bg-red-50' : 'bg-orange-50'
-                          }`}>
+                          <div key={index} className={`flex justify-between items-center p-3 rounded-lg ${product.status === 'Hết hàng' ? 'bg-red-50' : 'bg-orange-50'
+                            }`}>
                             <div>
                               <p className="font-medium">{product.name}</p>
                               <p className="text-sm text-muted-foreground">Còn lại: {product.stock} sản phẩm</p>
                             </div>
-                            <span className={`text-sm font-medium ${
-                              product.status === 'Hết hàng' ? 'text-red-600' : 'text-orange-600'
-                            }`}>
+                            <span className={`text-sm font-medium ${product.status === 'Hết hàng' ? 'text-red-600' : 'text-orange-600'
+                              }`}>
                               {product.status}
                             </span>
                           </div>
@@ -866,35 +864,35 @@ const DashboardContent = () => {
                   </Alert>
                 ) : orderStatus.length > 0 && orderStatus.some(item => item.soLuong > 0) ? (
                   <ResponsiveContainer width="100%" height={300}>
-                      <BarChart 
-                        data={orderStatus.filter(item => item.soLuong > 0)} 
-                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="trangThai"
-                          tick={{ fontSize: 12 }}
-                        />
-                        <YAxis 
-                          tick={{ fontSize: 12 }}
-                          domain={[0, 'dataMax']}
-                          tickCount={Math.max(...orderStatus.filter(item => item.soLuong > 0).map(item => item.soLuong)) + 1}
-                          allowDecimals={false}
-                        />
-                        <Tooltip 
-                          formatter={(value: any, name: string) => [
-                            `${value} đơn hàng`, 
-                            'Số lượng'
-                          ]}
-                          labelFormatter={(label) => `Trạng thái: ${label}`}
-                        />
-                        <Bar 
-                          dataKey="soLuong" 
-                          fill="#3b82f6" 
-                          name="Số lượng"
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <BarChart
+                      data={orderStatus.filter(item => item.soLuong > 0)}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="trangThai"
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        domain={[0, 'dataMax']}
+                        tickCount={Math.max(...orderStatus.filter(item => item.soLuong > 0).map(item => item.soLuong)) + 1}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        formatter={(value: any, name: string) => [
+                          `${value} đơn hàng`,
+                          'Số lượng'
+                        ]}
+                        labelFormatter={(label) => `Trạng thái: ${label}`}
+                      />
+                      <Bar
+                        dataKey="soLuong"
+                        fill="#3b82f6"
+                        name="Số lượng"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                 ) : (
                   <div className="flex items-center justify-center h-[300px]">
                     <div className="text-center">
@@ -917,7 +915,7 @@ const DashboardContent = () => {
 
 const Dashboard = () => {
   return (
-    <PermissionGuard 
+    <PermissionGuard
       requiredPermissions={['DASHBOARD_VIEW']}
     >
       <DashboardContent />

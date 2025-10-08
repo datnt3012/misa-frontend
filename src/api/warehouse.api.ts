@@ -1,19 +1,6 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
-export interface Warehouse {
-  id: string;
-  code: string;
-  name: string;
-  address: string;
-  description?: string;
-  isDeleted: boolean;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string;
-  stockLevels?: any;
-  warehouseReceipts?: any;
-}
+import { Warehouse } from '@/types/warehouse';
 
 export interface CreateWarehouseRequest {
   code?: string;

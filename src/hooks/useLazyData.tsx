@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 
+// ─── Types ───────────────────────────────────────────────
 interface LazyDataState {
   isLoading: boolean;
   hasLoaded: boolean;
@@ -14,132 +15,161 @@ interface LazyDataConfig {
   };
 }
 
+// ─── Main Hook ───────────────────────────────────────────
 export const useLazyData = (config: LazyDataConfig) => {
-  const location = useLocation();
-  const [dataStates, setDataStates] = useState<{ [key: string]: LazyDataState }>({});
+  // Khởi tạo state cho từng key trong config
+  const [dataStates, setDataStates] = useState<Record<string, LazyDataState>>(() =>
+    Object.keys(config).reduce((acc, key) => {
+      acc[key] = { isLoading: false, hasLoaded: false, error: null };
+      return acc;
+    }, {} as Record<string, LazyDataState>)
+  );
 
-  // Initialize data states
-  useEffect(() => {
-    const initialStates: { [key: string]: LazyDataState } = {};
-    Object.keys(config).forEach(key => {
-      initialStates[key] = {
-        isLoading: false,
-        hasLoaded: false,
-        error: null
+  // ── Load dữ liệu (chỉ load khi chưa loaded hoặc chưa loading)
+  const loadData = useCallback(
+    async (key: string) => {
+      const dataConfig = config[key];
+      if (!dataConfig) return;
+
+      let isCancelled = false;
+
+      setDataStates((prev) => {
+        const current = prev[key];
+        if (current?.isLoading || current?.hasLoaded) return prev;
+        return {
+          ...prev,
+          [key]: { ...current, isLoading: true, error: null },
+        };
+      });
+
+      try {
+        await dataConfig.loadFunction();
+        if (isCancelled) return;
+
+        setDataStates((prev) => ({
+          ...prev,
+          [key]: { ...prev[key], isLoading: false, hasLoaded: true, error: null },
+        }));
+      } catch (error) {
+        if (isCancelled) return;
+
+        setDataStates((prev) => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            isLoading: false,
+            hasLoaded: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        }));
+      }
+
+      return () => {
+        isCancelled = true;
       };
-    });
-    setDataStates(initialStates);
-  }, []);
+    },
+    [config]
+  );
 
-  const loadData = useCallback(async (key: string) => {
-    const dataConfig = config[key];
-    if (!dataConfig) return;
+  // ── Reload dữ liệu (bỏ qua điều kiện hasLoaded)
+  const reloadData = useCallback(
+    async (key: string) => {
+      const dataConfig = config[key];
+      if (!dataConfig) return;
 
-    // Check current state before proceeding
-    setDataStates(prev => {
-      // Don't load if already loading or loaded
-      if (prev[key]?.isLoading || prev[key]?.hasLoaded) return prev;
-      
-      // Start loading
-      return {
+      setDataStates((prev) => ({
         ...prev,
-        [key]: { ...prev[key], isLoading: true, error: null }
-      };
-    });
-
-    try {
-      await dataConfig.loadFunction();
-      setDataStates(prev => ({
-        ...prev,
-        [key]: { ...prev[key], isLoading: false, hasLoaded: true, error: null }
+        [key]: { ...prev[key], isLoading: true, error: null },
       }));
-    } catch (error) {
-      setDataStates(prev => ({
-        ...prev,
-        [key]: { 
-          ...prev[key], 
-          isLoading: false, 
-          hasLoaded: false, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }
-      }));
-    }
-  }, [config]);
 
-  const reloadData = useCallback(async (key: string) => {
-    const dataConfig = config[key];
-    if (!dataConfig) return;
+      try {
+        await dataConfig.loadFunction();
+        setDataStates((prev) => ({
+          ...prev,
+          [key]: { ...prev[key], isLoading: false, hasLoaded: true, error: null },
+        }));
+      } catch (error) {
+        setDataStates((prev) => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            isLoading: false,
+            hasLoaded: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        }));
+      }
+    },
+    [config]
+  );
 
-    setDataStates(prev => ({
-      ...prev,
-      [key]: { ...prev[key], isLoading: true, error: null }
-    }));
-
-    try {
-      await dataConfig.loadFunction();
-      setDataStates(prev => ({
-        ...prev,
-        [key]: { ...prev[key], isLoading: false, hasLoaded: true, error: null }
-      }));
-    } catch (error) {
-      setDataStates(prev => ({
-        ...prev,
-        [key]: { 
-          ...prev[key], 
-          isLoading: false, 
-          hasLoaded: false, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }
-      }));
-    }
-  }, [config]);
-
+  // ── Reset dữ liệu
   const resetData = useCallback((key: string) => {
-    setDataStates(prev => ({
+    setDataStates((prev) => ({
       ...prev,
-      [key]: { isLoading: false, hasLoaded: false, error: null }
+      [key]: { isLoading: false, hasLoaded: false, error: null },
     }));
   }, []);
 
-  const getDataState = useCallback((key: string) => {
-    return dataStates[key] || { isLoading: false, hasLoaded: false, error: null };
-  }, [dataStates]);
+  // ── Lấy trạng thái 1 key cụ thể
+  const getDataState = useCallback(
+    (key: string) => dataStates[key] || { isLoading: false, hasLoaded: false, error: null },
+    [dataStates]
+  );
+
+  // ── Tự reload khi dependencies thay đổi
+  useEffect(() => {
+    Object.entries(config).forEach(([key, { dependencies }]) => {
+      if (dependencies && dependencies.length > 0) {
+        reloadData(key);
+      }
+    });
+  }, [config]);
+
+  // ── Derived states
+  const isLoading = Object.values(dataStates).some((s) => s.isLoading);
+  const hasError = Object.values(dataStates).some((s) => !!s.error);
+  const isAllLoaded = Object.values(dataStates).every((s) => s.hasLoaded);
+  const errorMessages = Object.entries(dataStates)
+    .filter(([, s]) => s.error)
+    .map(([key, s]) => `${key}: ${s.error}`);
 
   return {
     loadData,
     reloadData,
     resetData,
     getDataState,
-    isLoading: Object.values(dataStates).some(state => state.isLoading),
-    hasError: Object.values(dataStates).some(state => state.error)
+    dataStates,
+    isLoading,
+    hasError,
+    isAllLoaded,
+    errorMessages,
   };
 };
 
-// Hook for route-based lazy loading
+// ─── Hook cho lazy loading theo route ──────────────────────
 export const useRouteBasedLazyData = (config: LazyDataConfig) => {
   const location = useLocation();
   const lazyData = useLazyData(config);
 
+  const routeMap: Record<string, string> = {
+    "/": "dashboard",
+    "/dashboard": "dashboard",
+    "/inventory": "inventory",
+    "/orders": "orders",
+    "/customers": "customers",
+    "/revenue": "revenue",
+    "/export-slips": "exportSlips",
+    "/settings": "settings",
+  };
+
   useEffect(() => {
-    // Load data based on current route
-    const pathname = location.pathname;
-    
-    if (pathname === '/' || pathname === '/dashboard') {
-      lazyData.loadData('dashboard');
-    } else if (pathname.startsWith('/inventory')) {
-      lazyData.loadData('inventory');
-    } else if (pathname.startsWith('/orders')) {
-      lazyData.loadData('orders');
-    } else if (pathname.startsWith('/customers')) {
-      lazyData.loadData('customers');
-    } else if (pathname.startsWith('/revenue')) {
-      lazyData.loadData('revenue');
-    } else if (pathname.startsWith('/export-slips')) {
-      lazyData.loadData('exportSlips');
-    } else if (pathname.startsWith('/settings')) {
-      lazyData.loadData('settings');
-    }
-  }, [location.pathname]); // Removed lazyData from dependencies to prevent infinite loops
+    const matchedKey = Object.keys(routeMap).find(
+      (route) => location.pathname === route || location.pathname.startsWith(route)
+    );
+
+    if (matchedKey) lazyData.loadData(routeMap[matchedKey]);
+  }, [location.pathname]);
 
   return lazyData;
 };
