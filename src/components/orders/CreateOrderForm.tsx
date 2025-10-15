@@ -50,12 +50,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     customer_name: "",
     customer_code: "",
     customer_phone: "",
-    customer_address: "",
-    customer_addressInfo: {
-      provinceCode: "",
-      districtCode: "",
-      wardCode: ""
-    },
+    // Removed customer address fields from UI; will derive from selected customer
     order_type: "sale",
     notes: "",
     contract_number: "",
@@ -65,6 +60,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     vat_tax_code: "",
     vat_company_name: "",
     vat_company_address: "",
+    vat_company_phone: "",
     vat_company_addressInfo: {
       provinceCode: "",
       districtCode: "",
@@ -72,7 +68,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     },
     vat_invoice_email: "",
     
-    // Shipping Information
+    // Shipping Information (auto-fill from selected customer)
     shipping_recipient_name: "",
     shipping_recipient_phone: "",
     shipping_address: "",
@@ -255,13 +251,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       const orderData = await orderApi.createOrder({
         customerId: newOrder.customer_id || "",
         paymentMethod: newOrder.initial_payment_method || "cash",
+        status: 'pending',
         totalAmount: total,
-        customer_address: newOrder.customer_address,
-        customer_addressInfo: newOrder.customer_addressInfo,
-        vat_company_address: newOrder.vat_company_address,
-        vat_company_addressInfo: newOrder.vat_company_addressInfo,
-        shipping_address: newOrder.shipping_address,
-        shipping_addressInfo: newOrder.shipping_addressInfo,
+        // Remove unsupported fields per backend API
         details: newOrder.items.map(it => ({
           productId: it.product_id,
           quantity: it.quantity,
@@ -332,13 +324,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         customer_name: customer?.name || "",
                         customer_code: customer?.customer_code || "",
                         customer_phone: customer?.phoneNumber || "",
-                        customer_address: customer?.address || "",
-                        vat_invoice_email: customer?.email || "",
-                        vat_company_name: customer?.name || "",
-                        vat_company_address: customer?.address || "",
+                        // do NOT auto-fill VAT company fields from customer
+                        // shipping auto-fill from customer
                         shipping_recipient_name: customer?.name || "",
                         shipping_recipient_phone: customer?.phoneNumber || "",
-                        shipping_address: customer?.address || ""
+                        shipping_address: customer?.address || prev.shipping_address || "",
+                        shipping_addressInfo: {
+                          provinceCode: customer?.addressInfo?.provinceCode || customer?.addressInfo?.province?.code || "",
+                          districtCode: customer?.addressInfo?.districtCode || customer?.addressInfo?.district?.code || "",
+                          wardCode: customer?.addressInfo?.wardCode || customer?.addressInfo?.ward?.code || "",
+                        }
                       }));
                     }}
                   >
@@ -375,28 +370,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     placeholder="Nhập số điện thoại"
                   />
                 </div>
-              <div>
-                <Label>Địa chỉ</Label>
-                <AddressFormSeparate
-                  value={{
-                    address: newOrder.customer_address,
-                    provinceCode: newOrder.customer_addressInfo?.provinceCode,
-                    districtCode: newOrder.customer_addressInfo?.districtCode,
-                    wardCode: newOrder.customer_addressInfo?.wardCode
-                  }}
-                  onChange={(data) => {
-                    setNewOrder(prev => ({
-                      ...prev,
-                      customer_address: data.address,
-                      customer_addressInfo: {
-                        provinceCode: data.provinceCode,
-                        districtCode: data.districtCode,
-                        wardCode: data.wardCode
-                      }
-                    }));
-                  }}
-                />
-              </div>
+              {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
               </div>
             </CardContent>
           </Card>
@@ -437,27 +411,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   placeholder="Nhập tên công ty"
                 />
               </div>
-              <div>
-                <Label>Địa chỉ công ty</Label>
-                <AddressFormSeparate
-                  value={{
-                    address: newOrder.vat_company_address,
-                    provinceCode: newOrder.vat_company_addressInfo?.provinceCode,
-                    districtCode: newOrder.vat_company_addressInfo?.districtCode,
-                    wardCode: newOrder.vat_company_addressInfo?.wardCode
-                  }}
-                  onChange={(data) => {
-                    setNewOrder(prev => ({
-                      ...prev,
-                      vat_company_address: data.address,
-                      vat_company_addressInfo: {
-                        provinceCode: data.provinceCode,
-                        districtCode: data.districtCode,
-                        wardCode: data.wardCode
-                      }
-                    }));
-                  }}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Điện thoại công ty</Label>
+                  <Input
+                    value={newOrder.vat_company_phone}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại công ty"
+                  />
+                </div>
+                <div>
+                  <Label>Địa chỉ công ty</Label>
+                  <Input
+                    value={newOrder.vat_company_address}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
+                    placeholder="Nhập địa chỉ công ty"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -465,26 +435,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           {/* Shipping Information */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Thông tin vận chuyển</CardTitle>
-                {newOrder.customer_name && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setNewOrder(prev => ({
-                        ...prev,
-                        shipping_recipient_name: prev.customer_name,
-                        shipping_recipient_phone: prev.customer_phone,
-                        shipping_address: prev.customer_address
-                      }));
-                    }}
-                  >
-                    Copy từ khách hàng
-                  </Button>
-                )}
-              </div>
+              <CardTitle>Thông tin vận chuyển</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -510,6 +461,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <div>
                 <Label>Địa chỉ nhận hàng</Label>
                 <AddressFormSeparate
+                  key={`${newOrder.shipping_addressInfo?.provinceCode || ''}-${newOrder.shipping_addressInfo?.districtCode || ''}-${newOrder.shipping_addressInfo?.wardCode || ''}-${newOrder.shipping_address || ''}`}
                   value={{
                     address: newOrder.shipping_address,
                     provinceCode: newOrder.shipping_addressInfo?.provinceCode,
