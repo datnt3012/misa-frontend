@@ -16,6 +16,7 @@ import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
 import { getErrorMessage } from "@/lib/error-utils";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 
 interface CreateOrderFormProps {
   open: boolean;
@@ -50,6 +51,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     customer_code: "",
     customer_phone: "",
     customer_address: "",
+    customer_addressInfo: {
+      provinceCode: "",
+      districtCode: "",
+      wardCode: ""
+    },
     order_type: "sale",
     notes: "",
     contract_number: "",
@@ -59,12 +65,22 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     vat_tax_code: "",
     vat_company_name: "",
     vat_company_address: "",
+    vat_company_addressInfo: {
+      provinceCode: "",
+      districtCode: "",
+      wardCode: ""
+    },
     vat_invoice_email: "",
     
     // Shipping Information
     shipping_recipient_name: "",
     shipping_recipient_phone: "",
     shipping_address: "",
+    shipping_addressInfo: {
+      provinceCode: "",
+      districtCode: "",
+      wardCode: ""
+    },
     
     initial_payment: 0,
     initial_payment_method: "cash",
@@ -240,6 +256,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         customerId: newOrder.customer_id || "",
         paymentMethod: newOrder.initial_payment_method || "cash",
         totalAmount: total,
+        customer_address: newOrder.customer_address,
+        customer_addressInfo: newOrder.customer_addressInfo,
+        vat_company_address: newOrder.vat_company_address,
+        vat_company_addressInfo: newOrder.vat_company_addressInfo,
+        shipping_address: newOrder.shipping_address,
+        shipping_addressInfo: newOrder.shipping_addressInfo,
         details: newOrder.items.map(it => ({
           productId: it.product_id,
           quantity: it.quantity,
@@ -353,15 +375,28 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     placeholder="Nhập số điện thoại"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="customer_address">Địa chỉ</Label>
-                  <Input
-                    id="customer_address"
-                    value={newOrder.customer_address}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_address: e.target.value }))}
-                    placeholder="Nhập địa chỉ"
-                  />
-                </div>
+              <div>
+                <Label>Địa chỉ</Label>
+                <AddressFormSeparate
+                  value={{
+                    address: newOrder.customer_address,
+                    provinceCode: newOrder.customer_addressInfo?.provinceCode,
+                    districtCode: newOrder.customer_addressInfo?.districtCode,
+                    wardCode: newOrder.customer_addressInfo?.wardCode
+                  }}
+                  onChange={(data) => {
+                    setNewOrder(prev => ({
+                      ...prev,
+                      customer_address: data.address,
+                      customer_addressInfo: {
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
+                />
+              </div>
               </div>
             </CardContent>
           </Card>
@@ -403,12 +438,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 />
               </div>
               <div>
-                <Label htmlFor="vat_company_address">Địa chỉ công ty</Label>
-                <Input
-                  id="vat_company_address"
-                  value={newOrder.vat_company_address}
-                  onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
-                  placeholder="Nhập địa chỉ công ty"
+                <Label>Địa chỉ công ty</Label>
+                <AddressFormSeparate
+                  value={{
+                    address: newOrder.vat_company_address,
+                    provinceCode: newOrder.vat_company_addressInfo?.provinceCode,
+                    districtCode: newOrder.vat_company_addressInfo?.districtCode,
+                    wardCode: newOrder.vat_company_addressInfo?.wardCode
+                  }}
+                  onChange={(data) => {
+                    setNewOrder(prev => ({
+                      ...prev,
+                      vat_company_address: data.address,
+                      vat_company_addressInfo: {
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
                 />
               </div>
             </CardContent>
@@ -460,12 +508,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </div>
               </div>
               <div>
-                <Label htmlFor="shipping_address">Địa chỉ nhận hàng</Label>
-                <Input
-                  id="shipping_address"
-                  value={newOrder.shipping_address}
-                  onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_address: e.target.value }))}
-                  placeholder="Nhập địa chỉ nhận hàng"
+                <Label>Địa chỉ nhận hàng</Label>
+                <AddressFormSeparate
+                  value={{
+                    address: newOrder.shipping_address,
+                    provinceCode: newOrder.shipping_addressInfo?.provinceCode,
+                    districtCode: newOrder.shipping_addressInfo?.districtCode,
+                    wardCode: newOrder.shipping_addressInfo?.wardCode
+                  }}
+                  onChange={(data) => {
+                    setNewOrder(prev => ({
+                      ...prev,
+                      shipping_address: data.address,
+                      shipping_addressInfo: {
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
                 />
               </div>
             </CardContent>

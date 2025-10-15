@@ -20,7 +20,7 @@ import { Loading } from "@/components/ui/loading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-// import AddressComponent from "@/components/common/AddressComponent"; // Temporarily commented - BE not ready
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
 import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
@@ -108,16 +108,11 @@ const InventoryContent = () => {
     code: "", 
     description: "", 
     address: "",
-    // Temporarily commented - BE not ready for address components
-    // addressData: {
-    //   province_code: '',
-    //   province_name: '',
-    //   district_code: '',
-    //   district_name: '',
-    //   ward_code: '',
-    //   ward_name: '',
-    //   address_detail: ''
-    // }
+    addressInfo: {
+      provinceCode: '',
+      districtCode: '',
+      wardCode: ''
+    }
   });
   const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
   const [isEditingWarehouse, setIsEditingWarehouse] = useState(false);
@@ -456,37 +451,29 @@ const InventoryContent = () => {
     try {
       const createResp: any = await warehouseApi.createWarehouse({
         name: newWarehouse.name,
-        ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
+        ...(newWarehouse.code && { code: newWarehouse.code }),
         description: newWarehouse.description,
         address: newWarehouse.address,
-        // Temporarily commented - BE not ready for address components
-        // province_code: newWarehouse.addressData.province_code,
-        // province_name: newWarehouse.addressData.province_name,
-        // district_code: newWarehouse.addressData.district_code,
-        // district_name: newWarehouse.addressData.district_name,
-        // ward_code: newWarehouse.addressData.ward_code,
-        // ward_name: newWarehouse.addressData.ward_name,
-        // address_detail: newWarehouse.addressData.address_detail,
+        addressInfo: {
+          provinceCode: newWarehouse.addressInfo?.provinceCode || undefined,
+          districtCode: newWarehouse.addressInfo?.districtCode || undefined,
+          wardCode: newWarehouse.addressInfo?.wardCode || undefined
+        }
       });
 
-      toast({ title: "Thành công", description: createResp?.message || "Đã tạo kho mới" });
+      toast({ title: "Thành công", description: "Đã tạo kho mới" });
       setNewWarehouse({ 
         name: "", 
         code: "", 
         description: "", 
         address: "",
-        // Temporarily commented - BE not ready for address components
-        // addressData: {
-        //   province_code: '',
-        //   province_name: '',
-        //   district_code: '',
-        //   district_name: '',
-        //   ward_code: '',
-        //   ward_name: '',
-        //   address_detail: ''
-        // }
+        addressInfo: {
+          provinceCode: '',
+          districtCode: '',
+          wardCode: ''
+        }
       });
-      loadData(); // Reload data
+      loadData();
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
@@ -504,22 +491,20 @@ const InventoryContent = () => {
   };
 
   const startEditWarehouse = (warehouse: any) => {
+    console.log('🔍 Editing warehouse:', warehouse);
+    console.log('🔍 Warehouse addressInfo:', warehouse.addressInfo);
+    
     setEditingWarehouse(warehouse);
     setNewWarehouse({
       name: warehouse.name,
       code: warehouse.code,
       description: warehouse.description || "",
       address: warehouse.address || "",
-      // Temporarily commented - BE not ready for address components
-      // addressData: {
-      //   province_code: warehouse.province_code || '',
-      //   province_name: warehouse.province_name || '',
-      //   district_code: warehouse.district_code || '',
-      //   district_name: warehouse.district_name || '',
-      //   ward_code: warehouse.ward_code || '',
-      //   ward_name: warehouse.ward_name || '',
-      //   address_detail: warehouse.address_detail || ''
-      // }
+      addressInfo: {
+        provinceCode: warehouse.addressInfo?.provinceCode ?? warehouse.addressInfo?.province?.code ?? '',
+        districtCode: warehouse.addressInfo?.districtCode ?? warehouse.addressInfo?.district?.code ?? '',
+        wardCode: warehouse.addressInfo?.wardCode ?? warehouse.addressInfo?.ward?.code ?? ''
+      }
     });
     setIsEditingWarehouse(true);
   };
@@ -531,16 +516,11 @@ const InventoryContent = () => {
       code: "", 
       description: "", 
       address: "",
-      // Temporarily commented - BE not ready for address components
-      // addressData: {
-      //   province_code: '',
-      //   province_name: '',
-      //   district_code: '',
-      //   district_name: '',
-      //   ward_code: '',
-      //   ward_name: '',
-      //   address_detail: ''
-      // }
+      addressInfo: {
+        provinceCode: '',
+        districtCode: '',
+        wardCode: ''
+      }
     });
     setIsEditingWarehouse(false);
   };
@@ -554,14 +534,19 @@ const InventoryContent = () => {
     try {
       const updateResp: any = await warehouseApi.updateWarehouse(editingWarehouse.id, {
         name: newWarehouse.name,
-        ...(newWarehouse.code && { code: newWarehouse.code }), // Only include code if provided
+        ...(newWarehouse.code && { code: newWarehouse.code }),
         description: newWarehouse.description,
         address: newWarehouse.address,
+        addressInfo: {
+          provinceCode: newWarehouse.addressInfo?.provinceCode || undefined,
+          districtCode: newWarehouse.addressInfo?.districtCode || undefined,
+          wardCode: newWarehouse.addressInfo?.wardCode || undefined
+        }
       });
       
-      toast({ title: "Thành công", description: updateResp?.message || "Đã cập nhật thông tin kho" });
+      toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
-      loadData(); // Reload data
+      loadData();
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
@@ -891,30 +876,35 @@ const InventoryContent = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <Label htmlFor="warehouse-address">Địa chỉ kho</Label>
-                        <Input
-                          id="warehouse-address"
-                          value={newWarehouse.address}
-                          onChange={(e) => setNewWarehouse(prev => ({ ...prev, address: e.target.value }))}
-                          placeholder="Nhập địa chỉ kho"
-                        />
-                      </div>
-                      
-                      {/* Temporarily commented - BE not ready for address components */}
-                      {/* <div className="md:col-span-2">
                         <Label>Địa chỉ kho</Label>
-                        <AddressComponent
-                          value={newWarehouse.addressData}
-                          onChange={(addressData) => {
-                            setNewWarehouse(prev => ({ 
-                              ...prev, 
-                              addressData,
-                              address: `${addressData.address_detail}, ${addressData.ward_name}, ${addressData.district_name}, ${addressData.province_name}`.replace(/^, |, $/g, '')
+                        <AddressFormSeparate
+                          value={(() => {
+                            const value = {
+                              address: newWarehouse.address,
+                              provinceCode: (editingWarehouse as any)?.addressInfo?.provinceCode ?? (editingWarehouse as any)?.addressInfo?.province?.code ?? newWarehouse.addressInfo?.provinceCode,
+                              districtCode: (editingWarehouse as any)?.addressInfo?.districtCode ?? (editingWarehouse as any)?.addressInfo?.district?.code ?? newWarehouse.addressInfo?.districtCode,
+                              wardCode: (editingWarehouse as any)?.addressInfo?.wardCode ?? (editingWarehouse as any)?.addressInfo?.ward?.code ?? newWarehouse.addressInfo?.wardCode,
+                              provinceName: (editingWarehouse as any)?.addressInfo?.province?.name ?? newWarehouse.addressInfo?.provinceName,
+                              districtName: (editingWarehouse as any)?.addressInfo?.district?.name ?? newWarehouse.addressInfo?.districtName,
+                              wardName: (editingWarehouse as any)?.addressInfo?.ward?.name ?? newWarehouse.addressInfo?.wardName
+                            };
+                            console.log('🔍 AddressFormSeparate value:', value);
+                            return value;
+                          })()}
+                          onChange={(data) => {
+                            setNewWarehouse(prev => ({
+                              ...prev,
+                              address: data.address,
+                              addressInfo: {
+                                provinceCode: data.provinceCode,
+                                districtCode: data.districtCode,
+                                wardCode: data.wardCode
+                              }
                             }));
                           }}
-                          required
+                          required={false}
                         />
-                      </div> */}
+                      </div>
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
                       {isEditingWarehouse ? (

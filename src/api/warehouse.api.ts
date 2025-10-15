@@ -1,11 +1,39 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
+export interface AddressOrganizationRef {
+  code: string;
+  name: string;
+  parentCode?: string | null;
+  level?: string;
+  type?: string | null;
+}
+
+export interface AddressInfo {
+  id?: string;
+  entityType?: string;
+  entityId?: string;
+  provinceCode?: string;
+  districtCode?: string;
+  wardCode?: string;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  province?: AddressOrganizationRef | null;
+  district?: AddressOrganizationRef | null;
+  ward?: AddressOrganizationRef | null;
+}
+
 export interface Warehouse {
   id: string;
   code: string;
   name: string;
   address: string;
+  addressInfo?: AddressInfo;
   description?: string;
   isDeleted: boolean;
   createdAt: string;
@@ -18,7 +46,12 @@ export interface Warehouse {
 export interface CreateWarehouseRequest {
   code?: string;
   name: string;
-  address: string;
+  address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
   description?: string;
 }
 
@@ -26,6 +59,11 @@ export interface UpdateWarehouseRequest {
   code?: string;
   name?: string;
   address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
   description?: string;
 }
 
@@ -49,6 +87,7 @@ export const warehouseApi = {
       code: row.code,
       name: row.name,
       address: row.address ?? '',
+      addressInfo: row.addressInfo ?? row.address_info ?? undefined,
       description: row.description ?? undefined,
       isDeleted: row.isDeleted ?? false,
       createdAt: row.createdAt ?? row.created_at ?? '',
@@ -77,7 +116,22 @@ export const warehouseApi = {
 
   // Create warehouse
   createWarehouse: async (data: CreateWarehouseRequest): Promise<Warehouse> => {
-    return api.post<Warehouse>(API_ENDPOINTS.WAREHOUSES.CREATE, data);
+    const res = await api.post<any>(API_ENDPOINTS.WAREHOUSES.CREATE, data);
+    const row = (res?.data ?? res) as any;
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      address: row.address ?? '',
+      addressInfo: row.addressInfo ?? row.address_info ?? undefined,
+      description: row.description ?? undefined,
+      isDeleted: row.isDeleted ?? false,
+      createdAt: row.createdAt ?? row.created_at ?? '',
+      updatedAt: row.updatedAt ?? row.updated_at ?? '',
+      deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+      stockLevels: row.stockLevels ?? undefined,
+      warehouseReceipts: row.warehouseReceipts ?? undefined,
+    };
   },
 
   // Update warehouse

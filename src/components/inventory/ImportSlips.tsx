@@ -18,6 +18,7 @@ import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
 import { productApi } from '@/api/product.api';
 import { warehouseApi } from '@/api/warehouse.api';
 import { supplierApi, Supplier } from '@/api/supplier.api';
+import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
 import { generateImportSlipCode } from '@/utils/importSlipUtils';
 import { stockLevelsApi } from '@/api/stockLevels.api';
@@ -87,6 +88,14 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     supplier_contact: '',
     supplier_email: '',
     supplier_address: '',
+    supplier_addressInfo: {
+      provinceCode: '',
+      districtCode: '',
+      wardCode: '',
+      provinceName: '',
+      districtName: '',
+      wardName: ''
+    },
     warehouse_id: '',
     notes: '',
     import_date: new Date().toISOString().split('T')[0]
@@ -510,7 +519,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               supplier_name: supplier?.name || '',
                               supplier_contact: supplier?.contact_phone || '',
                               supplier_email: supplier?.email || '',
-                              supplier_address: supplier?.address || ''
+                              supplier_address: supplier?.address || '',
+                              supplier_addressInfo: {
+                                provinceCode: supplier?.addressInfo?.provinceCode || supplier?.addressInfo?.province?.code || '',
+                                districtCode: supplier?.addressInfo?.districtCode || supplier?.addressInfo?.district?.code || '',
+                                wardCode: supplier?.addressInfo?.wardCode || supplier?.addressInfo?.ward?.code || '',
+                                provinceName: supplier?.addressInfo?.province?.name || '',
+                                districtName: supplier?.addressInfo?.district?.name || '',
+                                wardName: supplier?.addressInfo?.ward?.name || ''
+                              }
                             });
                           }}
                         >
@@ -571,7 +588,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                                       supplier_id: supplier.id,
                                       supplier_contact: supplier.contact_phone,
                                       supplier_email: supplier.email || '',
-                                      supplier_address: supplier.address || ''
+                                      supplier_address: supplier.address || '',
+                                      supplier_addressInfo: {
+                                        provinceCode: supplier.addressInfo?.provinceCode || supplier.addressInfo?.province?.code || '',
+                                        districtCode: supplier.addressInfo?.districtCode || supplier.addressInfo?.district?.code || '',
+                                        wardCode: supplier.addressInfo?.wardCode || supplier.addressInfo?.ward?.code || '',
+                                        provinceName: supplier.addressInfo?.province?.name || '',
+                                        districtName: supplier.addressInfo?.district?.name || '',
+                                        wardName: supplier.addressInfo?.ward?.name || ''
+                                      }
                                     });
                                     setShowSupplierSuggestions(false);
                                   }}
@@ -607,12 +632,28 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                       <div>
-                        <Label htmlFor="supplier_address">Địa chỉ</Label>
-                        <Input
-                          id="supplier_address"
-                          value={newSlip.supplier_address}
-                          onChange={(e) => setNewSlip({...newSlip, supplier_address: e.target.value})}
-                          placeholder="Địa chỉ nhà cung cấp"
+                        <Label>Địa chỉ</Label>
+                        <AddressFormSeparate
+                          value={{
+                            address: newSlip.supplier_address,
+                            provinceCode: newSlip.supplier_addressInfo?.provinceCode,
+                            districtCode: newSlip.supplier_addressInfo?.districtCode,
+                            wardCode: newSlip.supplier_addressInfo?.wardCode,
+                            provinceName: newSlip.supplier_addressInfo?.provinceName,
+                            districtName: newSlip.supplier_addressInfo?.districtName,
+                            wardName: newSlip.supplier_addressInfo?.wardName
+                          }}
+                          onChange={(data) => {
+                            setNewSlip(prev => ({
+                              ...prev,
+                              supplier_address: data.address,
+                              supplier_addressInfo: {
+                                provinceCode: data.provinceCode,
+                                districtCode: data.districtCode,
+                                wardCode: data.wardCode
+                              }
+                            }));
+                          }}
                         />
                       </div>
                     </div>

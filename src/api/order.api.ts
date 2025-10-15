@@ -56,6 +56,24 @@ export interface CreateOrderRequest {
   customerId: string;
   paymentMethod: string;
   totalAmount: number;
+  customer_address?: string;
+  customer_addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
+  vat_company_address?: string;
+  vat_company_addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
+  shipping_address?: string;
+  shipping_addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
   details: {
     productId: string;
     quantity: number;

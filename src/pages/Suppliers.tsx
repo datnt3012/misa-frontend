@@ -10,7 +10,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
 import { PermissionGuard } from '@/components/PermissionGuard';
-import { supplierApi } from '@/api/supplier.api';
+import { supplierApi, AddressInfo } from '@/api/supplier.api';
+import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 
 interface Supplier {
   id: string;
@@ -19,6 +20,7 @@ interface Supplier {
   contact_phone: string;
   email: string;
   address: string;
+  addressInfo?: AddressInfo;
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +32,11 @@ interface CreateSupplierRequest {
   phoneNumber: string;
   email: string;
   address: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
 }
 
 interface UpdateSupplierRequest {
@@ -38,6 +45,11 @@ interface UpdateSupplierRequest {
   phoneNumber?: string;
   email?: string;
   address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
 }
 
 const SuppliersContent: React.FC = () => {
@@ -52,9 +64,28 @@ const SuppliersContent: React.FC = () => {
     code: '',
     phoneNumber: '',
     email: '',
-    address: ''
+    address: '',
+    addressInfo: {
+      provinceCode: '',
+      districtCode: '',
+      wardCode: ''
+    }
   });
   const { toast } = useToast();
+
+  // Format full address with ward/district/province names when available
+  const formatAddress = (s: Supplier) => {
+    const ai = s?.addressInfo || {};
+    const wardNameFromNested = (ai as any)?.ward?.name;
+    const districtNameFromNested = (ai as any)?.district?.name;
+    const provinceNameFromNested = (ai as any)?.province?.name;
+    const parts: string[] = [];
+    if (s?.address) parts.push(s.address);
+    if (wardNameFromNested) parts.push(wardNameFromNested);
+    if (districtNameFromNested) parts.push(districtNameFromNested);
+    if (provinceNameFromNested) parts.push(provinceNameFromNested);
+    return parts.filter(Boolean).join(', ');
+  };
 
   // Load suppliers on component mount
   useEffect(() => {
@@ -98,13 +129,31 @@ const SuppliersContent: React.FC = () => {
     }
 
     try {
-      const response = await supplierApi.createSupplier(newSupplier);
+      const response = await supplierApi.createSupplier({
+        ...newSupplier,
+        addressInfo: {
+          provinceCode: newSupplier.addressInfo?.provinceCode || undefined,
+          districtCode: newSupplier.addressInfo?.districtCode || undefined,
+          wardCode: newSupplier.addressInfo?.wardCode || undefined
+        }
+      });
       toast({
         title: "Thành công",
-        description: response.message || "Tạo nhà cung cấp thành công",
+        description: "Tạo nhà cung cấp thành công",
       });
       setShowCreateDialog(false);
-      setNewSupplier({ name: '', code: '', phoneNumber: '', email: '', address: '' });
+      setNewSupplier({ 
+        name: '', 
+        code: '', 
+        phoneNumber: '', 
+        email: '', 
+        address: '',
+        addressInfo: {
+          provinceCode: '',
+          districtCode: '',
+          wardCode: ''
+        }
+      });
       loadSuppliers();
     } catch (error: any) {
       console.error('Error creating supplier:', error);
@@ -143,13 +192,18 @@ const SuppliersContent: React.FC = () => {
         code: editingSupplier.code,
         phoneNumber: editingSupplier.contact_phone,
         email: editingSupplier.email,
-        address: editingSupplier.address
+        address: editingSupplier.address,
+        addressInfo: {
+          provinceCode: editingSupplier.addressInfo?.provinceCode || undefined,
+          districtCode: editingSupplier.addressInfo?.districtCode || undefined,
+          wardCode: editingSupplier.addressInfo?.wardCode || undefined
+        }
       };
 
       const response = await supplierApi.updateSupplier(editingSupplier.id, updateData);
       toast({
         title: "Thành công",
-        description: response.message || "Cập nhật nhà cung cấp thành công",
+        description: "Cập nhật nhà cung cấp thành công",
       });
       setShowEditDialog(false);
       setEditingSupplier(null);
@@ -216,7 +270,7 @@ const SuppliersContent: React.FC = () => {
               Thêm nhà cung cấp
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Thêm nhà cung cấp mới</DialogTitle>
               <DialogDescription>
@@ -262,12 +316,26 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="address">Địa chỉ</Label>
-                <Input
-                  id="address"
-                  value={newSupplier.address}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, address: e.target.value })}
-                  placeholder="Nhập địa chỉ"
+                <Label>Địa chỉ</Label>
+                <AddressFormSeparate
+                  value={{
+                    address: newSupplier.address,
+                    provinceCode: newSupplier.addressInfo?.provinceCode,
+                    districtCode: newSupplier.addressInfo?.districtCode,
+                    wardCode: newSupplier.addressInfo?.wardCode
+                  }}
+                  onChange={(data) => {
+                    setNewSupplier(prev => ({
+                      ...prev,
+                      address: data.address,
+                      addressInfo: {
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
+                  required={false}
                 />
               </div>
             </div>
@@ -366,11 +434,11 @@ const SuppliersContent: React.FC = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {supplier.address ? (
+                        {(supplier.address || supplier.addressInfo) ? (
                           <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-muted-foreground" />
-                            <span className="max-w-48 truncate" title={supplier.address}>
-                              {supplier.address}
+                            <span className="max-w-48 truncate" title={formatAddress(supplier)}>
+                              {formatAddress(supplier)}
                             </span>
                           </div>
                         ) : (
@@ -412,7 +480,7 @@ const SuppliersContent: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh sửa nhà cung cấp</DialogTitle>
             <DialogDescription>
@@ -459,12 +527,30 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-address">Địa chỉ</Label>
-                <Input
-                  id="edit-address"
-                  value={editingSupplier.address}
-                  onChange={(e) => setEditingSupplier({ ...editingSupplier, address: e.target.value })}
-                  placeholder="Nhập địa chỉ"
+                <Label>Địa chỉ</Label>
+                <AddressFormSeparate
+                  value={{
+                    address: editingSupplier.address,
+                    provinceCode: editingSupplier.addressInfo?.provinceCode,
+                    districtCode: editingSupplier.addressInfo?.districtCode,
+                    wardCode: editingSupplier.addressInfo?.wardCode,
+                    provinceName: (editingSupplier as any).addressInfo?.province?.name ?? editingSupplier.addressInfo?.provinceName,
+                    districtName: (editingSupplier as any).addressInfo?.district?.name ?? editingSupplier.addressInfo?.districtName,
+                    wardName: (editingSupplier as any).addressInfo?.ward?.name ?? editingSupplier.addressInfo?.wardName
+                  }}
+                  onChange={(data) => {
+                    setEditingSupplier(prev => ({
+                      ...prev!,
+                      address: data.address,
+                      addressInfo: {
+                        ...prev!.addressInfo,
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
+                  required={false}
                 />
               </div>
             </div>

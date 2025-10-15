@@ -52,6 +52,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const [openProvince, setOpenProvince] = useState(false);
   const [openDistrict, setOpenDistrict] = useState(false);
   const [openWard, setOpenWard] = useState(false);
+  
+  // Track if component has been initialized to avoid re-hydration
+  const initializedRef = useRef(false);
 
   // Accent-insensitive search helper (remove diacritics)
   const normalizeText = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -155,9 +158,22 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
 
   // Hydrate selections when opening edit with existing values
   useEffect(() => {
+    console.log('🔍 AddressFormSeparate hydrate effect:', { value, initialized: initializedRef.current });
+    
     if (!value) return;
     if (!value.provinceCode) return;
+    
+    // Reset initialization if we have new values to hydrate
+    if (value.provinceCode && (value.provinceCode !== selectedProvince || value.districtCode !== selectedDistrict || value.wardCode !== selectedWard)) {
+      console.log('🔍 Starting hydration with:', value);
+      initializedRef.current = false; // Allow re-hydration
+    }
+    
+    if (initializedRef.current) return; // Already initialized for this set of values
+    
+    initializedRef.current = true;
     hydratingRef.current = true;
+    
     (async () => {
       setSelectedProvince(value.provinceCode!);
       await loadDistricts(value.provinceCode!, true);
@@ -176,6 +192,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
 
   // Notify parent when address changes
   useEffect(() => {
+    // Skip onChange during hydration to avoid loops
+    if (hydratingRef.current) return;
+    
     const provinceName = provinces.find(p => p.code === selectedProvince)?.name || '';
     const districtName = districts.find(d => d.code === selectedDistrict)?.name || '';
     const wardName = wards.find(w => w.code === selectedWard)?.name || '';
@@ -191,7 +210,8 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     };
 
     onChange(addressData);
-  }, [selectedProvince, selectedDistrict, selectedWard, addressDetail, provinces, districts, wards, onChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProvince, selectedDistrict, selectedWard, addressDetail, provinces, districts, wards]);
 
   return (
     <div className="space-y-3">

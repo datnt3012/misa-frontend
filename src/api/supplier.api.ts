@@ -1,6 +1,34 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
+export interface AddressOrganizationRef {
+  code: string;
+  name: string;
+  parentCode?: string | null;
+  level?: string;
+  type?: string | null;
+}
+
+export interface AddressInfo {
+  id?: string;
+  entityType?: string;
+  entityId?: string;
+  provinceCode?: string;
+  districtCode?: string;
+  wardCode?: string;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  // nested relations from backend
+  province?: AddressOrganizationRef | null;
+  district?: AddressOrganizationRef | null;
+  ward?: AddressOrganizationRef | null;
+}
+
 export interface Supplier {
   id: string;
   code: string;
@@ -8,6 +36,7 @@ export interface Supplier {
   contact_phone: string;
   email?: string;
   address?: string;
+  addressInfo?: AddressInfo;
   isDeleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -18,7 +47,12 @@ export interface CreateSupplierRequest {
   name: string;
   phoneNumber: string;
   email: string;
-  address: string;
+  address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
   isDeleted?: boolean;
 }
 
@@ -28,6 +62,11 @@ export interface UpdateSupplierRequest {
   phoneNumber?: string;
   email?: string;
   address?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
   isDeleted?: boolean;
 }
 
@@ -38,6 +77,7 @@ const normalize = (row: any): Supplier => ({
   contact_phone: row.contact_phone ?? row.phoneNumber ?? row.phone ?? '',
   email: row.email ?? undefined,
   address: row.address ?? undefined,
+  addressInfo: row.addressInfo ?? row.address_info ?? undefined,
   isDeleted: row.isDeleted ?? false,
   createdAt: row.createdAt ?? row.created_at ?? '',
   updatedAt: row.updatedAt ?? row.updated_at ?? '',
@@ -87,7 +127,9 @@ export const supplierApi = {
 
   // Create supplier
   createSupplier: async (data: CreateSupplierRequest): Promise<Supplier> => {
-    return api.post<Supplier>(API_ENDPOINTS.SUPPLIERS.CREATE, data);
+    const res = await api.post<any>(API_ENDPOINTS.SUPPLIERS.CREATE, data);
+    const row = (res?.data ?? res) as any;
+    return normalize(row);
   },
 
   // Update supplier

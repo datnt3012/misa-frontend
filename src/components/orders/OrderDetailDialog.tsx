@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 // Tag management is not available in this dialog
 
 interface OrderDetailDialogProps {
@@ -99,9 +100,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
   // Removed tag update logic
 
-  const startEditing = (field: string, currentValue: any) => {
+  const startEditing = (field: string, currentValue: any, addressInfo?: any) => {
     setEditingFields(prev => ({ ...prev, [field]: true }));
-    setEditValues(prev => ({ ...prev, [field]: currentValue }));
+    setEditValues(prev => ({ 
+      ...prev, 
+      [field]: currentValue,
+      ...(addressInfo && { [`${field}_addressInfo`]: addressInfo })
+    }));
   };
 
   const cancelEditing = (field: string) => {
@@ -109,6 +114,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     setEditValues(prev => {
       const newValues = { ...prev };
       delete newValues[field];
+      delete newValues[`${field}_addressInfo`];
       return newValues;
     });
   };
@@ -120,11 +126,17 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     try {
       const updateData: any = {};
       const value = editValues[field];
+      const addressInfo = editValues[`${field}_addressInfo`];
+      
       // Translate UI snake_case to API camelCase for updates
       if (field === 'initial_payment') {
         updateData.initialPayment = value;
       } else {
         updateData[field] = value;
+        // Add addressInfo if it exists
+        if (addressInfo) {
+          updateData[`${field}_addressInfo`] = addressInfo;
+        }
       }
       
       await orderApi.updateOrder(orderDetails.id, updateData);
@@ -168,6 +180,63 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     }).format(numAmount);
   };
 
+  const renderEditableAddressField = (field: string, label: string, value: any, addressInfo?: any) => {
+    const isEditing = editingFields[field];
+    const editValue = editValues[field] ?? value;
+    const editAddressInfo = editValues[`${field}_addressInfo`] ?? addressInfo;
+
+    return (
+      <div>
+        <label className="text-sm font-medium text-muted-foreground">{label}:</label>
+        <div className="mt-1">
+          {isEditing ? (
+            <div className="space-y-3">
+              <div>
+                <AddressFormSeparate
+                  value={{
+                    address: editValue || '',
+                    provinceCode: editAddressInfo?.provinceCode || '',
+                    districtCode: editAddressInfo?.districtCode || '',
+                    wardCode: editAddressInfo?.wardCode || '',
+                    provinceName: editAddressInfo?.provinceName || '',
+                    districtName: editAddressInfo?.districtName || '',
+                    wardName: editAddressInfo?.wardName || ''
+                  }}
+                  onChange={(data) => {
+                    setEditValues(prev => ({
+                      ...prev,
+                      [field]: data.address,
+                      [`${field}_addressInfo`]: {
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                  Lưu
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                  Hủy
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
+              <Button size="sm" variant="outline" onClick={() => startEditing(field, value, addressInfo)}>
+                Sửa
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderEditableField = (field: string, label: string, value: any, type: 'text' | 'textarea' = 'text') => {
     const isEditing = editingFields[field];
     const editValue = editValues[field] ?? value;
@@ -175,33 +244,37 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     return (
       <div>
         <label className="text-sm font-medium text-muted-foreground">{label}:</label>
-        <div className="flex items-center gap-2 mt-1">
+        <div className="mt-1">
           {isEditing ? (
-            <div className="flex items-center gap-2 flex-1">
-              {type === 'textarea' ? (
-                <Textarea
-                  value={editValue || ''}
-                  onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
-                  className="flex-1"
-                  rows={2}
-                />
-              ) : (
-                <Input
-                  value={editValue || ''}
-                  onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
-                  className="flex-1"
-                />
-              )}
-              <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
-                Lưu
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
-                Hủy
-              </Button>
+            <div className="space-y-3">
+              <div>
+                {type === 'textarea' ? (
+                  <Textarea
+                    value={editValue || ''}
+                    onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="w-full"
+                    rows={2}
+                  />
+                ) : (
+                  <Input
+                    value={editValue || ''}
+                    onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="w-full"
+                  />
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                  Lưu
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                  Hủy
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 flex-1">
-              <div className="text-base flex-1">{value || 'Chưa có thông tin'}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
               <Button size="sm" variant="outline" onClick={() => startEditing(field, value)}>
                 Sửa
               </Button>
@@ -265,7 +338,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết đơn hàng</DialogTitle>
           </DialogHeader>
@@ -280,14 +353,14 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Chi tiết đơn hàng #{orderDetails.order_number}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Customer Information */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-4">
               {renderEditableField('customer_name', 'Họ tên', orderDetails.customer_name)}
               {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
@@ -323,9 +396,12 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <label className="text-sm font-medium text-muted-foreground">Email:</label>
                 <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
               </div>
-
-              {renderEditableField('customer_address', 'Địa chỉ', orderDetails.customer_address)}
             </div>
+          </div>
+
+          {/* Address Section - Full Width */}
+          <div className="space-y-4">
+            {renderEditableAddressField('customer_address', 'Địa chỉ khách hàng', orderDetails.customer_address, orderDetails.customer_addressInfo)}
           </div>
 
           <Separator />
@@ -340,7 +416,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               {renderEditableField('receiver_name', 'Tên người nhận hàng', orderDetails.receiver_name)}
               {renderEditableField('receiver_phone', 'SĐT người nhận hàng', orderDetails.receiver_phone)}
             </div>
-            {renderEditableField('receiver_address', 'Địa chỉ giao hàng', orderDetails.receiver_address, 'textarea')}
+            <div className="mt-4">
+              {renderEditableAddressField('receiver_address', 'Địa chỉ giao hàng', orderDetails.receiver_address, orderDetails.receiver_addressInfo)}
+            </div>
           </div>
 
           <Separator />

@@ -22,7 +22,6 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { AddressInfo, customerApi } from "@/api/customer.api";
 import { organizationApi, Organization } from "@/api/organization.api";
 import { orderApi } from "@/api/order.api";
-import { SimpleAddressForm } from "@/components/common/SimpleAddressForm";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -485,7 +484,7 @@ const CustomersContent = () => {
                 Thêm Khách Hàng
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Thêm Khách Hàng Mới</DialogTitle>
                 <DialogDescription>
@@ -662,7 +661,7 @@ const CustomersContent = () => {
             setEditingCustomer(null);
           }
         }}>
-          <DialogContent>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Chỉnh Sửa Khách Hàng</DialogTitle>
               <DialogDescription>
