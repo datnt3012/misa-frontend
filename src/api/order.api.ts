@@ -21,6 +21,17 @@ export interface Order {
   customer_code?: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+    province?: { code?: string; name?: string; };
+    district?: { code?: string; name?: string; };
+    ward?: { code?: string; name?: string; };
+    provinceName?: string;
+    districtName?: string;
+    wardName?: string;
+  };
   status: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   order_type: 'sale' | 'return';
   total_amount: number;
@@ -86,6 +97,17 @@ export interface UpdateOrderRequest {
   customer_name?: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
+  receiver_address?: string;
+  receiver_addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+  };
   status?: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   order_type?: 'sale' | 'return';
   initialPayment?: number;
@@ -163,6 +185,40 @@ export const orderApi = {
       customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
       customer_address: row.customer?.address ?? row.customer_address ?? '',
+      // receiver fields (kept as extra props on the returned object)
+      ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
+      ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
+      ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
+      ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
+        const ai = row.addressInfo ?? row.receiver_address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name,
+          districtName: ai.district?.name,
+          wardName: ai.ward?.name,
+        };
+      })() } : {} as any),
+      customer_addressInfo: (() => {
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name ?? ai.provinceName,
+          districtName: ai.district?.name ?? ai.districtName,
+          wardName: ai.ward?.name ?? ai.wardName,
+        };
+      })(),
       status: row.status ?? 'draft',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
@@ -241,6 +297,39 @@ export const orderApi = {
       customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
       customer_address: row.customer?.address ?? row.customer_address ?? '',
+      ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
+      ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
+      ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
+      ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
+        const ai = row.addressInfo ?? row.receiver_address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name,
+          districtName: ai.district?.name,
+          wardName: ai.ward?.name,
+        };
+      })() } : {} as any),
+      customer_addressInfo: (() => {
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name ?? ai.provinceName,
+          districtName: ai.district?.name ?? ai.districtName,
+          wardName: ai.ward?.name ?? ai.wardName,
+        };
+      })(),
       status: row.status ?? 'draft',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
@@ -306,6 +395,21 @@ export const orderApi = {
       customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
       customer_address: row.customer?.address ?? row.customer_address ?? '',
+      customer_addressInfo: (() => {
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name ?? ai.provinceName,
+          districtName: ai.district?.name ?? ai.districtName,
+          wardName: ai.ward?.name ?? ai.wardName,
+        };
+      })(),
       status: row.status ?? 'draft',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),

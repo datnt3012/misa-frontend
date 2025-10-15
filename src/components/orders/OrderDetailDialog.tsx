@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 // Tag management is not available in this dialog
 import { orderApi, Order, OrderItem } from "@/api/order.api";
+import { customerApi } from "@/api/customer.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
@@ -28,6 +29,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   onOrderUpdated,
 }) => {
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
+  const [customerDetails, setCustomerDetails] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
@@ -52,6 +54,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       const orderData = await orderApi.getOrder(order.id);
       console.log('Order data loaded:', orderData);
       setOrderDetails(orderData);
+      // Always fetch fresh customer info for authoritative address
+      if (orderData.customer_id) {
+        try {
+          const customer = await customerApi.getCustomer(orderData.customer_id);
+          setCustomerDetails(customer);
+        } catch (e) {
+          console.warn('Could not load customer details', e);
+          setCustomerDetails(null);
+        }
+      } else {
+        setCustomerDetails(null);
+      }
     } catch (error) {
       console.error('Error loading order details:', error);
       toast({
@@ -132,10 +146,35 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       if (field === 'initial_payment') {
         updateData.initialPayment = value;
       } else {
-        updateData[field] = value;
-        // Add addressInfo if it exists
+        // Only allow editing receiver fields if they are empty originally
+        const original = orderDetails as any;
+        if ((field === 'receiverName' && original.receiverName) ||
+            (field === 'receiverPhone' && original.receiverPhone) ||
+            (field === 'receiverAddress' && (original.receiverAddress || original.addressInfo))) {
+          setLoading(false);
+          toast({
+            title: 'Không thể cập nhật',
+            description: 'Chỉ cho phép cập nhật thông tin người nhận khi đơn chưa có dữ liệu.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        // Map UI field names to BE expectations (camelCase per BE)
+        if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
+          updateData[field] = value;
+        } else {
+          updateData[field] = value;
+        }
+        // Add addressInfo if it exists (align with BE expects snake_case *_address_info)
         if (addressInfo) {
-          updateData[`${field}_addressInfo`] = addressInfo;
+          const normalizedInfo = {
+            provinceCode: addressInfo.provinceCode || undefined,
+            districtCode: addressInfo.districtCode || undefined,
+            wardCode: addressInfo.wardCode || undefined,
+          };
+          if (field === 'receiverAddress') {
+            updateData['addressInfo'] = normalizedInfo; // BE expects addressInfo for receiver
+          }
         }
       }
       
@@ -185,6 +224,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     const editValue = editValues[field] ?? value;
     const editAddressInfo = editValues[`${field}_addressInfo`] ?? addressInfo;
 
+    const formatFullAddress = (addr: string, ai: any) => {
+      const wardName = ai?.ward?.name || ai?.wardName;
+      const districtName = ai?.district?.name || ai?.districtName;
+      const provinceName = ai?.province?.name || ai?.provinceName;
+      const parts: string[] = [];
+      if (addr) parts.push(addr);
+      if (wardName) parts.push(wardName);
+      if (districtName) parts.push(districtName);
+      if (provinceName) parts.push(provinceName);
+      return parts.join(', ');
+    };
+
     return (
       <div>
         <label className="text-sm font-medium text-muted-foreground">{label}:</label>
@@ -193,14 +244,15 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             <div className="space-y-3">
               <div>
                 <AddressFormSeparate
+                  key={`${field}-${(editAddressInfo?.provinceCode || editAddressInfo?.province?.code || '')}-${(editAddressInfo?.districtCode || editAddressInfo?.district?.code || '')}-${(editAddressInfo?.wardCode || editAddressInfo?.ward?.code || '')}`}
                   value={{
                     address: editValue || '',
-                    provinceCode: editAddressInfo?.provinceCode || '',
-                    districtCode: editAddressInfo?.districtCode || '',
-                    wardCode: editAddressInfo?.wardCode || '',
-                    provinceName: editAddressInfo?.provinceName || '',
-                    districtName: editAddressInfo?.districtName || '',
-                    wardName: editAddressInfo?.wardName || ''
+                    provinceCode: (editAddressInfo?.provinceCode || editAddressInfo?.province?.code || '')?.toString(),
+                    districtCode: (editAddressInfo?.districtCode || editAddressInfo?.district?.code || '')?.toString(),
+                    wardCode: (editAddressInfo?.wardCode || editAddressInfo?.ward?.code || '')?.toString(),
+                    provinceName: editAddressInfo?.provinceName || editAddressInfo?.province?.name || '',
+                    districtName: editAddressInfo?.districtName || editAddressInfo?.district?.name || '',
+                    wardName: editAddressInfo?.wardName || editAddressInfo?.ward?.name || ''
                   }}
                   onChange={(data) => {
                     setEditValues(prev => ({
@@ -226,7 +278,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
+              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>
+                {formatFullAddress(value, addressInfo) || 'Chưa có thông tin'}
+              </div>
               <Button size="sm" variant="outline" onClick={() => startEditing(field, value, addressInfo)}>
                 Sửa
               </Button>
@@ -399,13 +453,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             </div>
           </div>
 
-          {/* Address Section - Full Width */}
-          <div className="space-y-4">
-            {renderEditableAddressField('customer_address', 'Địa chỉ khách hàng', orderDetails.customer_address, orderDetails.customer_addressInfo)}
-          </div>
-
-          <Separator />
-
           {/* Shipping Information */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -413,11 +460,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <h3 className="text-lg font-semibold">Vận chuyển</h3>
             </div>
             <div className="grid grid-cols-2 gap-6">
-              {renderEditableField('receiver_name', 'Tên người nhận hàng', orderDetails.receiver_name)}
-              {renderEditableField('receiver_phone', 'SĐT người nhận hàng', orderDetails.receiver_phone)}
+              {renderEditableField('receiverName', 'Tên người nhận hàng', (orderDetails as any).receiverName || customerDetails?.name)}
+              {renderEditableField('receiverPhone', 'SĐT người nhận hàng', (orderDetails as any).receiverPhone)}
             </div>
             <div className="mt-4">
-              {renderEditableAddressField('receiver_address', 'Địa chỉ giao hàng', orderDetails.receiver_address, orderDetails.receiver_addressInfo)}
+              {renderEditableAddressField(
+                'receiverAddress',
+                'Địa chỉ giao hàng',
+                (orderDetails as any).receiverAddress || customerDetails?.address,
+                (orderDetails as any).addressInfo || (orderDetails as any).receiverAddressInfo || customerDetails?.addressInfo
+              )}
             </div>
           </div>
 
@@ -490,13 +542,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             <div className="space-y-2">
                <div className="flex justify-between items-center">
                  <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
-                 <Select 
-                   value={orderDetails.order_status || orderDetails.status || 'pending'}
+                <Select 
+                  value={(orderDetails as any).order_status || orderDetails.status || 'pending'}
                    onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
                  >
                    <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
                      <div className="cursor-pointer">
-                       {getStatusBadge(orderDetails.order_status || orderDetails.status)}
+                      {getStatusBadge((orderDetails as any).order_status || orderDetails.status)}
                      </div>
                    </SelectTrigger>
                    <SelectContent>
@@ -512,7 +564,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
-                {getPaymentStatusBadge(orderDetails.payment_status || 'unpaid')}
+                {getPaymentStatusBadge((orderDetails as any).payment_status || 'unpaid')}
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
@@ -520,7 +572,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Người tạo đơn:</span>
-                <span>{orderDetails.profiles?.full_name || 'Hệ thống'}</span>
+                <span>{(orderDetails as any).profiles?.full_name || 'Hệ thống'}</span>
               </div>
             </div>
             <div className="space-y-2">

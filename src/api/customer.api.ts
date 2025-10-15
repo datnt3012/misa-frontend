@@ -140,9 +140,77 @@ export const customerApi = {
     };
   },
 
-  // Get customer by ID
+  // Get customer by ID (normalized)
   getCustomer: async (id: string): Promise<Customer> => {
-    return api.get<Customer>(`${API_ENDPOINTS.CUSTOMERS.LIST}/${id}`);
+    const res = await api.get<any>(`${API_ENDPOINTS.CUSTOMERS.LIST}/${id}`);
+    const row = (res?.data ?? res) as any;
+    const normalized: Customer = {
+      id: row.id,
+      code: row.code ?? null,
+      customer_code: row.code ?? row.customer_code ?? row.customerCode ?? null,
+      name: row.name ?? '',
+      email: row.email ?? null,
+      phoneNumber: row.phoneNumber ?? row.phone ?? null,
+      address: row.address ?? null,
+      addressInfo: (() => {
+        const ai = row.addressInfo ?? row.address_info;
+        if (!ai) return null as any;
+        return {
+          id: ai.id,
+          entityType: ai.entityType,
+          entityId: ai.entityId,
+          provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
+          districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+          wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
+          isDeleted: ai.isDeleted ?? false,
+          createdAt: ai.createdAt ?? ai.created_at ?? '',
+          updatedAt: ai.updatedAt ?? ai.updated_at ?? '',
+          deletedAt: ai.deletedAt ?? ai.deleted_at ?? null,
+          province: ai.province ? {
+            code: ai.province.code,
+            name: ai.province.name,
+            parentCode: ai.province.parentCode ?? ai.province.parent_code ?? null,
+            level: String(ai.province.level ?? ''),
+            type: ai.province.type,
+            isDeleted: ai.province.isDeleted ?? false,
+            createdAt: ai.province.createdAt ?? ai.province.created_at ?? '',
+            updatedAt: ai.province.updatedAt ?? ai.province.updated_at ?? '',
+            deletedAt: ai.province.deletedAt ?? ai.province.deleted_at ?? null,
+          } : undefined,
+          district: ai.district ? {
+            code: ai.district.code,
+            name: ai.district.name,
+            parentCode: ai.district.parentCode ?? ai.district.parent_code ?? null,
+            level: String(ai.district.level ?? ''),
+            type: ai.district.type,
+            isDeleted: ai.district.isDeleted ?? false,
+            createdAt: ai.district.createdAt ?? ai.district.created_at ?? '',
+            updatedAt: ai.district.updatedAt ?? ai.district.updated_at ?? '',
+            deletedAt: ai.district.deletedAt ?? ai.district.deleted_at ?? null,
+          } : undefined,
+          ward: ai.ward ? {
+            code: ai.ward.code,
+            name: ai.ward.name,
+            parentCode: ai.ward.parentCode ?? ai.ward.parent_code ?? null,
+            level: String(ai.ward.level ?? ''),
+            type: ai.ward.type,
+            isDeleted: ai.ward.isDeleted ?? false,
+            createdAt: ai.ward.createdAt ?? ai.ward.created_at ?? '',
+            updatedAt: ai.ward.updatedAt ?? ai.ward.updated_at ?? '',
+            deletedAt: ai.ward.deletedAt ?? ai.ward.deleted_at ?? null,
+          } : undefined,
+        } as any;
+      })(),
+      organizationId: row.organizationId ?? row.organization_id ?? null,
+      organizationName: row.organizationName ?? row.organization_name ?? null,
+      userId: row.userId ?? null,
+      isDeleted: row.isDeleted ?? false,
+      createdAt: row.createdAt ?? row.created_at ?? '',
+      updatedAt: row.updatedAt ?? row.updated_at ?? '',
+      deletedAt: row.deletedAt ?? row.deleted_at ?? null,
+      user: row.user ?? null,
+    };
+    return normalized;
   },
 
   // Create customer
