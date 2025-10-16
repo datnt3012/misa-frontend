@@ -182,6 +182,14 @@ const OrdersContent: React.FC = () => {
     }).format(numAmount);
   };
 
+  // Format VND without currency symbol for per-item unit prices
+  const formatVndNoSymbol = (amount: number | string | undefined | null) => {
+    const numAmount = Number(amount) || 0;
+    return new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: 0
+    }).format(numAmount);
+  };
+
   // Mask phone number - hide 4 middle digits
   const maskPhoneNumber = (phone: string) => {
     if (!phone || phone.length < 8) return phone;
@@ -457,31 +465,31 @@ const OrdersContent: React.FC = () => {
                     />
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px]" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px] text-center" 
                     onClick={() => handleSort("order_number")}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       ID
                       {getSortIcon("order_number")}
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px]" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px] text-center" 
                     onClick={() => handleSort("customer_name")}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       Khách hàng
                       {getSortIcon("customer_name")}
                     </div>
                   </TableHead>
                    <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[100px]">Sản phẩm</TableHead>
                    <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[100px]">Giá</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px]">SL</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px]">Số lượng</TableHead>
                    <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[120px]">Thanh toán</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px]">Ghi chú</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px]">Người tạo đơn</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[100px]">Trạng thái</TableHead>
-                  <TableHead className="text-right py-3 font-medium text-slate-700 min-w-[100px]">Thao tác</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px] text-center">Ghi chú</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px] text-center">Người tạo đơn</TableHead>
+                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] text-center">Trạng thái</TableHead>
+                  <TableHead className="text-center py-3 font-medium text-slate-700 min-w-[100px]">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -600,28 +608,28 @@ const OrdersContent: React.FC = () => {
                            </div>
                          </TableCell>
                          
-                           {/* Products Column */}
-                           <TableCell className="py-4 border-r border-slate-200 align-top text-center">
-                             <div className="space-y-3">
-                               {order.items?.map((item: any, index: number) => (
-                                 <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                   <div className="font-medium text-slate-900">{item.product_name || 'N/A'}</div>
-                                 </div>
-                               ))}
-                               {(!order.items || order.items.length === 0) && (
-                                 <div className="text-sm text-muted-foreground">Không có sản phẩm</div>
-                               )}
-                             </div>
-                           </TableCell>
+                          {/* Products Column */}
+                          <TableCell className="p-0 border-r border-slate-200 text-center">
+                            <div className="divide-y divide-slate-100">
+                              {order.items?.map((item: any, index: number) => (
+                                <div key={index} className="text-sm py-5 px-5">
+                                  <div className="font-medium text-slate-900 truncate" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
+                                </div>
+                              ))}
+                              {(!order.items || order.items.length === 0) && (
+                                <div className="text-sm text-muted-foreground">Không có sản phẩm</div>
+                              )}
+                            </div>
+                          </TableCell>
                           
                           {/* Remove SL column - now included in products */}
                            
-                            {/* Price Column */}
-                            <TableCell className="py-4 border-r border-slate-200 align-top text-center">
-                              <div className="space-y-3">
+                           {/* Price Column */}
+                           <TableCell className="p-0 border-r border-slate-200 text-center">
+                              <div className="divide-y divide-slate-100">
                                 {order.items?.map((item: any, index: number) => (
-                                  <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                    <div className="font-medium text-slate-900">{formatCurrency(item.unit_price)}</div>
+                                  <div key={index} className="text-sm py-5 px-5">
+                                    <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
                                   </div>
                                 ))}
                                 {(!order.items || order.items.length === 0) && (
@@ -630,29 +638,29 @@ const OrdersContent: React.FC = () => {
                               </div>
                             </TableCell>
                            
-                            {/* Quantity Column */}
-                            <TableCell className="py-4 border-r border-slate-200 align-top text-center">
-                              <div className="space-y-3">
-                                {order.items?.map((item: any, index: number) => (
-                                  <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                    <div className="font-medium text-slate-900">{item.quantity || 0}</div>
-                                  </div>
-                                ))}
-                                {(!order.items || order.items.length === 0) && (
-                                  <div className="text-sm text-muted-foreground">-</div>
-                                )}
-                              </div>
-                            </TableCell>
+                           {/* Quantity Column */}
+                           <TableCell className="p-0 border-r border-slate-200 text-center">
+                             <div className="divide-y divide-slate-100">
+                               {order.items?.map((item: any, index: number) => (
+                                 <div key={index} className="text-sm py-5 px-5">
+                                   <div className="font-medium text-slate-900">{item.quantity || 0}</div>
+                                 </div>
+                               ))}
+                               {(!order.items || order.items.length === 0) && (
+                                 <div className="text-sm text-muted-foreground">-</div>
+                               )}
+                             </div>
+                           </TableCell>
                            
                             {/* Payment Column */}
                             <TableCell className="py-4 border-r border-slate-200 text-center">
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
-                                  {formatCurrency(order.initial_payment || order.paid_amount)}
+                                  {formatVndNoSymbol(order.initial_payment || order.paid_amount)}
                                 </div>
                                 <div className="text-sm font-medium text-purple-600">
-                                  {formatCurrency(order.total_amount - (order.initial_payment || order.paid_amount))}
+                                  {formatVndNoSymbol(order.total_amount - (order.initial_payment || order.paid_amount))}
                                 </div>
                               </div>
                             </TableCell>
@@ -705,7 +713,7 @@ const OrdersContent: React.FC = () => {
                            </TableCell>
                          
                          {/* Actions Column */}
-                         <TableCell className="text-right py-4">
+                         <TableCell className="text-center py-4">
                            <DropdownMenu>
                              <DropdownMenuTrigger asChild>
                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
