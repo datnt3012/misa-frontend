@@ -65,32 +65,47 @@ export interface Order {
 
 export interface CreateOrderRequest {
   customerId: string;
+  code?: string;
+  note?: string;
+  status?: string;
+  
+  // VAT Information
+  taxCode?: string;
+  companyName?: string;
+  companyAddress?: string;
+  vatEmail?: string;
+  companyPhone?: string;
+  
+  // Receiver Information
+  receiverName?: string;
+  receiverPhone?: string;
+  receiverAddress?: string;
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  
+  // Payment
   paymentMethod: string;
+  initialPayment?: number;
   totalAmount: number;
-  customer_address?: string;
-  customer_addressInfo?: {
-    provinceCode?: string;
-    districtCode?: string;
-    wardCode?: string;
-  };
-  vat_company_address?: string;
-  vat_company_addressInfo?: {
-    provinceCode?: string;
-    districtCode?: string;
-    wardCode?: string;
-  };
-  shipping_address?: string;
-  shipping_addressInfo?: {
-    provinceCode?: string;
-    districtCode?: string;
-    wardCode?: string;
-  };
+  
+  // Order details
   details: {
     productId: string;
+    warehouseId: string;
     quantity: number;
     unitPrice: number;
-    warehouseId: string;
   }[];
+  
+  // Optional fields
+  description?: string;
+  tags?: string[];
+  isDeleted?: boolean;
 }
 
 export interface UpdateOrderRequest {
@@ -205,7 +220,7 @@ export const orderApi = {
         };
       })() } : {} as any),
       customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info;
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
@@ -316,7 +331,7 @@ export const orderApi = {
         };
       })() } : {} as any),
       customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info;
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
@@ -396,7 +411,7 @@ export const orderApi = {
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
       customer_address: row.customer?.address ?? row.customer_address ?? '',
       customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info;
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,

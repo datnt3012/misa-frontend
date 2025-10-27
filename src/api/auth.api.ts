@@ -50,6 +50,11 @@ export const authApi = {
     return api.get<User>(API_ENDPOINTS.AUTH.ME);
   },
 
+  // Update current user profile
+  updateProfile: async (userData: Partial<UpdateUserRequest>): Promise<User> => {
+    return api.patch<User>('/auth/profile', userData);
+  },
+
   // Forgot password
   forgotPassword: async (data: ForgotPasswordRequest): Promise<{ message: string }> => {
     return api.post<{ message: string }>(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, data);

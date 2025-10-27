@@ -284,15 +284,38 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       // Create order via backend API
       const orderData = await orderApi.createOrder({
         customerId: newOrder.customer_id || "",
-        paymentMethod: newOrder.initial_payment_method || "cash",
+        code: newOrder.contract_number || undefined,
+        note: newOrder.notes || undefined,
         status: 'pending',
+        
+        // VAT Information
+        taxCode: newOrder.vat_tax_code || undefined,
+        companyName: newOrder.vat_company_name || undefined,
+        companyAddress: newOrder.vat_company_address || undefined,
+        vatEmail: newOrder.vat_invoice_email || undefined,
+        companyPhone: newOrder.vat_company_phone || undefined,
+        
+        // Receiver Information
+        receiverName: newOrder.shipping_recipient_name || undefined,
+        receiverPhone: newOrder.shipping_recipient_phone || undefined,
+        receiverAddress: newOrder.shipping_address || undefined,
+        addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
+          provinceCode: newOrder.shipping_addressInfo.provinceCode,
+          districtCode: newOrder.shipping_addressInfo.districtCode,
+          wardCode: newOrder.shipping_addressInfo.wardCode
+        } : undefined,
+        
+        // Payment
+        paymentMethod: newOrder.initial_payment_method || "cash",
+        initialPayment: newOrder.initial_payment || 0,
         totalAmount: total,
-        // Remove unsupported fields per backend API
+        
+        // Order details
         details: newOrder.items.map(it => ({
           productId: it.product_id,
+          warehouseId: it.warehouse_id,
           quantity: it.quantity,
           unitPrice: it.unit_price,
-          warehouseId: it.warehouse_id,
         })),
       });
 
@@ -303,9 +326,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
       // Get order code from response
       const orderCode = orderData.order_number || 
-                       orderData.orderNumber || 
-                       orderData.code || 
-                       orderData.number || 
                        orderData.id || 
                        'thành công';
 
