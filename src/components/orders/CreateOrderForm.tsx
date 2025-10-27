@@ -15,6 +15,7 @@ import { customerApi } from "@/api/customer.api";
 import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
+import { stockLevelsApi } from "@/api/stockLevels.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 
@@ -34,6 +35,7 @@ interface OrderItem {
   vat_rate: number;
   vat_amount: number;
   warehouse_id: string;
+  current_stock?: number;
 }
 
 const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
@@ -158,8 +160,40 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         items[index].total_price = subtotal;
       }
       
+      // Fetch stock level when product or warehouse changes
+      if (field === 'product_id' || field === 'warehouse_id') {
+        fetchStockLevel(index, items[index].product_id, items[index].warehouse_id);
+      }
+      
       return { ...prev, items };
     });
+  };
+
+  const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
+    if (!productId || !warehouseId) return;
+    
+    try {
+      const stockLevels = await stockLevelsApi.getStockLevels({
+        productId,
+        warehouseId,
+        limit: 1
+      });
+      
+      const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
+      
+      setNewOrder(prev => {
+        const items = [...prev.items];
+        items[index].current_stock = currentStock;
+        return { ...prev, items };
+      });
+    } catch (error) {
+      console.warn('Could not fetch stock level:', error);
+      setNewOrder(prev => {
+        const items = [...prev.items];
+        items[index].current_stock = 0;
+        return { ...prev, items };
+      });
+    }
   };
 
   const calculateTotals = () => {
@@ -501,7 +535,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   <TableRow className="bg-slate-50 border-b-2 border-slate-200">
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm</TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">SL</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số lượng</TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá</TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Thành tiền</TableHead>
                     <TableHead className="font-semibold text-slate-700"></TableHead>
@@ -509,8 +543,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </TableHeader>
                 <TableBody>
                   {newOrder.items.map((item, index) => (
-                    <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
-                      <TableCell className="border-r border-slate-100">
+                    <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50 h-20">
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
                         <Select 
                           value={item.product_id} 
                           onValueChange={(value) => updateItem(index, 'product_id', value)}
@@ -527,7 +561,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
                         <Select 
                           value={item.warehouse_id} 
                           onValueChange={(value) => updateItem(index, 'warehouse_id', value)}
@@ -544,15 +578,27 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                          className="w-20"
-                        />
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                            className="w-20"
+                          />
+                          {item.current_stock !== undefined && (
+                            <div className="text-xs">
+                              <span className={`${item.quantity > item.current_stock ? 'text-red-600' : 'text-gray-600'}`}>
+                                Tồn kho: {item.current_stock}
+                              </span>
+                              {item.quantity > item.current_stock && (
+                                <span className="text-red-500 ml-1">⚠️</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
                         <Input
                           type="number"
                           value={item.unit_price}
@@ -560,10 +606,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           className="w-32"
                         />
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
-                        {item.total_price.toLocaleString('vi-VN')}đ
+                      <TableCell className="border-r border-slate-100 align-top pt-7">
+                        {item.total_price.toLocaleString('vi-VN')}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="align-top pt-4">
                         <Button
                           variant="outline"
                           size="sm"
