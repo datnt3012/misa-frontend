@@ -34,6 +34,17 @@ export interface ExportSlip {
     customer_name: string;
     customer_address?: string;
     customer_phone?: string;
+    customer_addressInfo?: {
+      provinceCode?: string;
+      districtCode?: string;
+      wardCode?: string;
+      province?: { code?: string; name?: string; };
+      district?: { code?: string; name?: string; };
+      ward?: { code?: string; name?: string; };
+      provinceName?: string;
+      districtName?: string;
+      wardName?: string;
+    };
     total_amount: number;
     order_items?: Array<{
       product_name: string;
@@ -58,10 +69,10 @@ export interface ExportSlip {
 }
 
 const normalizeItem = (it: any): ExportSlipItem => ({
-  id: it.id,
-  product_id: it.productId ?? it.product_id,
-  product_name: it.productName ?? it.product_name,
-  product_code: it.productCode ?? it.product_code,
+  id: it.id || '',
+  product_id: it.productId ?? it.product_id ?? '',
+  product_name: it.productName ?? it.product_name ?? '',
+  product_code: it.productCode ?? it.product_code ?? '',
   requested_quantity: Number(it.requestedQuantity ?? it.requested_quantity ?? 0),
   actual_quantity: Number(it.actualQuantity ?? it.actual_quantity ?? 0),
   remaining_quantity: Number(it.remainingQuantity ?? it.remaining_quantity ?? 0),
@@ -69,10 +80,8 @@ const normalizeItem = (it: any): ExportSlipItem => ({
 });
 
 const normalize = (row: any): ExportSlip => {
-  console.log('Normalizing export slip row:', row);
-  console.log('Row order data:', row.order);
   return {
-    id: row.id,
+    id: row.id || '',
     code: row.code ?? row.slip_number ?? '',
     order_id: row.orderId ?? row.order_id ?? '',
     status: row.status ?? 'pending',
@@ -89,8 +98,8 @@ const normalize = (row: any): ExportSlip => {
     exported_by: row.exported_by ?? row.exportedBy ?? undefined,
     export_slip_items: Array.isArray(row.details)
       ? row.details.map((detail: any) => ({
-          id: detail.id,
-          product_id: detail.productId ?? detail.product_id,
+          id: detail.id || '',
+          product_id: detail.productId ?? detail.product_id ?? '',
           product_name: detail.product?.name ?? detail.product_name ?? '',
           product_code: detail.product?.code ?? detail.product_code ?? '',
           requested_quantity: Number(detail.quantity ?? 0),
@@ -100,12 +109,27 @@ const normalize = (row: any): ExportSlip => {
         }))
       : Array.isArray(row.export_slip_items)
         ? row.export_slip_items.map(normalizeItem)
-        : undefined,
+        : [],
     order: row.order ? {
       order_number: row.order.order_number ?? row.order.orderNumber ?? '',
       customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
       customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
       customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
+      customer_addressInfo: (() => {
+        const ai = row.order.customer_addressInfo || row.order.customerAddressInfo || row.order.customer?.addressInfo || row.order.customer?.address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
+          districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+          wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name ?? ai.provinceName,
+          districtName: ai.district?.name ?? ai.districtName,
+          wardName: ai.ward?.name ?? ai.wardName,
+        };
+      })(),
       total_amount: Number(row.order.total_amount ?? row.order.totalAmount ?? row.totalAmount ?? row.total_amount ?? 0),
       order_items: Array.isArray(row.order.order_items)
         ? row.order.order_items.map((oi: any) => ({

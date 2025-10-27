@@ -65,7 +65,8 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       const response = await orderApi.getOrders({
         status: statusFilter,
         search: searchTerm || undefined,
-        limit: 50
+        limit: 50,
+        includeDeleted: true // Include soft deleted orders
       });
       setOrders(response.orders);
     } catch (error: any) {

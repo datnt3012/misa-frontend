@@ -61,7 +61,7 @@ export const orderTagsApi = {
     try {
       // Get current order to update its tags
       const { orderApi } = await import('./order.api');
-      const currentOrder = await orderApi.getOrder(orderId);
+      const currentOrder = await orderApi.getOrderIncludeDeleted(orderId);
       
       // Get the tag to assign
       const allTags = getPredefinedTags();
@@ -112,7 +112,7 @@ export const orderTagsApi = {
     try {
       // Get current order to update its tags
       const { orderApi } = await import('./order.api');
-      const currentOrder = await orderApi.getOrder(orderId);
+      const currentOrder = await orderApi.getOrderIncludeDeleted(orderId);
       
       // Get the tag to remove
       const allTags = getPredefinedTags();

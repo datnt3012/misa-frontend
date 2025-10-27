@@ -179,6 +179,18 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
     }).format(amount);
   };
 
+  const formatFullAddress = (address: string, addressInfo?: any) => {
+    const wardName = addressInfo?.ward?.name || addressInfo?.wardName;
+    const districtName = addressInfo?.district?.name || addressInfo?.districtName;
+    const provinceName = addressInfo?.province?.name || addressInfo?.provinceName;
+    const parts: string[] = [];
+    if (address) parts.push(address);
+    if (wardName) parts.push(wardName);
+    if (districtName) parts.push(districtName);
+    if (provinceName) parts.push(provinceName);
+    return parts.join(', ');
+  };
+
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
@@ -316,7 +328,7 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
                 {exportSlip.order.customer_address && (
                   <div>
                     <Label className="font-medium">Địa chỉ:</Label>
-                    <p>{exportSlip.order.customer_address}</p>
+                    <p>{formatFullAddress(exportSlip.order.customer_address, exportSlip.order.customer_addressInfo)}</p>
                   </div>
                 )}
                 <div>

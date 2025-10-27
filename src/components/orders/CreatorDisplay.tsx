@@ -56,15 +56,8 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
   }
 
   if (error || !userInfo) {
-    // Fallback: hiển thị ID rút gọn nếu có createdBy
-    if (createdBy) {
-      return (
-        <div className="text-sm">
-          <div className="font-medium text-slate-900">ID: {createdBy.slice(0, 8)}...</div>
-        </div>
-      );
-    }
-    return null; // Không hiển thị gì nếu không có createdBy
+    // Không hiển thị gì nếu không tìm thấy thông tin người dùng
+    return null;
   }
 
   // Tạo tên hiển thị: firstname + lastname hoặc email

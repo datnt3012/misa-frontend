@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 function ExportSlipsContent() {
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
+  const [addressCache, setAddressCache] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -32,20 +33,15 @@ function ExportSlipsContent() {
   const canUpdateStatus = hasPermission('WAREHOUSE_RECEIPTS_UPDATE');
   
   // More flexible role checking
-  const isWarehouseKeeper = user?.roleId === '0d1e0d2e-7fdc-4af7-88e6-574497282798' || 
-                           user?.role?.name?.toLowerCase().includes('warehouse') ||
-                           user?.role?.name?.toLowerCase().includes('keeper');
+  const isWarehouseKeeper = user?.roleId === '0d1e0d2e-7fdc-4af7-88e6-574497282798';
   const isAdmin = user?.roleId === '48cf005a-e5ed-4859-968d-237d1c1edf85' || 
-                 user?.roleId === '1db8203f-8618-4092-9215-5854e6aaa368' ||
-                 user?.role?.name?.toLowerCase().includes('admin') ||
-                 user?.role?.name?.toLowerCase().includes('owner');
+                 user?.roleId === '1db8203f-8618-4092-9215-5854e6aaa368';
   
   // Fallback: if user has any update permission, allow basic status updates
   const hasAnyUpdatePermission = canUpdateStatus || hasPermission('WAREHOUSE_RECEIPTS_UPDATE') || hasPermission('EXPORT_SLIPS_VIEW');
   
   console.log('User role info:', {
     roleId: user?.roleId,
-    roleName: user?.role?.name,
     isWarehouseKeeper,
     isAdmin,
     canUpdateStatus,
@@ -94,11 +90,6 @@ function ExportSlipsContent() {
     try {
       const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
       
-      // Debug log to check data structure
-      console.log('Export slips response:', resp);
-      console.log('First slip order data:', resp.slips?.[0]?.order);
-      console.log('First slip orderId:', resp.slips?.[0]?.order_id);
-      console.log('All slips data:', resp.slips);
       
       // If order data is missing, we'll need to fetch it separately
       const slips = await Promise.all((resp.slips || []).map(async (s) => {
@@ -107,50 +98,68 @@ function ExportSlipsContent() {
         // If order data is missing but we have order_id, try to fetch it
         if (!orderData && s.order_id) {
           try {
-            console.log('Fetching order data for order_id:', s.order_id);
-            const orderResponse = await orderApi.getOrder(s.order_id);
+            const orderResponse = await orderApi.getOrderIncludeDeleted(s.order_id);
             orderData = {
               order_number: orderResponse.order_number,
               customer_name: orderResponse.customer_name || 'Không xác định',
               customer_address: orderResponse.customer_address,
               customer_phone: orderResponse.customer_phone,
+              customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo,
               total_amount: orderResponse.total_amount,
               order_items: orderResponse.order_items
             };
-            console.log('Fetched order data:', orderData);
           } catch (error) {
             console.error('Error fetching order data:', error);
           }
         }
         
         return {
-          id: s.id,
-          code: s.code,
-          order_id: s.order_id,
-          status: s.status as any,
-          notes: s.notes,
-          approval_notes: s.approval_notes,
-          created_at: s.created_at,
-          approved_at: s.approved_at,
-          created_by: s.created_by,
-          approved_by: s.approved_by,
+          id: s.id || '',
+          code: s.code || '',
+          order_id: s.order_id || '',
+          status: s.status || 'pending',
+          notes: s.notes || undefined,
+          approval_notes: s.approval_notes || undefined,
+          created_at: s.created_at || '',
+          approved_at: s.approved_at || undefined,
+          created_by: s.created_by || '',
+          approved_by: s.approved_by || undefined,
           order: orderData ? {
-            order_number: orderData.order_number,
-            customer_name: orderData.customer_name,
-            customer_address: orderData.customer_address,
-            customer_phone: orderData.customer_phone,
-            total_amount: orderData.total_amount,
-            order_items: orderData.order_items,
+            order_number: orderData.order_number || '',
+            customer_name: orderData.customer_name || '',
+            customer_address: orderData.customer_address || undefined,
+            customer_phone: orderData.customer_phone || undefined,
+            customer_addressInfo: orderData.customer_addressInfo || undefined,
+            total_amount: orderData.total_amount || 0,
+            order_items: orderData.order_items || undefined,
           } : undefined,
-          export_slip_items: s.export_slip_items,
+          export_slip_items: s.export_slip_items || [],
         };
       }));
       
       setExportSlips(slips);
       
-      // Debug: Log export slips data
-      console.log('Export slips loaded:', slips);
-      console.log('First slip status:', slips[0]?.status);
+      // Update address cache for slips that now have addressInfo
+      const newCache: Record<string, string> = {};
+      for (const slip of slips) {
+        console.log(`Slip ${slip.id}:`, {
+          hasAddress: !!slip.order?.customer_address,
+          hasAddressInfo: !!slip.order?.customer_addressInfo,
+          addressInfo: slip.order?.customer_addressInfo
+        });
+        
+        if (slip.order?.customer_address && slip.order?.customer_addressInfo) {
+          const fullAddress = formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo);
+          newCache[slip.id] = fullAddress;
+          console.log(`Cached full address for ${slip.id}:`, fullAddress);
+        } else if (slip.order?.customer_address) {
+          // Even without addressInfo, cache the basic address
+          newCache[slip.id] = slip.order.customer_address;
+          console.log(`Cached basic address for ${slip.id}:`, slip.order.customer_address);
+        }
+      }
+      console.log('Final address cache:', newCache);
+      setAddressCache(newCache);
       
       // No toast notification for empty export slips list
     } catch (error: any) {
@@ -267,6 +276,39 @@ function ExportSlipsContent() {
       style: 'currency',
       currency: 'VND',
     }).format(amount);
+  };
+
+  const formatFullAddress = (address: string, addressInfo?: any) => {
+    const wardName = addressInfo?.ward?.name || addressInfo?.wardName;
+    const districtName = addressInfo?.district?.name || addressInfo?.districtName;
+    const provinceName = addressInfo?.province?.name || addressInfo?.provinceName;
+    const parts: string[] = [];
+    if (address) parts.push(address);
+    if (wardName) parts.push(wardName);
+    if (districtName) parts.push(districtName);
+    if (provinceName) parts.push(provinceName);
+    return parts.join(', ');
+  };
+
+  // Enhanced address formatting with fallback to order API
+  const formatAddressWithFallback = async (slip: ExportSlip) => {
+    if (slip.order?.customer_addressInfo) {
+      return formatFullAddress(slip.order.customer_address || '', slip.order.customer_addressInfo);
+    }
+    
+    // If no addressInfo in export slip, try to get from order API
+    if (slip.order_id) {
+      try {
+        const orderDetails = await orderApi.getOrderIncludeDeleted(slip.order_id);
+        if (orderDetails.customer_addressInfo) {
+          return formatFullAddress(slip.order?.customer_address || '', orderDetails.customer_addressInfo);
+        }
+      } catch (error) {
+        console.warn('Could not fetch order details for address:', error);
+      }
+    }
+    
+    return slip.order?.customer_address || '';
   };
 
   // Permission checks removed - let backend handle authorization
@@ -510,7 +552,13 @@ function ExportSlipsContent() {
                               {slip.order?.customer_address && (
                                 <div className="col-span-2">
                                   <Label className="font-medium">Địa chỉ giao hàng:</Label>
-                                  <p className="text-sm">{slip.order.customer_address}</p>
+                                  <p className="text-sm">
+                                    {(() => {
+                                      const cachedAddress = addressCache[slip.id];
+                                      const directAddress = formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo);
+                                      return cachedAddress || directAddress;
+                                    })()}
+                                  </p>
                                 </div>
                               )}
                               {slip.order?.customer_phone && (

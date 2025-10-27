@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,8 @@ import {
   User,
   LogOut,
   Users,
-  Building2
+  Building2,
+  Edit
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +27,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import UserProfileDialog from "@/components/UserProfileDialog";
+import { authApi } from "@/api/auth.api";
+import { User as UserType } from "@/types/auth";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 interface LayoutProps {
@@ -34,9 +38,33 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showUserProfileDialog, setShowUserProfileDialog] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
+  const [loadingUser, setLoadingUser] = useState(false);
   const location = useLocation();
   const { user, signOut, userRole } = useAuth();
   const { toast } = useToast();
+
+  // Fetch current user info from API
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      if (user) {
+        setLoadingUser(true);
+        try {
+          const userInfo = await authApi.getMe();
+          setCurrentUser(userInfo);
+        } catch (error) {
+          console.error('Error fetching current user:', error);
+          // Fallback to user from auth context
+          setCurrentUser(null);
+        } finally {
+          setLoadingUser(false);
+        }
+      }
+    };
+
+    fetchCurrentUser();
+  }, [user]);
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -63,23 +91,6 @@ const Layout = ({ children }: LayoutProps) => {
       title: "Đăng xuất thành công",
       description: "Hẹn gặp lại bạn!",
     });
-  };
-
-  const getRoleDisplayName = (role: string | null) => {
-    switch (role) {
-      case 'owner_director':
-        return 'Giám đốc/Chủ sở hữu';
-      case 'chief_accountant':
-        return 'Kế toán trưởng';
-      case 'accountant':
-        return 'Kế toán';
-      case 'inventory':
-        return 'Quản kho';
-      case 'shipper':
-        return 'Giao hàng';
-      default:
-        return 'Chưa có quyền';
-    }
   };
 
   const NavLinks = () => (
@@ -165,20 +176,24 @@ const Layout = ({ children }: LayoutProps) => {
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium leading-none">
-                          {user?.user_metadata?.full_name || user?.email}
+                          {currentUser?.full_name || currentUser?.email || user?.email}
                         </p>
                         <p className="text-xs leading-none text-muted-foreground">
-                          {user?.email}
+                          {currentUser?.email || user?.email}
                         </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1.5">
                       <Badge variant="secondary" className="text-xs">
-                        {getRoleDisplayName(userRole)}
+                        {userRole}
                       </Badge>
                     </div>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowUserProfileDialog(true)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      <span>Chỉnh sửa thông tin</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" />
                       <span>Đăng xuất</span>
@@ -193,6 +208,12 @@ const Layout = ({ children }: LayoutProps) => {
         {/* Page Content */}
         <main>{children}</main>
       </div>
+
+      {/* User Profile Dialog */}
+      <UserProfileDialog
+        open={showUserProfileDialog}
+        onOpenChange={setShowUserProfileDialog}
+      />
     </div>
   );
 };

@@ -20,6 +20,7 @@ export interface Order {
   customer_name: string;
   customer_code?: string;
   customer_phone?: string;
+  customer_email?: string;
   customer_address?: string;
   customer_addressInfo?: {
     provinceCode?: string;
@@ -36,6 +37,7 @@ export interface Order {
   order_type: 'sale' | 'return';
   total_amount: number;
   initial_payment?: number;
+  payment_method?: string;
   paid_amount: number;
   debt_amount: number;
   debt_date?: string;
@@ -46,6 +48,7 @@ export interface Order {
   created_by: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
   items?: OrderItem[];
   customer?: {
     id: string;
@@ -53,6 +56,8 @@ export interface Order {
     name: string;
     email?: string;
     phone?: string;
+    address?: string;
+    addressInfo?: any;
   };
   creator_info?: {
     id: string;
@@ -60,7 +65,30 @@ export interface Order {
     firstName?: string | null;
     lastName?: string | null;
   };
+  creator?: {
+    id: string;
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    phoneNumber?: string | null;
+    avatarUrl?: string | null;
+  };
   tags?: string[];
+  order_items?: OrderItem[];
+  addressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+    province?: { code?: string; name?: string; };
+    district?: { code?: string; name?: string; };
+    ward?: { code?: string; name?: string; };
+  };
+  receiverName?: string;
+  receiverPhone?: string;
+  receiverAddress?: string;
 }
 
 export interface CreateOrderRequest {
@@ -153,6 +181,7 @@ export const orderApi = {
     search?: string;
     start_date?: string;
     end_date?: string;
+    includeDeleted?: boolean;
   }): Promise<{ orders: Order[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
@@ -162,6 +191,7 @@ export const orderApi = {
     if (params?.search) queryParams.append('search', params.search);
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
@@ -481,6 +511,87 @@ export const orderApi = {
   // Get order items
   getOrderItems: async (orderId: string): Promise<OrderItem[]> => {
     return api.get<OrderItem[]>(API_ENDPOINTS.ORDERS.ITEMS(orderId));
+  },
+
+  // Get order by ID including soft deleted orders
+  getOrderIncludeDeleted: async (id: string): Promise<Order> => {
+    const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}?includeDeleted=true`);
+    const data = response?.data || response;
+
+    const normalizeItem = (it: any) => ({
+      id: it.id,
+      order_id: it.order_id ?? it.orderId ?? '',
+      product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
+      product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
+      product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      quantity: Number(it.quantity ?? 0),
+      unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+      total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+      created_at: it.created_at ?? it.createdAt ?? '',
+    });
+
+    const normalizeOrder = (row: any): Order => ({
+      id: row.id,
+      order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
+      customer_id: row.customerId ?? row.customer_id ?? '',
+      customer_name: row.customer_name ?? row.customerName ?? row.customer?.name ?? '',
+      customer_code: row.customer_code ?? row.customerCode ?? row.customer?.code ?? '',
+      customer_phone: row.customer_phone ?? row.customerPhone ?? row.customer?.phoneNumber ?? '',
+      customer_email: row.customer_email ?? row.customerEmail ?? row.customer?.email ?? '',
+      customer_address: row.customer_address ?? row.customerAddress ?? row.customer?.address ?? '',
+      customer_addressInfo: (() => {
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name,
+          districtName: ai.district?.name,
+          wardName: ai.ward?.name,
+        };
+      })(),
+      status: row.status ?? 'draft',
+      order_type: row.order_type ?? row.type ?? 'sale',
+      total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
+      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0),
+      payment_method: row.payment_method ?? row.paymentMethod ?? 'cash',
+      paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
+      debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
+      notes: row.notes ?? row.note ?? '',
+      created_at: row.created_at ?? row.createdAt ?? '',
+      updated_at: row.updated_at ?? row.updatedAt ?? '',
+      deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,
+      created_by: row.created_by ?? row.createdBy ?? '',
+      order_items: Array.isArray(row.details) ? row.details.map(normalizeItem) : Array.isArray(row.order_items) ? row.order_items.map(normalizeItem) : [],
+      customer: row.customer ? {
+        id: row.customer.id,
+        code: row.customer.code,
+        name: row.customer.name,
+        phone: row.customer.phoneNumber,
+        email: row.customer.email,
+        address: row.customer.address,
+        addressInfo: row.customer.addressInfo,
+      } : undefined,
+      creator: row.creator ? {
+        id: row.creator.id,
+        email: row.creator.email,
+        firstName: row.creator.firstName,
+        lastName: row.creator.lastName,
+        phoneNumber: row.creator.phoneNumber,
+        avatarUrl: row.creator.avatarUrl,
+      } : undefined,
+      tags: row.tags ?? [],
+      receiverName: row.receiverName ?? row.receiver_name,
+      receiverPhone: row.receiverPhone ?? row.receiver_phone,
+      receiverAddress: row.receiverAddress ?? row.receiver_address,
+      addressInfo: row.addressInfo ?? row.address_info,
+    });
+
+    return normalizeOrder(data);
   },
 
   // Add item to order

@@ -73,7 +73,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
   const loadOrder = async () => {
     try {
       setOrderLoading(true);
-      const orderData = await orderApi.getOrder(orderId);
+      const orderData = await orderApi.getOrderIncludeDeleted(orderId);
       setOrder(orderData);
       
       // Initialize selected items
