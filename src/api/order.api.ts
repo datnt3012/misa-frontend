@@ -89,6 +89,7 @@ export interface Order {
   receiverName?: string;
   receiverPhone?: string;
   receiverAddress?: string;
+  payment_status?: string;
 }
 
 export interface CreateOrderRequest {

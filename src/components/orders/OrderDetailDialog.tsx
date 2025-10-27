@@ -12,8 +12,7 @@ import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { customerApi } from "@/api/customer.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
-import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
-// Tag management is not available in this dialog
+import { PaymentDialog } from '@/components/PaymentDialog';
 
 interface OrderDetailDialogProps {
   order: any;
@@ -33,6 +32,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   // Tags are display-only here
   const { toast } = useToast();
 
@@ -143,38 +143,34 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       const addressInfo = editValues[`${field}_addressInfo`];
       
       // Translate UI snake_case to API camelCase for updates
-      if (field === 'initial_payment') {
-        updateData.initialPayment = value;
+      // Only allow editing receiver fields if they are empty originally
+      const original = orderDetails as any;
+      if ((field === 'receiverName' && original.receiverName) ||
+          (field === 'receiverPhone' && original.receiverPhone) ||
+          (field === 'receiverAddress' && (original.receiverAddress || original.addressInfo))) {
+        setLoading(false);
+        toast({
+          title: 'Không thể cập nhật',
+          description: 'Chỉ cho phép cập nhật thông tin người nhận khi đơn chưa có dữ liệu.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // Map UI field names to BE expectations (camelCase per BE)
+      if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
+        updateData[field] = value;
       } else {
-        // Only allow editing receiver fields if they are empty originally
-        const original = orderDetails as any;
-        if ((field === 'receiverName' && original.receiverName) ||
-            (field === 'receiverPhone' && original.receiverPhone) ||
-            (field === 'receiverAddress' && (original.receiverAddress || original.addressInfo))) {
-          setLoading(false);
-          toast({
-            title: 'Không thể cập nhật',
-            description: 'Chỉ cho phép cập nhật thông tin người nhận khi đơn chưa có dữ liệu.',
-            variant: 'destructive',
-          });
-          return;
-        }
-        // Map UI field names to BE expectations (camelCase per BE)
-        if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
-          updateData[field] = value;
-        } else {
-          updateData[field] = value;
-        }
-        // Add addressInfo if it exists (align with BE expects snake_case *_address_info)
-        if (addressInfo) {
-          const normalizedInfo = {
-            provinceCode: addressInfo.provinceCode || undefined,
-            districtCode: addressInfo.districtCode || undefined,
-            wardCode: addressInfo.wardCode || undefined,
-          };
-          if (field === 'receiverAddress') {
-            updateData['addressInfo'] = normalizedInfo; // BE expects addressInfo for receiver
-          }
+        updateData[field] = value;
+      }
+      // Add addressInfo if it exists (align with BE expects snake_case *_address_info)
+      if (addressInfo) {
+        const normalizedInfo = {
+          provinceCode: addressInfo.provinceCode || undefined,
+          districtCode: addressInfo.districtCode || undefined,
+          wardCode: addressInfo.wardCode || undefined,
+        };
+        if (field === 'receiverAddress') {
+          updateData['addressInfo'] = normalizedInfo; // BE expects addressInfo for receiver
         }
       }
       
@@ -365,6 +361,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     
     const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+  };
+
+  // Calculate payment status based on paid amount vs total amount
+  const calculatePaymentStatus = (paidAmount: number, totalAmount: number): string => {
+    if (paidAmount <= 0) return 'unpaid';
+    if (paidAmount >= totalAmount) return 'paid';
+    return 'partially_paid';
   };
 
   // Convert tags from string array to OrderTag objects for display
@@ -564,7 +567,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
-                {getPaymentStatusBadge((orderDetails as any).payment_status || 'unpaid')}
+                {getPaymentStatusBadge(
+                  (orderDetails as any).payment_status || 
+                  calculatePaymentStatus(
+                    orderDetails.initial_payment || orderDetails.paid_amount || 0,
+                    orderDetails.total_amount || 0
+                  )
+                )}
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
@@ -591,29 +600,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
                 <div className="flex items-center gap-2">
-                  {editingFields['initial_payment'] ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={editValues['initial_payment'] ?? (orderDetails.initial_payment || orderDetails.paid_amount || 0)}
-                        onChange={(e) => setEditValues(prev => ({ ...prev, initial_payment: Number(e.target.value) }))}
-                        className="w-32"
-                      />
-                      <Button size="sm" onClick={() => saveField('initial_payment')} disabled={loading}>
-                        Lưu
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => cancelEditing('initial_payment')}>
-                        Hủy
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>
-                      <Button size="sm" variant="outline" onClick={() => startEditing('initial_payment', orderDetails.initial_payment || orderDetails.paid_amount || 0)}>
-                        Sửa
-                      </Button>
-                    </div>
-                  )}
+                  <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>
+                  <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
+                    Thêm thanh toán
+                  </Button>
                 </div>
               </div>
               {/* Reconciliation tags are not shown in this dialog */}
@@ -679,6 +669,22 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
        </DialogContent>
 
       {/* Tags manager intentionally removed in this dialog */}
+      
+      {/* Payment Dialog */}
+      {orderDetails && (
+        <PaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          order={orderDetails}
+          onUpdate={() => {
+            // Refresh order details when payment is updated
+            loadOrderDetails();
+            if (onOrderUpdated) {
+              onOrderUpdated();
+            }
+          }}
+        />
+      )}
      </Dialog>
    );
  };
