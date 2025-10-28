@@ -45,6 +45,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const [selectedProvince, setSelectedProvince] = useState(value.provinceCode || '');
   const [selectedDistrict, setSelectedDistrict] = useState(value.districtCode || '');
   const [selectedWard, setSelectedWard] = useState(value.wardCode || '');
+  const [selectedProvinceName, setSelectedProvinceName] = useState(value.provinceName || '');
+  const [selectedDistrictName, setSelectedDistrictName] = useState(value.districtName || '');
+  const [selectedWardName, setSelectedWardName] = useState(value.wardName || '');
   const [addressDetail, setAddressDetail] = useState(value.address || '');
   // Removed primary/default flags per requirement
 
@@ -69,7 +72,12 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
         noPaging: true,
         level: '1'
       });
-      setProvinces((response.organizations || []).filter(org => String(org.level) === '1'));
+      const list = (response.organizations || []).filter(org => String(org.level) === '1');
+      setProvinces(list);
+      if (selectedProvince && !selectedProvinceName) {
+        const found = list.find(p => p.code === selectedProvince);
+        if (found) setSelectedProvinceName(found.name);
+      }
     } catch (error: any) {
       console.error('Error loading provinces:', error);
       setProvinces([]);
@@ -96,11 +104,17 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
         parentCode: provinceCode
       });
       // Backend already filters by level and parentCode
-      setDistricts(response.organizations || []);
+      const list = response.organizations || [];
+      setDistricts(list);
       setWards([]);
       if (!preserveSelection) {
         setSelectedDistrict('');
+        setSelectedDistrictName('');
         setSelectedWard('');
+        setSelectedWardName('');
+      } else if (selectedDistrict) {
+        const found = list.find(d => d.code === selectedDistrict);
+        if (found) setSelectedDistrictName(found.name);
       }
     } catch (error: any) {
       console.error('Error loading districts:', error);
@@ -126,9 +140,14 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
         parentCode: districtCode
       });
       // Backend already filters by level and parentCode
-      setWards(response.organizations || []);
+      const list = response.organizations || [];
+      setWards(list);
       if (!preserveSelection) {
         setSelectedWard('');
+        setSelectedWardName('');
+      } else if (selectedWard) {
+        const found = list.find(w => w.code === selectedWard);
+        if (found) setSelectedWardName(found.name);
       }
     } catch (error: any) {
       console.error('Error loading wards:', error);
@@ -176,13 +195,19 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     
     (async () => {
       setSelectedProvince(value.provinceCode!);
+      setSelectedProvinceName(value.provinceName || '');
       await loadDistricts(value.provinceCode!, true);
       if (value.districtCode) {
         setSelectedDistrict(value.districtCode);
+        setSelectedDistrictName(value.districtName || '');
         await loadWards(value.districtCode, true);
-        if (value.wardCode) setSelectedWard(value.wardCode);
+        if (value.wardCode) {
+          setSelectedWard(value.wardCode);
+          setSelectedWardName(value.wardName || '');
+        }
       } else {
         setSelectedWard('');
+        setSelectedWardName('');
       }
     })().finally(() => {
       hydratingRef.current = false;
@@ -195,9 +220,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     // Skip onChange during hydration to avoid loops
     if (hydratingRef.current) return;
     
-    const provinceName = provinces.find(p => p.code === selectedProvince)?.name || '';
-    const districtName = districts.find(d => d.code === selectedDistrict)?.name || '';
-    const wardName = wards.find(w => w.code === selectedWard)?.name || '';
+    const provinceName = selectedProvinceName || provinces.find(p => p.code === selectedProvince)?.name || '';
+    const districtName = selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || '';
+    const wardName = selectedWardName || wards.find(w => w.code === selectedWard)?.name || '';
 
     const addressData: AddressData = {
       address: addressDetail,
@@ -223,7 +248,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
           <Popover open={openProvince} onOpenChange={setOpenProvince}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || loading}>
-                {selectedProvince ? (provinces.find(p => p.code === selectedProvince)?.name || selectedProvince) : (loading ? 'Đang tải...' : 'Chọn tỉnh')}
+                {selectedProvince
+                  ? (selectedProvinceName || provinces.find(p => p.code === selectedProvince)?.name || (loading ? 'Đang tải...' : 'Chọn tỉnh'))
+                  : (loading ? 'Đang tải...' : 'Chọn tỉnh')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[300px]" onWheelCapture={(e) => e.stopPropagation()}>
@@ -233,7 +260,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
                   <CommandEmpty>Không tìm thấy</CommandEmpty>
                   <CommandGroup>
                     {provinces.map((p) => (
-                      <CommandItem key={p.code} value={`${p.code} ${p.name} ${normalizeText(p.name)}`} onSelect={() => { setSelectedProvince(p.code); setOpenProvince(false); }}>
+                      <CommandItem key={p.code} value={`${p.code} ${p.name} ${normalizeText(p.name)}`} onSelect={() => { setSelectedProvince(p.code); setSelectedProvinceName(p.name); setSelectedDistrict(''); setSelectedDistrictName(''); setSelectedWard(''); setSelectedWardName(''); setOpenProvince(false); }}>
                         {p.name}
                       </CommandItem>
                     ))}
@@ -250,7 +277,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
           <Popover open={openDistrict} onOpenChange={setOpenDistrict}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedProvince}>
-                {selectedDistrict ? (districts.find(d => d.code === selectedDistrict)?.name || selectedDistrict) : 'Chọn quận/huyện'}
+                {selectedDistrict
+                  ? (selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || (loading ? 'Đang tải...' : 'Chọn quận/huyện'))
+                  : 'Chọn quận/huyện'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[300px]" onWheelCapture={(e) => e.stopPropagation()}>
@@ -260,7 +289,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
                   <CommandEmpty>Không tìm thấy</CommandEmpty>
                   <CommandGroup>
                     {districts.map((d) => (
-                      <CommandItem key={d.code} value={`${d.code} ${d.name} ${normalizeText(d.name)}`} onSelect={() => { setSelectedDistrict(d.code); setOpenDistrict(false); }}>
+                      <CommandItem key={d.code} value={`${d.code} ${d.name} ${normalizeText(d.name)}`} onSelect={() => { setSelectedDistrict(d.code); setSelectedDistrictName(d.name); setSelectedWard(''); setSelectedWardName(''); setOpenDistrict(false); }}>
                         {d.name}
                       </CommandItem>
                     ))}
@@ -277,7 +306,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
           <Popover open={openWard} onOpenChange={setOpenWard}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedDistrict}>
-                {selectedWard ? (wards.find(w => w.code === selectedWard)?.name || selectedWard) : 'Chọn phường/xã'}
+                {selectedWard
+                  ? (selectedWardName || wards.find(w => w.code === selectedWard)?.name || (loading ? 'Đang tải...' : 'Chọn phường/xã'))
+                  : 'Chọn phường/xã'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[300px]" onWheelCapture={(e) => e.stopPropagation()}>
@@ -287,7 +318,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
                   <CommandEmpty>Không có phường/xã phù hợp</CommandEmpty>
                   <CommandGroup>
                     {wards.map((w) => (
-                      <CommandItem key={w.code} value={`${w.code} ${w.name} ${normalizeText(w.name)}`} onSelect={() => { setSelectedWard(w.code); setOpenWard(false); }}>
+                      <CommandItem key={w.code} value={`${w.code} ${w.name} ${normalizeText(w.name)}`} onSelect={() => { setSelectedWard(w.code); setSelectedWardName(w.name); setOpenWard(false); }}>
                         {w.name}
                       </CommandItem>
                     ))}

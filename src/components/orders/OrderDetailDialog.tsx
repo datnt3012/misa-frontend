@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 // Tag management is not available in this dialog
 import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { customerApi } from "@/api/customer.api";
