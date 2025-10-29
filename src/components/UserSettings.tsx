@@ -3,9 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-// import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead
 import { useToast } from '@/hooks/use-toast';
 import { Key, Loader2 } from 'lucide-react';
+import { authApi } from '@/api/auth.api';
 
 const UserSettings = () => {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -35,11 +35,11 @@ const UserSettings = () => {
 
     try {
       setLoading(true);
-      const { error } = await supabase.auth.updateUser({
+      
+      // Update password using API
+      await authApi.updateProfile({
         password: newPassword
       });
-
-      if (error) throw error;
 
       toast({
         title: "Thành công",
@@ -52,7 +52,7 @@ const UserSettings = () => {
     } catch (error: any) {
       toast({
         title: "Lỗi",
-        description: error.message || "Không thể đổi mật khẩu",
+        description: error.response?.data?.message || error.message || "Không thể đổi mật khẩu",
         variant: "destructive",
       });
     } finally {

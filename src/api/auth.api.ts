@@ -42,7 +42,8 @@ export const authApi = {
 
   // Get user profile
   getProfile: async (): Promise<User> => {
-    return api.get<User>(API_ENDPOINTS.AUTH.PROFILE);
+    // Use /auth/me instead of /auth/profile since /auth/profile doesn't exist
+    return api.get<User>(API_ENDPOINTS.AUTH.ME);
   },
 
   // Get current user info (preferred method)
@@ -52,7 +53,30 @@ export const authApi = {
 
   // Update current user profile
   updateProfile: async (userData: Partial<UpdateUserRequest>): Promise<User> => {
-    return api.patch<User>('/auth/profile', userData);
+    // Get current user info first, then update via users API
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.AUTH.ME);
+      
+      // Handle different response structures
+      let currentUser;
+      if (response.data) {
+        currentUser = response.data;
+      } else if (response.id) {
+        currentUser = response;
+      } else {
+        currentUser = response;
+      }
+      
+      const userId = currentUser.id || currentUser.user_id || currentUser.sub;
+      
+      if (!userId) {
+        throw new Error('User ID not found in response');
+      }
+      
+      return api.patch<User>(API_ENDPOINTS.USERS.UPDATE(userId), userData);
+    } catch (error: any) {
+      throw new Error('Unable to update profile: ' + (error.message || 'Unknown error'));
+    }
   },
 
   // Forgot password

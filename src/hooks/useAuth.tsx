@@ -30,6 +30,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
+  refreshUser: () => Promise<void>;
   userRole: string | null;
 }
 
@@ -158,6 +159,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Check if we have the required data directly in result
       if (result && result.access_token && result.user) {
+        // Handle different user data structures
+        let userData = result.user;
+        if (result.user.data) {
+          userData = result.user.data;
+        }
 
         // Create session from API response
         const sessionData = {
@@ -166,13 +172,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           expires_in: 3600, // Default 1 hour
           expires_at: Math.floor(Date.now() / 1000) + 3600,
           token_type: 'bearer',
-          user: result.user
+          user: userData
         };
 
         // Update user state directly from API response
-        setUser(result.user);
+        setUser(userData);
         setSession(sessionData);
-        setUserRole(result.user.roleId); // Set roleId, will be resolved by usePermissions
+        setUserRole(userData.roleId); // Set roleId, will be resolved by usePermissions
 
         // Store tokens directly in localStorage for axios interceptor
         localStorage.setItem('access_token', result.access_token);
@@ -180,9 +186,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Store session in localStorage for persistence
         localStorage.setItem('user-session', JSON.stringify({
-          user: result.user,
+          user: userData,
           session: sessionData,
-          userRole: result.user.roleId // Store roleId, will be resolved by usePermissions
+          userRole: userData.roleId // Store roleId, will be resolved by usePermissions
         }));
 
 
@@ -228,6 +234,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: { message: 'Reset password not implemented yet' } };
   };
 
+  const refreshUser = async () => {
+    try {
+      const response = await authApi.getMe();
+      
+      // Handle different response structures
+      let userData;
+      if (response.data) {
+        userData = response.data;
+      } else if (response.id) {
+        userData = response;
+      } else {
+        userData = response;
+      }
+      
+      // Update user state
+      setUser(userData);
+      
+      // Update session if exists
+      if (session) {
+        const updatedSession = { ...session, user: userData };
+        setSession(updatedSession);
+        
+        // Update localStorage
+        localStorage.setItem('user-session', JSON.stringify({
+          user: userData,
+          session: updatedSession,
+          userRole: userData.roleId
+        }));
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
+
   const signOut = async () => {
     
     // Call logout API first (but don't block on it)
@@ -257,6 +297,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     resetPassword,
+    refreshUser,
     userRole,
   };
 

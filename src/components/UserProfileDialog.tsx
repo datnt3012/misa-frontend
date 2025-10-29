@@ -19,20 +19,18 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
-    full_name: '',
     firstName: '',
     lastName: '',
   });
   const { toast } = useToast();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
 
   useEffect(() => {
     if (open && currentUser) {
       setFormData({
         email: currentUser.email || '',
-        full_name: currentUser.full_name || '',
-        firstName: currentUser.user_metadata?.firstName || '',
-        lastName: currentUser.user_metadata?.lastName || '',
+        firstName: currentUser.firstName || currentUser.user_metadata?.firstName || '',
+        lastName: currentUser.lastName || currentUser.user_metadata?.lastName || '',
       });
     }
   }, [open, currentUser]);
@@ -67,6 +65,9 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
       // Gọi API cập nhật thông tin người dùng hiện tại
       await authApi.updateProfile(updateData);
 
+      // Refresh user data to update UI
+      await refreshUser();
+
       toast({
         title: "Thành công",
         description: "Đã cập nhật thông tin người dùng",
@@ -90,9 +91,8 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     if (currentUser) {
       setFormData({
         email: currentUser.email || '',
-        full_name: currentUser.full_name || '',
-        firstName: currentUser.user_metadata?.firstName || '',
-        lastName: currentUser.user_metadata?.lastName || '',
+        firstName: currentUser.firstName || currentUser.user_metadata?.firstName || '',
+        lastName: currentUser.lastName || currentUser.user_metadata?.lastName || '',
       });
     }
     onOpenChange(false);
@@ -117,17 +117,6 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
               placeholder="Nhập email"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="full_name">Họ và tên</Label>
-            <Input
-              id="full_name"
-              type="text"
-              value={formData.full_name}
-              onChange={(e) => handleInputChange('full_name', e.target.value)}
-              placeholder="Nhập họ và tên"
             />
           </div>
 
