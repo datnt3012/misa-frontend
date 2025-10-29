@@ -14,6 +14,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { CalendarIcon, Filter, Download, TrendingUp, AlertCircle, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { format as formatDate } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { customerApi } from '@/api/customer.api';
@@ -33,6 +34,7 @@ const formatCurrency = (value: number) => {
 };
 
 function RevenueContent() {
+  const formatDateLocal = (d?: Date) => (d ? formatDate(d, 'yyyy-MM-dd') : undefined);
   // Filter states
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -108,69 +110,100 @@ function RevenueContent() {
 
   const fetchRevenueData = async () => {
     try {
-      // Build query parameters based on filters
+      setOrdersLoading(true);
+      // Build API-supported query parameters
       const queryParams: any = {
         page: 1,
-        limit: 1000
+        limit: 1000,
       };
 
       // Date filters
-      if (startDate) {
-        queryParams.startDate = startDate.toISOString().split('T')[0];
-      }
-      if (endDate) {
-        queryParams.endDate = endDate.toISOString().split('T')[0];
-      }
-      if (createdFromDate) {
-        queryParams.createdFromDate = createdFromDate.toISOString().split('T')[0];
-      }
-      if (createdToDate) {
-        queryParams.createdToDate = createdToDate.toISOString().split('T')[0];
-      }
-      if (completedFromDate) {
-        queryParams.completedFromDate = completedFromDate.toISOString().split('T')[0];
-      }
-      if (completedToDate) {
-        queryParams.completedToDate = completedToDate.toISOString().split('T')[0];
-      }
+      // Backend expects created_at range as start_date/end_date.
+      // Use main range pickers (Từ ngày/Đến ngày) for server filtering.
+      const apiStart = formatDateLocal(startDate);
+      const apiEnd = formatDateLocal(endDate);
+      if (apiStart) queryParams.startDate = apiStart;
+      if (apiEnd) queryParams.endDate = apiEnd;
 
-      // Value filters
+      // Value filters (backend expects minTotalAmount/maxTotalAmount)
       if (valueFrom && valueFrom !== "0") {
-        queryParams.valueFrom = parseFloat(valueFrom.replace(/,/g, ''));
+        queryParams.minTotalAmount = parseFloat(valueFrom.replace(/,/g, ''));
       }
       if (valueTo && valueTo !== "999,999,999") {
-        queryParams.valueTo = parseFloat(valueTo.replace(/,/g, ''));
+        queryParams.maxTotalAmount = parseFloat(valueTo.replace(/,/g, ''));
       }
 
       // Selection filters
       if (selectedCustomer !== "all") {
         queryParams.customerId = selectedCustomer;
       }
-      if (selectedProduct !== "all") {
-        queryParams.productId = selectedProduct;
-      }
+      // status supported by API (map UI -> backend)
       if (selectedOrderStatus !== "all") {
-        queryParams.status = selectedOrderStatus;
+        const statusMapToBackend: Record<string, string> = {
+          pending: 'draft',
+          processing: 'processing',
+          completed: 'delivered',
+          cancelled: 'cancelled',
+        };
+        const apiStatus = statusMapToBackend[selectedOrderStatus] || selectedOrderStatus;
+        queryParams.status = apiStatus;
       }
-      if (selectedOrderCreator !== "all") {
-        queryParams.createdBy = selectedOrderCreator;
-      }
-      if (selectedPaymentMethod !== "all") {
-        queryParams.paymentMethod = selectedPaymentMethod;
-      }
-      if (selectedArea !== "all") {
-        queryParams.area = selectedArea;
-      }
-      if (selectedProductGroup !== "all") {
-        queryParams.categoryId = selectedProductGroup;
-      }
+      // Other filters will be applied client-side below
 
       // Fetch orders data from backend API with filters
+      console.log('[Revenue] Fetch orders with params:', queryParams);
       const ordersResponse = await orderApi.getOrders(queryParams);
-      const ordersData = ordersResponse.orders || [];
+      console.log('[Revenue] Received orders:', ordersResponse.total);
+      let ordersData = ordersResponse.orders || [];
+
+      // Apply client-side filters not supported by API
+      ordersData = ordersData.filter((order) => {
+        // Value range is now handled by backend (minTotalAmount/maxTotalAmount)
+        
+        // Creator
+        if (selectedOrderCreator !== 'all' && String(order.created_by) !== String(selectedOrderCreator)) return false;
+
+        // Payment method
+        if (selectedPaymentMethod !== 'all' && order.payment_method !== selectedPaymentMethod) return false;
+
+        // Area by customer addressInfo (province/region) if available
+        if (selectedArea !== 'all') {
+          const provinceName = order.customer_addressInfo?.provinceName || order.customer?.addressInfo?.province?.name;
+          if (!provinceName) return false;
+          const areaMap: any = {
+            north: ['Hà Nội','Hải Phòng','Quảng Ninh','Hải Dương','Bắc Ninh','Bắc Giang','Nam Định','Thái Bình','Vĩnh Phúc','Phú Thọ','Ninh Bình','Hà Nam','Hòa Bình','Lào Cai','Yên Bái','Sơn La','Điện Biên','Lai Châu','Tuyên Quang','Hà Giang','Bắc Kạn','Cao Bằng','Thái Nguyên','Lạng Sơn'],
+            central: ['Đà Nẵng','Thừa Thiên Huế','Quảng Trị','Quảng Bình','Quảng Nam','Quảng Ngãi','Bình Định','Phú Yên','Khánh Hòa','Nghệ An','Hà Tĩnh','Kon Tum','Gia Lai','Đắk Lắk','Đắk Nông','Lâm Đồng'],
+            south: ['TP. Hồ Chí Minh','Bình Dương','Đồng Nai','Bà Rịa - Vũng Tàu','Tây Ninh','Bình Phước','Long An','Tiền Giang','Bến Tre','Trà Vinh','Vĩnh Long','Đồng Tháp','An Giang','Cần Thơ','Hậu Giang','Sóc Trăng','Bạc Liêu','Cà Mau','Kiên Giang']
+          };
+          const list = areaMap[selectedArea] || [];
+          if (!list.some(name => provinceName?.includes(name))) return false;
+        }
+
+        // Product and Category by items
+        if (selectedProduct !== 'all') {
+          const hasProduct = (order.items || order.order_items || []).some((it: any) => String(it.product_id) === String(selectedProduct));
+          if (!hasProduct) return false;
+        }
+        if (selectedProductGroup !== 'all') {
+          const inCategory = (order.items || order.order_items || []).some((it: any) => String(it.category_id || it.categoryId) === String(selectedProductGroup));
+          if (!inCategory) return false;
+        }
+
+        // Completed date range if available
+        if (completedFromDate || completedToDate) {
+          const completedAt = order.updated_at || order.created_at;
+          const d = completedAt ? new Date(completedAt) : null;
+          if (!d) return false;
+          if (completedFromDate && d < new Date(completedFromDate.setHours(0,0,0,0))) return false;
+          if (completedToDate && d > new Date(completedToDate.setHours(23,59,59,999))) return false;
+        }
+
+        return true;
+      });
       
-      // Store orders for detailed view
+      // Store orders for detailed view and reset pagination
       setOrders(ordersData);
+      setCurrentPage(1);
 
       // Calculate revenue by month from filtered orders
       const monthlyRevenue: any = {};
@@ -230,6 +263,8 @@ function RevenueContent() {
           variant: "destructive",
         });
       throw error; // Re-throw for lazy loading error handling
+    } finally {
+      setOrdersLoading(false);
     }
   };
 

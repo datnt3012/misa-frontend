@@ -179,19 +179,31 @@ export const orderApi = {
     limit?: number;
     status?: string;
     customer_id?: string;
+    customerId?: string;
     search?: string;
+    startDate?: string;
+    endDate?: string;
     start_date?: string;
     end_date?: string;
+    minTotalAmount?: number;
+    maxTotalAmount?: number;
     includeDeleted?: boolean;
   }): Promise<{ orders: Order[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.status) queryParams.append('status', params.status);
-    if (params?.customer_id) queryParams.append('customer_id', params.customer_id);
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.start_date) queryParams.append('start_date', params.start_date);
-    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.customer_id) queryParams.append('customerId', params.customer_id);
+    if (params?.customerId) queryParams.append('customerId', params.customerId);
+    if (params?.search) queryParams.append('keyword', params.search);
+    // Backend DTO expects camelCase: startDate, endDate
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    // Legacy support for snake_case
+    if (params?.start_date && !params?.startDate) queryParams.append('startDate', params.start_date);
+    if (params?.end_date && !params?.endDate) queryParams.append('endDate', params.end_date);
+    if (params?.minTotalAmount !== undefined) queryParams.append('minTotalAmount', params.minTotalAmount.toString());
+    if (params?.maxTotalAmount !== undefined) queryParams.append('maxTotalAmount', params.maxTotalAmount.toString());
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
 
     const url = queryParams.toString() 
