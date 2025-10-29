@@ -1,0 +1,10 @@
+/* Custom styles for Revenue page calendar */
+.revenue-calendar-popover {
+  z-index: 9999 !important;
+  overflow: visible;
+}
+
+/* Keep only container behavior; let component classes control sizing */
+.revenue-calendar-popover .rdp {
+  margin: 0;
+}
