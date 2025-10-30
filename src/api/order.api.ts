@@ -191,6 +191,9 @@ export const orderApi = {
     end_date?: string;
     minTotalAmount?: number;
     maxTotalAmount?: number;
+    categories?: string | string[];
+    paymentMethods?: string | string[];
+    region?: 'north' | 'central' | 'south';
     includeDeleted?: boolean;
   }): Promise<{ orders: Order[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
@@ -211,6 +214,34 @@ export const orderApi = {
     if (params?.end_date && !params?.endDate) queryParams.append('endDate', params.end_date);
     if (params?.minTotalAmount !== undefined) queryParams.append('minTotalAmount', params.minTotalAmount.toString());
     if (params?.maxTotalAmount !== undefined) queryParams.append('maxTotalAmount', params.maxTotalAmount.toString());
+    // Categories filter: support CSV or array syntax per backend
+    if (params?.categories) {
+      if (Array.isArray(params.categories)) {
+        params.categories.forEach((id) => queryParams.append('categories[]', String(id)));
+      } else if (typeof params.categories === 'string') {
+        if (params.categories.includes(',')) {
+          queryParams.append('categories', params.categories);
+        } else {
+          queryParams.append('categories', params.categories);
+        }
+      }
+    }
+    // Payment methods filter: support CSV or array syntax per backend
+    if (params?.paymentMethods) {
+      if (Array.isArray(params.paymentMethods)) {
+        params.paymentMethods.forEach((m) => queryParams.append('paymentMethods[]', String(m)));
+      } else if (typeof params.paymentMethods === 'string') {
+        if (params.paymentMethods.includes(',')) {
+          queryParams.append('paymentMethods', params.paymentMethods);
+        } else {
+          queryParams.append('paymentMethods', params.paymentMethods);
+        }
+      }
+    }
+    // Region filter
+    if (params?.region) {
+      queryParams.append('region', params.region);
+    }
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
 
     const url = queryParams.toString() 
@@ -288,6 +319,7 @@ export const orderApi = {
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
+      payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',
@@ -400,6 +432,7 @@ export const orderApi = {
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
+      payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',

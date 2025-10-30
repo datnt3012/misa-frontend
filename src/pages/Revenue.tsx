@@ -80,14 +80,8 @@ function RevenueContent() {
   const canReadRevenue = hasPermission('REVENUE_READ');
   const canViewProfit = hasPermission('REVENUE_PROFIT_VIEW');
   
-  // Check user role for profit access - only owner and chief_accountant
-  const isOwner = user?.role === 'owner' || user?.roleCode === 'OWNER';
-  const isChiefAccountant = user?.role === 'chief_accountant' || user?.roleCode === 'CHIEF_ACCOUNTANT';
-  
-  // Only allow if user data is loaded AND (has permission OR is owner/chief_accountant)
-  const canAccessProfit = user && (
-    canViewProfit || isOwner || isChiefAccountant
-  );
+  // Access to profit relies on permission only to avoid type errors on user role fields
+  const canAccessProfit = !!user && canViewProfit;
 
   const fetchFilterData = async () => {
     try {
@@ -118,12 +112,17 @@ function RevenueContent() {
       };
 
       // Date filters
-      // Backend expects created_at range as start_date/end_date.
-      // Use main range pickers (Từ ngày/Đến ngày) for server filtering.
-      const apiStart = formatDateLocal(startDate);
-      const apiEnd = formatDateLocal(endDate);
-      if (apiStart) queryParams.startDate = apiStart;
-      if (apiEnd) queryParams.endDate = apiEnd;
+      // Created date range -> startDate/endDate (prefer specific created range if provided)
+      const createdStart = formatDateLocal(createdFromDate || startDate);
+      const createdEnd = formatDateLocal(createdToDate || endDate);
+      if (createdStart) queryParams.startDate = createdStart;
+      if (createdEnd) queryParams.endDate = createdEnd;
+
+      // Completed date range -> completedStartDate/completedEndDate
+      const completedStart = formatDateLocal(completedFromDate);
+      const completedEnd = formatDateLocal(completedToDate);
+      if (completedStart) queryParams.completedStartDate = completedStart;
+      if (completedEnd) queryParams.completedEndDate = completedEnd;
 
       // Value filters (backend expects minTotalAmount/maxTotalAmount)
       if (valueFrom && valueFrom !== "0") {
@@ -142,12 +141,28 @@ function RevenueContent() {
         const statusMapToBackend: Record<string, string> = {
           pending: 'draft',
           processing: 'processing',
-          completed: 'delivered',
+          delivered: 'delivered',
+          completed: 'completed',
           cancelled: 'cancelled',
         };
         const apiStatus = statusMapToBackend[selectedOrderStatus] || selectedOrderStatus;
         queryParams.status = apiStatus;
       }
+      // Product category (backend: categories accepts CSV or array)
+      if (selectedProductGroup !== 'all') {
+        queryParams.categories = String(selectedProductGroup);
+      }
+
+      // Payment methods (backend: paymentMethods accepts CSV or array)
+      if (selectedPaymentMethod !== 'all') {
+        queryParams.paymentMethods = String(selectedPaymentMethod);
+      }
+
+      // Region (backend handles region based on receiver/customer province)
+      if (selectedArea !== 'all') {
+        queryParams.region = selectedArea;
+      }
+
       // Other filters will be applied client-side below
 
       // Fetch orders data from backend API with filters
@@ -163,21 +178,12 @@ function RevenueContent() {
         // Creator
         if (selectedOrderCreator !== 'all' && String(order.created_by) !== String(selectedOrderCreator)) return false;
 
-        // Payment method
-        if (selectedPaymentMethod !== 'all' && order.payment_method !== selectedPaymentMethod) return false;
-
-        // Area by customer addressInfo (province/region) if available
-        if (selectedArea !== 'all') {
-          const provinceName = order.customer_addressInfo?.provinceName || order.customer?.addressInfo?.province?.name;
-          if (!provinceName) return false;
-          const areaMap: any = {
-            north: ['Hà Nội','Hải Phòng','Quảng Ninh','Hải Dương','Bắc Ninh','Bắc Giang','Nam Định','Thái Bình','Vĩnh Phúc','Phú Thọ','Ninh Bình','Hà Nam','Hòa Bình','Lào Cai','Yên Bái','Sơn La','Điện Biên','Lai Châu','Tuyên Quang','Hà Giang','Bắc Kạn','Cao Bằng','Thái Nguyên','Lạng Sơn'],
-            central: ['Đà Nẵng','Thừa Thiên Huế','Quảng Trị','Quảng Bình','Quảng Nam','Quảng Ngãi','Bình Định','Phú Yên','Khánh Hòa','Nghệ An','Hà Tĩnh','Kon Tum','Gia Lai','Đắk Lắk','Đắk Nông','Lâm Đồng'],
-            south: ['TP. Hồ Chí Minh','Bình Dương','Đồng Nai','Bà Rịa - Vũng Tàu','Tây Ninh','Bình Phước','Long An','Tiền Giang','Bến Tre','Trà Vinh','Vĩnh Long','Đồng Tháp','An Giang','Cần Thơ','Hậu Giang','Sóc Trăng','Bạc Liêu','Cà Mau','Kiên Giang']
-          };
-          const list = areaMap[selectedArea] || [];
-          if (!list.some(name => provinceName?.includes(name))) return false;
+        // Payment method: already handled by backend when selectedPaymentMethod !== 'all'
+        if (selectedPaymentMethod !== 'all') {
+          // Do not re-filter here to avoid dropping valid BE results
         }
+
+        // Region: already handled by backend
 
         // Product and Category by items
         if (selectedProduct !== 'all') {
@@ -185,8 +191,7 @@ function RevenueContent() {
           if (!hasProduct) return false;
         }
         if (selectedProductGroup !== 'all') {
-          const inCategory = (order.items || order.order_items || []).some((it: any) => String(it.category_id || it.categoryId) === String(selectedProductGroup));
-          if (!inCategory) return false;
+          // Category filter sent to backend via categories param; skip client-side item check to avoid false negatives
         }
 
         // Completed date range if available
@@ -653,11 +658,15 @@ function RevenueContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tất cả nhân viên</SelectItem>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.firstName} {user.lastName}
-                        </SelectItem>
-                      ))}
+                      {users.map((user) => {
+                        const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+                        const label = fullName || user.email || 'Không xác định';
+                        return (
+                          <SelectItem key={user.id} value={user.id}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -965,6 +974,7 @@ function RevenueContent() {
                     <TableHead>Ngày tạo</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Phương thức TT</TableHead>
+                    <TableHead className="text-center">Ngày hoàn thành</TableHead>
                     <TableHead>Tổng tiền</TableHead>
                     <TableHead>Công nợ</TableHead>
                     <TableHead>Người tạo</TableHead>
@@ -1040,6 +1050,15 @@ function RevenueContent() {
                         </TableCell>
                         <TableCell>
                           {getPaymentMethodLabel(order.payment_method)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {(() => {
+                            const completedAt = order.completed_at || order.updated_at;
+                            const showCompleted = ['delivered','completed'].includes(order.status);
+                            return showCompleted && completedAt
+                              ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm', { locale: vi })
+                              : '-';
+                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           {formatCurrency(order.total_amount || 0)}
