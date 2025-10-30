@@ -312,8 +312,8 @@ const OrdersContent: React.FC = () => {
   }), { totalAmount: 0, paidAmount: 0, debtAmount: 0 });
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-2 sm:p-3 md:p-4">
+      <div className="w-full mx-auto space-y-3 sm:space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">📋 DANH SÁCH ĐƠN HÀNG</h1>
@@ -453,10 +453,10 @@ const OrdersContent: React.FC = () => {
       <Card className="shadow-sm border">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-full">
+            <Table className="min-w-full text-xs sm:text-sm">
               <TableHeader>
                 <TableRow className="border-b bg-slate-50/50">
-                  <TableHead className="w-12 py-3 border-r border-slate-200">
+                  <TableHead className="w-10 sm:w-12 py-1 sm:py-2 border-r border-slate-200">
                     <input 
                       type="checkbox" 
                       className="rounded" 
@@ -465,7 +465,7 @@ const OrdersContent: React.FC = () => {
                     />
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px] text-center" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[96px] sm:min-w-[110px] text-center" 
                     onClick={() => handleSort("order_number")}
                   >
                     <div className="flex items-center justify-center gap-1">
@@ -474,7 +474,7 @@ const OrdersContent: React.FC = () => {
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px] text-center" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[120px] sm:min-w-[140px] text-center" 
                     onClick={() => handleSort("customer_name")}
                   >
                     <div className="flex items-center justify-center gap-1">
@@ -482,26 +482,27 @@ const OrdersContent: React.FC = () => {
                       {getSortIcon("customer_name")}
                     </div>
                   </TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[100px]">Sản phẩm</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[100px]">Giá</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px]">Số lượng</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[120px]">Thanh toán</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[150px] text-center">Ghi chú</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[120px] text-center">Người tạo đơn</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] text-center">Trạng thái</TableHead>
-                  <TableHead className="text-center py-3 font-medium text-slate-700 min-w-[100px]">Thao tác</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ngày hoàn thành</TableHead>
+                  <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[88px] sm:min-w-[104px] text-center whitespace-nowrap">Trạng thái</TableHead>
+                  <TableHead className="text-center py-1 sm:py-2 font-medium text-slate-700 min-w-[80px] sm:min-w-[90px]">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-6">
                       Đang tải...
                     </TableCell>
                   </TableRow>
                 ) : filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-6">
                       Không có đơn hàng nào
                     </TableCell>
                   </TableRow>
@@ -528,7 +529,7 @@ const OrdersContent: React.FC = () => {
                     
                     return (
                       <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
-                        <TableCell className="py-4 border-r border-slate-200">
+                        <TableCell className="py-3 border-r border-slate-200">
                           <input 
                             type="checkbox" 
                             className="rounded" 
@@ -537,7 +538,7 @@ const OrdersContent: React.FC = () => {
                           />
                         </TableCell>
                          {/* ID Column */}
-                         <TableCell className="py-4 border-r border-slate-200">
+                         <TableCell className="py-3 border-r border-slate-200">
                            <div className="space-y-2">
                              <div className="font-mono text-sm font-medium text-blue-600">
                                {order.order_number}
@@ -579,7 +580,7 @@ const OrdersContent: React.FC = () => {
                          </TableCell>
                          
                          {/* Customer Column */}
-                         <TableCell className="py-4 border-r border-slate-200">
+                         <TableCell className="py-3 border-r border-slate-200">
                            <div className="space-y-1">
                              <div className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                                {maskPhoneNumber(order.customer_phone || "")}
@@ -653,7 +654,7 @@ const OrdersContent: React.FC = () => {
                            </TableCell>
                            
                             {/* Payment Column */}
-                            <TableCell className="py-4 border-r border-slate-200 text-center">
+                          <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
@@ -666,7 +667,7 @@ const OrdersContent: React.FC = () => {
                             </TableCell>
                          
                           {/* Quick Notes Column */}
-                          <TableCell className="py-4 border-r border-slate-200">
+                          <TableCell className="py-3 border-r border-slate-200">
                             <div className="max-w-xs">
                               <Input
                                 defaultValue={order.notes || ""}
@@ -683,37 +684,47 @@ const OrdersContent: React.FC = () => {
                           </TableCell>
                           
                            {/* Creator Column */}
-                           <TableCell className="py-4 border-r border-slate-200">
+                          <TableCell className="py-3 border-r border-slate-200">
                              <CreatorDisplay createdBy={order.created_by} creatorInfo={order.creator_info} />
                            </TableCell>
                           
-                          {/* Remove date column - now in ID */}
+                          {/* Completed At Column */}
+                          <TableCell className="py-3 border-r border-slate-200 text-center">
+                            {(() => {
+                              const completedAt = order.completed_at || order.updated_at;
+                              const showCompleted = ['delivered','completed'].includes(order.status);
+                              return showCompleted && completedAt
+                                ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm')
+                                : '-';
+                            })()}
+                          </TableCell>
                           
-                           {/* Status Column */}
-                           <TableCell className="py-4 border-r border-slate-200">
-                             <Select
-                               value={order.status || 'pending'}
-                               onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
-                             >
-                               <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
-                                 <div className="cursor-pointer">
-                                   {getStatusBadge(order.status)}
-                                 </div>
-                               </SelectTrigger>
-                               <SelectContent>
-                                 <SelectItem value="pending">Chờ xử lý</SelectItem>
-                                 <SelectItem value="confirmed">Đã xác nhận</SelectItem>
-                                 <SelectItem value="processing">Đang xử lý</SelectItem>
-                                 <SelectItem value="picked">Đã lấy hàng</SelectItem>
-                                 <SelectItem value="shipped">Đã giao</SelectItem>
-                                 <SelectItem value="delivered">Đã nhận</SelectItem>
-                                 <SelectItem value="cancelled">Đã hủy</SelectItem>
-                               </SelectContent>
-                             </Select>
-                           </TableCell>
+                          {/* Status Column */}
+                          <TableCell className="py-4 border-r border-slate-200 min-w-[88px] sm:min-w-[104px]">
+                            <Select
+                              value={order.status || 'pending'}
+                              onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
+                            >
+                              <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
+                                <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
+                                  {getStatusBadge(order.status)}
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent className="min-w-[128px] sm:min-w-[144px]">
+                                <SelectItem value="pending">Chờ xử lý</SelectItem>
+                                <SelectItem value="confirmed">Đã xác nhận</SelectItem>
+                                <SelectItem value="processing">Đang xử lý</SelectItem>
+                                <SelectItem value="picked">Đã lấy hàng</SelectItem>
+                                <SelectItem value="shipped">Đã giao</SelectItem>
+                                <SelectItem value="delivered">Đã nhận</SelectItem>
+                                <SelectItem value="cancelled">Đã hủy</SelectItem>
+                                <SelectItem value="completed">Đã hoàn thành</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
                          
                          {/* Actions Column */}
-                         <TableCell className="text-center py-4">
+                          <TableCell className="text-center py-3">
                            <DropdownMenu>
                              <DropdownMenuTrigger asChild>
                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

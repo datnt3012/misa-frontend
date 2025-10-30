@@ -563,6 +563,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                      <SelectItem value="shipped">Đã giao</SelectItem>
                      <SelectItem value="delivered">Đã nhận</SelectItem>
                      <SelectItem value="cancelled">Đã hủy</SelectItem>
+                     <SelectItem value="completed">Đã hoàn thành</SelectItem>
                    </SelectContent>
                  </Select>
                </div>

@@ -33,7 +33,7 @@ export interface Order {
     districtName?: string;
     wardName?: string;
   };
-  status: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'completed';
   order_type: 'sale' | 'return';
   total_amount: number;
   initial_payment?: number;
@@ -90,6 +90,8 @@ export interface Order {
   receiverPhone?: string;
   receiverAddress?: string;
   payment_status?: string;
+  // Completion timestamp when order reached completed/delivered status
+  completed_at?: string;
 }
 
 export interface CreateOrderRequest {
@@ -152,7 +154,7 @@ export interface UpdateOrderRequest {
     districtCode?: string;
     wardCode?: string;
   };
-  status?: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status?: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'completed';
   order_type?: 'sale' | 'return';
   initialPayment?: number;
   paid_amount?: number;
@@ -183,6 +185,8 @@ export const orderApi = {
     search?: string;
     startDate?: string;
     endDate?: string;
+    completedStartDate?: string;
+    completedEndDate?: string;
     start_date?: string;
     end_date?: string;
     minTotalAmount?: number;
@@ -199,6 +203,9 @@ export const orderApi = {
     // Backend DTO expects camelCase: startDate, endDate
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
+    // Completed date range (deliveredAt/completedAt) if supported by backend
+    if (params?.completedStartDate) queryParams.append('completedStartDate', params.completedStartDate);
+    if (params?.completedEndDate) queryParams.append('completedEndDate', params.completedEndDate);
     // Legacy support for snake_case
     if (params?.start_date && !params?.startDate) queryParams.append('startDate', params.start_date);
     if (params?.end_date && !params?.endDate) queryParams.append('endDate', params.end_date);
@@ -296,6 +303,7 @@ export const orderApi = {
       tags: Array.isArray(row.tags) ? row.tags : undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
+      completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
@@ -407,6 +415,7 @@ export const orderApi = {
       tags: Array.isArray(row.tags) ? row.tags : undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
+      completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
@@ -578,6 +587,7 @@ export const orderApi = {
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,
+      completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
       created_by: row.created_by ?? row.createdBy ?? '',
       order_items: Array.isArray(row.details) ? row.details.map(normalizeItem) : Array.isArray(row.order_items) ? row.order_items.map(normalizeItem) : [],
       customer: row.customer ? {
