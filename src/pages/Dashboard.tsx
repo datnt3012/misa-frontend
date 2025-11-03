@@ -1,15 +1,18 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Line, Legend } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Package, TrendingUp, ShoppingCart, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { productApi } from "@/api/product.api";
+import { categoriesApi } from "@/api/categories.api";
 import { orderApi } from "@/api/order.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import { notificationApi } from "@/api/notification.api";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { Loading } from "@/components/ui/loading";
 import { format } from "date-fns";
@@ -19,8 +22,7 @@ import { Lock } from "lucide-react";
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
+    maximumFractionDigits: 0
   }).format(value);
 };
 
@@ -74,7 +76,10 @@ const DashboardContent = () => {
   const canViewProducts = hasPermission('PRODUCTS_READ');
   const canViewInventory = hasPermission('INVENTORY_READ');
   const canViewRevenue = hasPermission('REVENUE_READ');
-  
+  // Gate: only admin, owner_director, chief_accountant can see total revenue
+  const canSeeTotalRevenue = canViewRevenue && (
+    (user as any)?.roleId === 'admin' || (user as any)?.roleId === 'owner_director' || (user as any)?.roleId === 'chief_accountant'
+  );
   
   
   const [dashboardData, setDashboardData] = useState({
@@ -84,13 +89,28 @@ const DashboardContent = () => {
     totalProducts: 0,
     totalOrders: 0,
     currentMonthRevenue: 0,
-    previousMonthRevenue: 0
+    previousMonthRevenue: 0,
+    currentProfit: 0,
+    previousProfit: 0,
+    currentProfitRevenue: 0,
+    previousProfitRevenue: 0,
   });
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [inventoryData, setInventoryData] = useState<any[]>([]);
   const [orderStatus, setOrderStatus] = useState<any[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [productStockData, setProductStockData] = useState<any[]>([]);
+  const [regionRevenue, setRegionRevenue] = useState<any[]>([]);
+  const [categoryProfit, setCategoryProfit] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [topCustomers, setTopCustomers] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [recentOrdersLimit, setRecentOrdersLimit] = useState<number>(5);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [newCustomers, setNewCustomers] = useState<number>(0);
+  // Period toggle: 'month' or 'year'
+  const [revenuePeriod, setRevenuePeriod] = useState<'month' | 'year'>('month');
+  const [profitPeriod, setProfitPeriod] = useState<'month' | 'year'>('month');
   
   // Track loading and error states for different sections
   const [loadingStates, setLoadingStates] = useState({
@@ -120,6 +140,14 @@ const DashboardContent = () => {
       fetchDashboardData();
     }
   }, [permissionsLoading, canViewOrders, canViewProducts, canViewInventory, canViewRevenue]);
+  
+  // Fetch data when period changes
+  useEffect(() => {
+    if (!permissionsLoading) {
+      fetchDashboardData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revenuePeriod, profitPeriod]);
 
   const fetchDashboardData = async () => {
     try {
@@ -143,7 +171,12 @@ const DashboardContent = () => {
       if (canViewProducts) {
         promises.push(productApi.getProducts({ page: 1, limit: 1000 }));
         promiseLabels.push('products');
+        promises.push(categoriesApi.getCategories({ page: 1, limit: 1000 }));
+        promiseLabels.push('categories');
       }
+      // Notifications for recent activities (not permission-gated for this demo)
+      promises.push(notificationApi.getNotifications({ page: 1, limit: 20 }));
+      promiseLabels.push('notifications');
       
       if (canViewInventory) {
         promises.push(stockLevelsApi.getStockLevels({ page: 1, limit: 1000, includeDeleted: false }));
@@ -168,6 +201,8 @@ const DashboardContent = () => {
       let allOrders: any[] = [];
       let products: any[] = [];
       let stockLevels: any[] = [];
+      let categories: any[] = [];
+      let notifications: any = { notifications: [] };
       
       responses.forEach((response, index) => {
         const label = promiseLabels[index];
@@ -183,6 +218,10 @@ const DashboardContent = () => {
           } else if (label === 'inventory') {
             stockLevels = data.stockLevels || [];
             setLoadingStates(prev => ({ ...prev, inventory: false }));
+          } else if (label === 'categories') {
+            categories = data.categories || [];
+          } else if (label === 'notifications') {
+            notifications = data || { notifications: [] };
           }
         } else {
           // Handle API errors
@@ -217,10 +256,61 @@ const DashboardContent = () => {
       let totalDebt = 0;
       let totalProfit = 0;
       const monthlyRevenue: any = {};
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
+      const today = new Date();
+      
+      // Calculate revenue period based on revenuePeriod toggle
+      let pStart: Date, pEnd: Date, prevStart: Date, prevEnd: Date;
+      if (revenuePeriod === 'month') {
+        pStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        pEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+        prevStart = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+        prevEnd = new Date(today.getFullYear() - 1, today.getMonth() + 1, 0, 23, 59, 59, 999);
+      } else {
+        pStart = new Date(today.getFullYear(), 0, 1);
+        pEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+        prevStart = new Date(today.getFullYear() - 1, 0, 1);
+        prevEnd = new Date(today.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+      }
+      
+      // Separate period calculation for profit based on profitPeriod toggle
+      let currentProfitStart: Date, currentProfitEnd: Date, previousProfitStart: Date, previousProfitEnd: Date;
+      if (profitPeriod === 'month') {
+        currentProfitStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        currentProfitEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+        previousProfitStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        previousProfitEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+      } else {
+        currentProfitStart = new Date(today.getFullYear(), 0, 1);
+        currentProfitEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+        previousProfitStart = new Date(today.getFullYear() - 1, 0, 1);
+        previousProfitEnd = new Date(today.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+      }
       let currentMonthRevenue = 0;
       let previousMonthRevenue = 0;
+      let currentProfit = 0;
+      let previousProfit = 0;
+      let currentProfitRevenue = 0;
+      let previousProfitRevenue = 0;
+      const customerFirstOrder: Record<string, Date> = {};
+      const statusCounter: Record<string, number> = {};
+      const provinceToRevenue: Record<string, number> = {};
+      const productAggregate: Record<string, { name: string; qty: number; revenue: number } > = {};
+      const customerAggregate: Record<string, { name: string; revenue: number; lastDate: Date } > = {};
+      const categoryProfitMap: Record<string, number> = {};
+      // Build product map for quick lookup
+      const productMapAtCalc = (products || []).reduce((acc: any, p: any) => {
+        acc[p.id] = p;
+        return acc;
+      }, {} as any);
+      const productByCodeMap = (products || []).reduce((acc: any, p: any) => {
+        const code = p.code || p.product_code;
+        if (code) acc[String(code)] = p;
+        return acc;
+      }, {} as any);
+      const categoryMapById = (categories || []).reduce((acc: any, c: any) => {
+        acc[c.id] = c.name;
+        return acc;
+      }, {} as any);
 
       // Calculate total debt and basic revenue estimation from orders
       allOrders.forEach((order: any) => {
@@ -230,40 +320,125 @@ const DashboardContent = () => {
         const orderYear = createdAt.getFullYear();
         const amount = order.total_amount || 0;
         totalRevenue += amount;
-        
-        // Calculate current and previous month revenue
-        if (orderYear === currentYear) {
-          if (orderMonth === currentMonth) {
-            currentMonthRevenue += amount;
-          } else if (orderMonth === (currentMonth - 1 + 12) % 12) {
-            previousMonthRevenue += amount;
+        // status counter
+        if (order.status) statusCounter[order.status] = (statusCounter[order.status] || 0) + 1;
+        // first order per customer to estimate new customers
+        const custId = order.customer_id || order.customer?.id;
+        if (custId) {
+          if (!customerFirstOrder[custId] || createdAt < customerFirstOrder[custId]) {
+            customerFirstOrder[custId] = createdAt;
           }
+          const custName = order.customer_name || order.customer?.name || 'Khách hàng';
+          const lastDate = createdAt;
+          if (!customerAggregate[custId]) customerAggregate[custId] = { name: custName, revenue: 0, lastDate };
+          customerAggregate[custId].revenue += amount;
+          if (lastDate > customerAggregate[custId].lastDate) customerAggregate[custId].lastDate = lastDate;
+        }
+        // region revenue by province name if available
+        const provinceName = order.customer_addressInfo?.provinceName || order.customer?.addressInfo?.province?.name;
+        if (provinceName) provinceToRevenue[provinceName] = (provinceToRevenue[provinceName] || 0) + amount;
+        // aggregate products by items when available
+        const lineItems = order.items || order.order_items || order.details || [];
+        lineItems.forEach((it: any) => {
+          const prodId = it.product?.id || it.product_id || it.productId;
+          const prodCode = it.product?.code || it.product_code || it.productCode;
+          const key = prodId || prodCode || it.id;
+          const name = it.product_name || it.productName || prodCode || 'SP';
+          const qty = Number(it.quantity || 0);
+          const rev = Number(it.total_price || it.totalPrice || (Number(it.unit_price || it.unitPrice || 0) * qty) || 0);
+          const costUnit = Number(it.product?.costPrice || it.costPrice || 0);
+          const profit = Math.max(0, rev - costUnit * qty);
+          if (!productAggregate[key]) productAggregate[key] = { name, qty: 0, revenue: 0 };
+          productAggregate[key].qty += qty;
+          productAggregate[key].revenue += rev;
+          // Category revenue by product
+          const prod = (prodId && productMapAtCalc[prodId]) || (prodCode && productByCodeMap[prodCode]);
+          const itemCategoryRaw = it.product?.category; // can be string or object
+          const itemCategoryId = it.product?.categoryId || it.categoryId || it.category_id;
+          const catName = (
+            typeof itemCategoryRaw === 'string' ? itemCategoryRaw :
+            itemCategoryRaw?.name ||
+            categoryMapById[itemCategoryId as any] ||
+            prod?.category?.name ||
+            categoryMapById[prod?.categoryId as any] ||
+            it.category_name || prod?.categoryName ||
+            (prod?.category && (prod.category.name || prod.category.title)) ||
+            'Không xác định'
+          );
+          const catKey = String(catName);
+          categoryProfitMap[catKey] = (categoryProfitMap[catKey] || 0) + profit;
+        });
+        
+        // Calculate revenue in selected period and previous period
+        if (createdAt >= pStart && createdAt <= pEnd) {
+          currentMonthRevenue += amount;
+        } else if (createdAt >= prevStart && createdAt <= prevEnd) {
+          previousMonthRevenue += amount;
         }
         
-        // Group by month for chart
-        const monthKey = format(createdAt, 'MMM-yyyy', { locale: vi });
-        if (!monthlyRevenue[monthKey]) {
-          monthlyRevenue[monthKey] = { 
-            month: monthKey, 
-            revenue: 0, 
-            profit: 0,
-            monthNumber: createdAt.getMonth(),
-            year: createdAt.getFullYear()
-          };
+        // Calculate profit based on profitPeriod toggle
+        if (createdAt >= currentProfitStart && createdAt <= currentProfitEnd) {
+          currentProfitRevenue += amount;
+          const lineItems2 = order.items || order.order_items || order.details || [];
+          lineItems2.forEach((it: any) => {
+            const qty = Number(it.quantity || 0);
+            const rev2 = Number(it.total_price || it.totalPrice || (Number(it.unit_price || it.unitPrice || 0) * qty) || 0);
+            const costUnit2 = Number(it.product?.costPrice || it.costPrice || 0);
+            currentProfit += Math.max(0, rev2 - costUnit2 * qty);
+          });
+        } else if (createdAt >= previousProfitStart && createdAt <= previousProfitEnd) {
+          previousProfitRevenue += amount;
+          const lineItems2 = order.items || order.order_items || order.details || [];
+          lineItems2.forEach((it: any) => {
+            const qty = Number(it.quantity || 0);
+            const rev2 = Number(it.total_price || it.totalPrice || (Number(it.unit_price || it.unitPrice || 0) * qty) || 0);
+            const costUnit2 = Number(it.product?.costPrice || it.costPrice || 0);
+            previousProfit += Math.max(0, rev2 - costUnit2 * qty);
+          });
         }
-        monthlyRevenue[monthKey].revenue += amount;
+        
+        // Accumulate per-order only; month buckets will be constructed after
       });
 
-      // Convert monthly revenue to array and sort properly
-      const revenueArray = Object.values(monthlyRevenue)
-        .sort((a: any, b: any) => {
-          // Sort by year first, then by month
-          if (a.year !== b.year) {
-            return a.year - b.year;
-          }
-          return a.monthNumber - b.monthNumber;
-        })
-        .slice(-6); // Last 6 months
+      // Helper to get month end
+      const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth()+1, 0, 23, 59, 59, 999);
+      // Create 12 months of data comparing current year vs previous year
+      // Start from 11 months ago (most distant), end at last month (most recent)
+      const merged = Array.from({ length: 12 }).map((_, i) => {
+        // Calculate months back: where i=0 is 11 months back, i=11 is 0 months back (last month)
+        const monthsBack = 11 - i; // i=0: 11 months back, i=11: 0 months back (last month)
+        
+        // Get the month by subtracting from current date
+        const targetDate = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
+        const curStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const curEnd = endOfMonth(curStart);
+        
+        // Previous year: same month
+        const prevStart = new Date(targetDate.getFullYear() - 1, targetDate.getMonth(), 1);
+        const prevEnd = endOfMonth(prevStart);
+        
+        const sumInRange = (start: Date, end: Date) => {
+          let sum = 0;
+          allOrders.forEach((order: any) => {
+            const createdAt = order.created_at ? new Date(order.created_at) : new Date();
+            if (createdAt >= start && createdAt <= end) sum += (order.total_amount || 0);
+          });
+          return sum;
+        };
+        const currentSum = sumInRange(curStart, curEnd);
+        const prevSum = sumInRange(prevStart, prevEnd);
+        return {
+          month: format(curStart, 'MMM-yyyy', { locale: vi }),
+          label: `T${String(curStart.getMonth() + 1).padStart(2, '0')}`,
+          current: currentSum,
+          previous: prevSum,
+          monthNumber: curStart.getMonth(),
+          year: curStart.getFullYear(),
+        };
+      }).sort((a, b) => {
+        // Sort by month number only
+        return a.monthNumber - b.monthNumber;
+      });
 
       // Calculate order status breakdown
       const statusCounts: any = {};
@@ -389,11 +564,15 @@ const DashboardContent = () => {
       setDashboardData({
         totalRevenue,
         totalDebt,
-        totalProfit,
+        totalProfit: currentProfit,
         totalProducts,
         totalOrders: allOrders?.length || 0,
         currentMonthRevenue,
-        previousMonthRevenue
+        previousMonthRevenue,
+        currentProfit,
+        previousProfit,
+        currentProfitRevenue,
+        previousProfitRevenue
       });
       // Create detailed product stock data for chart
       const productStockChartData = Object.keys(productStockTotals).map(productId => {
@@ -424,11 +603,61 @@ const DashboardContent = () => {
         };
       }).filter(Boolean).sort((a: any, b: any) => b.stock - a.stock); // Sort by stock descending
 
-      setRevenueData(revenueArray);
+      setRevenueData(merged);
       setInventoryData(inventoryArray);
       setOrderStatus(orderStatusArray);
       setLowStockProducts(lowStockItems.slice(0, 5)); // Show only top 5
       setProductStockData(productStockChartData);
+      // Region revenue list (top 5 provinces)
+      const regionList = Object.keys(provinceToRevenue)
+        .map(name => ({ name, revenue: provinceToRevenue[name] }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+      setRegionRevenue(regionList);
+      // Top products (by revenue)
+      const topProds = Object.values(productAggregate)
+        .sort((a: any, b: any) => b.revenue - a.revenue)
+        .slice(0, 5);
+      setTopProducts(topProds as any);
+      // Top customers (by revenue)
+      const topCusts = Object.keys(customerAggregate).map(id => customerAggregate[id])
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+      setTopCustomers(topCusts);
+      // Recent orders (latest 5)
+      const sortedRecent = [...allOrders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setRecentOrders(sortedRecent);
+      // Recent activities: mix notifications + order created/completed
+      const orderActivities = sortedRecent.slice(0, 10).map(o => ({
+        id: `order-${o.id}`,
+        type: o.status === 'completed' ? 'success' : 'info',
+        title: o.status === 'completed' ? 'Đơn hàng hoàn thành' : 'Đơn hàng mới',
+        message: `${o.order_number} • ${o.customer_name || 'Khách lẻ'}`,
+        amount: o.total_amount || 0,
+        createdAt: o.created_at
+      }));
+      const notifActivities = (notifications.notifications || []).map((n: any) => ({
+        id: `notif-${n.id}`,
+        type: n.type || 'info',
+        title: n.title,
+        message: n.message,
+        amount: undefined,
+        createdAt: n.createdAt || n.created_at
+      }));
+      const combined = [...orderActivities, ...notifActivities]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 8);
+      setRecentActivities(combined);
+      // Category revenue array (top 5)
+      const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+      const catArray = Object.keys(categoryProfitMap).map((name, idx) => ({ name, value: categoryProfitMap[name], color: palette[idx % palette.length], fill: palette[idx % palette.length] }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5)
+        .map((c, idx) => ({ ...c, color: c.color, fill: c.fill }));
+      setCategoryProfit(catArray);
+      // New customers in current month
+      const newCustCount = Object.values(customerFirstOrder).filter((d: any) => d >= pStart && d <= pEnd).length;
+      setNewCustomers(newCustCount);
       
       // Set revenue loading to false after processing
       setLoadingStates(prev => ({ ...prev, revenue: false }));
@@ -453,8 +682,10 @@ const DashboardContent = () => {
   });
 
   const getGrowthPercentage = () => {
+    const delta = dashboardData.currentMonthRevenue - dashboardData.previousMonthRevenue;
+    if (delta <= 0) return 0;
     if (dashboardData.previousMonthRevenue === 0) return 0;
-    return Math.round(((dashboardData.currentMonthRevenue - dashboardData.previousMonthRevenue) / dashboardData.previousMonthRevenue) * 100);
+    return Math.round((delta / dashboardData.previousMonthRevenue) * 100);
   };
 
 
@@ -481,31 +712,101 @@ const DashboardContent = () => {
           </div>
         </div>
 
+
         {/* Thống kê tổng quan */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Doanh Thu Tháng Hiện Tại */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Tổng Doanh Thu - gated */}
           {errorStates.revenue || loadingStates.revenue ? (
             <PermissionErrorCard 
-              title="Doanh Thu Tháng Hiện Tại" 
+              title="Tổng Doanh Thu" 
               error={errorStates.revenue} 
               loading={loadingStates.revenue} 
             />
           ) : (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Doanh Thu Tháng Hiện Tại</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(dashboardData.currentMonthRevenue)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {getGrowthPercentage() >= 0 ? '+' : ''}{getGrowthPercentage()}% so với tháng trước
-                </p>
-              </CardContent>
-            </Card>
+            canSeeTotalRevenue && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Tổng Doanh Thu</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">
+                    {formatCurrency(dashboardData.currentMonthRevenue)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {getGrowthPercentage() >= 0 ? '+' : ''}{getGrowthPercentage()}% so với tháng trước
+                  </p>
+                </CardContent>
+              </Card>
+            )
           )}
+
+          {/* Tổng doanh thu - visible to all who can view revenue section */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tổng doanh thu</CardTitle>
+              <Select value={revenuePeriod} onValueChange={(v) => setRevenuePeriod(v as 'month' | 'year')}>
+                <SelectTrigger className="h-7 w-auto px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Tháng</SelectItem>
+                  <SelectItem value="year">Năm</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(dashboardData.currentMonthRevenue)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {(() => {
+                  const delta = dashboardData.currentMonthRevenue - dashboardData.previousMonthRevenue;
+                  if (delta <= 0) {
+                    return `0 so với ${revenuePeriod === 'month' ? 'tháng' : 'năm'} trước`;
+                  }
+                  const revenueGrowth = dashboardData.previousMonthRevenue === 0 
+                    ? 0 
+                    : (delta / dashboardData.previousMonthRevenue) * 100;
+                  return `${revenueGrowth >= 0 ? '+' : ''}${Math.round(revenueGrowth)}% so với ${revenuePeriod === 'month' ? 'tháng' : 'năm'} trước`;
+                })()}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Lợi nhuận trong tháng */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Lợi nhuận</CardTitle>
+              <Select value={profitPeriod} onValueChange={(v) => setProfitPeriod(v as 'month' | 'year')}>
+                <SelectTrigger className="h-7 w-auto px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Tháng</SelectItem>
+                  <SelectItem value="year">Năm</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const currentProfit = dashboardData.currentProfit || 0;
+                const currentRevenue = dashboardData.currentProfitRevenue || 0;
+                const currentMargin = currentRevenue > 0 ? (currentProfit / currentRevenue) * 100 : 0;
+                const color = currentProfit >= 0 ? 'text-green-600' : 'text-red-600';
+                return (
+                  <>
+                    <div className={`text-2xl font-bold ${color}`}>
+                      {currentProfit >= 0 ? '+' : ''}{formatCurrency(Math.abs(currentProfit))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Tỷ suất: {currentMargin.toFixed(1)}%
+                    </p>
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
 
           {/* Tổng Đơn Hàng */}
           {errorStates.orders || loadingStates.orders ? (
@@ -570,6 +871,28 @@ const DashboardContent = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Đơn chờ xử lý */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Đơn chờ xử lý</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{(orderStatus.find(s => s.trangThai === 'Chờ xử lý')?.soLuong) || 0}</div>
+              <p className="text-xs text-muted-foreground">Cần xử lý trong ngày</p>
+            </CardContent>
+          </Card>
+
+          {/* Khách hàng mới */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Khách hàng mới</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{newCustomers}</div>
+              <p className="text-xs text-muted-foreground">Trong tháng hiện tại</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Biểu đồ và thống kê chi tiết */}
@@ -599,19 +922,17 @@ const DashboardContent = () => {
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle>Biểu Đồ Doanh Thu 6 Tháng Gần Nhất</CardTitle>
-                  <CardDescription>Theo dõi xu hướng doanh thu theo tháng</CardDescription>
+                  <CardTitle>So sánh doanh thu 12 tháng gần nhất</CardTitle>
+                  <CardDescription>Năm nay vs Năm trước</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={revenueData}>
+                      <BarChart data={revenueData} barCategoryGap={20}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
-                        dataKey="month" 
+                        dataKey="label" 
                         tick={{ fontSize: 12 }}
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
+                        height={30}
                       />
                       <YAxis 
                         tickFormatter={(value) => {
@@ -628,16 +949,85 @@ const DashboardContent = () => {
                       <Tooltip 
                         formatter={(value: any, name: string) => [
                           formatCurrency(value), 
-                          name === 'revenue' ? 'Doanh thu' : 'Lợi nhuận'
+                          name === 'Năm nay' || name === 'Xu hướng' ? 'Năm nay' : 'Năm trước'
                         ]}
-                        labelFormatter={(label) => `Tháng: ${label}`}
+                        labelFormatter={(label, payload) => {
+                          const i = payload && payload[0] ? payload[0].payload : null;
+                          return i ? `Tháng: ${i.month}` : label;
+                        }}
                       />
-                      <Bar dataKey="revenue" fill="#22c55e" name="Doanh thu" />
+                      <Bar dataKey="previous" fill="#94a3b8" name="Năm trước" opacity={0.6} />
+                      <Bar dataKey="current" fill="#1d4ed8" name="Năm nay" />
+                      <Line type="monotone" dataKey="current" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} name="Xu hướng" />
+                      <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 12 }} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
+
+            {/* Doanh thu theo khu vực & danh mục */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Doanh thu theo khu vực</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {regionRevenue.length === 0 ? (
+                    <p className="text-muted-foreground">Chưa có dữ liệu</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {regionRevenue.map((row, idx) => (
+                        <div key={idx}>
+                          <div className="flex justify-between text-sm">
+                            <span>{row.name}</span>
+                            <span className="font-medium">{formatCurrency(row.revenue)}</span>
+                          </div>
+                          <div className="h-2 bg-muted rounded">
+                            <div className="h-2 bg-primary rounded" style={{ width: `${Math.min(100, Math.round((row.revenue / (regionRevenue[0]?.revenue || 1)) * 100))}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Lợi nhuận theo danh mục</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {categoryProfit.length === 0 ? (
+                    <p className="text-muted-foreground">Chưa có dữ liệu</p>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <PieChart>
+                          <Pie data={categoryProfit} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+                            {categoryProfit.map((entry, index) => (
+                              <Cell key={`cat-${index}`} fill={entry.fill || entry.color || '#3b82f6'} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: any, n: string) => [formatCurrency(Number(v)), n]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 space-y-2">
+                        {categoryProfit.map((c, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
+                              <span>{c.name}</span>
+                            </div>
+                            <span className="font-medium">{formatCurrency(c.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -908,8 +1298,184 @@ const DashboardContent = () => {
                 )}
               </CardContent>
             </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top sản phẩm bán chạy</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {topProducts.length === 0 ? (
+                    <p className="text-muted-foreground">Chưa có dữ liệu</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {topProducts.map((p, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{idx+1}</div>
+                            <div>
+                              <div className="font-medium">{(p as any).name}</div>
+                              <div className="text-xs text-muted-foreground">Đã bán: {(p as any).qty} sản phẩm</div>
+                            </div>
+                          </div>
+                          <div className="text-blue-600 font-bold">{formatCurrency((p as any).revenue)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top khách hàng</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {topCustomers.length === 0 ? (
+                    <p className="text-muted-foreground">Chưa có dữ liệu</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {topCustomers.map((c, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{idx+1}</div>
+                            <div>
+                              <div className="font-medium">{(c as any).name}</div>
+                              <div className="text-xs text-muted-foreground">Lần cuối: {format((c as any).lastDate, 'yyyy-MM-dd')}</div>
+                            </div>
+                          </div>
+                          <div className="text-blue-600 font-bold">{formatCurrency((c as any).revenue)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
+
+        {/* Cảnh báo tồn kho & Hoạt động gần đây */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cảnh báo tồn kho</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!canViewInventory ? (
+                <Alert>
+                  <Lock className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    Bạn không có quyền xem dữ liệu tồn kho (cần Read Inventory)
+                  </AlertDescription>
+                </Alert>
+              ) : errorStates.inventory ? (
+                <Alert>
+                  <Lock className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    {errorStates.inventory}
+                  </AlertDescription>
+                </Alert>
+              ) : loadingStates.inventory ? (
+                <div className="text-muted-foreground text-sm">Đang tải dữ liệu tồn kho...</div>
+              ) : lowStockProducts.length === 0 ? (
+                <p className="text-muted-foreground">Không có cảnh báo</p>
+              ) : (
+                <div className="space-y-3">
+                  {lowStockProducts.map((p, idx) => {
+                    const isCritical = p.status === 'Hết hàng';
+                    const percent = Math.min(100, Math.round(((p.stock || 0) / ((p.minStock || 20))) * 100));
+                    return (
+                      <div key={idx} className={`p-3 rounded-lg ${isCritical ? 'bg-red-50' : 'bg-orange-50'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium">{p.name}</div>
+                          <span className={`text-xs px-2 py-1 rounded-full ${isCritical ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{isCritical ? 'Nghiêm trọng' : 'Cảnh báo'}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Tồn: {p.stock || 0}</div>
+                        <div className="mt-2 h-2 bg-muted rounded">
+                          <div className={`h-2 rounded ${isCritical ? 'bg-red-500' : 'bg-orange-500'}`} style={{ width: `${percent}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Hoạt động gần đây</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentActivities.length === 0 ? (
+                <p className="text-muted-foreground">Chưa có hoạt động</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentActivities.map((a, idx) => (
+                    <div key={idx} className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${a.type === 'success' ? 'bg-green-100 text-green-700' : a.type === 'warning' ? 'bg-yellow-100 text-yellow-700' : a.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>{idx+1}</div>
+                        <div>
+                          <div className="text-sm font-medium">{a.title}</div>
+                          <div className="text-xs text-muted-foreground">{a.message}</div>
+                          <div className="text-[10px] text-muted-foreground">{format(new Date(a.createdAt), 'yyyy-MM-dd HH:mm')}</div>
+                        </div>
+                      </div>
+                      {a.amount !== undefined && (
+                        <div className="text-blue-600 font-medium">{formatCurrency(a.amount)}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Đơn hàng gần đây */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Đơn hàng gần đây</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Hiển thị</span>
+                <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
+                  <SelectTrigger className="h-8 w-20">
+                    <SelectValue placeholder="Số lượng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {recentOrders.length === 0 ? (
+              <p className="text-muted-foreground">Chưa có đơn hàng</p>
+            ) : (
+              <div className="space-y-3">
+                {recentOrders.slice(0, recentOrdersLimit).map((o, idx) => (
+                  <div key={idx} className="flex items-center justify-between border rounded-lg p-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-medium">{o.order_number}</span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                        >{o.status === 'pending' ? 'Chờ xử lý' : o.status === 'processing' ? 'Đang giao' : o.status === 'completed' ? 'Hoàn thành' : o.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
+                    </div>
+                    <div className="text-blue-600 font-bold">{formatCurrency(o.total_amount || 0)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
