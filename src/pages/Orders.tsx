@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,8 +44,40 @@ const OrdersContent: React.FC = () => {
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [totalOrders, setTotalOrders] = useState(0);
+  
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Fetch orders function
+  const fetchOrders = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params: any = { page: currentPage, limit: itemsPerPage };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (searchTerm) params.search = searchTerm;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      if (creatorFilter !== 'all') params.customerId = creatorFilter;
+      const resp = await orderApi.getOrders(params);
+      setOrders(resp.orders || []);
+      setTotalOrders(resp.total || 0);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách đơn hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage, statusFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
 
   // Handle creating export slip
   const handleCreateExportSlip = (order: any) => {
@@ -146,32 +178,13 @@ const OrdersContent: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, [sortField, sortDirection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage]); // Fetch when pagination changes
 
   // Removed automatic refresh - only reload on user actions
 
   const fetchCreators = async () => {
     setCreators([]); // Not implemented on BE yet
-  };
-
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const params: any = { page: 1, limit: 1000 };
-      if (statusFilter !== 'all') params.status = statusFilter;
-      if (searchTerm) params.search = searchTerm;
-      const resp = await orderApi.getOrders(params);
-      setOrders(resp.orders || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể tải danh sách đơn hàng",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
   };
 
   const formatCurrency = (amount: number | string | undefined | null) => {
@@ -259,6 +272,11 @@ const OrdersContent: React.FC = () => {
       setSortDirection("asc");
     }
   };
+  
+  const handleApplyFilters = () => {
+    setCurrentPage(1);
+    fetchOrders();
+  };
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -285,26 +303,8 @@ const OrdersContent: React.FC = () => {
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
-      order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_phone?.includes(searchTerm);
-      
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    
-    const matchesCreator = creatorFilter === "all" || order.created_by === creatorFilter;
-    
-    const orderDate = order.created_at ? new Date(order.created_at) : new Date();
-    const matchesStartDate = !startDate || orderDate >= new Date(startDate);
-    const matchesEndDate = !endDate || orderDate <= new Date(endDate + 'T23:59:59');
-    
-    return matchesSearch && matchesStatus && matchesCreator && matchesStartDate && matchesEndDate;
-  });
-
-
-  // Calculate totals
-  const totals = filteredOrders.reduce((acc, order) => ({
+  // Calculate totals from orders returned by API
+  const totals = orders.reduce((acc, order) => ({
     totalAmount: acc.totalAmount + (order.total_amount || 0),
     paidAmount: acc.paidAmount + (order.initial_payment || order.paid_amount || 0),
     debtAmount: acc.debtAmount + (order.debt_amount || 0),
@@ -387,6 +387,14 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Apply Filters Button */}
+            <Button 
+              onClick={handleApplyFilters}
+              className="ml-auto"
+            >
+              Áp dụng
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -396,7 +404,7 @@ const OrdersContent: React.FC = () => {
         <CardContent className="pt-6">
           <div className="grid grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold">{filteredOrders.length}</div>
+              <div className="text-2xl font-bold">{totalOrders}</div>
               <div className="text-sm text-muted-foreground">Đơn hàng</div>
             </div>
             <div>
@@ -499,14 +507,14 @@ const OrdersContent: React.FC = () => {
                       Đang tải...
                     </TableCell>
                   </TableRow>
-                ) : filteredOrders.length === 0 ? (
+                ) : orders.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-6">
                       Không có đơn hàng nào
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredOrders.map((order) => {
+                  orders.map((order) => {
                     // Convert tag names to tag objects for display
                     const tagNames = order.tags || [];
                     const allPredefinedTags = [
@@ -789,6 +797,54 @@ const OrdersContent: React.FC = () => {
             </Table>
           </div>
           
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Hiển thị</span>
+              <Select 
+                value={itemsPerPage.toString()} 
+                onValueChange={(value) => {
+                  setCurrentPage(1);
+                  setItemsPerPage(Number(value));
+                  // Will auto-fetch via useEffect below
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground">
+                trong tổng số {totalOrders} đơn hàng
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Trước
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Trang {currentPage} / {Math.max(1, Math.ceil(totalOrders / itemsPerPage))}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage >= Math.ceil(totalOrders / itemsPerPage)}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
