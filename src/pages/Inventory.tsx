@@ -574,7 +574,8 @@ const InventoryContent = () => {
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
         unit: newProduct.unit,
-        price: newProduct.price
+        price: newProduct.price,
+        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
       
       toast({ title: "Thành công", description: createProductResp?.message || 'Đã thêm sản phẩm vào danh mục!' });
@@ -599,8 +600,7 @@ const InventoryContent = () => {
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 

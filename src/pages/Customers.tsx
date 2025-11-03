@@ -834,7 +834,7 @@ const CustomersContent = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-green-600">
-                        {customerStats.total_spent.toLocaleString('vi-VN')} ₫
+                        {customerStats.total_spent.toLocaleString('vi-VN')}
                       </div>
                     </CardContent>
                   </Card>
@@ -846,7 +846,7 @@ const CustomersContent = () => {
                     </CardHeader>
                     <CardContent>
                       <div className={`text-2xl font-bold ${customerStats.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {customerStats.current_debt.toLocaleString('vi-VN')} ₫
+                        {customerStats.current_debt.toLocaleString('vi-VN')}
                       </div>
                     </CardContent>
                   </Card>
@@ -892,14 +892,14 @@ const CustomersContent = () => {
                                 {getStatusBadge(order.status)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number(order.total_amount).toLocaleString('vi-VN')} ₫
+                                {Number(order.total_amount).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number((order as any).initial_payment ?? order.paid_amount).toLocaleString('vi-VN')} ₫
+                                {Number((order as any).initial_payment ?? order.paid_amount).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className={Number(order.debt_amount) > 0 ? 'text-red-600' : 'text-green-600'}>
-                                  {Number(order.debt_amount).toLocaleString('vi-VN')} ₫
+                                  {Number(order.debt_amount).toLocaleString('vi-VN')}
                                 </span>
                               </TableCell>
                             </TableRow>

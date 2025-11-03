@@ -185,7 +185,7 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <Label className="font-medium">Trạng thái:</Label>
-                <p className="mt-1">{getStatusBadge(exportSlip.status)}</p>
+                <div className="mt-1">{getStatusBadge(exportSlip.status)}</div>
               </div>
               <div>
                 <Label className="font-medium">Người tạo:</Label>

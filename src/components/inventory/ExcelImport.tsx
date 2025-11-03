@@ -564,8 +564,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
                       <TableCell>{record.productName || 'Đang tải...'}</TableCell>
                       <TableCell>{record.category || 'Đang tải...'}</TableCell>
                       <TableCell>{record.quantity}</TableCell>
-                      <TableCell>{record.costPrice.toLocaleString('vi-VN')} ₫</TableCell>
-                      <TableCell>{record.sellPrice.toLocaleString('vi-VN')} ₫</TableCell>
+                      <TableCell>{record.costPrice.toLocaleString('vi-VN')}</TableCell>
+                      <TableCell>{record.sellPrice.toLocaleString('vi-VN')}</TableCell>
                       <TableCell>
                         {record.status === 'valid' ? (
                           <Badge variant="default" className="bg-green-100 text-green-800">

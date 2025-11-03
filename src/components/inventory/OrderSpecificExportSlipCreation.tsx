@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,11 +55,12 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
   // Permission checks
   const canCreateExportSlip = hasPermission('WAREHOUSE_RECEIPTS_CREATE');
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadOrder();
     loadWarehouses();
     loadSuppliers();
     generateSlipCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
   const generateSlipCode = () => {
@@ -239,8 +240,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -348,7 +348,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
             <div>
               <Label className="font-medium">Trạng thái:</Label>
-              <p>{getStatusBadge(order.status)}</p>
+              <div>{getStatusBadge(order.status)}</div>
             </div>
             <div>
               <Label className="font-medium">Tổng giá trị:</Label>

@@ -33,6 +33,7 @@ export interface CreateProductRequest {
   category?: string;
   unit?: string;
   price: number;
+  costPrice?: number;
 }
 
 export interface UpdateProductRequest {
@@ -50,6 +51,28 @@ export interface ProductImportRequest {
   file: File;
   warehouse_id?: string;
 }
+
+// Helper function to normalize product data from API response
+const normalizeProduct = (row: any): Product => {
+  const price = parseFloat(row.price ?? '0');
+  const costPrice = parseFloat(row.costPrice ?? row.cost_price ?? '0');
+  
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    description: row.description ?? undefined,
+    category: row.category ?? undefined,
+    unit: row.unit ?? 'piece',
+    price: price,
+    costPrice: costPrice,
+    barcode: row.barcode ?? undefined,
+    isDeleted: row.isDeleted ?? false,
+    createdAt: row.createdAt ?? row.created_at ?? '',
+    updatedAt: row.updatedAt ?? row.updated_at ?? '',
+    deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+  };
+};
 
 export const productApi = {
   // Get all products
@@ -75,31 +98,9 @@ export const productApi = {
     const response = await api.get<any>(url);
     const data = response?.data || response; // support both shapes
 
-    const normalize = (row: any): Product => {
-      const price = parseFloat(row.price ?? '0');
-      const costPrice = parseFloat(row.costPrice ?? '0');
-      
-      
-      return {
-        id: row.id,
-        code: row.code,
-        name: row.name,
-        description: row.description ?? undefined,
-        category: row.category ?? undefined,
-        unit: row.unit ?? 'piece',
-        price: price,
-        costPrice: costPrice,
-        barcode: row.barcode ?? undefined,
-        isDeleted: row.isDeleted ?? false,
-        createdAt: row.createdAt ?? row.created_at ?? '',
-        updatedAt: row.updatedAt ?? row.updated_at ?? '',
-        deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
-      };
-    };
-
     if (data && Array.isArray(data.rows)) {
       return {
-        products: data.rows.map(normalize),
+        products: data.rows.map(normalizeProduct),
         total: Number(data.count ?? data.rows.length ?? 0),
         page: Number(data.page ?? params?.page ?? 1),
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
@@ -108,7 +109,7 @@ export const productApi = {
 
     // Fallback if API already returns expected shape
     return {
-      products: (response?.products || []).map(normalize),
+      products: (response?.products || []).map(normalizeProduct),
       total: Number(response?.total ?? 0),
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? 0),
@@ -117,17 +118,23 @@ export const productApi = {
 
   // Get product by ID
   getProduct: async (id: string): Promise<Product> => {
-    return api.get<Product>(`${API_ENDPOINTS.PRODUCTS.LIST}/${id}`);
+    const response = await api.get<any>(`${API_ENDPOINTS.PRODUCTS.LIST}/${id}`);
+    const data = response?.data || response;
+    return normalizeProduct(data);
   },
 
   // Create product
   createProduct: async (data: CreateProductRequest): Promise<Product> => {
-    return api.post<Product>(API_ENDPOINTS.PRODUCTS.CREATE, data);
+    const response = await api.post<any>(API_ENDPOINTS.PRODUCTS.CREATE, data);
+    const responseData = response?.data || response;
+    return normalizeProduct(responseData);
   },
 
   // Update product
   updateProduct: async (id: string, data: UpdateProductRequest): Promise<Product> => {
-    return api.patch<Product>(API_ENDPOINTS.PRODUCTS.UPDATE(id), data);
+    const response = await api.patch<any>(API_ENDPOINTS.PRODUCTS.UPDATE(id), data);
+    const responseData = response?.data || response;
+    return normalizeProduct(responseData);
   },
 
   // Delete product

@@ -177,8 +177,7 @@ const OrdersContent: React.FC = () => {
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(numAmount);
   };
 

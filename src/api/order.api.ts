@@ -267,6 +267,9 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      // category helpers for dashboard aggregations
+      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
+      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
@@ -381,6 +384,8 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
+      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
@@ -481,6 +486,8 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
+      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
@@ -622,6 +629,13 @@ export const orderApi = {
       deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,
       completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
       created_by: row.created_by ?? row.createdBy ?? '',
+      items: Array.isArray(row.details)
+        ? row.details.map(normalizeItem)
+        : Array.isArray(row.items)
+          ? row.items.map(normalizeItem)
+          : Array.isArray(row.order_items)
+            ? row.order_items.map(normalizeItem)
+            : [],
       order_items: Array.isArray(row.details) ? row.details.map(normalizeItem) : Array.isArray(row.order_items) ? row.order_items.map(normalizeItem) : [],
       customer: row.customer ? {
         id: row.customer.id,

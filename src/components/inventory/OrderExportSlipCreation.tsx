@@ -59,6 +59,23 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
     }
   }, [orderSelectionOpen, statusFilter]);
 
+  // Reinitialize selectedItems when dialog opens and order is selected (only if items are missing)
+  useEffect(() => {
+    if (createDialogOpen && selectedOrder && selectedItems.length === 0 && selectedOrder.items && selectedOrder.items.length > 0) {
+      setSelectedItems(
+        (selectedOrder.items || []).map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          product_code: item.product_code,
+          requested_quantity: item.quantity,
+          unit_price: item.unit_price,
+          selected: true
+        }))
+      );
+    }
+  }, [createDialogOpen, selectedOrder]);
+
   const loadOrders = async () => {
     try {
       setOrdersLoading(true);
@@ -81,10 +98,25 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
     }
   };
 
-  const handleOrderSelect = (order: Order) => {
-    setSelectedOrder(order);
-    setSelectedItems(
-      (order.items || []).map(item => ({
+  const handleOrderSelect = async (order: Order) => {
+    try {
+      setOrdersLoading(true);
+      // Load full order details to ensure items are included
+      const fullOrder = await orderApi.getOrderIncludeDeleted(order.id);
+      setSelectedOrder(fullOrder);
+      
+      // Initialize selectedItems from the full order
+      // Use items or order_items (backward compatibility)
+      const orderItems = fullOrder.items || fullOrder.order_items || [];
+      console.log('Debug - Full order items:', {
+        orderId: fullOrder.id,
+        hasItems: !!fullOrder.items,
+        hasOrderItems: !!fullOrder.order_items,
+        itemsCount: orderItems.length,
+        items: orderItems
+      });
+      
+      const items = orderItems.map(item => ({
         id: item.id,
         product_id: item.product_id,
         product_name: item.product_name,
@@ -92,10 +124,21 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
         requested_quantity: item.quantity,
         unit_price: item.unit_price,
         selected: true
-      }))
-    );
-    setCreateDialogOpen(true);
-    setOrderSelectionOpen(false);
+      }));
+      
+      setSelectedItems(items);
+      setCreateDialogOpen(true);
+      setOrderSelectionOpen(false);
+    } catch (error: any) {
+      console.error('Error loading order details:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải chi tiết đơn hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setOrdersLoading(false);
+    }
   };
 
   const handleItemSelectionChange = (itemId: string, selected: boolean) => {
@@ -177,8 +220,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -205,6 +247,20 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
   const totalSelectedValue = selectedItems
     .filter(item => item.selected)
     .reduce((sum, item) => sum + (item.requested_quantity * item.unit_price), 0);
+
+  // Debug: Log to console (can be removed later)
+  useEffect(() => {
+    if (createDialogOpen && selectedOrder) {
+      console.log('Debug - OrderExportSlipCreation:', {
+        selectedOrder: selectedOrder?.order_number,
+        orderItemsCount: selectedOrder?.items?.length || 0,
+        selectedItemsCount: selectedItems.length,
+        totalSelectedItems,
+        selectedItems: selectedItems.map(i => ({ name: i.product_name, selected: i.selected })),
+        orderItems: selectedOrder?.items?.map(i => ({ name: i.product_name, quantity: i.quantity })) || []
+      });
+    }
+  }, [createDialogOpen, selectedItems, totalSelectedItems, selectedOrder]);
 
   if (!canCreateExportSlip) {
     return (
@@ -268,7 +324,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 </div>
                 <div>
                   <Label className="font-medium">Trạng thái:</Label>
-                  <p>{getStatusBadge(selectedOrder.status)}</p>
+                  <div>{getStatusBadge(selectedOrder.status)}</div>
                 </div>
                 <div>
                   <Label className="font-medium">Tổng giá trị:</Label>
@@ -417,7 +473,14 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       </Dialog>
 
       {/* Create Export Slip Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        setCreateDialogOpen(open);
+        if (!open) {
+          // Reset when dialog closes
+          setSelectedItems([]);
+          setNotes('');
+        }
+      }}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Tạo phiếu xuất kho</DialogTitle>
@@ -484,8 +547,15 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedItems.map((item) => (
-                      <TableRow key={item.id}>
+                    {selectedItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          Không có sản phẩm trong đơn hàng này
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      selectedItems.map((item) => (
+                        <TableRow key={item.id}>
                         <TableCell>
                           <Checkbox
                             checked={item.selected}
@@ -517,7 +587,8 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                           {formatCurrency(item.requested_quantity * item.unit_price)}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>

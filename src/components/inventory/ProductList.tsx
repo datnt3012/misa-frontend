@@ -218,15 +218,16 @@ const ProductList: React.FC<ProductListProps> = ({
         await saveNewCategory(newProduct.category);
       }
 
-      await productApi.createProduct({
+      const response = await productApi.createProduct({
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
         unit: newProduct.unit,
-        price: newProduct.price
+        price: newProduct.price,
+        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
 
-      toast({ title: 'Thành công', description: response.message || 'Đã thêm sản phẩm vào danh mục!' });
+      toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
       setNewProduct({
         name: '',
@@ -279,7 +280,7 @@ const ProductList: React.FC<ProductListProps> = ({
         await saveNewCategory(newProduct.category);
       }
 
-      await productApi.updateProduct(editingProduct.id, {
+      const response = await productApi.updateProduct(editingProduct.id, {
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
@@ -289,7 +290,7 @@ const ProductList: React.FC<ProductListProps> = ({
         ...(newProduct.barcode && { barcode: newProduct.barcode }), // Include barcode if provided
       });
 
-      toast({ title: 'Thành công', description: response.message || 'Đã cập nhật sản phẩm!' });
+      toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
       onProductsUpdate();
       setEditingProduct(null);
       setNewProduct({
@@ -331,8 +332,7 @@ const ProductList: React.FC<ProductListProps> = ({
   const formatCurrency = (amount: number) => {
     
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
