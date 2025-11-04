@@ -27,6 +27,20 @@ export const API_ENDPOINTS = {
     RESET_PASSWORD: '/auth/reset-password',
   },
   
+  // Dashboard
+  DASHBOARD: {
+    SUMMARY: '/dashboard/summary',
+    REVENUE_SERIES: '/dashboard/revenue-series',
+    ORDER_STATUS: '/dashboard/order-status',
+    INVENTORY_OVERVIEW: '/dashboard/inventory-overview',
+    TOP_PRODUCTS: '/dashboard/top-products',
+    TOP_CUSTOMERS: '/dashboard/top-customers',
+    REGION_REVENUE: '/dashboard/region-revenue',
+    CATEGORY_PROFIT: '/dashboard/category-profit',
+    RECENT_ORDERS: '/dashboard/recent-orders',
+    RECENT_ACTIVITIES: '/dashboard/recent-activities',
+  },
+  
   // Users
   USERS: {
     LIST: '/users',

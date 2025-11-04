@@ -1,19 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Line, Legend } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Package, TrendingUp, ShoppingCart, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
-import { productApi } from "@/api/product.api";
-import { categoriesApi } from "@/api/categories.api";
-import { orderApi } from "@/api/order.api";
-import { stockLevelsApi } from "@/api/stockLevels.api";
+import { dashboardApi } from "@/api/dashboard.api";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { notificationApi } from "@/api/notification.api";
-import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { Loading } from "@/components/ui/loading";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -104,9 +98,9 @@ const DashboardContent = () => {
   const [categoryProfit, setCategoryProfit] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [topCustomers, setTopCustomers] = useState<any[]>([]);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [recentOrdersLimit, setRecentOrdersLimit] = useState<number>(5);
-  const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [newCustomers, setNewCustomers] = useState<number>(0);
   // Period toggle: 'month' or 'year'
   const [revenuePeriod, setRevenuePeriod] = useState<'month' | 'year'>('month');
@@ -126,6 +120,9 @@ const DashboardContent = () => {
     revenue: null as string | null
   });
   
+  // Track if data has been loaded
+  const [dataLoaded, setDataLoaded] = useState(false);
+  
   
   // Clear error states when permissions are available
   useEffect(() => {
@@ -133,21 +130,6 @@ const DashboardContent = () => {
       setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
     }
   }, [canViewOrders, canViewProducts, canViewInventory, canViewRevenue]);
-
-  // Trigger data fetch when permissions are loaded
-  useEffect(() => {
-    if (!permissionsLoading) {
-      fetchDashboardData();
-    }
-  }, [permissionsLoading, canViewOrders, canViewProducts, canViewInventory, canViewRevenue]);
-  
-  // Fetch data when period changes
-  useEffect(() => {
-    if (!permissionsLoading) {
-      fetchDashboardData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revenuePeriod, profitPeriod]);
 
   const fetchDashboardData = async () => {
     try {
@@ -159,545 +141,176 @@ const DashboardContent = () => {
       setLoadingStates({ orders: true, products: true, inventory: true, revenue: true });
       setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
       
-      // Fetch data based on permissions
-      const promises: Promise<any>[] = [];
-      const promiseLabels: string[] = [];
-      
-      if (canViewOrders) {
-        promises.push(orderApi.getOrders({ page: 1, limit: 1000 }));
-        promiseLabels.push('orders');
-      }
-      
-      if (canViewProducts) {
-        promises.push(productApi.getProducts({ page: 1, limit: 1000 }));
-        promiseLabels.push('products');
-        promises.push(categoriesApi.getCategories({ page: 1, limit: 1000 }));
-        promiseLabels.push('categories');
-      }
-      // Notifications for recent activities (not permission-gated for this demo)
-      promises.push(notificationApi.getNotifications({ page: 1, limit: 20 }));
-      promiseLabels.push('notifications');
-      
-      if (canViewInventory) {
-        promises.push(stockLevelsApi.getStockLevels({ page: 1, limit: 1000, includeDeleted: false }));
-        promiseLabels.push('inventory');
-      }
-      
-      // If no permissions, set empty data and return
-      if (promises.length === 0) {
-        setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
-        setErrorStates({ 
-          orders: 'Không có quyền xem dữ liệu đơn hàng (cần Read Orders)', 
-          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)', 
-          inventory: 'Không có quyền xem dữ liệu tồn kho (cần Read Inventory)',
-          revenue: 'Không có quyền xem dữ liệu doanh thu (cần Read Revenue)'
-        });
-        return;
-      }
-      
-      const responses = await Promise.allSettled(promises);
-      
-      // Process responses and handle errors
-      let allOrders: any[] = [];
-      let products: any[] = [];
-      let stockLevels: any[] = [];
-      let categories: any[] = [];
-      let notifications: any = { notifications: [] };
-      
-      responses.forEach((response, index) => {
-        const label = promiseLabels[index];
-        
-        if (response.status === 'fulfilled') {
-          const data = response.value;
-          if (label === 'orders') {
-            allOrders = data.orders || [];
-            setLoadingStates(prev => ({ ...prev, orders: false }));
-          } else if (label === 'products') {
-            products = data.products || [];
-            setLoadingStates(prev => ({ ...prev, products: false }));
-          } else if (label === 'inventory') {
-            stockLevels = data.stockLevels || [];
-            setLoadingStates(prev => ({ ...prev, inventory: false }));
-          } else if (label === 'categories') {
-            categories = data.categories || [];
-          } else if (label === 'notifications') {
-            notifications = data || { notifications: [] };
-          }
-        } else {
-          // Handle API errors
-          const error = response.reason;
-          let errorMessage = 'Lỗi tải dữ liệu';
-          
-          if (error?.response?.status === 403) {
-            if (label === 'orders') {
-              errorMessage = 'Không có quyền truy cập dữ liệu đơn hàng (cần Read Orders)';
-            } else if (label === 'products') {
-              errorMessage = 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)';
-            } else if (label === 'inventory') {
-              errorMessage = 'Không có quyền truy cập dữ liệu tồn kho (cần Read Inventory)';
-            } else if (label === 'revenue') {
-              errorMessage = 'Không có quyền truy cập dữ liệu doanh thu (cần Read Revenue)';
-            } else {
-              errorMessage = 'Không có quyền truy cập dữ liệu này';
-            }
-          } else if (error?.response?.status === 401) {
-            errorMessage = 'Phiên đăng nhập đã hết hạn';
-          } else if (error?.message) {
-            errorMessage = error.message;
-          }
-          
-          setErrorStates(prev => ({ ...prev, [label]: errorMessage }));
-          setLoadingStates(prev => ({ ...prev, [label]: false }));
-        }
+      // Fetch all dashboard data from backend APIs
+      const [summary, revenueSeries, orderStatusData, inventoryOverview, topProductsData, topCustomersData, regionRevenueData, categoryProfitData, recentOrdersData, recentActivitiesData] = await Promise.all([
+        dashboardApi.getSummary({ revenuePeriod, profitPeriod }),
+        dashboardApi.getRevenueSeries(),
+        dashboardApi.getOrderStatus(),
+        dashboardApi.getInventoryOverview(),
+        dashboardApi.getTopProducts(5),
+        dashboardApi.getTopCustomers(5),
+        dashboardApi.getRegionRevenue(5),
+        dashboardApi.getCategoryProfit(5),
+        dashboardApi.getRecentOrders(10),
+        dashboardApi.getRecentActivities(8),
+      ]);
+
+      // Debug: Log API responses
+      console.log('Dashboard API Responses:', {
+        summary,
+        revenueSeries,
+        orderStatusData,
+        inventoryOverview,
+        topProductsData,
+        topCustomersData,
+        regionRevenueData,
+        categoryProfitData,
+        recentActivitiesData,
       });
 
-      // Calculate dashboard metrics
-      let totalRevenue = 0;
-      let totalDebt = 0;
-      let totalProfit = 0;
-      const monthlyRevenue: any = {};
-      const today = new Date();
+      // Set summary data - merge with previous state to ensure all properties exist
+      setDashboardData(prev => ({
+        ...prev,
+        ...summary,
+      }));
       
-      // Calculate revenue period based on revenuePeriod toggle
-      let pStart: Date, pEnd: Date, prevStart: Date, prevEnd: Date;
-      if (revenuePeriod === 'month') {
-        pStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        pEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-        prevStart = new Date(today.getFullYear() - 1, today.getMonth(), 1);
-        prevEnd = new Date(today.getFullYear() - 1, today.getMonth() + 1, 0, 23, 59, 59, 999);
-      } else {
-        pStart = new Date(today.getFullYear(), 0, 1);
-        pEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
-        prevStart = new Date(today.getFullYear() - 1, 0, 1);
-        prevEnd = new Date(today.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-      }
+      // Set revenue data - need to add colors
+      // Ensure revenueSeries is an array before mapping
+      const revenueWithColors = (revenueSeries || []).map((item, idx) => ({
+        ...item,
+        month: format(new Date(item.year, item.monthNumber, 1), 'MMM-yyyy', { locale: vi }),
+      }));
+      setRevenueData(revenueWithColors);
       
-      // Separate period calculation for profit based on profitPeriod toggle
-      let currentProfitStart: Date, currentProfitEnd: Date, previousProfitStart: Date, previousProfitEnd: Date;
-      if (profitPeriod === 'month') {
-        currentProfitStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        currentProfitEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-        previousProfitStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        previousProfitEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
-      } else {
-        currentProfitStart = new Date(today.getFullYear(), 0, 1);
-        currentProfitEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
-        previousProfitStart = new Date(today.getFullYear() - 1, 0, 1);
-        previousProfitEnd = new Date(today.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-      }
-      let currentMonthRevenue = 0;
-      let previousMonthRevenue = 0;
-      let currentProfit = 0;
-      let previousProfit = 0;
-      let currentProfitRevenue = 0;
-      let previousProfitRevenue = 0;
-      const customerFirstOrder: Record<string, Date> = {};
-      const statusCounter: Record<string, number> = {};
-      const provinceToRevenue: Record<string, number> = {};
-      const productAggregate: Record<string, { name: string; qty: number; revenue: number } > = {};
-      const customerAggregate: Record<string, { name: string; revenue: number; lastDate: Date } > = {};
-      const categoryProfitMap: Record<string, number> = {};
-      // Build product map for quick lookup
-      const productMapAtCalc = (products || []).reduce((acc: any, p: any) => {
-        acc[p.id] = p;
-        return acc;
-      }, {} as any);
-      const productByCodeMap = (products || []).reduce((acc: any, p: any) => {
-        const code = p.code || p.product_code;
-        if (code) acc[String(code)] = p;
-        return acc;
-      }, {} as any);
-      const categoryMapById = (categories || []).reduce((acc: any, c: any) => {
-        acc[c.id] = c.name;
-        return acc;
-      }, {} as any);
-
-      // Calculate total debt and basic revenue estimation from orders
-      allOrders.forEach((order: any) => {
-        totalDebt += order.debt_amount || 0;
-        const createdAt = order.created_at ? new Date(order.created_at) : new Date();
-        const orderMonth = createdAt.getMonth();
-        const orderYear = createdAt.getFullYear();
-        const amount = order.total_amount || 0;
-        totalRevenue += amount;
-        // status counter
-        if (order.status) statusCounter[order.status] = (statusCounter[order.status] || 0) + 1;
-        // first order per customer to estimate new customers
-        const custId = order.customer_id || order.customer?.id;
-        if (custId) {
-          if (!customerFirstOrder[custId] || createdAt < customerFirstOrder[custId]) {
-            customerFirstOrder[custId] = createdAt;
-          }
-          const custName = order.customer_name || order.customer?.name || 'Khách hàng';
-          const lastDate = createdAt;
-          if (!customerAggregate[custId]) customerAggregate[custId] = { name: custName, revenue: 0, lastDate };
-          customerAggregate[custId].revenue += amount;
-          if (lastDate > customerAggregate[custId].lastDate) customerAggregate[custId].lastDate = lastDate;
-        }
-        // region revenue by province name if available
-        const provinceName = order.customer_addressInfo?.provinceName || order.customer?.addressInfo?.province?.name;
-        if (provinceName) provinceToRevenue[provinceName] = (provinceToRevenue[provinceName] || 0) + amount;
-        // aggregate products by items when available
-        const lineItems = order.items || order.order_items || order.details || [];
-        lineItems.forEach((it: any) => {
-          const prodId = it.product?.id || it.product_id || it.productId;
-          const prodCode = it.product?.code || it.product_code || it.productCode;
-          const key = prodId || prodCode || it.id;
-          const name = it.product_name || it.productName || prodCode || 'SP';
-          const qty = Number(it.quantity || 0);
-          const rev = Number(it.total_price || it.totalPrice || (Number(it.unit_price || it.unitPrice || 0) * qty) || 0);
-          const costUnit = Number(it.product?.costPrice || it.costPrice || 0);
-          const profit = Math.max(0, rev - costUnit * qty);
-          if (!productAggregate[key]) productAggregate[key] = { name, qty: 0, revenue: 0 };
-          productAggregate[key].qty += qty;
-          productAggregate[key].revenue += rev;
-          // Category revenue by product
-          const prod = (prodId && productMapAtCalc[prodId]) || (prodCode && productByCodeMap[prodCode]);
-          const itemCategoryRaw = it.product?.category; // can be string or object
-          const itemCategoryId = it.product?.categoryId || it.categoryId || it.category_id;
-          const catName = (
-            typeof itemCategoryRaw === 'string' ? itemCategoryRaw :
-            itemCategoryRaw?.name ||
-            categoryMapById[itemCategoryId as any] ||
-            prod?.category?.name ||
-            categoryMapById[prod?.categoryId as any] ||
-            it.category_name || prod?.categoryName ||
-            (prod?.category && (prod.category.name || prod.category.title)) ||
-            'Không xác định'
-          );
-          const catKey = String(catName);
-          categoryProfitMap[catKey] = (categoryProfitMap[catKey] || 0) + profit;
-        });
-        
-        // Calculate revenue in selected period and previous period
-        if (createdAt >= pStart && createdAt <= pEnd) {
-          currentMonthRevenue += amount;
-        } else if (createdAt >= prevStart && createdAt <= prevEnd) {
-          previousMonthRevenue += amount;
-        }
-        
-        // Calculate profit based on profitPeriod toggle
-        if (createdAt >= currentProfitStart && createdAt <= currentProfitEnd) {
-          currentProfitRevenue += amount;
-          const lineItems2 = order.items || order.order_items || order.details || [];
-          lineItems2.forEach((it: any) => {
-            const qty = Number(it.quantity || 0);
-            const rev2 = Number(it.total_price || it.totalPrice || (Number(it.unit_price || it.unitPrice || 0) * qty) || 0);
-            const costUnit2 = Number(it.product?.costPrice || it.costPrice || 0);
-            currentProfit += Math.max(0, rev2 - costUnit2 * qty);
-          });
-        } else if (createdAt >= previousProfitStart && createdAt <= previousProfitEnd) {
-          previousProfitRevenue += amount;
-          const lineItems2 = order.items || order.order_items || order.details || [];
-          lineItems2.forEach((it: any) => {
-            const qty = Number(it.quantity || 0);
-            const rev2 = Number(it.total_price || it.totalPrice || (Number(it.unit_price || it.unitPrice || 0) * qty) || 0);
-            const costUnit2 = Number(it.product?.costPrice || it.costPrice || 0);
-            previousProfit += Math.max(0, rev2 - costUnit2 * qty);
-          });
-        }
-        
-        // Accumulate per-order only; month buckets will be constructed after
-      });
-
-      // Helper to get month end
-      const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth()+1, 0, 23, 59, 59, 999);
-      // Create 12 months of data comparing current year vs previous year
-      // Start from 11 months ago (most distant), end at last month (most recent)
-      const merged = Array.from({ length: 12 }).map((_, i) => {
-        // Calculate months back: where i=0 is 11 months back, i=11 is 0 months back (last month)
-        const monthsBack = 11 - i; // i=0: 11 months back, i=11: 0 months back (last month)
-        
-        // Get the month by subtracting from current date
-        const targetDate = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
-        const curStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-        const curEnd = endOfMonth(curStart);
-        
-        // Previous year: same month
-        const prevStart = new Date(targetDate.getFullYear() - 1, targetDate.getMonth(), 1);
-        const prevEnd = endOfMonth(prevStart);
-        
-        const sumInRange = (start: Date, end: Date) => {
-          let sum = 0;
-          allOrders.forEach((order: any) => {
-            const createdAt = order.created_at ? new Date(order.created_at) : new Date();
-            if (createdAt >= start && createdAt <= end) sum += (order.total_amount || 0);
-          });
-          return sum;
-        };
-        const currentSum = sumInRange(curStart, curEnd);
-        const prevSum = sumInRange(prevStart, prevEnd);
-        return {
-          month: format(curStart, 'MMM-yyyy', { locale: vi }),
-          label: `T${String(curStart.getMonth() + 1).padStart(2, '0')}`,
-          current: currentSum,
-          previous: prevSum,
-          monthNumber: curStart.getMonth(),
-          year: curStart.getFullYear(),
-        };
-      }).sort((a, b) => {
-        // Sort by month number only
-        return a.monthNumber - b.monthNumber;
-      });
-
-      // Calculate order status breakdown
-      const statusCounts: any = {};
-      allOrders?.forEach((order) => {
-        const status = order.status;
-        if (status) {
-          statusCounts[status] = (statusCounts[status] || 0) + 1;
-        }
-      });
-
-      const orderStatusArray = [
-        // Trạng thái từ API interface: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
-        { trangThai: 'Nháp', soLuong: statusCounts.draft || 0 },
-        { trangThai: 'Đang xử lý', soLuong: statusCounts.processing || 0 },
-        { trangThai: 'Đã giao', soLuong: statusCounts.shipped || 0 },
-        { trangThai: 'Đã nhận', soLuong: statusCounts.delivered || 0 },
-        { trangThai: 'Đã hủy', soLuong: statusCounts.cancelled || 0 },
-        // Thêm các trạng thái khác có thể có từ backend
-        { trangThai: 'Chờ xử lý', soLuong: statusCounts.pending || 0 },
-        { trangThai: 'Đã xác nhận', soLuong: statusCounts.confirmed || 0 },
-        { trangThai: 'Đã lấy hàng', soLuong: statusCounts.picked || 0 },
-        { trangThai: 'Bàn giao ĐVVC', soLuong: statusCounts.handover || 0 },
-        { trangThai: 'Đã giao hàng', soLuong: statusCounts.delivered || 0 },
-        { trangThai: 'Hoàn thành', soLuong: statusCounts.completed || 0 },
-        { trangThai: 'Đang giao', soLuong: statusCounts.shipping || 0 },
-      ];
-
-      // Add any other statuses that might exist in the data
-      Object.keys(statusCounts).forEach(status => {
-        const predefinedStatuses = ['draft', 'processing', 'shipped', 'delivered', 'cancelled', 'pending', 'confirmed', 'picked', 'handover', 'completed', 'shipping'];
-        if (!predefinedStatuses.includes(status)) {
-          orderStatusArray.push({ 
-            trangThai: status.charAt(0).toUpperCase() + status.slice(1), 
-            soLuong: statusCounts[status] 
-          });
-        }
-      });
-
-      // If no orders, show a default message
-      if (allOrders.length === 0) {
-        orderStatusArray.push({ trangThai: 'Chưa có đơn hàng', soLuong: 0 });
-      }
-
-      // Calculate inventory breakdown using actual stock levels
-      let inStock = 0;
-      let lowStock = 0;
-      let outOfStock = 0;
-      const lowStockItems: any[] = [];
-      const productStockMap: any = {};
-
-      // Create a map of products for easy lookup
-      const productMap = products.reduce((acc: any, product: any) => {
-        acc[product.id] = product;
-        return acc;
-      }, {});
-
-      // Group stock levels by product and calculate totals
-      const productStockTotals: any = {};
-      stockLevels.forEach((stockLevel: any) => {
-        const productId = stockLevel.productId;
-        if (!productStockTotals[productId]) {
-          productStockTotals[productId] = 0;
-        }
-        productStockTotals[productId] += stockLevel.quantity || 0;
-      });
-
-      // Calculate inventory status for each product
-      Object.keys(productStockTotals).forEach(productId => {
-        const product = productMap[productId];
-        if (!product) return;
-        
-        const totalStock = productStockTotals[productId];
-        const minStock = product.min_stock_level || 10; // Default minimum stock level
-        
-        if (totalStock === 0) {
-          outOfStock++;
-          lowStockItems.push({
-            name: product.name,
-            stock: totalStock,
-            status: 'Hết hàng'
-          });
-        } else if (totalStock <= minStock) {
-          lowStock++;
-          lowStockItems.push({
-            name: product.name,
-            stock: totalStock,
-            status: 'Sắp hết'
-          });
-        } else {
-          inStock++;
-        }
-        
-        productStockMap[productId] = {
-          name: product.name,
-          stock: totalStock,
-          minStock: minStock
-        };
-      });
-
-      // Handle products with no stock levels (should be considered out of stock)
-      products.forEach((product: any) => {
-        if (!productStockTotals[product.id]) {
-          outOfStock++;
-          lowStockItems.push({
-            name: product.name,
-            stock: 0,
-            status: 'Hết hàng'
-          });
-        }
-      });
-
-      const totalProducts = products.length || 0;
-      const inventoryArray = totalProducts > 0 ? [
-        ...(inStock > 0 ? [{ name: 'Còn hàng', value: Math.round((inStock / totalProducts) * 100), color: '#22c55e' }] : []),
-        ...(lowStock > 0 ? [{ name: 'Sắp hết', value: Math.round((lowStock / totalProducts) * 100), color: '#f59e0b' }] : []),
-        ...(outOfStock > 0 ? [{ name: 'Hết hàng', value: Math.round((outOfStock / totalProducts) * 100), color: '#ef4444' }] : []),
-      ] : [
-        { name: 'Không có dữ liệu', value: 100, color: '#e5e7eb' },
-      ];
-
-
-      // Update state
-      setDashboardData({
-        totalRevenue,
-        totalDebt,
-        totalProfit: currentProfit,
-        totalProducts,
-        totalOrders: allOrders?.length || 0,
-        currentMonthRevenue,
-        previousMonthRevenue,
-        currentProfit,
-        previousProfit,
-        currentProfitRevenue,
-        previousProfitRevenue
-      });
-      // Create detailed product stock data for chart
-      const productStockChartData = Object.keys(productStockTotals).map(productId => {
-        const product = productMap[productId];
-        if (!product) return null;
-        
-        const totalStock = productStockTotals[productId];
-        const minStock = product.min_stock_level || 10;
-        
-        let status = 'Còn hàng';
-        let color = '#22c55e';
-        
-        if (totalStock === 0) {
-          status = 'Hết hàng';
-          color = '#ef4444';
-        } else if (totalStock <= minStock) {
-          status = 'Sắp hết';
-          color = '#f59e0b';
-        }
-        
-        return {
-          name: product.name,
-          stock: totalStock,
-          minStock: minStock,
-          status: status,
-          color: color,
-          code: product.code || product.id
-        };
-      }).filter(Boolean).sort((a: any, b: any) => b.stock - a.stock); // Sort by stock descending
-
-      setRevenueData(merged);
-      setInventoryData(inventoryArray);
+      // Set order status data - need to format to array
+      // Ensure orderStatusData is an object before processing
+      const orderStatusArray = Object.entries(orderStatusData || {}).map(([key, value]) => ({
+        trangThai: key.charAt(0).toUpperCase() + key.slice(1),
+        soLuong: value,
+      }));
       setOrderStatus(orderStatusArray);
-      setLowStockProducts(lowStockItems.slice(0, 5)); // Show only top 5
-      setProductStockData(productStockChartData);
-      // Region revenue list (top 5 provinces)
-      const regionList = Object.keys(provinceToRevenue)
-        .map(name => ({ name, revenue: provinceToRevenue[name] }))
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5);
-      setRegionRevenue(regionList);
-      // Top products (by revenue)
-      const topProds = Object.values(productAggregate)
-        .sort((a: any, b: any) => b.revenue - a.revenue)
-        .slice(0, 5);
-      setTopProducts(topProds as any);
-      // Top customers (by revenue)
-      const topCusts = Object.keys(customerAggregate).map(id => customerAggregate[id])
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5);
-      setTopCustomers(topCusts);
-      // Recent orders (latest 5)
-      const sortedRecent = [...allOrders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setRecentOrders(sortedRecent);
-      // Recent activities: mix notifications + order created/completed
-      const orderActivities = sortedRecent.slice(0, 10).map(o => ({
-        id: `order-${o.id}`,
-        type: o.status === 'completed' ? 'success' : 'info',
-        title: o.status === 'completed' ? 'Đơn hàng hoàn thành' : 'Đơn hàng mới',
-        message: `${o.order_number} • ${o.customer_name || 'Khách lẻ'}`,
-        amount: o.total_amount || 0,
-        createdAt: o.created_at
-      }));
-      const notifActivities = (notifications.notifications || []).map((n: any) => ({
-        id: `notif-${n.id}`,
-        type: n.type || 'info',
-        title: n.title,
-        message: n.message,
-        amount: undefined,
-        createdAt: n.createdAt || n.created_at
-      }));
-      const combined = [...orderActivities, ...notifActivities]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 8);
-      setRecentActivities(combined);
-      // Category revenue array (top 5)
-      const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
-      const catArray = Object.keys(categoryProfitMap).map((name, idx) => ({ name, value: categoryProfitMap[name], color: palette[idx % palette.length], fill: palette[idx % palette.length] }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5)
-        .map((c, idx) => ({ ...c, color: c.color, fill: c.fill }));
-      setCategoryProfit(catArray);
-      // New customers in current month
-      const newCustCount = Object.values(customerFirstOrder).filter((d: any) => d >= pStart && d <= pEnd).length;
-      setNewCustomers(newCustCount);
       
-      // Set revenue loading to false after processing
-      setLoadingStates(prev => ({ ...prev, revenue: false }));
+      // Set inventory data
+      // Ensure inventoryOverview exists before accessing properties
+      if (inventoryOverview) {
+        setInventoryData(inventoryOverview.inventoryData || []);
+        setLowStockProducts(inventoryOverview.lowStockProducts || []);
+        setProductStockData(inventoryOverview.productStockData || []);
+      } else {
+        setInventoryData([]);
+        setLowStockProducts([]);
+        setProductStockData([]);
+      }
+      
+      // Set top products
+      setTopProducts(topProductsData || []);
+      
+      // Set top customers
+      setTopCustomers(topCustomersData || []);
+      
+      // Set region revenue
+      setRegionRevenue(regionRevenueData || []);
+      
+      // Set category profit - need to add colors
+      // Ensure categoryProfitData is an array before mapping
+      const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+      const catArray = (categoryProfitData || []).map((c, idx) => ({
+        ...c,
+        color: palette[idx % palette.length],
+        fill: palette[idx % palette.length],
+      }));
+      setCategoryProfit(catArray);
+      
+      // Set recent orders
+      setRecentOrders(recentOrdersData || []);
+      
+      // Set recent activities
+      setRecentActivities(recentActivitiesData || []);
+      
+      // Calculate new customers count from summary revenue period
+      const today = new Date();
+      const pStart = revenuePeriod === 'month' 
+        ? new Date(today.getFullYear(), today.getMonth(), 1)
+        : new Date(today.getFullYear(), 0, 1);
+      const pEnd = revenuePeriod === 'month'
+        ? new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999)
+        : new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+      
+      // Note: New customers count is not available from backend, setting to 0
+      setNewCustomers(0);
+      
+      // Set all loading states to false
+      setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
+      setDataLoaded(true); // Mark data as loaded
 
-    } catch (error) {
+    } catch (error: any) {
       // Set all loading states to false and show error
       setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
+      let errorMessage = 'Lỗi tải dữ liệu dashboard';
+      
+      if (error?.response?.status === 403) {
+        errorMessage = 'Không có quyền truy cập dashboard';
+      } else if (error?.response?.status === 401) {
+        errorMessage = 'Phiên đăng nhập đã hết hạn';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       setErrorStates({ 
-        orders: 'Lỗi tải dữ liệu đơn hàng (cần Read Orders)', 
-        products: 'Lỗi tải dữ liệu sản phẩm (cần Read Products)', 
-        inventory: 'Lỗi tải dữ liệu tồn kho (cần Read Inventory)',
-        revenue: 'Lỗi tải dữ liệu doanh thu (cần Read Revenue)'
+        orders: errorMessage, 
+        products: errorMessage, 
+        inventory: errorMessage,
+        revenue: errorMessage
       });
+      
+      // Mark data as loaded even on error to prevent infinite loading
+      setDataLoaded(true);
     }
   };
 
-  // Lazy loading configuration
-  const lazyData = useRouteBasedLazyData({
-    dashboard: {
-      loadFunction: fetchDashboardData
+  // Trigger data fetch when permissions are loaded or period changes
+  useEffect(() => {
+    if (!permissionsLoading) {
+      fetchDashboardData();
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsLoading, revenuePeriod, profitPeriod]);
 
   const getGrowthPercentage = () => {
-    const delta = dashboardData.currentMonthRevenue - dashboardData.previousMonthRevenue;
+    if (!dashboardData) return 0;
+    const delta = (dashboardData.currentMonthRevenue || 0) - (dashboardData.previousMonthRevenue || 0);
     if (delta <= 0) return 0;
-    if (dashboardData.previousMonthRevenue === 0) return 0;
-    return Math.round((delta / dashboardData.previousMonthRevenue) * 100);
+    if ((dashboardData.previousMonthRevenue || 0) === 0) return 0;
+    return Math.round((delta / (dashboardData.previousMonthRevenue || 1)) * 100);
   };
 
-
-  const dashboardState = lazyData.getDataState('dashboard');
-  
-  
-  if (dashboardState.isLoading || dashboardState.error) {
+  // Show loading if permissions are still loading
+  if (permissionsLoading) {
     return (
       <Loading 
         message="Đang tải dữ liệu dashboard..."
-        error={dashboardState.error}
-        onRetry={() => lazyData.reloadData('dashboard')}
+      />
+    );
+  }
+
+  // Show loading if data is being fetched for the first time
+  // Only show loading when loading AND data hasn't been loaded yet
+  // This prevents NaN errors and allows rendering when data is loaded
+  const isInitialLoading = !dataLoaded && (loadingStates.revenue || loadingStates.orders || loadingStates.products || loadingStates.inventory);
+  
+  if (isInitialLoading) {
+    return (
+      <Loading 
+        message="Đang tải dữ liệu dashboard..."
+      />
+    );
+  }
+
+  // Safeguard: ensure dashboardData exists before rendering
+  if (!dashboardData) {
+    return (
+      <Loading 
+        message="Đang tải dữ liệu dashboard..."
       />
     );
   }
@@ -1004,24 +617,86 @@ const DashboardContent = () => {
                     <>
                       <ResponsiveContainer width="100%" height={260}>
                         <PieChart>
-                          <Pie data={categoryProfit} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+                          <Pie 
+                            data={categoryProfit} 
+                            dataKey="profit" 
+                            nameKey="name" 
+                            cx="50%" 
+                            cy="50%" 
+                            outerRadius={90} 
+                            label={({ name }) => {
+                              // Find the category in data to get percentage
+                              const category = categoryProfit.find(c => c.name === name);
+                              if (category) {
+                                // Use percentage from backend if available
+                                const percentage = category.percentage || category.value;
+                                if (percentage) {
+                                  // Extract number from "72.73%" format
+                                  const percentStr = typeof percentage === 'string' 
+                                    ? percentage.replace('%', '') 
+                                    : percentage.toString();
+                                  return `${name}: ${percentStr}%`;
+                                }
+                              }
+                              // Fallback: calculate from profit values
+                              const total = categoryProfit.reduce((sum, item) => sum + (Number(item.profit) || 0), 0);
+                              const currentProfit = category?.profit || 0;
+                              const percentValue = total > 0 ? ((Number(currentProfit) || 0) / total * 100).toFixed(1) : '0';
+                              return `${name}: ${percentValue}%`;
+                            }}
+                          >
                             {categoryProfit.map((entry, index) => (
                               <Cell key={`cat-${index}`} fill={entry.fill || entry.color || '#3b82f6'} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(v: any, n: string) => [formatCurrency(Number(v)), n]} />
+                          <Tooltip formatter={(v: any, n: string, props: any) => {
+                            // v is the profit value (number)
+                            // props.payload might be array or object
+                            let payload = props?.payload;
+                            if (Array.isArray(payload)) {
+                              payload = payload[0] || {};
+                            }
+                            const percentage = payload?.percentage || payload?.value;
+                            let percentStr = '';
+                            if (percentage) {
+                              // Extract number from "72.73%" format
+                              percentStr = typeof percentage === 'string' 
+                                ? percentage.replace('%', '') 
+                                : percentage.toString();
+                            } else {
+                              // Calculate if not provided
+                              const total = categoryProfit.reduce((sum, item) => sum + (Number(item.profit) || 0), 0);
+                              percentStr = total > 0 ? ((Number(v) || 0) / total * 100).toFixed(1) : '0';
+                            }
+                            return [`${formatCurrency(Number(v) || 0)} (${percentStr}%)`, n];
+                          }} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="mt-4 space-y-2">
-                        {categoryProfit.map((c, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
-                              <span>{c.name}</span>
+                        {categoryProfit.map((c, idx) => {
+                          // Use percentage from backend if available
+                          const percentage = c.percentage || c.value;
+                          let percentStr = '';
+                          if (percentage) {
+                            // Extract number from "72.73%" format
+                            percentStr = typeof percentage === 'string' 
+                              ? percentage.replace('%', '') 
+                              : percentage.toString();
+                          } else {
+                            // Calculate if not provided
+                            const total = categoryProfit.reduce((sum, item) => sum + (Number(item.profit) || 0), 0);
+                            percentStr = total > 0 ? ((Number(c.profit) || 0) / total * 100).toFixed(1) : '0';
+                          }
+                          return (
+                            <div key={idx} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
+                                <span>{c.name}</span>
+                              </div>
+                              <span className="font-medium">{percentStr}%</span>
                             </div>
-                            <span className="font-medium">{formatCurrency(c.value)}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -1352,124 +1027,76 @@ const DashboardContent = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Đơn hàng gần đây */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Đơn hàng gần đây</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Hiển thị</span>
+                    <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
+                      <SelectTrigger className="h-8 w-20">
+                        <SelectValue placeholder="Số lượng" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="10">10</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {recentOrders.length === 0 ? (
+                  <p className="text-muted-foreground">Chưa có đơn hàng</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recentOrders.slice(0, recentOrdersLimit).map((o, idx) => (
+                      <div key={idx} className="flex items-center justify-between border rounded-lg p-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-medium">{o.order_number}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                            >{o.status === 'pending' ? 'Chờ xử lý' : o.status === 'processing' ? 'Đang giao' : o.status === 'completed' ? 'Hoàn thành' : o.status}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
+                        </div>
+                        <div className="text-blue-600 font-bold">{formatCurrency(o.total_amount || 0)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
 
-        {/* Cảnh báo tồn kho & Hoạt động gần đây */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cảnh báo tồn kho</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!canViewInventory ? (
-                <Alert>
-                  <Lock className="h-4 w-4" />
-                  <AlertDescription className="text-sm">
-                    Bạn không có quyền xem dữ liệu tồn kho (cần Read Inventory)
-                  </AlertDescription>
-                </Alert>
-              ) : errorStates.inventory ? (
-                <Alert>
-                  <Lock className="h-4 w-4" />
-                  <AlertDescription className="text-sm">
-                    {errorStates.inventory}
-                  </AlertDescription>
-                </Alert>
-              ) : loadingStates.inventory ? (
-                <div className="text-muted-foreground text-sm">Đang tải dữ liệu tồn kho...</div>
-              ) : lowStockProducts.length === 0 ? (
-                <p className="text-muted-foreground">Không có cảnh báo</p>
-              ) : (
-                <div className="space-y-3">
-                  {lowStockProducts.map((p, idx) => {
-                    const isCritical = p.status === 'Hết hàng';
-                    const percent = Math.min(100, Math.round(((p.stock || 0) / ((p.minStock || 20))) * 100));
-                    return (
-                      <div key={idx} className={`p-3 rounded-lg ${isCritical ? 'bg-red-50' : 'bg-orange-50'}`}>
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium">{p.name}</div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${isCritical ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{isCritical ? 'Nghiêm trọng' : 'Cảnh báo'}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">Tồn: {p.stock || 0}</div>
-                        <div className="mt-2 h-2 bg-muted rounded">
-                          <div className={`h-2 rounded ${isCritical ? 'bg-red-500' : 'bg-orange-500'}`} style={{ width: `${percent}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Hoạt động gần đây</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentActivities.length === 0 ? (
-                <p className="text-muted-foreground">Chưa có hoạt động</p>
-              ) : (
-                <div className="space-y-3">
-                  {recentActivities.map((a, idx) => (
-                    <div key={idx} className="flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${a.type === 'success' ? 'bg-green-100 text-green-700' : a.type === 'warning' ? 'bg-yellow-100 text-yellow-700' : a.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>{idx+1}</div>
-                        <div>
-                          <div className="text-sm font-medium">{a.title}</div>
-                          <div className="text-xs text-muted-foreground">{a.message}</div>
-                          <div className="text-[10px] text-muted-foreground">{format(new Date(a.createdAt), 'yyyy-MM-dd HH:mm')}</div>
-                        </div>
-                      </div>
-                      {a.amount !== undefined && (
-                        <div className="text-blue-600 font-medium">{formatCurrency(a.amount)}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Đơn hàng gần đây */}
+        {/* Hoạt động gần đây */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Đơn hàng gần đây</CardTitle>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Hiển thị</span>
-                <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
-                  <SelectTrigger className="h-8 w-20">
-                    <SelectValue placeholder="Số lượng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">3</SelectItem>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <CardTitle>Hoạt động gần đây</CardTitle>
           </CardHeader>
           <CardContent>
-            {recentOrders.length === 0 ? (
-              <p className="text-muted-foreground">Chưa có đơn hàng</p>
+            {recentActivities.length === 0 ? (
+              <p className="text-muted-foreground">Chưa có hoạt động</p>
             ) : (
               <div className="space-y-3">
-                {recentOrders.slice(0, recentOrdersLimit).map((o, idx) => (
-                  <div key={idx} className="flex items-center justify-between border rounded-lg p-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-medium">{o.order_number}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
-                        >{o.status === 'pending' ? 'Chờ xử lý' : o.status === 'processing' ? 'Đang giao' : o.status === 'completed' ? 'Hoàn thành' : o.status}
-                        </span>
+                {recentActivities.map((a, idx) => (
+                  <div key={idx} className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${a.type === 'success' ? 'bg-green-100 text-green-700' : a.type === 'warning' ? 'bg-yellow-100 text-yellow-700' : a.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>{idx+1}</div>
+                      <div>
+                        <div className="text-sm font-medium">{a.title}</div>
+                        <div className="text-xs text-muted-foreground">{a.message}</div>
+                        <div className="text-[10px] text-muted-foreground">{format(new Date(a.createdAt), 'yyyy-MM-dd HH:mm')}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
                     </div>
-                    <div className="text-blue-600 font-bold">{formatCurrency(o.total_amount || 0)}</div>
+                    {a.amount !== undefined && (
+                      <div className="text-blue-600 font-medium">{formatCurrency(a.amount)}</div>
+                    )}
                   </div>
                 ))}
               </div>
