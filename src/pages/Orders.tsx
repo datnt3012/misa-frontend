@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
+import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -27,6 +28,8 @@ const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -59,10 +62,11 @@ const OrdersContent: React.FC = () => {
       setLoading(true);
       const params: any = { page: currentPage, limit: itemsPerPage };
       if (statusFilter !== 'all') params.status = statusFilter;
+      if (categoryFilter !== 'all') params.categories = categoryFilter;
       if (searchTerm) params.search = searchTerm;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
-      if (creatorFilter !== 'all') params.customerId = creatorFilter;
+      if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
       const resp = await orderApi.getOrders(params);
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
@@ -77,7 +81,22 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+        // Filter out deleted categories
+        const activeCategories = response.categories.filter(cat => !cat.isDeleted);
+        setCategories(activeCategories);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // Handle creating export slip
   const handleCreateExportSlip = (order: any) => {
@@ -345,12 +364,26 @@ const OrdersContent: React.FC = () => {
                 <SelectValue placeholder="Chọn trạng thái" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="all">Tất cả trạng thái</SelectItem>
                 <SelectItem value="pending">Chờ xử lý</SelectItem>
                 <SelectItem value="processing">Đang xử lý</SelectItem>
                 <SelectItem value="delivered">Đã giao</SelectItem>
                 <SelectItem value="completed">Hoàn thành</SelectItem>
                 <SelectItem value="cancelled">Đã hủy</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Chọn loại sản phẩm" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
