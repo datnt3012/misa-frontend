@@ -814,13 +814,12 @@ function RevenueContent() {
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn phương thức" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả phương thức</SelectItem>
-                      <SelectItem value="cash">Tiền mặt</SelectItem>
-                      <SelectItem value="bank_transfer">Chuyển khoản</SelectItem>
-                      <SelectItem value="credit_card">Thẻ tín dụng</SelectItem>
-                      <SelectItem value="debit_card">Thẻ ghi nợ</SelectItem>
-                    </SelectContent>
+                                          <SelectContent>
+                        <SelectItem value="all">Tất cả phương thức</SelectItem>
+                        <SelectItem value="cash">Tiền mặt</SelectItem>
+                        <SelectItem value="transfer">Chuyển khoản</SelectItem>
+                        <SelectItem value="card">Thẻ</SelectItem>
+                      </SelectContent>
                   </Select>
                 </div>
 
@@ -1141,15 +1140,17 @@ function RevenueContent() {
                       );
                     };
 
-                    const getPaymentMethodLabel = (method: string) => {
-                      const methodMap: { [key: string]: string } = {
-                        'cash': 'Tiền mặt',
-                        'bank_transfer': 'Chuyển khoản',
-                        'credit_card': 'Thẻ tín dụng',
-                        'debit_card': 'Thẻ ghi nợ'
+                                        const getPaymentMethodLabel = (method: string) => {
+                        const methodMap: { [key: string]: string } = {
+                          'cash': 'Tiền mặt',
+                          'transfer': 'Chuyển khoản',
+                          'bank_transfer': 'Chuyển khoản', // Backward compatibility
+                          'card': 'Thẻ',
+                          'credit_card': 'Thẻ', // Backward compatibility
+                          'debit_card': 'Thẻ' // Backward compatibility
+                        };
+                        return methodMap[method] || method;
                       };
-                      return methodMap[method] || method;
-                    };
 
                     return (
                       <TableRow key={order.id}>
