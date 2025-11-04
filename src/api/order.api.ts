@@ -195,7 +195,17 @@ export const orderApi = {
     paymentMethods?: string | string[];
     region?: 'north' | 'central' | 'south';
     includeDeleted?: boolean;
-  }): Promise<{ orders: Order[]; total: number; page: number; limit: number }> => {
+  }): Promise<{ 
+    orders: Order[]; 
+    total: number; 
+    page: number; 
+    limit: number;
+    summary?: {
+      totalAmount: number;
+      totalInitialPayment: number;
+      totalDebt: number;
+    };
+  }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -249,11 +259,26 @@ export const orderApi = {
       : API_ENDPOINTS.ORDERS.LIST;
 
     const response = await api.get<any>(url);
+    
+    // Handle different response structures:
+    // Structure 1: { code: 200, data: { rows: [], summary: {} } }
+    // Structure 2: { rows: [], summary: {} }
     const data = response?.data || response;
+    
+    // Debug: Log summary from API
+    console.log('[Order API] Raw response:', response);
+    console.log('[Order API] Parsed data:', {
+      hasSummary: !!data?.summary,
+      summary: data?.summary,
+      hasRows: !!data?.rows,
+      count: data?.count,
+      totalPage: data?.totalPage,
+      allKeys: data ? Object.keys(data) : [],
+    });
     
     // Debug: Log raw response to see tags structure
     if (data && data.rows && data.rows.length > 0) {
-      console.log('🔍 Raw order API response (first order):', {
+      console.log('[Order API] Raw order API response (first order):', {
         order_id: data.rows[0].id,
         tags: data.rows[0].tags,
         tag_names: data.rows[0].tags || [],
@@ -361,6 +386,11 @@ export const orderApi = {
         total: Number(data.count ?? data.rows.length ?? 0),
         page: Number(data.page ?? params?.page ?? 1),
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
+        summary: data.summary ? {
+          totalAmount: Number(data.summary.totalAmount || 0),
+          totalInitialPayment: Number(data.summary.totalInitialPayment || 0),
+          totalDebt: Number(data.summary.totalDebt || 0),
+        } : undefined,
       };
     }
 
@@ -368,6 +398,11 @@ export const orderApi = {
     return {
       orders,
       total: Number(response?.total ?? orders.length ?? 0),
+      summary: data?.summary ? {
+        totalAmount: Number(data.summary.totalAmount || 0),
+        totalInitialPayment: Number(data.summary.totalInitialPayment || 0),
+        totalDebt: Number(data.summary.totalDebt || 0),
+      } : undefined,
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? orders.length ?? 0),
     };

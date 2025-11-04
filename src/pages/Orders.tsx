@@ -53,6 +53,13 @@ const OrdersContent: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalOrders, setTotalOrders] = useState(0);
   
+  // Summary state from API
+  const [summary, setSummary] = useState<{
+    totalAmount: number;
+    totalInitialPayment: number;
+    totalDebt: number;
+  } | null>(null);
+  
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -68,8 +75,25 @@ const OrdersContent: React.FC = () => {
       if (endDate) params.endDate = endDate;
       if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
       const resp = await orderApi.getOrders(params);
+      console.log('[Orders] API response:', {
+        ordersCount: resp.orders?.length || 0,
+        total: resp.total,
+        hasSummary: !!resp.summary,
+        summary: resp.summary,
+      });
+      
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
+      
+      // Set summary from API if available
+      if (resp.summary) {
+        console.log('[Orders] Setting summary from API:', resp.summary);
+        setSummary(resp.summary);
+      } else {
+        console.log('[Orders] No summary from API, using fallback calculation');
+        // Fallback: calculate from orders if summary not available
+        setSummary(null);
+      }
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast({
@@ -322,8 +346,12 @@ const OrdersContent: React.FC = () => {
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
 
-  // Calculate totals from orders returned by API
-  const totals = orders.reduce((acc, order) => ({
+  // Use summary from API if available, otherwise calculate from orders
+  const totals = summary ? {
+    totalAmount: summary.totalAmount,
+    paidAmount: summary.totalInitialPayment,
+    debtAmount: summary.totalDebt,
+  } : orders.reduce((acc, order) => ({
     totalAmount: acc.totalAmount + (order.total_amount || 0),
     paidAmount: acc.paidAmount + (order.initial_payment || order.paid_amount || 0),
     debtAmount: acc.debtAmount + (order.debt_amount || 0),
