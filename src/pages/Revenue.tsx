@@ -238,14 +238,19 @@ function RevenueContent() {
 
       ordersData.forEach(order => {
         const orderDate = new Date(order.created_at);
-        const month = format(orderDate, 'MMM', { locale: vi });
+        const monthIndex = orderDate.getMonth(); // 0-11
         const year = orderDate.getFullYear();
+        // Map month index to our format: 'Thg 1', 'Thg 2', etc.
+        const monthNames = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
+                           'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
+        const month = monthNames[monthIndex];
         const key = `${month}-${year}`;
 
         if (!monthlyRevenue[key]) {
           monthlyRevenue[key] = {
             month: month,
             year: year,
+            monthLabel: `${month}/${year}`, // Label for chart to include year
             revenue: 0,
             debt: 0,
             orderCount: 0,
@@ -289,14 +294,60 @@ function RevenueContent() {
         totalProfit += orderProfit;
       });
 
-      // Convert to array and sort by date
-      const revenueArray = Object.values(monthlyRevenue).sort((a: any, b: any) => {
-        const dateA = new Date(a.year, getMonthIndex(a.month)).getTime();
-        const dateB = new Date(b.year, getMonthIndex(b.month)).getTime();
-        return dateA - dateB;
+      // Determine the year to display (from filter or current year)
+      let displayYear = new Date().getFullYear();
+      if (startDate) {
+        const filterDate = typeof startDate === 'string' ? new Date(startDate) : startDate;
+        const filterYear = filterDate.getFullYear();
+        if (!isNaN(filterYear)) displayYear = filterYear;
+      } else if (endDate) {
+        const filterDate = typeof endDate === 'string' ? new Date(endDate) : endDate;
+        const filterYear = filterDate.getFullYear();
+        if (!isNaN(filterYear)) displayYear = filterYear;
+      } else if (Object.keys(monthlyRevenue).length > 0) {
+        // Use the most recent year from data
+        const years = Array.from(new Set(Object.values(monthlyRevenue).map((item: any) => item.year)));
+        displayYear = Math.max(...years.map(y => Number(y)));
+      }
+
+      // Create array of 12 months for the display year
+      const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
+                     'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
+      
+      const revenueArray = months.map((monthName, index) => {
+        const monthKey = `${monthName}-${displayYear}`;
+        const existingData = monthlyRevenue[monthKey];
+        
+        if (existingData) {
+          return {
+            ...existingData,
+            monthNumber: index + 1, // 1-12 for sorting
+          };
+        } else {
+          // Create empty data for months without orders
+          return {
+            month: monthName,
+            year: displayYear,
+            monthLabel: `${monthName}/${displayYear}`,
+            monthNumber: index + 1,
+            revenue: 0,
+            debt: 0,
+            orderCount: 0,
+            paymentCount: 0,
+          };
+        }
       });
       
-      // Set revenueData for charts (keep unchanged - only for charts)
+      // Debug logging
+      console.log('[Revenue] Monthly revenue data:', {
+        monthlyRevenueKeys: Object.keys(monthlyRevenue),
+        displayYear,
+        revenueArrayLength: revenueArray.length,
+        revenueArraySample: revenueArray.slice(0, 3),
+        ordersDataLength: ordersData.length,
+      });
+      
+      // Set revenueData for charts (12 months)
       setRevenueData(revenueArray);
       
       // Don't update debtData here - it should come from report API
@@ -922,7 +973,7 @@ function RevenueContent() {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
+              <XAxis dataKey="monthLabel" />
               <YAxis tickFormatter={(value) => {
                 if (value >= 1000000) {
                   return `${(value / 1000000).toFixed(1)}M`;
@@ -952,7 +1003,7 @@ function RevenueContent() {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
+              <XAxis dataKey="monthLabel" />
               <YAxis tickFormatter={(value) => {
                 if (value >= 1000000) {
                   return `${(value / 1000000).toFixed(1)}M`;
