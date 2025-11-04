@@ -76,7 +76,7 @@ export interface RecentOrder {
 }
 
 export const dashboardApi = {
-  // Get only summary metrics
+  // Get only summary metrics (excludes cancelled orders from revenue)
   getSummary: async (params?: {
     revenuePeriod?: 'month' | 'year';
     profitPeriod?: 'month' | 'year';
@@ -89,10 +89,10 @@ export const dashboardApi = {
     if (params?.profitPeriod) {
       queryParams.append('profitPeriod', params.profitPeriod);
     }
+    // Exclude cancelled orders from revenue calculation
+    queryParams.append('excludeStatus', 'cancelled');
     
-    const url = queryParams.toString() 
-      ? `/dashboard/summary?${queryParams.toString()}`
-      : '/dashboard/summary';
+    const url = `/dashboard/summary?${queryParams.toString()}`;
     
     try {
       const response = await api.get<any>(url);
@@ -135,10 +135,11 @@ export const dashboardApi = {
     }
   },
   
-  // Get revenue series for last 12 months
+  // Get revenue series for last 12 months (excludes cancelled orders)
   getRevenueSeries: async (): Promise<RevenueDataPoint[]> => {
     try {
-      const response = await api.get<any>('/dashboard/revenue-series');
+      // Exclude cancelled orders from revenue calculation
+      const response = await api.get<any>('/dashboard/revenue-series?excludeStatus=cancelled');
       const data = response?.data || response;
       
       // If data is an array, return it
@@ -214,10 +215,10 @@ export const dashboardApi = {
     }
   },
   
-  // Get top products by revenue
+      // Get top products by revenue (excludes cancelled orders)
   getTopProducts: async (limit: number = 5): Promise<TopProduct[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/top-products?limit=${limit}`);
+      const response = await api.get<any>(`/dashboard/top-products?limit=${limit}&excludeStatus=cancelled`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
@@ -235,10 +236,10 @@ export const dashboardApi = {
     }
   },
   
-  // Get top customers by revenue
+      // Get top customers by revenue (excludes cancelled orders)
   getTopCustomers: async (limit: number = 5): Promise<TopCustomer[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/top-customers?limit=${limit}`);
+      const response = await api.get<any>(`/dashboard/top-customers?limit=${limit}&excludeStatus=cancelled`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
@@ -256,10 +257,10 @@ export const dashboardApi = {
     }
   },
   
-  // Get revenue by region (province)
+      // Get revenue by region (province) (excludes cancelled orders)
   getRegionRevenue: async (limit: number = 5): Promise<RegionRevenueData[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/region-revenue?limit=${limit}`);
+      const response = await api.get<any>(`/dashboard/region-revenue?limit=${limit}&excludeStatus=cancelled`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
@@ -277,10 +278,10 @@ export const dashboardApi = {
     }
   },
   
-  // Get profit by category
+      // Get profit by category (excludes cancelled orders)
   getCategoryProfit: async (limit: number = 5): Promise<CategoryProfitData[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/category-profit?limit=${limit}`);
+      const response = await api.get<any>(`/dashboard/category-profit?limit=${limit}&excludeStatus=cancelled`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
