@@ -23,6 +23,7 @@ import { productApi } from '@/api/product.api';
 import { categoriesApi } from '@/api/categories.api';
 import { usersApi } from '@/api/users.api';
 import { reportApi } from '@/api/report.api';
+import { dashboardApi } from '@/api/dashboard.api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -114,6 +115,82 @@ function RevenueContent() {
       console.error('[Revenue] Error fetching revenue report:', error);
       // Don't throw - we'll calculate from orders instead
       return null;
+    }
+  };
+
+  // Fetch revenue chart data from dashboard API (excludes cancelled orders automatically)
+  const fetchRevenueChartData = async () => {
+    try {
+      console.log('[Revenue] Fetching revenue chart data from dashboard API...');
+      const revenueSeries = await dashboardApi.getRevenueSeries();
+      console.log('[Revenue] Revenue series from API:', revenueSeries);
+      
+      // Transform API data to match chart format
+      // API returns: { month, label, current, previous, currentDebt, previousDebt, monthNumber, year }
+      // Chart expects: { month, year, monthLabel, monthNumber, revenue, debt, orderCount, paymentCount }
+      const chartData = revenueSeries.map((item) => {
+        // Use monthLabel from API if available, otherwise construct it
+        const monthLabel = item.label || `T${String(item.monthNumber).padStart(2, '0')}/${item.year}`;
+        
+        return {
+          month: item.month || `Thg ${item.monthNumber}`,
+          year: item.year,
+          monthLabel: monthLabel,
+          monthNumber: item.monthNumber,
+          revenue: item.current || 0,
+          debt: item.currentDebt || 0, // Use currentDebt from API
+          orderCount: 0, // API doesn't provide order count per month
+          paymentCount: 0, // API doesn't provide payment count per month
+        };
+      });
+
+      // Ensure we have 12 months sorted by monthNumber
+      const sortedData = chartData.sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.monthNumber - b.monthNumber;
+      });
+
+      console.log('[Revenue] Sorted chart data from API:', sortedData);
+
+      // Find the most recent year with data (usually current year)
+      const years = Array.from(new Set(sortedData.map(d => d.year))).sort((a, b) => b - a);
+      const displayYear = years.length > 0 ? years[0] : new Date().getFullYear();
+      
+      console.log('[Revenue] Using display year:', displayYear);
+
+      // Fill in missing months with 0 values for the display year
+      const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
+                     'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
+      
+      const completeData = months.map((monthName, index) => {
+        const monthNum = index + 1; // 1-12
+        const existingData = sortedData.find(
+          d => d.year === displayYear && d.monthNumber === monthNum
+        );
+        
+        if (existingData) {
+          console.log(`[Revenue] Found data for ${monthName}/${displayYear}: revenue=${existingData.revenue}`);
+          return existingData;
+        } else {
+          return {
+            month: monthName,
+            year: displayYear,
+            monthLabel: `T${String(monthNum).padStart(2, '0')}/${displayYear}`,
+            monthNumber: monthNum,
+            revenue: 0,
+            debt: 0,
+            orderCount: 0,
+            paymentCount: 0,
+          };
+        }
+      });
+      
+      console.log('[Revenue] Final chart data:', completeData);
+      setRevenueData(completeData);
+    } catch (error: any) {
+      console.error('[Revenue] Error fetching revenue chart data:', error);
+      // Fallback to empty array if API fails
+      setRevenueData([]);
     }
   };
 
@@ -339,7 +416,7 @@ function RevenueContent() {
       });
       
       // Debug logging
-      console.log('[Revenue] Monthly revenue data:', {
+      console.log('[Revenue] Monthly revenue data (from orders, for reference only):', {
         monthlyRevenueKeys: Object.keys(monthlyRevenue),
         displayYear,
         revenueArrayLength: revenueArray.length,
@@ -347,8 +424,9 @@ function RevenueContent() {
         ordersDataLength: ordersData.length,
       });
       
-      // Set revenueData for charts (12 months)
-      setRevenueData(revenueArray);
+      // NOTE: Do NOT set revenueData here - it should come from dashboard API (fetchRevenueChartData)
+      // which automatically excludes cancelled orders
+      // setRevenueData(revenueArray); // REMOVED: Chart data comes from API, not from filtered orders
       
       // Don't update debtData here - it should come from report API
       // Only update if report API is not available (fallback)
@@ -374,7 +452,10 @@ function RevenueContent() {
       // Fetch report summary from backend API for card metrics
       const reportSummary = await fetchRevenueReport();
       
-      // Fetch filter data and revenue data (for charts)
+      // Fetch chart data from dashboard API (excludes cancelled orders automatically)
+      await fetchRevenueChartData();
+      
+      // Fetch filter data and orders data (for table view)
       await Promise.all([fetchFilterData(), fetchRevenueData()]);
       
       // Update debtData with report summary if available

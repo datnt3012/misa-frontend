@@ -20,6 +20,8 @@ export interface RevenueDataPoint {
   label: string;
   current: number;
   previous: number;
+  currentDebt?: number;
+  previousDebt?: number;
   monthNumber: number;
   year: number;
 }
@@ -89,14 +91,16 @@ export const dashboardApi = {
     if (params?.profitPeriod) {
       queryParams.append('profitPeriod', params.profitPeriod);
     }
-    // Exclude cancelled orders from revenue calculation
-    queryParams.append('excludeStatus', 'cancelled');
-    
-    const url = `/dashboard/summary?${queryParams.toString()}`;
+    // Backend API already excludes cancelled orders by default, no need for params
+    const url = queryParams.toString() 
+      ? `/dashboard/summary?${queryParams.toString()}`
+      : '/dashboard/summary';
     
     try {
+      console.log('[Dashboard API] Fetching summary with URL:', url);
       const response = await api.get<any>(url);
       const data = response?.data || response;
+      console.log('[Dashboard API] Summary response:', data);
       
       // Return data if it's already in the correct format
       if (data && typeof data === 'object' && 'totalRevenue' in data) {
@@ -135,12 +139,16 @@ export const dashboardApi = {
     }
   },
   
-  // Get revenue series for last 12 months (excludes cancelled orders)
+  // Get revenue series for last 12 months (backend automatically excludes cancelled orders)
   getRevenueSeries: async (): Promise<RevenueDataPoint[]> => {
     try {
-      // Exclude cancelled orders from revenue calculation
-      const response = await api.get<any>('/dashboard/revenue-series?excludeStatus=cancelled');
+      // Backend API already excludes cancelled orders by default, no need for params
+      const url = '/dashboard/revenue-series';
+      console.log('[Dashboard API] Fetching revenue series with URL:', url);
+      const response = await api.get<any>(url);
       const data = response?.data || response;
+      
+      console.log('[Dashboard API] Revenue series response:', data);
       
       // If data is an array, return it
       if (Array.isArray(data)) {
@@ -218,7 +226,7 @@ export const dashboardApi = {
       // Get top products by revenue (excludes cancelled orders)
   getTopProducts: async (limit: number = 5): Promise<TopProduct[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/top-products?limit=${limit}&excludeStatus=cancelled`);
+      const response = await api.get<any>(`/dashboard/top-products?limit=${limit}`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
@@ -239,7 +247,7 @@ export const dashboardApi = {
       // Get top customers by revenue (excludes cancelled orders)
   getTopCustomers: async (limit: number = 5): Promise<TopCustomer[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/top-customers?limit=${limit}&excludeStatus=cancelled`);
+      const response = await api.get<any>(`/dashboard/top-customers?limit=${limit}`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
@@ -260,7 +268,7 @@ export const dashboardApi = {
       // Get revenue by region (province) (excludes cancelled orders)
   getRegionRevenue: async (limit: number = 5): Promise<RegionRevenueData[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/region-revenue?limit=${limit}&excludeStatus=cancelled`);
+      const response = await api.get<any>(`/dashboard/region-revenue?limit=${limit}`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
@@ -281,7 +289,7 @@ export const dashboardApi = {
       // Get profit by category (excludes cancelled orders)
   getCategoryProfit: async (limit: number = 5): Promise<CategoryProfitData[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/category-profit?limit=${limit}&excludeStatus=cancelled`);
+      const response = await api.get<any>(`/dashboard/category-profit?limit=${limit}`);
       const data = response?.data || response;
       
       if (Array.isArray(data)) {
