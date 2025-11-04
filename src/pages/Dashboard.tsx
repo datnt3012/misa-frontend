@@ -196,18 +196,18 @@ const DashboardContent = () => {
         setInventoryData(inventoryOverview.inventoryData || []);
         setLowStockProducts(inventoryOverview.lowStockProducts || []);
         setProductStockData(inventoryOverview.productStockData || []);
-      } else {
+        } else {
         setInventoryData([]);
         setLowStockProducts([]);
         setProductStockData([]);
-      }
+        }
       
       // Set top products
       setTopProducts(topProductsData || []);
       
       // Set top customers
       setTopCustomers(topCustomersData || []);
-      
+
       // Set region revenue
       setRegionRevenue(regionRevenueData || []);
       
@@ -220,7 +220,7 @@ const DashboardContent = () => {
         fill: palette[idx % palette.length],
       }));
       setCategoryProfit(catArray);
-      
+        
       // Set recent orders
       setRecentOrders(recentOrdersData || []);
       
@@ -238,7 +238,7 @@ const DashboardContent = () => {
       
       // Note: New customers count is not available from backend, setting to 0
       setNewCustomers(0);
-      
+
       // Set all loading states to false
       setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
       setDataLoaded(true); // Mark data as loaded
@@ -688,13 +688,13 @@ const DashboardContent = () => {
                             percentStr = total > 0 ? ((Number(c.profit) || 0) / total * 100).toFixed(1) : '0';
                           }
                           return (
-                            <div key={idx} className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
-                                <span>{c.name}</span>
-                              </div>
-                              <span className="font-medium">{percentStr}%</span>
+                          <div key={idx} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
+                              <span>{c.name}</span>
                             </div>
+                              <span className="font-medium">{percentStr}%</span>
+                          </div>
                           );
                         })}
                       </div>
@@ -1020,51 +1020,51 @@ const DashboardContent = () => {
                             </div>
                           </div>
                           <div className="text-blue-600 font-bold">{formatCurrency((c as any).revenue)}</div>
-                        </div>
-                      ))}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Đơn hàng gần đây */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Đơn hàng gần đây</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Hiển thị</span>
-                    <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
-                      <SelectTrigger className="h-8 w-20">
-                        <SelectValue placeholder="Số lượng" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3">3</SelectItem>
-                        <SelectItem value="5">5</SelectItem>
-                        <SelectItem value="10">10</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  ))}
                 </div>
-              </CardHeader>
-              <CardContent>
-                {recentOrders.length === 0 ? (
-                  <p className="text-muted-foreground">Chưa có đơn hàng</p>
-                ) : (
-                  <div className="space-y-3">
-                    {recentOrders.slice(0, recentOrdersLimit).map((o, idx) => (
-                      <div key={idx} className="flex items-center justify-between border rounded-lg p-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-medium">{o.order_number}</span>
-                            <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
-                            >{o.status === 'pending' ? 'Chờ xử lý' : o.status === 'processing' ? 'Đang giao' : o.status === 'completed' ? 'Hoàn thành' : o.status}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
-                        </div>
-                        <div className="text-blue-600 font-bold">{formatCurrency(o.total_amount || 0)}</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Đơn hàng gần đây */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Đơn hàng gần đây</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Hiển thị</span>
+                <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
+                  <SelectTrigger className="h-8 w-20">
+                    <SelectValue placeholder="Số lượng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {recentOrders.length === 0 ? (
+              <p className="text-muted-foreground">Chưa có đơn hàng</p>
+            ) : (
+              <div className="space-y-3">
+                {recentOrders.slice(0, recentOrdersLimit).map((o, idx) => (
+                  <div key={idx} className="flex items-center justify-between border rounded-lg p-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-medium">{o.order_number}</span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                        >{o.status === 'pending' ? 'Chờ xử lý' : o.status === 'processing' ? 'Đang giao' : o.status === 'completed' ? 'Hoàn thành' : o.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
+                    </div>
+                    <div className="text-blue-600 font-bold">{formatCurrency(o.total_amount || 0)}</div>
                       </div>
                     ))}
                   </div>

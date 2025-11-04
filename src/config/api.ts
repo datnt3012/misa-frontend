@@ -169,6 +169,11 @@ export const API_ENDPOINTS = {
     ANALYTICS: '/revenue/analytics',
     REPORTS: '/revenue/reports',
   },
+
+  // Report
+  REPORT: {
+    REVENUE: '/report/revenue',
+  },
   
   // Notifications
   NOTIFICATIONS: {

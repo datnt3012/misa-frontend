@@ -5,3 +5,4 @@ export * from './warehouse.api';
 export * from './product.api';
 export * from './notification.api';
 export * from './dashboard.api';
+export * from './report.api';

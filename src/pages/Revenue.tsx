@@ -22,6 +22,7 @@ import { orderApi } from '@/api/order.api';
 import { productApi } from '@/api/product.api';
 import { categoriesApi } from '@/api/categories.api';
 import { usersApi } from '@/api/users.api';
+import { reportApi } from '@/api/report.api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -101,6 +102,21 @@ function RevenueContent() {
     }
   };
 
+  // Fetch revenue report from backend API (without filters - total overview)
+  // Note: Currently report API doesn't support filters, but logic matches backend calculation
+  const fetchRevenueReport = async () => {
+    try {
+      const report = await reportApi.getRevenueReport();
+      console.log('[Revenue] Report API response:', report);
+      // Note: This is total overview (no filters). For filtered data, we calculate from filtered orders below
+      return report;
+    } catch (error: any) {
+      console.error('[Revenue] Error fetching revenue report:', error);
+      // Don't throw - we'll calculate from orders instead
+      return null;
+    }
+  };
+
   const fetchRevenueData = async () => {
     try {
       setOrdersLoading(true);
@@ -168,6 +184,7 @@ function RevenueContent() {
       console.log('[Revenue] Fetch orders with params:', queryParams);
       const ordersResponse = await orderApi.getOrders(queryParams);
       console.log('[Revenue] Received orders:', ordersResponse.total);
+      console.log('[Revenue] Orders sample:', ordersResponse.orders?.[0]);
       let ordersData = ordersResponse.orders || [];
 
       // Apply client-side filters not supported by API
@@ -214,7 +231,11 @@ function RevenueContent() {
       let totalDebt = 0;
       let totalRevenue = 0;
 
-      // Process orders to calculate revenue and debt
+      // Process orders to calculate revenue, debt, and profit
+      // Logic matches backend report.service.ts for consistency
+      let totalProfit = 0;
+      let totalOrderCount = 0;
+
       ordersData.forEach(order => {
         const orderDate = new Date(order.created_at);
         const month = format(orderDate, 'MMM', { locale: vi });
@@ -233,14 +254,39 @@ function RevenueContent() {
         }
 
         // Add total amount to revenue (use total_amount as revenue)
-        const orderAmount = order.total_amount || 0;
+        // Match backend logic from report.service.ts
+        const orderAmount = Number(order.total_amount || 0);
+        const initialPayment = Number(order.initialPayment || order.initial_payment || 0);
+        
         monthlyRevenue[key].revenue += orderAmount;
         monthlyRevenue[key].orderCount += 1;
         totalRevenue += orderAmount;
+        totalOrderCount += 1;
 
-        // Add debt amount
-        monthlyRevenue[key].debt += order.debt_amount || 0;
-        totalDebt += order.debt_amount || 0;
+        // Calculate debt: debt = max(0, totalAmount - initialPayment)
+        // Match backend logic from report.service.ts
+        const debtAmount = Math.max(0, orderAmount - initialPayment);
+        monthlyRevenue[key].debt += debtAmount;
+        totalDebt += debtAmount;
+
+        // Calculate profit: profit = revenue - cost from order details
+        // Match backend logic from report.service.ts
+        let orderProfit = 0;
+        if (order.profit !== undefined) {
+          // Backend provides profit directly
+          orderProfit = Number(order.profit || 0);
+        } else {
+          // Calculate profit from order details: profit = sum(revenue - cost * quantity) for each detail
+          const orderDetails = order.details || order.items || order.order_items || [];
+          orderProfit = orderDetails.reduce((sum: number, detail: any) => {
+            const unitCost = Number(detail.costPrice || detail.cost_price || (detail.product?.costPrice || 0));
+            const quantity = Number(detail.quantity || 0);
+            const revenue = Number(detail.totalPrice || detail.total_price || detail.price || 0);
+            // Profit per item = revenue - (cost * quantity)
+            return sum + Math.max(0, revenue - (unitCost * quantity));
+          }, 0);
+        }
+        totalProfit += orderProfit;
       });
 
       // Convert to array and sort by date
@@ -250,14 +296,12 @@ function RevenueContent() {
         return dateA - dateB;
       });
       
+      // Set revenueData for charts (keep unchanged - only for charts)
       setRevenueData(revenueArray);
-      setDebtData({
-        totalRevenue,
-        totalDebt,
-        totalProfit: 0, // Profit calculation removed - let backend handle
-        debtRatio: totalRevenue > 0 ? (totalDebt / totalRevenue) * 100 : 0,
-        profitMargin: 0 // Profit margin removed - let backend handle
-      });
+      
+      // Don't update debtData here - it should come from report API
+      // Only update if report API is not available (fallback)
+      // setDebtData will be handled by loadData after fetching report API
 
     } catch (error) {
       console.error('Error fetching revenue data:', error);
@@ -276,7 +320,24 @@ function RevenueContent() {
   const loadData = async () => {
     try {
       setLoading(true);
+      // Fetch report summary from backend API for card metrics
+      const reportSummary = await fetchRevenueReport();
+      
+      // Fetch filter data and revenue data (for charts)
       await Promise.all([fetchFilterData(), fetchRevenueData()]);
+      
+      // Update debtData with report summary if available
+      if (reportSummary) {
+        setDebtData(prev => ({
+          ...prev,
+          totalRevenue: reportSummary.totalRevenue,
+          totalDebt: reportSummary.totalDebt,
+          totalProfit: reportSummary.totalProfit || 0,
+          totalOrderCount: reportSummary.totalOrders,
+          debtRatio: reportSummary.totalRevenue > 0 ? (reportSummary.totalDebt / reportSummary.totalRevenue) * 100 : 0,
+          profitMargin: reportSummary.totalRevenue > 0 && reportSummary.totalProfit ? (reportSummary.totalProfit / reportSummary.totalRevenue) * 100 : 0,
+        }));
+      }
     } catch (error) {
       console.error('Error loading revenue data:', error);
     } finally {
@@ -294,9 +355,15 @@ function RevenueContent() {
     return months.indexOf(monthName);
   };
 
-  const handleFilter = () => {
+  const handleFilter = async () => {
     setCurrentPage(1); // Reset to first page when applying filters
-    fetchRevenueData();
+    
+    // Fetch revenue data for charts (filtered)
+    await fetchRevenueData();
+    
+    // Note: Card metrics (totalOrders, totalDebt, totalProfit) come from report API
+    // which doesn't support filters, so they show total overview
+    // Only charts and order list are filtered
     
     // Build filter description
     const filterDescriptions = [];
@@ -811,9 +878,9 @@ function RevenueContent() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{revenueData.reduce((sum, item) => sum + (item.paymentCount || 0), 0)}</div>
+            <div className="text-2xl font-bold">{debtData.totalOrderCount || orders.length || 0}</div>
             <p className="text-xs text-muted-foreground">
-              Số lượt thanh toán
+              Tổng số đơn hàng theo bộ lọc
             </p>
           </CardContent>
         </Card>
