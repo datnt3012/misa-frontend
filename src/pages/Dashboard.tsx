@@ -184,8 +184,15 @@ const DashboardContent = () => {
       
       // Set order status data - need to format to array
       // Ensure orderStatusData is an object before processing
+      const statusMap: { [key: string]: string } = {
+        'pending': 'Chờ xử lý',
+        'processing': 'Đang xử lý',
+        'delivered': 'Đã giao',
+        'completed': 'Hoàn thành',
+        'cancelled': 'Đã hủy',
+      };
       const orderStatusArray = Object.entries(orderStatusData || {}).map(([key, value]) => ({
-        trangThai: key.charAt(0).toUpperCase() + key.slice(1),
+        trangThai: statusMap[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1),
         soLuong: value,
       }));
       setOrderStatus(orderStatusArray);
@@ -327,7 +334,8 @@ const DashboardContent = () => {
 
 
         {/* Thống kê tổng quan */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Hàng 1: Tối đa 4 card, tự động co giãn */}
+        <div className="flex flex-col md:flex-row md:flex-wrap gap-4">
           {/* Tổng Doanh Thu - gated */}
           {errorStates.revenue || loadingStates.revenue ? (
             <PermissionErrorCard 
@@ -337,7 +345,7 @@ const DashboardContent = () => {
             />
           ) : (
             canSeeTotalRevenue && (
-              <Card>
+              <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Tổng Doanh Thu</CardTitle>
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -355,7 +363,7 @@ const DashboardContent = () => {
           )}
 
           {/* Tổng doanh thu - visible to all who can view revenue section */}
-          <Card>
+          <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tổng doanh thu</CardTitle>
               <Select value={revenuePeriod} onValueChange={(v) => setRevenuePeriod(v as 'month' | 'year')}>
@@ -388,7 +396,7 @@ const DashboardContent = () => {
           </Card>
 
           {/* Lợi nhuận trong tháng */}
-          <Card>
+          <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Lợi nhuận</CardTitle>
               <Select value={profitPeriod} onValueChange={(v) => setProfitPeriod(v as 'month' | 'year')}>
@@ -429,7 +437,7 @@ const DashboardContent = () => {
               loading={loadingStates.orders} 
             />
           ) : (
-            <Card>
+            <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Tổng Đơn Hàng</CardTitle>
                 <ShoppingCart className="h-4 w-4 text-muted-foreground" />
@@ -440,7 +448,10 @@ const DashboardContent = () => {
               </CardContent>
             </Card>
           )}
+        </div>
 
+        {/* Hàng 2: Các card còn lại - tự động co giãn */}
+        <div className="flex flex-col md:flex-row md:flex-wrap gap-4">
           {/* Sản Phẩm Tồn Kho */}
           {errorStates.products || loadingStates.products ? (
             <PermissionErrorCard 
@@ -449,7 +460,7 @@ const DashboardContent = () => {
               loading={loadingStates.products} 
             />
           ) : (
-            <Card>
+            <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Sản Phẩm Tồn Kho</CardTitle>
                 <Package className="h-4 w-4 text-muted-foreground" />
@@ -469,7 +480,7 @@ const DashboardContent = () => {
               loading={loadingStates.orders} 
             />
           ) : (
-            <Card>
+            <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Công Nợ Tồn Đọng</CardTitle>
                 <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -486,7 +497,7 @@ const DashboardContent = () => {
           )}
 
           {/* Đơn chờ xử lý */}
-          <Card>
+          <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Đơn chờ xử lý</CardTitle>
             </CardHeader>
@@ -497,7 +508,7 @@ const DashboardContent = () => {
           </Card>
 
           {/* Khách hàng mới */}
-          <Card>
+          <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Khách hàng mới</CardTitle>
             </CardHeader>
