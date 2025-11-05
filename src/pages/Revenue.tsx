@@ -127,16 +127,37 @@ function RevenueContent() {
       
       // Transform API data to match chart format
       // API returns: { month, label, current, previous, currentDebt, previousDebt, monthNumber, year }
+      // Note: monthNumber from API might be 0-based (0-11), but label (e.g., "T11") is 1-based (1-12)
       // Chart expects: { month, year, monthLabel, monthNumber, revenue, debt, orderCount, paymentCount }
       const chartData = revenueSeries.map((item) => {
+        // Parse month number from label (e.g., "T11" -> 11) as it's more reliable
+        let monthNum = item.monthNumber;
+        if (item.label) {
+          // Extract number from label like "T11" or "T01"
+          const match = item.label.match(/T(\d+)/);
+          if (match) {
+            monthNum = parseInt(match[1], 10); // 1-12
+          } else {
+            // If label doesn't match, use monthNumber but convert from 0-based to 1-based if needed
+            monthNum = (item.monthNumber !== undefined && item.monthNumber < 12) 
+              ? item.monthNumber + 1 
+              : item.monthNumber;
+          }
+        } else {
+          // If no label, convert monthNumber from 0-based to 1-based if needed
+          monthNum = (item.monthNumber !== undefined && item.monthNumber < 12) 
+            ? item.monthNumber + 1 
+            : item.monthNumber;
+        }
+        
         // Use monthLabel from API if available, otherwise construct it
-        const monthLabel = item.label || `T${String(item.monthNumber).padStart(2, '0')}/${item.year}`;
+        const monthLabel = item.label || `T${String(monthNum).padStart(2, '0')}/${item.year}`;
         
         return {
-          month: item.month || `Thg ${item.monthNumber}`,
+          month: item.month || `Thg ${monthNum}`,
           year: item.year,
           monthLabel: monthLabel,
-          monthNumber: item.monthNumber,
+          monthNumber: monthNum, // Store as 1-12 for consistency
           revenue: item.current || 0,
           debt: item.currentDebt || 0, // Use currentDebt from API
           orderCount: 0, // API doesn't provide order count per month
@@ -158,34 +179,50 @@ function RevenueContent() {
       
       console.log('[Revenue] Using display year:', displayYear);
 
-      // Fill in missing months with 0 values for the display year
+      // Build a map of all available data by year and monthNumber for easy lookup
+      const dataMap = new Map<string, typeof chartData[0]>();
+      sortedData.forEach(item => {
+        const key = `${item.year}-${item.monthNumber}`;
+        dataMap.set(key, item);
+      });
+      
+      // Always show 12 months of the displayYear (current year) only
+      // Do not use data from previous year
+      const completeData: typeof chartData = [];
       const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
                      'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
       
-      const completeData = months.map((monthName, index) => {
-        const monthNum = index + 1; // 1-12
-        const existingData = sortedData.find(
-          d => d.year === displayYear && d.monthNumber === monthNum
-        );
+      // Build 12 months for the displayYear only
+      for (let monthNum = 1; monthNum <= 12; monthNum++) {
+        const key = `${displayYear}-${monthNum}`;
+        const existingData = dataMap.get(key);
         
         if (existingData) {
-          console.log(`[Revenue] Found data for ${monthName}/${displayYear}: revenue=${existingData.revenue}`);
-          return existingData;
+          // All months are from current year, so just show "T01", "T02", etc.
+          const monthLabel = `T${String(monthNum).padStart(2, '0')}`;
+          
+          console.log(`[Revenue] Found data for ${months[monthNum - 1]}/${displayYear}: revenue=${existingData.revenue}, debt=${existingData.debt}, label=${monthLabel}`);
+          
+          completeData.push({
+            ...existingData,
+            monthLabel: monthLabel,
+          });
         } else {
-          return {
-            month: monthName,
+          // No data found, create empty entry for current year
+          completeData.push({
+            month: months[monthNum - 1],
             year: displayYear,
-            monthLabel: `T${String(monthNum).padStart(2, '0')}/${displayYear}`,
+            monthLabel: `T${String(monthNum).padStart(2, '0')}`, // Same year, no need to show year
             monthNumber: monthNum,
             revenue: 0,
             debt: 0,
             orderCount: 0,
             paymentCount: 0,
-          };
+          });
         }
-      });
+      }
       
-      console.log('[Revenue] Final chart data:', completeData);
+      console.log('[Revenue] Final chart data (12 months of current year):', completeData);
       setRevenueData(completeData);
     } catch (error: any) {
       console.error('[Revenue] Error fetching revenue chart data:', error);
