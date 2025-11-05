@@ -28,6 +28,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # 👉 Nếu bạn dùng Create React App thay vì Vite, hãy đổi dòng trên thành:
 # COPY --from=builder /app/build /usr/share/nginx/html
 
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Expose port
 EXPOSE 8082
 
