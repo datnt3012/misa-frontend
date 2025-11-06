@@ -240,7 +240,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             <div className="space-y-3">
               <div>
                 <AddressFormSeparate
-                  key={`${field}-${(editAddressInfo?.provinceCode || editAddressInfo?.province?.code || '')}-${(editAddressInfo?.districtCode || editAddressInfo?.district?.code || '')}-${(editAddressInfo?.wardCode || editAddressInfo?.ward?.code || '')}`}
                   value={{
                     address: editValue || '',
                     provinceCode: (editAddressInfo?.provinceCode || editAddressInfo?.province?.code || '')?.toString(),

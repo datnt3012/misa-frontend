@@ -37,10 +37,12 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   disabled = false,
   required = false
 }) => {
-  const [provinces, setProvinces] = useState<Organization[]>([]);
-  const [districts, setDistricts] = useState<Organization[]>([]);
-  const [wards, setWards] = useState<Organization[]>([]);
+  // Store all data loaded from API
+  const [allProvinces, setAllProvinces] = useState<Organization[]>([]);
+  const [allDistricts, setAllDistricts] = useState<Organization[]>([]);
+  const [allWards, setAllWards] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const [selectedProvince, setSelectedProvince] = useState(value.provinceCode || '');
   const [selectedDistrict, setSelectedDistrict] = useState(value.districtCode || '');
@@ -49,7 +51,16 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const [selectedDistrictName, setSelectedDistrictName] = useState(value.districtName || '');
   const [selectedWardName, setSelectedWardName] = useState(value.wardName || '');
   const [addressDetail, setAddressDetail] = useState(value.address || '');
-  // Removed primary/default flags per requirement
+
+  // Filtered lists based on selection (computed after state declarations)
+  // These are filtered from already-loaded data - NO API CALLS when selecting options
+  const provinces = allProvinces;
+  const districts = selectedProvince 
+    ? allDistricts.filter(d => d.parentCode === selectedProvince)
+    : [];
+  const wards = selectedDistrict
+    ? allWards.filter(w => w.parentCode === selectedDistrict)
+    : [];
 
   // Autocomplete popover states
   const [openProvince, setOpenProvince] = useState(false);
@@ -65,145 +76,102 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const hydratingRef = useRef(false);
   // Track if we're updating from user selection (internal) vs prop change (external)
   const isInternalUpdateRef = useRef(false);
+  
+  // Track if data has been loaded to prevent multiple API calls
+  const dataLoadStartedRef = useRef(false);
 
-  // Load provinces from API (level 1)
-  const loadProvinces = async () => {
+  // Load all address data from API (all 3 levels at once)
+  // This is called ONLY ONCE when component mounts, not when selecting options
+  const loadAllAddressData = async () => {
+    // Prevent multiple calls even if component remounts
+    if (dataLoadStartedRef.current) {
+      return;
+    }
+    dataLoadStartedRef.current = true;
+    
     try {
       setLoading(true);
-      const response = await organizationApi.getOrganizations({
-        noPaging: true,
-        level: '1'
-      });
-      const list = (response.organizations || []).filter(org => String(org.level) === '1');
-      setProvinces(list);
+      console.log('[AddressForm] Loading all address data - ONE TIME ONLY');
+      
+      // Load all 3 levels in parallel - ONLY CALLED ONCE on mount
+      const [provincesRes, districtsRes, wardsRes] = await Promise.all([
+        organizationApi.getOrganizations({ noPaging: true, level: '1' }),
+        organizationApi.getOrganizations({ noPaging: true, level: '2' }),
+        organizationApi.getOrganizations({ noPaging: true, level: '3' })
+      ]);
+      
+      console.log('[AddressForm] Address data loaded successfully');
+
+      const provincesList = (provincesRes.organizations || []).filter(org => String(org.level) === '1');
+      const districtsList = (districtsRes.organizations || []).filter(org => String(org.level) === '2');
+      const wardsList = (wardsRes.organizations || []).filter(org => String(org.level) === '3');
+
+      setAllProvinces(provincesList);
+      setAllDistricts(districtsList);
+      setAllWards(wardsList);
+      setDataLoaded(true);
+
+      // Update names if we have selections but no names
       if (selectedProvince && !selectedProvinceName) {
-        const found = list.find(p => p.code === selectedProvince);
+        const found = provincesList.find(p => p.code === selectedProvince);
         if (found) setSelectedProvinceName(found.name);
       }
-    } catch (error: any) {
-      console.error('Error loading provinces:', error);
-      setProvinces([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load districts when province changes
-  const loadDistricts = async (provinceCode: string, preserveSelection: boolean = false) => {
-    if (!provinceCode) {
-      setDistricts([]);
-      setWards([]);
-      setSelectedDistrict('');
-      setSelectedWard('');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await organizationApi.getOrganizations({
-        noPaging: true,
-        level: '2',
-        parentCode: provinceCode
-      });
-      // Backend already filters by level and parentCode
-      const list = response.organizations || [];
-      setDistricts(list);
-      setWards([]);
-      if (!preserveSelection) {
-        // Province changed, always clear district and ward
-        setSelectedDistrict('');
-        setSelectedDistrictName('');
-        setSelectedWard('');
-        setSelectedWardName('');
-      } else if (selectedDistrict) {
-        // Preserve selection mode - check if district still exists
-        const found = list.find(d => d.code === selectedDistrict);
-        if (found) {
-          // District still exists, update name if needed
-          setSelectedDistrictName(found.name);
-        } else {
-          // District no longer exists in list, clear it
-          setSelectedDistrict('');
-          setSelectedDistrictName('');
-          setSelectedWard('');
-          setSelectedWardName('');
-        }
+      if (selectedDistrict && !selectedDistrictName) {
+        const found = districtsList.find(d => d.code === selectedDistrict);
+        if (found) setSelectedDistrictName(found.name);
+      }
+      if (selectedWard && !selectedWardName) {
+        const found = wardsList.find(w => w.code === selectedWard);
+        if (found) setSelectedWardName(found.name);
       }
     } catch (error: any) {
-      console.error('Error loading districts:', error);
-      setDistricts([]);
+      console.error('Error loading address data:', error);
+      setAllProvinces([]);
+      setAllDistricts([]);
+      setAllWards([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Load wards when district changes
-  const loadWards = async (districtCode: string, preserveSelection: boolean = false) => {
-    if (!districtCode) {
-      setWards([]);
-      setSelectedWard('');
-      setSelectedWardName('');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await organizationApi.getOrganizations({
-        noPaging: true,
-        level: '3',
-        parentCode: districtCode
-      });
-      // Backend already filters by level and parentCode
-      const list = response.organizations || [];
-      setWards(list);
-      if (!preserveSelection) {
-        // District changed, always clear ward
-        setSelectedWard('');
-        setSelectedWardName('');
-      } else if (selectedWard) {
-        // Preserve selection mode - check if ward still exists
-        const found = list.find(w => w.code === selectedWard);
-        if (found) {
-          // Ward still exists, update name if needed
-          setSelectedWardName(found.name);
-        } else {
-          // Ward no longer exists in list, clear it
-          setSelectedWard('');
-          setSelectedWardName('');
-        }
-      }
-    } catch (error: any) {
-      console.error('Error loading wards:', error);
-      setWards([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Load all data once on mount
   useEffect(() => {
-    loadProvinces();
+    loadAllAddressData();
   }, []);
 
+  // Update names when selections change (data is already loaded)
   useEffect(() => {
-    if (selectedProvince) {
-      if (hydratingRef.current) return; // avoid cascading during hydration
-      loadDistricts(selectedProvince, false);
+    if (!dataLoaded) return;
+    
+    if (selectedProvince && !selectedProvinceName) {
+      const found = allProvinces.find(p => p.code === selectedProvince);
+      if (found) setSelectedProvinceName(found.name);
     }
-  }, [selectedProvince]);
+  }, [selectedProvince, selectedProvinceName, allProvinces, dataLoaded]);
 
   useEffect(() => {
-    if (selectedDistrict) {
-      if (hydratingRef.current) return; // avoid cascading during hydration
-      // Load wards for the selected district
-      // Don't wait for districts list to be populated - just load based on selectedDistrict
-      loadWards(selectedDistrict, false);
-    } else {
-      // Only clear wards if district is explicitly cleared
-      setWards([]);
+    if (!dataLoaded) return;
+    
+    if (selectedDistrict && !selectedDistrictName) {
+      const found = allDistricts.find(d => d.code === selectedDistrict);
+      if (found) setSelectedDistrictName(found.name);
+    }
+    
+    // Clear ward when district changes
+    if (!selectedDistrict) {
       setSelectedWard('');
       setSelectedWardName('');
     }
-  }, [selectedDistrict]);
+  }, [selectedDistrict, selectedDistrictName, allDistricts, dataLoaded]);
+
+  useEffect(() => {
+    if (!dataLoaded) return;
+    
+    if (selectedWard && !selectedWardName) {
+      const found = allWards.find(w => w.code === selectedWard);
+      if (found) setSelectedWardName(found.name);
+    }
+  }, [selectedWard, selectedWardName, allWards, dataLoaded]);
 
   // Hydrate selections when opening edit with existing values
   useEffect(() => {
@@ -213,11 +181,25 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       return;
     }
     
+    // Wait for data to be loaded
+    if (!dataLoaded) return;
+    
     if (!value) return;
-    if (!value.provinceCode) return;
+    if (!value.provinceCode) {
+      // If value has no provinceCode, clear everything only if we have selections
+      if (selectedProvince || selectedDistrict || selectedWard) {
+        setSelectedProvince('');
+        setSelectedDistrict('');
+        setSelectedWard('');
+        setSelectedProvinceName('');
+        setSelectedDistrictName('');
+        setSelectedWardName('');
+        initializedRef.current = false;
+      }
+      return;
+    }
     
     // Only hydrate if values are actually different and we haven't initialized yet
-    // Don't reset if we're just updating names from the same codes
     const codesMatch = value.provinceCode === selectedProvince && 
                        (value.districtCode || '') === (selectedDistrict || '') && 
                        (value.wardCode || '') === (selectedWard || '');
@@ -226,66 +208,127 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       // Just update names if they're missing, but codes match
       if (value.provinceName && !selectedProvinceName) {
         setSelectedProvinceName(value.provinceName);
+      } else if (!selectedProvinceName && selectedProvince) {
+        const found = allProvinces.find(p => p.code === selectedProvince);
+        if (found) setSelectedProvinceName(found.name);
       }
       if (value.districtName && !selectedDistrictName) {
         setSelectedDistrictName(value.districtName);
+      } else if (!selectedDistrictName && selectedDistrict) {
+        const found = allDistricts.find(d => d.code === selectedDistrict);
+        if (found) setSelectedDistrictName(found.name);
       }
       if (value.wardName && !selectedWardName) {
         setSelectedWardName(value.wardName);
+      } else if (!selectedWardName && selectedWard) {
+        const found = allWards.find(w => w.code === selectedWard);
+        if (found) setSelectedWardName(found.name);
       }
       return;
     }
     
-    // Reset initialization if we have new values to hydrate that don't match current state
-    if (!codesMatch) {
-      initializedRef.current = false; // Allow re-hydration
+    // Check if values actually changed
+    const provinceChanged = value.provinceCode !== selectedProvince;
+    const districtChanged = value.districtCode && value.districtCode !== selectedDistrict;
+    const wardChanged = value.wardCode && value.wardCode !== selectedWard;
+    
+    // CRITICAL: If we have selectedDistrict but value.districtCode is undefined,
+    // NEVER clear! This prevents losing user selections
+    if (initializedRef.current && selectedDistrict && !value.districtCode && !provinceChanged) {
+      return; // Don't hydrate - preserve user selection
     }
     
-    if (initializedRef.current) return; // Already initialized for this set of values
+    // If codes match, don't hydrate
+    if (initializedRef.current && !provinceChanged && !districtChanged && !wardChanged) {
+      return;
+    }
     
+    // Hydrate with new values
     initializedRef.current = true;
     hydratingRef.current = true;
     
-    (async () => {
-      setSelectedProvince(value.provinceCode!);
-      setSelectedProvinceName(value.provinceName || '');
-      await loadDistricts(value.provinceCode!, true);
-      if (value.districtCode) {
-        setSelectedDistrict(value.districtCode);
-        setSelectedDistrictName(value.districtName || '');
-        await loadWards(value.districtCode, true);
-        if (value.wardCode) {
-          setSelectedWard(value.wardCode);
-          setSelectedWardName(value.wardName || '');
-        }
+    // Set province
+    setSelectedProvince(value.provinceCode);
+    const province = allProvinces.find(p => p.code === value.provinceCode);
+    setSelectedProvinceName(value.provinceName || province?.name || '');
+    
+    // Set district if provided
+    if (value.districtCode) {
+      setSelectedDistrict(value.districtCode);
+      const district = allDistricts.find(d => d.code === value.districtCode);
+      setSelectedDistrictName(value.districtName || district?.name || '');
+      
+      // Set ward if provided
+      if (value.wardCode) {
+        setSelectedWard(value.wardCode);
+        const ward = allWards.find(w => w.code === value.wardCode);
+        setSelectedWardName(value.wardName || ward?.name || '');
       } else {
         setSelectedWard('');
         setSelectedWardName('');
       }
-    })().finally(() => {
-      hydratingRef.current = false;
-    });
+    } else {
+      // Only clear if province changed (fresh init or province change)
+      if (!initializedRef.current || provinceChanged) {
+        setSelectedDistrict('');
+        setSelectedDistrictName('');
+        setSelectedWard('');
+        setSelectedWardName('');
+      }
+      // Otherwise keep current selection
+    }
+    
+    hydratingRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value.provinceCode, value.districtCode, value.wardCode]);
+  }, [value.provinceCode, value.districtCode, value.wardCode, dataLoaded, allProvinces, allDistricts, allWards]);
+
+  // Track previous values to avoid unnecessary onChange calls
+  const prevValuesRef = useRef<{ province?: string; district?: string; ward?: string; address?: string }>({});
 
   // Notify parent when address changes
   useEffect(() => {
     // Skip onChange during hydration to avoid loops
     if (hydratingRef.current) return;
     
+    // Wait for data to be loaded
+    if (!dataLoaded) return;
+    
     // Mark as internal update so hydration effect doesn't reset
     isInternalUpdateRef.current = true;
     
-    // Only call onChange if we have valid selections or if explicitly clearing
-    // Don't reset if districts/wards lists are still loading
-    const provinceName = selectedProvinceName || provinces.find(p => p.code === selectedProvince)?.name || '';
-    const districtName = selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || '';
-    const wardName = selectedWardName || wards.find(w => w.code === selectedWard)?.name || '';
+    // Get names from state or from loaded data
+    const provinceName = selectedProvinceName || allProvinces.find(p => p.code === selectedProvince)?.name || '';
+    const districtName = selectedDistrictName || allDistricts.find(d => d.code === selectedDistrict)?.name || '';
+    const wardName = selectedWardName || allWards.find(w => w.code === selectedWard)?.name || '';
 
+    // Check if values actually changed to avoid unnecessary onChange calls
+    const currentValues = {
+      province: selectedProvince || undefined,
+      district: selectedDistrict || undefined,
+      ward: selectedWard || undefined,
+      address: addressDetail
+    };
+
+    const prevValues = prevValuesRef.current;
+    const valuesChanged = 
+      currentValues.province !== prevValues.province ||
+      currentValues.district !== prevValues.district ||
+      currentValues.ward !== prevValues.ward ||
+      currentValues.address !== prevValues.address;
+
+    if (!valuesChanged) {
+      return; // No actual change, skip onChange
+    }
+
+    // Update previous values
+    prevValuesRef.current = { ...currentValues };
+
+    // CRITICAL: Always preserve districtCode when we have selectedDistrict
+    // This ensures districtCode is never lost when selecting wards
     const addressData: AddressData = {
       address: addressDetail,
       provinceCode: selectedProvince || undefined,
-      districtCode: selectedDistrict || undefined,
+      districtCode: selectedDistrict || undefined, // Always include if selectedDistrict exists
       wardCode: selectedWard || undefined,
       provinceName: provinceName || undefined,
       districtName: districtName || undefined,
@@ -294,7 +337,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
 
     onChange(addressData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProvince, selectedDistrict, selectedWard, selectedProvinceName, selectedDistrictName, selectedWardName, addressDetail]);
+  }, [selectedProvince, selectedDistrict, selectedWard, selectedProvinceName, selectedDistrictName, selectedWardName, addressDetail, dataLoaded, allProvinces, allDistricts, allWards]);
 
   return (
     <div className="space-y-3">
@@ -336,7 +379,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedProvince}>
                 {selectedDistrict
-                  ? (selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || (loading ? 'Đang tải...' : 'Chọn quận/huyện'))
+                  ? (selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || 'Đang tải...')
                   : 'Chọn quận/huyện'}
               </Button>
             </PopoverTrigger>
@@ -365,7 +408,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedDistrict}>
                 {selectedWard
-                  ? (selectedWardName || wards.find(w => w.code === selectedWard)?.name || (loading ? 'Đang tải...' : 'Chọn phường/xã'))
+                  ? (selectedWardName || wards.find(w => w.code === selectedWard)?.name || 'Đang tải...')
                   : 'Chọn phường/xã'}
               </Button>
             </PopoverTrigger>

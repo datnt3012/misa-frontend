@@ -515,7 +515,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <div>
                 <Label>Địa chỉ nhận hàng</Label>
                 <AddressFormSeparate
-                  key={`${newOrder.shipping_addressInfo?.provinceCode || ''}-${newOrder.shipping_addressInfo?.districtCode || ''}-${newOrder.shipping_addressInfo?.wardCode || ''}-${newOrder.shipping_address || ''}`}
                   value={{
                     address: newOrder.shipping_address,
                     provinceCode: newOrder.shipping_addressInfo?.provinceCode,
