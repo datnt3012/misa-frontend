@@ -63,6 +63,8 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const normalizeText = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   const hydratingRef = useRef(false);
+  // Track if we're updating from user selection (internal) vs prop change (external)
+  const isInternalUpdateRef = useRef(false);
 
   // Load provinces from API (level 1)
   const loadProvinces = async () => {
@@ -108,13 +110,24 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       setDistricts(list);
       setWards([]);
       if (!preserveSelection) {
+        // Province changed, always clear district and ward
         setSelectedDistrict('');
         setSelectedDistrictName('');
         setSelectedWard('');
         setSelectedWardName('');
       } else if (selectedDistrict) {
+        // Preserve selection mode - check if district still exists
         const found = list.find(d => d.code === selectedDistrict);
-        if (found) setSelectedDistrictName(found.name);
+        if (found) {
+          // District still exists, update name if needed
+          setSelectedDistrictName(found.name);
+        } else {
+          // District no longer exists in list, clear it
+          setSelectedDistrict('');
+          setSelectedDistrictName('');
+          setSelectedWard('');
+          setSelectedWardName('');
+        }
       }
     } catch (error: any) {
       console.error('Error loading districts:', error);
@@ -129,6 +142,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     if (!districtCode) {
       setWards([]);
       setSelectedWard('');
+      setSelectedWardName('');
       return;
     }
 
@@ -143,11 +157,20 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       const list = response.organizations || [];
       setWards(list);
       if (!preserveSelection) {
+        // District changed, always clear ward
         setSelectedWard('');
         setSelectedWardName('');
       } else if (selectedWard) {
+        // Preserve selection mode - check if ward still exists
         const found = list.find(w => w.code === selectedWard);
-        if (found) setSelectedWardName(found.name);
+        if (found) {
+          // Ward still exists, update name if needed
+          setSelectedWardName(found.name);
+        } else {
+          // Ward no longer exists in list, clear it
+          setSelectedWard('');
+          setSelectedWardName('');
+        }
       }
     } catch (error: any) {
       console.error('Error loading wards:', error);
@@ -171,20 +194,50 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   useEffect(() => {
     if (selectedDistrict) {
       if (hydratingRef.current) return; // avoid cascading during hydration
+      // Load wards for the selected district
+      // Don't wait for districts list to be populated - just load based on selectedDistrict
       loadWards(selectedDistrict, false);
+    } else {
+      // Only clear wards if district is explicitly cleared
+      setWards([]);
+      setSelectedWard('');
+      setSelectedWardName('');
     }
   }, [selectedDistrict]);
 
   // Hydrate selections when opening edit with existing values
   useEffect(() => {
-    console.log('🔍 AddressFormSeparate hydrate effect:', { value, initialized: initializedRef.current });
+    // Skip hydration if this is an internal update (user selection)
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false; // Reset flag
+      return;
+    }
     
     if (!value) return;
     if (!value.provinceCode) return;
     
-    // Reset initialization if we have new values to hydrate
-    if (value.provinceCode && (value.provinceCode !== selectedProvince || value.districtCode !== selectedDistrict || value.wardCode !== selectedWard)) {
-      console.log('🔍 Starting hydration with:', value);
+    // Only hydrate if values are actually different and we haven't initialized yet
+    // Don't reset if we're just updating names from the same codes
+    const codesMatch = value.provinceCode === selectedProvince && 
+                       (value.districtCode || '') === (selectedDistrict || '') && 
+                       (value.wardCode || '') === (selectedWard || '');
+    
+    if (codesMatch && initializedRef.current) {
+      // Just update names if they're missing, but codes match
+      if (value.provinceName && !selectedProvinceName) {
+        setSelectedProvinceName(value.provinceName);
+      }
+      if (value.districtName && !selectedDistrictName) {
+        setSelectedDistrictName(value.districtName);
+      }
+      if (value.wardName && !selectedWardName) {
+        setSelectedWardName(value.wardName);
+      }
+      return;
+    }
+    
+    // Reset initialization if we have new values to hydrate that don't match current state
+    if (!codesMatch) {
       initializedRef.current = false; // Allow re-hydration
     }
     
@@ -220,6 +273,11 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     // Skip onChange during hydration to avoid loops
     if (hydratingRef.current) return;
     
+    // Mark as internal update so hydration effect doesn't reset
+    isInternalUpdateRef.current = true;
+    
+    // Only call onChange if we have valid selections or if explicitly clearing
+    // Don't reset if districts/wards lists are still loading
     const provinceName = selectedProvinceName || provinces.find(p => p.code === selectedProvince)?.name || '';
     const districtName = selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || '';
     const wardName = selectedWardName || wards.find(w => w.code === selectedWard)?.name || '';
@@ -236,7 +294,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
 
     onChange(addressData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProvince, selectedDistrict, selectedWard, addressDetail, provinces, districts, wards]);
+  }, [selectedProvince, selectedDistrict, selectedWard, selectedProvinceName, selectedDistrictName, selectedWardName, addressDetail]);
 
   return (
     <div className="space-y-3">
