@@ -8,9 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
+import { Trash2, Plus, Edit2, X, Check } from "lucide-react";
 // Tag management is not available in this dialog
 import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { customerApi } from "@/api/customer.api";
+import { productApi } from "@/api/product.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PaymentDialog } from '@/components/PaymentDialog';
@@ -34,14 +36,26 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
   // Tags are display-only here
   const { toast } = useToast();
 
   useEffect(() => {
     if (open && order) {
       loadOrderDetails();
+      loadProducts();
     }
   }, [open, order]);
+
+  const loadProducts = async () => {
+    try {
+      const response = await productApi.getProducts({ page: 1, limit: 1000 });
+      setProducts(response.products || []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+    }
+  };
 
   const loadOrderDetails = async () => {
     if (!order?.id) {
@@ -391,6 +405,175 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   // Only show non-reconciliation tags in this dialog
   const getOtherTags = () => getTagsForDisplay().filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
 
+  // Product editing functions
+  const startEditingItem = (itemId: string, item: OrderItem) => {
+    setEditingItems(prev => ({
+      ...prev,
+      [itemId]: {
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_code: item.product_code,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price
+      }
+    }));
+  };
+
+  const cancelEditingItem = (itemId: string) => {
+    setEditingItems(prev => {
+      const newItems = { ...prev };
+      delete newItems[itemId];
+      return newItems;
+    });
+  };
+
+  const updateEditingItem = (itemId: string, field: keyof OrderItem, value: any) => {
+    setEditingItems(prev => {
+      const current = prev[itemId] || {};
+      const updated = { ...current, [field]: value };
+      
+      // Auto-calculate total_price when quantity or unit_price changes
+      if (field === 'quantity' || field === 'unit_price') {
+        const quantity = field === 'quantity' ? Number(value) : (updated.quantity || 0);
+        const unitPrice = field === 'unit_price' ? Number(value) : (updated.unit_price || 0);
+        updated.total_price = quantity * unitPrice;
+      }
+      
+      // Auto-fill product info when product_id changes
+      if (field === 'product_id') {
+        const product = products.find(p => p.id === value);
+        if (product) {
+          updated.product_id = product.id;
+          updated.product_name = product.name;
+          updated.product_code = product.code;
+          updated.unit_price = product.price || updated.unit_price || 0;
+          updated.total_price = (updated.quantity || 0) * (product.price || 0);
+        }
+      }
+      
+      return { ...prev, [itemId]: updated };
+    });
+  };
+
+  const saveItem = async (itemId: string) => {
+    if (!orderDetails) return;
+    
+    const editedItem = editingItems[itemId];
+    if (!editedItem) return;
+    
+    setLoading(true);
+    try {
+      await orderApi.updateOrderItem(orderDetails.id, itemId, {
+        product_id: editedItem.product_id || '',
+        product_name: editedItem.product_name || '',
+        product_code: editedItem.product_code || '',
+        quantity: editedItem.quantity || 0,
+        unit_price: editedItem.unit_price || 0
+      });
+      
+      // Refresh order details
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      // Clear editing state
+      cancelEditingItem(itemId);
+      
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật sản phẩm",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật sản phẩm"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteItem = async (itemId: string) => {
+    if (!orderDetails) return;
+    
+    if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi đơn hàng?')) {
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      await orderApi.deleteOrderItem(orderDetails.id, itemId);
+      
+      // Refresh order details
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã xóa sản phẩm",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể xóa sản phẩm"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addNewItem = () => {
+    if (!orderDetails) return;
+    
+    if (products.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Không có sản phẩm nào để thêm",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoading(true);
+    const firstProduct = products[0];
+    orderApi.addOrderItem(orderDetails.id, {
+      product_id: firstProduct.id,
+      product_name: firstProduct.name,
+      product_code: firstProduct.code,
+      quantity: 1,
+      unit_price: firstProduct.price || 0
+    }).then(() => {
+      return orderApi.getOrder(orderDetails.id);
+    }).then((updatedOrder) => {
+      setOrderDetails(updatedOrder);
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      toast({
+        title: "Thành công",
+        description: "Đã thêm sản phẩm",
+      });
+    }).catch((error) => {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể thêm sản phẩm"),
+        variant: "destructive",
+      });
+    }).finally(() => {
+      setLoading(false);
+    });
+  };
+
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -479,9 +662,15 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
           {/* Products */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📦</span>
-              <h3 className="text-lg font-semibold">Sản phẩm</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📦</span>
+                <h3 className="text-lg font-semibold">Sản phẩm</h3>
+              </div>
+              <Button size="sm" onClick={addNewItem} disabled={loading}>
+                <Plus className="w-4 h-4 mr-1" />
+                Thêm sản phẩm
+              </Button>
             </div>
             
             <Table>
@@ -493,29 +682,118 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   <TableHead className="text-center">SL</TableHead>
                   <TableHead className="text-right">Giá</TableHead>
                   <TableHead className="text-right">Tổng</TableHead>
+                  <TableHead className="w-24">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orderDetails.items && orderDetails.items.length > 0 ? (
-                  orderDetails.items.map((item: OrderItem, index: number) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{item.product_code || 'N/A'}</div>
-                          <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
-                          <div className="text-xs text-blue-600">ID: {item.product_id || 'N/A'}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">-</TableCell>
-                      <TableCell className="text-center">{item.quantity}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
-                    </TableRow>
-                  ))
+                  orderDetails.items.map((item: OrderItem, index: number) => {
+                    const isEditing = !!editingItems[item.id || ''];
+                    const editedItem = editingItems[item.id || ''] || item;
+                    
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Select
+                              value={editedItem.product_id || ''}
+                              onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Chọn sản phẩm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products.map((product) => (
+                                  <SelectItem key={product.id} value={product.id}>
+                                    {product.code} - {product.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="font-medium">{item.product_code || 'N/A'}</div>
+                              <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">-</TableCell>
+                        <TableCell className="text-center">
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              min="1"
+                              value={editedItem.quantity || 0}
+                              onChange={(e) => updateEditingItem(item.id || '', 'quantity', Number(e.target.value) || 1)}
+                              className="w-20 text-center"
+                            />
+                          ) : (
+                            item.quantity
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              value={editedItem.unit_price || 0}
+                              onChange={(e) => updateEditingItem(item.id || '', 'unit_price', Number(e.target.value) || 0)}
+                              className="w-24 text-right"
+                            />
+                          ) : (
+                            formatCurrency(item.unit_price)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => saveItem(item.id || '')}
+                                disabled={loading}
+                              >
+                                <Check className="w-4 h-4 text-green-600" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => cancelEditingItem(item.id || '')}
+                              >
+                                <X className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditingItem(item.id || '', item)}
+                                disabled={loading}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteItem(item.id || '')}
+                                disabled={loading}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Không có sản phẩm nào trong đơn hàng
                     </TableCell>
                   </TableRow>

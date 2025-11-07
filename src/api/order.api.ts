@@ -701,16 +701,25 @@ export const orderApi = {
 
   // Add item to order
   addOrderItem: async (orderId: string, data: CreateOrderItemRequest): Promise<OrderItem> => {
-    return api.post<OrderItem>(API_ENDPOINTS.ORDERS.ITEMS(orderId), data);
+    return api.post<OrderItem>(API_ENDPOINTS.ORDERS.ITEMS(orderId), {
+      ...data,
+      order_id: orderId
+    });
   },
 
   // Update order item
   updateOrderItem: async (orderId: string, itemId: string, data: Partial<CreateOrderItemRequest>): Promise<OrderItem> => {
-    return api.patch<OrderItem>(`${API_ENDPOINTS.ORDERS.ITEMS(orderId)}/${itemId}`, data);
+    // Use /orders/{orderId}/details/{itemId} endpoint with camelCase body
+    return api.patch<OrderItem>(API_ENDPOINTS.ORDERS.DETAILS(orderId, itemId), {
+      productId: data.product_id,
+      quantity: data.quantity,
+      unitPrice: data.unit_price
+    });
   },
 
   // Delete order item
   deleteOrderItem: async (orderId: string, itemId: string): Promise<{ message: string }> => {
-    return api.delete<{ message: string }>(`${API_ENDPOINTS.ORDERS.ITEMS(orderId)}/${itemId}`);
+    // Use /orders/{orderId}/details/{itemId} endpoint
+    return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DETAILS(orderId, itemId));
   }
 };

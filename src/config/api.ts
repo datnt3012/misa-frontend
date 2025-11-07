@@ -128,6 +128,15 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/orders/${id}`,
     DELETE: (id: string) => `/orders/${id}`,
     ITEMS: (id: string) => `/orders/${id}/items`,
+    DETAILS: (orderId: string, itemId: string) => `/orders/${orderId}/details/${itemId}`,
+  },
+  
+  // Order Items
+  ORDER_ITEMS: {
+    LIST: '/order-items',
+    CREATE: '/order-items',
+    UPDATE: (id: string) => `/order-items/${id}`,
+    DELETE: (id: string) => `/order-items/${id}`,
   },
   
   // Order Tags (handled via order API)
