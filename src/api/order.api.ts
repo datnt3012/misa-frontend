@@ -10,6 +10,8 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  vat_rate?: number;
+  vat_amount?: number;
   created_at: string;
 }
 
@@ -42,6 +44,9 @@ export interface Order {
   debt_amount: number;
   debt_date?: string;
   notes?: string;
+  vat_type?: string;
+  vat_rate?: number;
+  vat_amount?: number;
   contract_number?: string;
   contract_url?: string;
   purchase_order_number?: string;
@@ -101,6 +106,7 @@ export interface CreateOrderRequest {
   status?: string;
   
   // VAT Information
+  vatRate?: number; // VAT rate (optional, nếu không có sẽ lấy từ customer)
   taxCode?: string;
   companyName?: string;
   companyAddress?: string;
@@ -298,6 +304,22 @@ export const orderApi = {
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+      vat_rate: (() => {
+        const vatRateValue = it.vat_rate ?? it.vatRate;
+        if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
+      vat_amount: (() => {
+        const vatAmountValue = it.vat_amount ?? it.vatAmount;
+        if (vatAmountValue === undefined || vatAmountValue === null || vatAmountValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
 
@@ -351,6 +373,23 @@ export const orderApi = {
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',
+      vat_type: row.vat_type ?? row.vatType ?? undefined,
+      vat_rate: (() => {
+        const vatRateValue = row.vat_rate ?? row.vatRate;
+        if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
+      vat_amount: (() => {
+        const vatAmountValue = row.vat_amount ?? row.vatAmount;
+        if (vatAmountValue === undefined || vatAmountValue === null || vatAmountValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
       contract_number: row.contract_number ?? row.contractNumber ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
@@ -412,6 +451,15 @@ export const orderApi = {
   getOrder: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}`);
     const data = response?.data || response;
+    
+    console.log('[Order API] Raw order data:', {
+      vatRate: data?.vatRate,
+      vat_rate: data?.vat_rate,
+      vatAmount: data?.vatAmount,
+      vat_amount: data?.vat_amount,
+      type_vatRate: typeof data?.vatRate,
+      type_vat_rate: typeof data?.vat_rate
+    });
 
     const normalizeItem = (it: any) => ({
       id: it.id,
@@ -424,6 +472,22 @@ export const orderApi = {
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+      vat_rate: (() => {
+        const vatRateValue = it.vat_rate ?? it.vatRate;
+        if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
+      vat_amount: (() => {
+        const vatAmountValue = it.vat_amount ?? it.vatAmount;
+        if (vatAmountValue === undefined || vatAmountValue === null || vatAmountValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
 
@@ -476,6 +540,23 @@ export const orderApi = {
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',
+      vat_type: row.vat_type ?? row.vatType ?? undefined,
+      vat_rate: (() => {
+        const vatRateValue = row.vat_rate ?? row.vatRate;
+        if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
+      vat_amount: (() => {
+        const vatAmountValue = row.vat_amount ?? row.vatAmount;
+        if (vatAmountValue === undefined || vatAmountValue === null || vatAmountValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
       contract_number: row.contract_number ?? row.contractNumber ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
@@ -505,7 +586,15 @@ export const orderApi = {
       } : undefined,
     });
 
-    return normalizeOrder(data);
+    const normalizedOrder = normalizeOrder(data);
+    console.log('[Order API] Normalized order VAT:', {
+      vat_rate: normalizedOrder.vat_rate,
+      vat_amount: normalizedOrder.vat_amount,
+      type_vat_rate: typeof normalizedOrder.vat_rate,
+      type_vat_amount: typeof normalizedOrder.vat_amount
+    });
+    
+    return normalizedOrder;
   },
 
   // Create order
@@ -526,6 +615,22 @@ export const orderApi = {
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+      vat_rate: (() => {
+        const vatRateValue = it.vat_rate ?? it.vatRate;
+        if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
+      vat_amount: (() => {
+        const vatAmountValue = it.vat_amount ?? it.vatAmount;
+        if (vatAmountValue === undefined || vatAmountValue === null || vatAmountValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
 
@@ -624,6 +729,22 @@ export const orderApi = {
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+      vat_rate: (() => {
+        const vatRateValue = it.vat_rate ?? it.vatRate;
+        if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
+      vat_amount: (() => {
+        const vatAmountValue = it.vat_amount ?? it.vatAmount;
+        if (vatAmountValue === undefined || vatAmountValue === null || vatAmountValue === '') {
+          return undefined;
+        }
+        const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
+        return isNaN(numValue) ? undefined : numValue;
+      })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
 

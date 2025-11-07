@@ -123,6 +123,7 @@ const CustomersContent = () => {
     phone: "",
     email: "",
     address: "",
+    vatRate: undefined as number | undefined,
     organizationId: "none",
     addressInfo: {
       organizationId: "",
@@ -141,6 +142,7 @@ const CustomersContent = () => {
     phone: "",
     email: "",
     address: "",
+    vatRate: undefined as number | undefined,
     addressInfo: {
       organizationId: "",
       provinceCode: "",
@@ -269,6 +271,7 @@ const CustomersContent = () => {
         phoneNumber: newCustomer.phone || null,
         email: newCustomer.email || null,
         address: newCustomer.address || null,
+        vatRate: newCustomer.vatRate,
         addressInfo: {
           provinceCode: newCustomer.addressInfo?.provinceCode || null,
           districtCode: newCustomer.addressInfo?.districtCode || null,
@@ -287,6 +290,7 @@ const CustomersContent = () => {
         phone: "", 
         email: "", 
         address: "",
+        vatRate: undefined,
         organizationId: "none",
         addressInfo: {
           organizationId: "",
@@ -324,6 +328,7 @@ const CustomersContent = () => {
       phone: customer.phoneNumber || "",
       email: customer.email || "",
       address: customer.address || "",
+      vatRate: customer.vatRate,
       addressInfo: customer.addressInfo || {
         organizationId: "",
         provinceCode: "",
@@ -348,6 +353,7 @@ const CustomersContent = () => {
         phoneNumber: editCustomer.phone || null,
         email: editCustomer.email || null,
         address: editCustomer.address || null,
+        vatRate: editCustomer.vatRate,
         addressInfo: {
           provinceCode: editCustomer.addressInfo?.provinceCode || null,
           districtCode: editCustomer.addressInfo?.districtCode || null,
@@ -533,6 +539,22 @@ const CustomersContent = () => {
                   />
                 </div>
                 <div className="grid gap-2">
+                  <Label htmlFor="vatRate">VAT Rate (%)</Label>
+                  <Input
+                    id="vatRate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={newCustomer.vatRate ?? ''}
+                    onChange={(e) => setNewCustomer({...newCustomer, vatRate: e.target.value ? Number(e.target.value) : undefined})}
+                    placeholder="Nhập VAT rate mặc định (ví dụ: 10 cho 10%)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    VAT rate mặc định sẽ được áp dụng khi tạo đơn hàng cho khách hàng này
+                  </p>
+                </div>
+                <div className="grid gap-2">
                   <Label>Địa chỉ</Label>
                   <AddressFormSeparate
                     value={{
@@ -707,6 +729,22 @@ const CustomersContent = () => {
                 />
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="edit-vatRate">VAT Rate (%)</Label>
+                <Input
+                  id="edit-vatRate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={editCustomer.vatRate ?? ''}
+                  onChange={(e) => setEditCustomer({...editCustomer, vatRate: e.target.value ? Number(e.target.value) : undefined})}
+                  placeholder="Nhập VAT rate mặc định (ví dụ: 10 cho 10%)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  VAT rate mặc định sẽ được áp dụng khi tạo đơn hàng cho khách hàng này
+                </p>
+              </div>
+              <div className="grid gap-2">
                 <Label>Địa chỉ</Label>
                 <AddressFormSeparate
                   value={{
@@ -810,6 +848,14 @@ const CustomersContent = () => {
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <span>Tham gia: {selectedCustomer.createdAt && selectedCustomer.createdAt !== '' ? format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}</span>
                         </div>
+                        {selectedCustomer.vatRate !== undefined && selectedCustomer.vatRate > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-muted-foreground">VAT Rate:</span>
+                            <Badge variant="outline" className="font-mono">
+                              {selectedCustomer.vatRate}%
+                            </Badge>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>

@@ -229,17 +229,25 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     
     // Check if values actually changed
     const provinceChanged = value.provinceCode !== selectedProvince;
-    const districtChanged = value.districtCode && value.districtCode !== selectedDistrict;
-    const wardChanged = value.wardCode && value.wardCode !== selectedWard;
+    // District changed if: value has districtCode and it's different from selected, OR value has districtCode but we don't have one
+    const districtChanged = (value.districtCode && value.districtCode !== selectedDistrict) || 
+                          (value.districtCode && !selectedDistrict);
+    // Ward changed if: value has wardCode and it's different from selected, OR value has wardCode but we don't have one
+    const wardChanged = (value.wardCode && value.wardCode !== selectedWard) || 
+                       (value.wardCode && !selectedWard);
+    
+    // If any code changed, this is an external update (e.g., from customer selection)
+    const hasAnyChange = provinceChanged || districtChanged || wardChanged;
     
     // CRITICAL: If we have selectedDistrict but value.districtCode is undefined,
     // NEVER clear! This prevents losing user selections
+    // BUT: Allow if province changed (which would invalidate district anyway)
     if (initializedRef.current && selectedDistrict && !value.districtCode && !provinceChanged) {
       return; // Don't hydrate - preserve user selection
     }
     
     // If codes match, don't hydrate
-    if (initializedRef.current && !provinceChanged && !districtChanged && !wardChanged) {
+    if (initializedRef.current && !hasAnyChange) {
       return;
     }
     

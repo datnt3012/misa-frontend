@@ -69,6 +69,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       wardCode: ""
     },
     vat_invoice_email: "",
+    vat_rate: undefined as number | undefined, // VAT rate (sẽ lấy từ customer nếu không có)
     
     // Shipping Information (auto-fill from selected customer)
     shipping_recipient_name: "",
@@ -98,6 +99,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         warehouseApi.getWarehouses({ page: 1, limit: 1000 })
       ]);
 
+      console.log('[CreateOrderForm] Customers loaded:', {
+        customersCount: customersRes.customers?.length || 0,
+        firstCustomer: customersRes.customers?.[0],
+        firstCustomerVatRate: customersRes.customers?.[0]?.vatRate,
+        vatRateType: typeof customersRes.customers?.[0]?.vatRate
+      });
       setCustomers(customersRes.customers || []);
       setProducts(productsRes.products || []);
       setWarehouses(warehousesRes.warehouses || []);
@@ -198,10 +205,30 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
   const calculateTotals = () => {
     const subtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
-    const total = subtotal;
+    // Tính VAT: vatAmount = subtotal × (vatRate / 100)
+    // Ensure vat_rate is always a number
+    const vatRate = newOrder.vat_rate 
+      ? (typeof newOrder.vat_rate === 'number' 
+          ? newOrder.vat_rate 
+          : parseFloat(String(newOrder.vat_rate)))
+      : 0;
+    const validVatRate = isNaN(vatRate) ? 0 : vatRate;
+    const vatAmount = subtotal * (validVatRate / 100);
+    const total = subtotal + vatAmount;
     const debt = total - (newOrder.initial_payment || 0);
     
-    return { subtotal, total, debt };
+    // Debug logging
+    if (validVatRate > 0) {
+      console.log('[CreateOrderForm] Calculating VAT:', {
+        subtotal,
+        vatRate: newOrder.vat_rate,
+        validVatRate,
+        vatAmount,
+        total
+      });
+    }
+    
+    return { subtotal, vatAmount, total, debt };
   };
 
   const handleSubmit = async () => {
@@ -278,7 +305,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
     setLoading(true);
     try {
-      const { subtotal, total } = calculateTotals();
+      const { subtotal, vatAmount, total } = calculateTotals();
       const paidAmount = newOrder.initial_payment || 0;
 
       // Create order via backend API
@@ -289,6 +316,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         status: 'pending',
         
         // VAT Information
+        vatRate: newOrder.vat_rate, // Gửi VAT rate (optional, backend sẽ lấy từ customer nếu không có)
         taxCode: newOrder.vat_tax_code || undefined,
         companyName: newOrder.vat_company_name || undefined,
         companyAddress: newOrder.vat_company_address || undefined,
@@ -378,6 +406,26 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         customer_name: customer?.name || "",
                         customer_code: customer?.customer_code || "",
                         customer_phone: customer?.phoneNumber || "",
+                        // Tự động lấy VAT rate từ customer nếu có (already parsed as number by customer.api)
+                        vat_rate: (() => {
+                          if (!customer?.vatRate) {
+                            console.log('[CreateOrderForm] No VAT rate in customer:', customer);
+                            return prev.vat_rate;
+                          }
+                          // customer.vatRate should already be a number from customer.api normalization
+                          const vatRateValue = typeof customer.vatRate === 'number' 
+                            ? customer.vatRate 
+                            : (typeof customer.vatRate === 'string' ? parseFloat(customer.vatRate) : Number(customer.vatRate));
+                          console.log('[CreateOrderForm] Setting VAT rate from customer:', {
+                            customerId: customer.id,
+                            customerName: customer.name,
+                            customerVatRate: customer.vatRate,
+                            type: typeof customer.vatRate,
+                            converted: vatRateValue,
+                            isValid: !isNaN(vatRateValue) && vatRateValue > 0
+                          });
+                          return (!isNaN(vatRateValue) && vatRateValue > 0) ? vatRateValue : prev.vat_rate;
+                        })(),
                         // do NOT auto-fill VAT company fields from customer
                         // shipping auto-fill from customer
                         shipping_recipient_name: customer?.name || "",
@@ -424,8 +472,38 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     placeholder="Nhập số điện thoại"
                   />
                 </div>
-              {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
+                <div>
+                  <Label htmlFor="vat_rate">VAT Rate (%)</Label>
+                  <Input
+                    id="vat_rate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={newOrder.vat_rate ?? ''}
+                    onChange={(e) => setNewOrder(prev => ({ 
+                      ...prev, 
+                      vat_rate: e.target.value ? Number(e.target.value) : undefined 
+                    }))}
+                    placeholder="Tự động từ khách hàng"
+                  />
+                  {newOrder.customer_id && (() => {
+                    const customer = customers.find(c => c.id === newOrder.customer_id);
+                    const customerVatRate = customer?.vatRate;
+                    if (!customerVatRate) return null;
+                    const vatRateValue = typeof customerVatRate === 'string' 
+                      ? parseFloat(customerVatRate) 
+                      : Number(customerVatRate);
+                    if (isNaN(vatRateValue) || vatRateValue === 0) return null;
+                    return (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Mặc định từ khách hàng: {vatRateValue}%
+                      </p>
+                    );
+                  })()}
+                </div>
               </div>
+              {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
             </CardContent>
           </Card>
 
@@ -710,6 +788,45 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   placeholder="Nhập ghi chú"
                 />
               </div>
+
+              {/* Order Summary */}
+              {(() => {
+                const { subtotal, vatAmount, total, debt } = calculateTotals();
+                return (
+                  <div className="border-t pt-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tổng tiền trước VAT:</span>
+                      <span className="font-medium">{subtotal.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    {(() => {
+                      const vatRate = typeof newOrder.vat_rate === 'number' 
+                        ? newOrder.vat_rate 
+                        : (newOrder.vat_rate ? parseFloat(String(newOrder.vat_rate)) : 0);
+                      if (vatRate > 0 && !isNaN(vatRate)) {
+                        return (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">VAT ({vatRate}%):</span>
+                              <span className="font-medium text-blue-600">{vatAmount.toLocaleString('vi-VN')} đ</span>
+                            </div>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+                    <div className="flex justify-between text-lg font-bold border-t pt-2">
+                      <span>Tổng tiền sau VAT:</span>
+                      <span>{total.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    {newOrder.initial_payment > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Còn nợ:</span>
+                        <span className="font-medium text-orange-600">{debt.toLocaleString('vi-VN')} đ</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 

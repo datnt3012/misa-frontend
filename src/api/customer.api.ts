@@ -40,6 +40,7 @@ export interface Customer {
   addressInfo?: AddressInfo; // Thông tin địa chỉ (có thể bao gồm quan hệ nested)
   organizationId?: string; // ID của tổ chức
   organizationName?: string; // Tên tổ chức
+  vatRate?: number; // VAT rate mặc định (%)
   userId?: string;
   isDeleted: boolean;
   createdAt: string;
@@ -53,6 +54,7 @@ export interface CreateCustomerRequest {
   email?: string;
   phoneNumber?: string;
   address?: string;
+  vatRate?: number; // VAT rate mặc định (%)
   addressInfo?: {
     provinceCode?: string;
     districtCode?: string;
@@ -68,6 +70,7 @@ export interface UpdateCustomerRequest {
   email?: string;
   phoneNumber?: string;
   address?: string;
+  vatRate?: number; // VAT rate mặc định (%)
   addressInfo?: {
     provinceCode?: string;
     districtCode?: string;
@@ -113,6 +116,17 @@ export const customerApi = {
         addressInfo: row.addressInfo ?? row.address_info ?? null,
         organizationId: row.organizationId ?? row.organization_id ?? null,
         organizationName: row.organizationName ?? row.organization_name ?? null,
+        vatRate: (() => {
+          const vatRateValue = row.vatRate ?? row.vat_rate;
+          if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
+            return undefined;
+          }
+          // Convert string to number, handle both "10.00" and 10.00
+          const numValue = typeof vatRateValue === 'string' 
+            ? parseFloat(vatRateValue) 
+            : Number(vatRateValue);
+          return isNaN(numValue) ? undefined : numValue;
+        })(),
         userId: row.userId ?? null,
         isDeleted: row.isDeleted ?? false,
         createdAt: row.createdAt ?? row.created_at ?? '',
@@ -203,6 +217,7 @@ export const customerApi = {
       })(),
       organizationId: row.organizationId ?? row.organization_id ?? null,
       organizationName: row.organizationName ?? row.organization_name ?? null,
+      vatRate: row.vatRate !== undefined ? Number(row.vatRate ?? row.vat_rate) : undefined,
       userId: row.userId ?? null,
       isDeleted: row.isDeleted ?? false,
       createdAt: row.createdAt ?? row.created_at ?? '',
@@ -229,6 +244,7 @@ export const customerApi = {
       addressInfo: row.addressInfo ?? row.address_info ?? null,
       organizationId: row.organizationId ?? row.organization_id ?? null,
       organizationName: row.organizationName ?? row.organization_name ?? null,
+      vatRate: row.vatRate !== undefined ? Number(row.vatRate ?? row.vat_rate) : undefined,
       userId: row.userId ?? null,
       isDeleted: row.isDeleted ?? false,
       createdAt: row.createdAt ?? row.created_at ?? '',
