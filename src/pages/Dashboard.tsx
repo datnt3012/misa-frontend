@@ -68,7 +68,7 @@ const DashboardContent = () => {
   // Permission checks for different data sections
   const canViewOrders = hasPermission('ORDERS_READ');
   const canViewProducts = hasPermission('PRODUCTS_READ');
-  const canViewInventory = hasPermission('INVENTORY_READ');
+  const canViewInventory = hasPermission('STOCK_LEVELS_READ');
   const canViewRevenue = hasPermission('REVENUE_READ');
   // Gate: only admin, owner_director, chief_accountant can see total revenue
   const canSeeTotalRevenue = canViewRevenue && (

@@ -805,7 +805,7 @@ const InventoryContent = () => {
            {/* Inventory Stock Tab */}
            <TabsContent value="inventory" className="space-y-6">
              <PermissionGuard 
-               requiredPermissions={['INVENTORY_VIEW', 'PRODUCTS_VIEW', 'WAREHOUSES_VIEW']}
+               requiredPermissions={['STOCK_LEVELS_VIEW', 'PRODUCTS_VIEW', 'WAREHOUSES_VIEW']}
                requireAll={true}
              >
                <InventoryStock 

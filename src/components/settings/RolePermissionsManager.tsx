@@ -27,8 +27,10 @@ const getResourceIcon = (module: string) => {
     'Products': Package,
     'Categories': Package,
     'Inventory': Package,
+    'Stock': Package,
     'Stock Levels': Package,
     'Warehouses': Building2,
+    'Warehouse': Building2,
     'Warehouse Receipts': Package,
     
     // Reports & Analytics
@@ -60,9 +62,11 @@ const getModuleDisplayName = (module: string) => {
     // Product & Inventory Management
     'Products': 'Sản phẩm',
     'Categories': 'Loại sản phẩm',
-    'Inventory': 'Tồn kho',
+    'Inventory': 'Kho',
+    'Stock': 'Tồn kho',
     'Stock Levels': 'Số lượng tồn',
     'Warehouses': 'Kho hàng',
+    'Warehouse': 'Kho hàng',
     'Warehouse Receipts': 'Phiếu nhập kho',
     'Export Slips': 'Phiếu xuất kho',
 
@@ -375,9 +379,27 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       }
     });
     
-    // Sort categories by name for consistent display
+    // Sort categories with warehouse-related groups together
     const sortedCategories: Record<string, Permission[]> = {};
-    Object.keys(categories).sort().forEach(key => {
+    const categoryKeys = Object.keys(categories);
+    
+    // Define warehouse-related groups in order
+    const warehouseGroups = ['Warehouses', 'Warehouse Receipts', 'Export Slips'];
+    
+    // Separate warehouse groups from other groups
+    const warehouseKeys = categoryKeys.filter(key => warehouseGroups.includes(key));
+    const otherKeys = categoryKeys.filter(key => !warehouseGroups.includes(key));
+    
+    // Sort warehouse keys according to defined order
+    const sortedWarehouseKeys = warehouseGroups.filter(key => warehouseKeys.includes(key));
+    
+    // Sort other keys alphabetically
+    const sortedOtherKeys = otherKeys.sort();
+    
+    // Combine: warehouse groups first, then others
+    const finalOrder = [...sortedWarehouseKeys, ...sortedOtherKeys];
+    
+    finalOrder.forEach(key => {
       sortedCategories[key] = categories[key];
     });
     
@@ -386,14 +408,12 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
 
   // Extract module from permission code (MODULE_ACTION format)
   const extractModuleFromCode = (code: string): string => {
-    // Completely hide EXPORT_SLIPS permissions except VIEW
-    if (code.startsWith('EXPORT_SLIPS_') && !code.includes('VIEW')) {
-      return 'HIDDEN'; // Completely hide non-VIEW export slips permissions
+    // Handle special cases with multiple parts
+    if (code.startsWith('WAREHOUSE_RECEIPTS_')) {
+      return formatModuleName('WAREHOUSE_RECEIPTS');
     }
-    
-    // Map EXPORT_SLIPS_VIEW to its own module
-    if (code.startsWith('EXPORT_SLIPS_VIEW')) {
-      return 'Export Slips';
+    if (code.startsWith('EXPORT_SLIPS_')) {
+      return formatModuleName('EXPORT_SLIPS');
     }
     
     // Split by underscore and take the first part as module
@@ -427,9 +447,12 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'PRODUCTS': 'Products',
       'CATEGORIES': 'Categories',
       'INVENTORY': 'Inventory',
+      'STOCK': 'Stock',
       'STOCK_LEVELS': 'Stock Levels',
+      'WAREHOUSE': 'Warehouses',
       'WAREHOUSES': 'Warehouses',
       'WAREHOUSE_RECEIPTS': 'Warehouse Receipts',
+      'EXPORT_SLIPS': 'Export Slips',
       
       // Reports & Analytics
       'REPORTS': 'Reports',
@@ -891,12 +914,37 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="grid grid-cols-2 gap-3">
-                          {roleCategoryPermissions.map((permission) => (
-                            <div key={permission.id} className="flex items-center space-x-2">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-sm">{permission.name}</span>
-                            </div>
-                          ))}
+                          {roleCategoryPermissions
+                            .sort((a, b) => {
+                              // Sort by permission type: VIEW, READ, MANAGE, etc.
+                              const getPermissionOrder = (code: string) => {
+                                if (code.includes('_VIEW')) return 1;
+                                if (code.includes('_READ')) return 2;
+                                if (code.includes('_MANAGE')) return 3;
+                                if (code.includes('_CREATE')) return 4;
+                                if (code.includes('_UPDATE')) return 5;
+                                if (code.includes('_DELETE')) return 6;
+                                if (code.includes('_APPROVE')) return 7;
+                                if (code.includes('_EXPORT')) return 8;
+                                return 9;
+                              };
+                              
+                              const orderA = getPermissionOrder(a.code);
+                              const orderB = getPermissionOrder(b.code);
+                              
+                              if (orderA !== orderB) {
+                                return orderA - orderB;
+                              }
+                              
+                              // If same order, sort by name
+                              return a.name.localeCompare(b.name);
+                            })
+                            .map((permission) => (
+                              <div key={permission.id} className="flex items-center space-x-2">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-sm">{permission.name}</span>
+                              </div>
+                            ))}
                         </div>
                       </CardContent>
                     </Card>

@@ -50,8 +50,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
   const { hasPermission } = usePermissions();
 
   // Permission checks
-  const canCreateExportSlip = hasPermission('WAREHOUSE_RECEIPTS_CREATE');
-  const canManageInventory = hasPermission('INVENTORY_MANAGE');
+  const canCreateExportSlip = hasPermission('EXPORT_SLIPS_CREATE');
 
   useEffect(() => {
     if (orderSelectionOpen) {
