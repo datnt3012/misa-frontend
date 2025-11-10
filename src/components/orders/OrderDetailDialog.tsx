@@ -1022,7 +1022,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>
                   <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
-                    Thêm thanh toán
+                    Thanh toán
                   </Button>
                 </div>
               </div>

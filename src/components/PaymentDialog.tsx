@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { paymentsApi } from "@/api/payments.api";
 import { getErrorMessage } from "@/lib/error-utils";
-import { DollarSign, Clock, Upload, X, FileText, Image } from "lucide-react";
+import { API_CONFIG } from "@/config/api";
+import { DollarSign, Clock, Upload, X, FileText, Image, Eye } from "lucide-react";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -36,6 +37,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadingFilesForPayment, setUploadingFilesForPayment] = useState<string | null>(null);
+  const [filesToUploadForPayment, setFilesToUploadForPayment] = useState<Record<string, File[]>>({});
+  const [fileMetadataCache, setFileMetadataCache] = useState<Record<string, {
+    fileName: string;
+    fileSize?: number;
+    mimeType?: string;
+    extension?: string;
+  }>>({});
   const [bankAccounts, setBankAccounts] = useState<string[]>([
     'MB Bank',
     'TP Bank', 
@@ -60,14 +69,49 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   const loadPaymentHistory = async () => {
     try {
+      console.log('[PaymentDialog] Loading payment history for order:', order.id);
       const payments = await paymentsApi.getPaymentsByOrder(order.id);
-      setPaymentHistory(payments);
-    } catch (error: any) {
-      toast({
-        title: "Thông báo",
-        description: "Tính năng thanh toán chưa được hỗ trợ bởi backend",
-        variant: "default",
+      console.log('[PaymentDialog] Payment history loaded:', payments);
+      
+      // Sort payments by date (newest first)
+      const sortedPayments = [...payments].sort((a, b) => {
+        const dateA = new Date(a.payment_date).getTime();
+        const dateB = new Date(b.payment_date).getTime();
+        return dateB - dateA; // Descending order (newest first)
       });
+      
+      setPaymentHistory(sortedPayments);
+      
+      // Pre-fetch file metadata for all files
+      const filePaths: string[] = [];
+      sortedPayments.forEach((payment) => {
+        const paths = Array.isArray(payment.filePaths) 
+          ? payment.filePaths 
+          : payment.filePaths 
+            ? [payment.filePaths] 
+            : [];
+        filePaths.push(...paths);
+      });
+
+      // Fetch metadata for all files in parallel (silently, don't block on errors)
+      if (filePaths.length > 0) {
+        // Fire and forget - don't wait for metadata to load
+        filePaths.forEach((filePath) => {
+          if (filePath && filePath.trim()) {
+            getFileMetadata(filePath).catch((error) => {
+              // Silently ignore - metadata is optional, fallback will be used
+              // Only log if it's not a 404 (endpoint not available)
+              if (!error?.message?.includes('404') && !error?.message?.includes('Not Found')) {
+                console.debug('[PaymentDialog] Could not fetch metadata for:', filePath);
+              }
+            });
+          }
+        });
+      }
+    } catch (error: any) {
+      console.error('[PaymentDialog] Error loading payment history:', error);
+      // Don't show error toast - just log and continue with empty array
+      setPaymentHistory([]);
     }
   };
 
@@ -85,30 +129,77 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     try {
       const amount = parseFloat(paymentAmount);
       
-      // Update order's initialPayment instead of creating payment record
-      const { orderApi } = await import('@/api/order.api');
-      const currentInitialPayment = order.initial_payment || 0;
-      const newInitialPayment = currentInitialPayment + amount;
+      // Step 1: Create payment (JSON only)
+      let createdPayment;
+      try {
+        createdPayment = await paymentsApi.createPayment({
+          order_id: order.id,
+          amount: amount,
+          payment_method: paymentMethod as 'cash' | 'bank_transfer' | 'card' | 'other',
+          payment_date: new Date().toISOString(),
+          notes: paymentNotes || undefined,
+          created_by: user?.id,
+        });
+        console.log('[PaymentDialog] Payment record created successfully:', createdPayment);
+      } catch (paymentError: any) {
+        console.error('[PaymentDialog] Error creating payment:', paymentError);
+        toast({
+          title: "Lỗi",
+          description: getErrorMessage(paymentError, "Không thể tạo payment record"),
+          variant: "destructive",
+        });
+        return;
+      }
       
-      await orderApi.updateOrder(order.id, {
-        initialPayment: newInitialPayment
-      });
+      // Step 2: Upload files if any (separate API call)
+      if (uploadedFiles.length > 0 && createdPayment?.id) {
+        try {
+          await paymentsApi.uploadFiles(createdPayment.id, uploadedFiles);
+          console.log('[PaymentDialog] Files uploaded successfully');
+        } catch (uploadError: any) {
+          console.error('[PaymentDialog] Error uploading files:', uploadError);
+          toast({
+            title: "Cảnh báo",
+            description: "Payment đã được tạo nhưng không thể upload file. Vui lòng thử upload lại sau.",
+            variant: "default",
+          });
+        }
+      }
+      
+      // Step 3: Update order's initialPayment (for backward compatibility)
+      try {
+        const { orderApi } = await import('@/api/order.api');
+        const currentInitialPayment = order.initial_payment || 0;
+        const newInitialPayment = currentInitialPayment + amount;
+        
+        await orderApi.updateOrder(order.id, {
+          initialPayment: newInitialPayment
+        });
+      } catch (orderUpdateError: any) {
+        console.warn('[PaymentDialog] Could not update order initialPayment:', orderUpdateError);
+        // Non-critical error, continue
+      }
 
       toast({
         title: "Thành công",
         description: amount >= 0 
-          ? `Đã cập nhật thanh toán: ${formatCurrency(newInitialPayment)}`
-          : `Đã điều chỉnh thanh toán: ${formatCurrency(newInitialPayment)}`,
+          ? `Đã thêm thanh toán: ${formatCurrency(amount)}`
+          : `Đã điều chỉnh thanh toán: ${formatCurrency(amount)}`,
       });
 
       onUpdate();
-      loadPaymentHistory(); // Refresh payment history
+      
+      // Refresh payment history after a short delay to allow backend to process
+      setTimeout(() => {
+        loadPaymentHistory();
+      }, 500);
       
       // Reset form
       setPaymentAmount('');
       setPaymentNotes('');
       setPaymentMethod('cash');
       setBankAccount('');
+      setUploadedFiles([]);
     } catch (error: any) {
       toast({
         title: "Lỗi",
@@ -117,6 +208,319 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteFile = async (paymentId: string, filePath: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa file này?')) {
+      return;
+    }
+
+    try {
+      await paymentsApi.deleteFile(paymentId, filePath);
+      toast({
+        title: "Thành công",
+        description: "Đã xóa file",
+      });
+      
+      // Remove from metadata cache
+      setFileMetadataCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[filePath];
+        return newCache;
+      });
+      
+      // Refresh payment history
+      loadPaymentHistory();
+      onUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể xóa file"),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUploadFilesForPayment = async (paymentId: string) => {
+    const files = filesToUploadForPayment[paymentId];
+    if (!files || files.length === 0) {
+      toast({
+        title: "Thông báo",
+        description: "Vui lòng chọn file để upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingFilesForPayment(paymentId);
+    try {
+      await paymentsApi.uploadFiles(paymentId, files);
+      toast({
+        title: "Thành công",
+        description: "Đã upload file",
+      });
+      
+      // Clear files for this payment
+      setFilesToUploadForPayment(prev => {
+        const newState = { ...prev };
+        delete newState[paymentId];
+        return newState;
+      });
+      
+      // Clear metadata cache for this payment's files (they will be re-fetched)
+      // Refresh payment history will fetch new metadata
+      // Refresh payment history
+      loadPaymentHistory();
+      onUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể upload file"),
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFilesForPayment(null);
+    }
+  };
+
+  // Helper to construct file download URL
+  const getFileDownloadUrl = (filePath: string): string => {
+    // Construct download URL using API base URL
+    // Backend should serve files from the file path directly or via /files endpoint
+    // If filePath is already a full URL, return it
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+      return filePath;
+    }
+    
+    // Use API base URL from environment or default
+    const baseUrl = API_CONFIG.BASE_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0';
+    
+    // Construct URL: backend serves files via /files/{path}
+    return `${baseUrl}/files/${encodeURIComponent(filePath)}`;
+  };
+
+  // Get file metadata from API (?info=true)
+  const getFileMetadata = async (filePath: string): Promise<{
+    fileName: string;
+    fileSize?: number;
+    mimeType?: string;
+    extension?: string;
+  } | null> => {
+    // Check cache first
+    if (fileMetadataCache[filePath]) {
+      return fileMetadataCache[filePath];
+    }
+
+    // Skip if filePath is empty or invalid
+    if (!filePath || filePath.trim() === '') {
+      return null;
+    }
+
+    try {
+      const fileUrl = getFileDownloadUrl(filePath);
+      const metadataUrl = `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}info=true`;
+      
+      const response = await fetch(metadataUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
+        },
+      });
+
+      // Handle 404 gracefully - endpoint might not be available yet
+      if (response.status === 404) {
+        console.log('[PaymentDialog] Metadata endpoint not found for:', filePath, '- using fallback');
+        return null;
+      }
+
+      if (!response.ok) {
+        // For other errors, log but don't throw
+        console.warn('[PaymentDialog] Failed to fetch metadata:', response.status, response.statusText, 'for:', filePath);
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (data?.success && data?.data) {
+        const metadata = {
+          fileName: data.data.fileName || data.data.filename || '',
+          fileSize: data.data.fileSize || data.data.file_size,
+          mimeType: data.data.mimeType || data.data.mime_type,
+          extension: data.data.extension,
+        };
+
+        // Only cache if we have a fileName
+        if (metadata.fileName) {
+          setFileMetadataCache(prev => ({
+            ...prev,
+            [filePath]: metadata,
+          }));
+          return metadata;
+        }
+      }
+
+      return null;
+    } catch (error: any) {
+      // Don't log as error if it's just a network error or endpoint not available
+      if (error?.message?.includes('Failed to fetch') || error?.message?.includes('404')) {
+        console.log('[PaymentDialog] Metadata endpoint not available for:', filePath, '- using fallback');
+      } else {
+        console.warn('[PaymentDialog] Error fetching file metadata:', error, 'for:', filePath);
+      }
+      return null;
+    }
+  };
+
+  // Get file name from header (when fetching file)
+  const getFileNameFromHeader = async (filePath: string): Promise<string | null> => {
+    if (!filePath || filePath.trim() === '') {
+      return null;
+    }
+
+    try {
+      const fileUrl = getFileDownloadUrl(filePath);
+      
+      const response = await fetch(fileUrl, {
+        method: 'HEAD',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
+        },
+      });
+
+      if (response.ok) {
+        const fileName = response.headers.get('X-File-Name');
+        if (fileName) {
+          return decodeURIComponent(fileName);
+        }
+      }
+
+      return null;
+    } catch (error: any) {
+      // Silently fail - header method is optional
+      console.debug('[PaymentDialog] Could not get file name from header for:', filePath);
+      return null;
+    }
+  };
+
+  // Synchronous version for display (uses cache or fallback parsing)
+  const getDisplayFileNameSync = (filePath: string, paymentId: string): string => {
+    // Check cache first - this is the best source
+    if (fileMetadataCache[filePath]?.fileName) {
+      return fileMetadataCache[filePath].fileName;
+    }
+
+    // Fallback: parse from path
+    if (!filePath || typeof filePath !== 'string') {
+      return 'Tệp tin';
+    }
+
+    // Normalize path - handle both forward and back slashes, remove leading/trailing slashes
+    let normalizedPath = filePath.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    
+    // Extract filename from path (last part after /)
+    // Handle cases like "uploads/payments/id/file.pdf" or just "file.pdf"
+    const parts = normalizedPath.split('/').filter(p => p && p.trim());
+    
+    // Always take the last part as filename
+    let rawName = parts.length > 0 ? parts[parts.length - 1] : normalizedPath;
+    
+    // Decode URL encoding if present
+    try {
+      rawName = decodeURIComponent(rawName);
+    } catch (e) {
+      // If decode fails, use raw name as-is
+    }
+    
+    if (!rawName || rawName.trim() === '') {
+      return 'Tệp tin';
+    }
+
+    // Extract extension
+    const dotIndex = rawName.lastIndexOf('.');
+    const extension = dotIndex >= 0 ? rawName.slice(dotIndex) : '';
+    let nameWithoutExt = dotIndex >= 0 ? rawName.slice(0, dotIndex) : rawName;
+
+    // Clean up the name: remove payment ID, timestamp, and random suffix
+    // Format examples:
+    // - "invoice-abc123-1234567890-987654.pdf" -> "invoice.pdf"
+    // - "document-5b30d173-9661-4cd5-8c86-f4bfe7b63dab-1762505253482-233534523.pdf" -> "document.pdf"
+    
+    // Pattern 1: Remove UUID-like pattern followed by timestamp and random number
+    // Matches: -{uuid}-{timestamp}-{random}
+    const fullPattern = /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{10,}-\d+$/i;
+    if (fullPattern.test(nameWithoutExt)) {
+      nameWithoutExt = nameWithoutExt.replace(fullPattern, '');
+      if (nameWithoutExt.trim()) {
+        return nameWithoutExt.trim() + extension;
+      }
+    }
+
+    // Pattern 2: Remove payment ID pattern if paymentId is provided
+    if (paymentId) {
+      const paymentToken = `-${paymentId}-`;
+      const tokenIndex = nameWithoutExt.lastIndexOf(paymentToken);
+      if (tokenIndex !== -1 && tokenIndex > 0) {
+        const beforeToken = nameWithoutExt.slice(0, tokenIndex);
+        if (beforeToken.trim()) {
+          nameWithoutExt = beforeToken;
+        }
+      }
+    }
+
+    // Pattern 3: Remove trailing UUID-like pattern (20+ hex chars with dashes)
+    const uuidPattern = /-[0-9a-f-]{20,}$/i;
+    if (uuidPattern.test(nameWithoutExt)) {
+      nameWithoutExt = nameWithoutExt.replace(uuidPattern, '');
+    }
+
+    // Pattern 4: Remove trailing timestamp (long numbers, 10+ digits)
+    const timestampPattern = /-\d{10,}$/;
+    if (timestampPattern.test(nameWithoutExt)) {
+      nameWithoutExt = nameWithoutExt.replace(timestampPattern, '');
+    }
+
+    // Pattern 5: Remove trailing random number (shorter numbers that might be random)
+    // Only if it looks like a suffix (preceded by dash and the name has other content)
+    const randomPattern = /-\d{6,9}$/;
+    if (randomPattern.test(nameWithoutExt) && nameWithoutExt.length > 15) {
+      nameWithoutExt = nameWithoutExt.replace(randomPattern, '');
+    }
+
+    // Clean up: remove trailing dashes and trim
+    nameWithoutExt = nameWithoutExt.replace(/-+$/, '').trim();
+
+    // Return cleaned name with extension, or fallback to raw filename
+    const finalName = nameWithoutExt ? nameWithoutExt + extension : rawName;
+    return finalName || 'Tệp tin';
+  };
+
+  const handleViewFile = async (filePath: string) => {
+    const fileUrl = getFileDownloadUrl(filePath);
+    if (!fileUrl) {
+      toast({
+        title: "Lỗi",
+        description: "Không tìm thấy đường dẫn tệp",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Open file in new tab
+    window.open(fileUrl, '_blank', 'noopener,noreferrer');
+    
+    // Try to update cache with header name (if not already cached)
+    if (!fileMetadataCache[filePath]) {
+      getFileNameFromHeader(filePath).then((fileName) => {
+        if (fileName) {
+          setFileMetadataCache(prev => ({
+            ...prev,
+            [filePath]: { fileName },
+          }));
+        }
+      }).catch((error) => {
+        console.warn('[PaymentDialog] Could not get file name from header:', error);
+      });
     }
   };
 
@@ -313,54 +717,211 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             )}
           </div>
 
-          {/* Payment History */}
-          {paymentHistory.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="font-medium mb-3 flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Lịch sử thanh toán
-                </h4>
-                <div className="border rounded-md">
+          {/* Payment History - Always show */}
+          <Separator />
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                Lịch sử thanh toán
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading && paymentHistory.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Đang tải lịch sử thanh toán...
+                </div>
+              ) : paymentHistory.length > 0 ? (
+                <div className="border rounded-md overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Ngày</TableHead>
-                        <TableHead>Số tiền</TableHead>
+                        <TableHead className="w-[120px]">Ngày giờ</TableHead>
+                        <TableHead className="text-right">Số tiền</TableHead>
                         <TableHead>Phương thức</TableHead>
-                        <TableHead>Người tạo</TableHead>
                         <TableHead>Ghi chú</TableHead>
+                        <TableHead className="w-[220px]">Tệp tin</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paymentHistory.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>
-                            {new Date(payment.payment_date).toLocaleDateString('vi-VN')}
-                          </TableCell>
-                          <TableCell>
-                            <span className={payment.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                              {formatCurrency(payment.amount)}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {getPaymentMethodText(payment.payment_method)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {payment.creator_profile?.full_name || 'Không xác định'}
-                          </TableCell>
-                          <TableCell>{payment.notes || '-'}</TableCell>
-                        </TableRow>
-                      ))}
+                      {paymentHistory.map((payment) => {
+                        const filePathsRaw = Array.isArray(payment.filePaths) 
+                          ? payment.filePaths 
+                          : payment.filePaths 
+                            ? [payment.filePaths] 
+                            : [];
+                        const hasFiles = filePathsRaw.length > 0;
+                        const filesToUpload = filesToUploadForPayment[payment.id] || [];
+                        
+                        return (
+                          <TableRow key={payment.id}>
+                            <TableCell className="text-sm">
+                              <div>
+                                <div>{new Date(payment.payment_date).toLocaleDateString('vi-VN')}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {new Date(payment.payment_date).toLocaleTimeString('vi-VN', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className={`font-medium ${payment.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {payment.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(payment.amount))} đ
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {getPaymentMethodText(payment.payment_method)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {payment.notes || payment.note || '-'}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <div className="space-y-2">
+                                {/* Display existing files */}
+                                {hasFiles && (
+                                  <div className="space-y-1">
+                                    {filePathsRaw.map((filePath: string, idx: number) => {
+                                      // Ensure we're working with the file path, not the full path
+                                      const displayName = getDisplayFileNameSync(filePath, payment.id);
+                                      
+                                      // Debug log to see what we're working with
+                                      if (process.env.NODE_ENV === 'development') {
+                                        console.log('[PaymentDialog] File path:', filePath, 'Display name:', displayName);
+                                      }
+                                      
+                                      return (
+                                        <div key={idx} className="flex items-center gap-1 text-xs">
+                                          <FileText className="w-3 h-3 flex-shrink-0" />
+                                          <Button
+                                            type="button"
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto p-0 text-xs text-blue-600 hover:underline min-w-0"
+                                            onClick={() => handleViewFile(filePath)}
+                                          >
+                                            <span className="inline-flex items-center gap-1 min-w-0">
+                                              <Eye className="w-3 h-3 flex-shrink-0" />
+                                              <span className="truncate max-w-[120px] block" title={displayName}>
+                                                {displayName}
+                                              </span>
+                                            </span>
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 w-4 p-0"
+                                            onClick={() => handleDeleteFile(payment.id, filePath)}
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </Button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                
+                                {/* Upload files for existing payment */}
+                                <div className="flex flex-col gap-1">
+                                  <Input
+                                    type="file"
+                                    multiple
+                                    accept="image/*,.pdf,.doc,.docx"
+                                    className="hidden"
+                                    id={`payment-files-${payment.id}`}
+                                    onChange={(e) => {
+                                      if (e.target.files) {
+                                        setFilesToUploadForPayment(prev => ({
+                                          ...prev,
+                                          [payment.id]: Array.from(e.target.files || [])
+                                        }));
+                                      }
+                                    }}
+                                  />
+                                  {filesToUpload.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {filesToUpload.map((file, idx) => (
+                                        <div key={idx} className="flex items-center gap-1 text-xs">
+                                          <FileText className="w-3 h-3" />
+                                          <span className="truncate max-w-[100px]">{file.name}</span>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 w-4 p-0"
+                                            onClick={() => {
+                                              setFilesToUploadForPayment(prev => ({
+                                                ...prev,
+                                                [payment.id]: prev[payment.id]?.filter((_, i) => i !== idx) || []
+                                              }));
+                                            }}
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 text-xs"
+                                        onClick={() => handleUploadFilesForPayment(payment.id)}
+                                        disabled={uploadingFilesForPayment === payment.id}
+                                      >
+                                        {uploadingFilesForPayment === payment.id ? 'Uploading...' : 'Upload'}
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-xs"
+                                      onClick={() => document.getElementById(`payment-files-${payment.id}`)?.click()}
+                                    >
+                                      <Upload className="w-3 h-3 mr-1" />
+                                      Thêm file
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
+                  {/* Payment History Summary */}
+                  <div className="border-t bg-muted/50 p-3">
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>Tổng đã thanh toán:</span>
+                      <span className="text-green-600">
+                        {formatCurrency(paymentHistory.reduce((sum, p) => sum + (p.amount >= 0 ? p.amount : 0), 0))} đ
+                      </span>
+                    </div>
+                    {paymentHistory.some(p => p.amount < 0) && (
+                      <div className="flex justify-between text-sm font-medium mt-1">
+                        <span>Tổng điều chỉnh:</span>
+                        <span className="text-red-600">
+                          {formatCurrency(Math.abs(paymentHistory.reduce((sum, p) => sum + (p.amount < 0 ? p.amount : 0), 0)))} đ
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>Chưa có lịch sử thanh toán nào</p>
+                  <p className="text-xs mt-1">Các thanh toán sẽ được hiển thị tại đây</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <DialogFooter>
