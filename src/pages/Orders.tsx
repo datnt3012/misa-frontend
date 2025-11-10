@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
+import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -37,6 +38,7 @@ const OrdersContent: React.FC = () => {
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showOrderDetailDialog, setShowOrderDetailDialog] = useState(false);
+  const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
@@ -803,6 +805,16 @@ const OrdersContent: React.FC = () => {
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setSelectedOrder(order);
+                                    setShowOrderViewDialog(true);
+                                  }}
+                                  className="cursor-pointer hover:bg-muted"
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Xem chi tiết
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setSelectedOrder(order);
                                     setShowOrderDetailDialog(true);
                                   }}
                                   className="cursor-pointer hover:bg-muted"
@@ -919,7 +931,14 @@ const OrdersContent: React.FC = () => {
         }}
       />
 
-      {/* Order Detail Dialog */}
+      {/* Order View Dialog (Read-only) */}
+      <OrderViewDialog
+        order={selectedOrder}
+        open={showOrderViewDialog}
+        onOpenChange={setShowOrderViewDialog}
+      />
+
+      {/* Order Detail Dialog (Editable) */}
       <OrderDetailDialog
         order={selectedOrder}
         open={showOrderDetailDialog}

@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock } from "lucide-react";
+import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('vi-VN', {
@@ -105,6 +106,9 @@ const DashboardContent = () => {
   // Period toggle: 'month' or 'year'
   const [revenuePeriod, setRevenuePeriod] = useState<'month' | 'year'>('month');
   const [profitPeriod, setProfitPeriod] = useState<'month' | 'year'>('month');
+  // Order detail dialog state
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [orderDetailDialogOpen, setOrderDetailDialogOpen] = useState<boolean>(false);
   
   // Track loading and error states for different sections
   const [loadingStates, setLoadingStates] = useState({
@@ -1065,8 +1069,15 @@ const DashboardContent = () => {
             ) : (
               <div className="space-y-3">
                 {recentOrders.slice(0, recentOrdersLimit).map((o, idx) => (
-                  <div key={idx} className="flex items-center justify-between border rounded-lg p-3">
-                    <div>
+                  <div 
+                    key={idx} 
+                    className="flex items-center justify-between border rounded-lg p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => {
+                      setSelectedOrder(o);
+                      setOrderDetailDialogOpen(true);
+                    }}
+                  >
+                    <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-medium">{o.order_number}</span>
                         <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
@@ -1076,11 +1087,11 @@ const DashboardContent = () => {
                       <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
                     </div>
                     <div className="text-blue-600 font-bold">{formatCurrency(o.total_amount || 0)}</div>
-                      </div>
-                    ))}
                   </div>
-                )}
-              </CardContent>
+                ))}
+              </div>
+            )}
+          </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
@@ -1114,6 +1125,21 @@ const DashboardContent = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Order View Dialog (Read-only) */}
+        {selectedOrder && (
+          <OrderViewDialog
+            order={selectedOrder}
+            open={orderDetailDialogOpen}
+            onOpenChange={(open) => {
+              setOrderDetailDialogOpen(open);
+              if (!open) {
+                // Clear selected order when dialog is closed
+                setSelectedOrder(null);
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

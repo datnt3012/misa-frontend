@@ -171,6 +171,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       // Map UI field names to BE expectations (camelCase per BE)
       if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
         updateData[field] = value;
+      } else if (field === 'taxCode') {
+        updateData['taxCode'] = value;
+      } else if (field === 'vatEmail') {
+        updateData['vatEmail'] = value;
+      } else if (field === 'companyName') {
+        updateData['companyName'] = value;
+      } else if (field === 'companyPhone') {
+        updateData['companyPhone'] = value;
+      } else if (field === 'companyAddress') {
+        updateData['companyAddress'] = value;
       } else {
         updateData[field] = value;
       }
@@ -591,7 +601,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Chi tiết đơn hàng #{orderDetails.order_number}</DialogTitle>
+          <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails.order_number}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -657,6 +667,25 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
           <Separator />
 
+          {/* VAT Company Information */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🧾</span>
+              <h3 className="text-lg font-semibold">Thông tin VAT</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {renderEditableField('taxCode', 'Mã số thuế', orderDetails.taxCode || (orderDetails as any).vat_tax_code)}
+              {renderEditableField('vatEmail', 'Email nhận hóa đơn VAT', orderDetails.vatEmail || (orderDetails as any).vat_invoice_email)}
+              {renderEditableField('companyName', 'Tên công ty', orderDetails.companyName || (orderDetails as any).vat_company_name)}
+              {renderEditableField('companyPhone', 'Điện thoại công ty', orderDetails.companyPhone || (orderDetails as any).vat_company_phone)}
+              <div className="lg:col-span-2">
+                {renderEditableField('companyAddress', 'Địa chỉ công ty', orderDetails.companyAddress || (orderDetails as any).vat_company_address)}
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Products */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -679,8 +708,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   <TableHead className="text-center">SL</TableHead>
                   <TableHead className="text-right">Giá</TableHead>
                   <TableHead className="text-right">Tổng</TableHead>
-                  <TableHead className="text-right">VAT (%)</TableHead>
-                  <TableHead className="text-right">VAT</TableHead>
                   <TableHead className="w-24">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
@@ -747,12 +774,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                         <TableCell className="text-right font-medium">
                           {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {item.vat_rate !== undefined ? `${item.vat_rate}%` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.vat_amount !== undefined ? formatCurrency(item.vat_amount) : '-'}
-                        </TableCell>
                         <TableCell>
                           {isEditing ? (
                             <div className="flex gap-1">
@@ -798,7 +819,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Không có sản phẩm nào trong đơn hàng
                     </TableCell>
                   </TableRow>
@@ -814,113 +835,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                     <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
                     <span className="font-medium">{orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + item.quantity, 0)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Tổng tiền trước VAT:</span>
-                    <span className="font-medium">
-                      {formatCurrency(orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.total_price || 0), 0) || 0)}
-                    </span>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Tổng tiền:</span>
+                    <span className="text-xl">{formatCurrency(orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.total_price || 0), 0) || orderDetails.total_amount || 0)}</span>
                   </div>
-                </div>
-
-                {/* VAT Details Section */}
-                {(() => {
-                  // Calculate total VAT from items
-                  const totalVatFromItems = orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.vat_amount || 0), 0) || 0;
-                  const hasVatFromItems = totalVatFromItems > 0;
-                  const hasVatFromOrder = orderDetails.vat_amount !== undefined && orderDetails.vat_amount > 0;
-                  const hasVatType = orderDetails.vat_type && orderDetails.vat_type !== 'none' && orderDetails.vat_type !== '';
-                  const hasVatRate = orderDetails.vat_rate !== undefined && orderDetails.vat_rate > 0;
-                  const hasAnyVat = hasVatFromOrder || hasVatFromItems || hasVatType || hasVatRate;
-                  
-                  // Get effective VAT amount (prefer order vat_amount, fallback to sum from items)
-                  const effectiveVatAmount = orderDetails.vat_amount !== undefined && orderDetails.vat_amount > 0 
-                    ? orderDetails.vat_amount 
-                    : totalVatFromItems;
-                  
-                  if (!hasAnyVat) {
-                    return (
-                      <div className="text-sm text-muted-foreground italic text-center py-2">
-                        Không có VAT
-                      </div>
-                    );
-                  }
-                  
-                  return (
-                    <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg space-y-2 border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">📋 Thông tin VAT</span>
-                      </div>
-                      
-                      {/* VAT Type */}
-                      {hasVatType && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Loại tính VAT:</span>
-                          <span className="font-medium">
-                            {orderDetails.vat_type === 'total' ? 'Tính trên tổng tiền' : 
-                             orderDetails.vat_type === 'per_line' ? 'Tính theo từng dòng' : 
-                             orderDetails.vat_type || 'N/A'}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* VAT Rate */}
-                      {hasVatRate && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Tỷ lệ VAT:</span>
-                          <span className="font-medium">{orderDetails.vat_rate}%</span>
-                        </div>
-                      )}
-
-                      {/* VAT Breakdown - Show if per_line or if items have VAT */}
-                      {(orderDetails.vat_type === 'per_line' || hasVatFromItems) && orderDetails.items && orderDetails.items.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
-                          <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Chi tiết VAT theo sản phẩm:</div>
-                          <div className="space-y-1 max-h-32 overflow-y-auto">
-                            {orderDetails.items
-                              .filter((item: OrderItem) => item.vat_amount && item.vat_amount > 0)
-                              .map((item: OrderItem, idx: number) => (
-                                <div key={idx} className="flex justify-between text-xs">
-                                  <span className="text-muted-foreground truncate max-w-[180px]">
-                                    {item.product_code || item.product_name}
-                                  </span>
-                                  <span className="font-medium">
-                                    {formatCurrency(item.vat_amount || 0)} 
-                                    {item.vat_rate ? ` (${item.vat_rate}%)` : ''}
-                                  </span>
-                                </div>
-                              ))}
-                            {orderDetails.items.filter((item: OrderItem) => item.vat_amount && item.vat_amount > 0).length === 0 && (
-                              <div className="text-xs text-muted-foreground italic">Không có sản phẩm nào có VAT</div>
-                            )}
-                          </div>
-                          {hasVatFromItems && (
-                            <div className="flex justify-between text-xs font-medium mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
-                              <span>Tổng VAT từ các dòng:</span>
-                              <span className="text-blue-700 dark:text-blue-300">
-                                {formatCurrency(totalVatFromItems)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Total VAT */}
-                      {effectiveVatAmount > 0 && (
-                        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-blue-200 dark:border-blue-800">
-                          <span className="text-blue-700 dark:text-blue-300">Tổng VAT:</span>
-                          <span className="text-blue-700 dark:text-blue-300 text-base">
-                            {formatCurrency(effectiveVatAmount)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Final Total */}
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Tổng tiền sau VAT:</span>
-                  <span className="text-xl">{formatCurrency(orderDetails.total_amount)}</span>
                 </div>
               </div>
             </div>
@@ -968,14 +886,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
                 <span>{orderDetails.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng'}</span>
               </div>
-              {orderDetails.vat_rate !== undefined && orderDetails.vat_rate > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">VAT Rate:</span>
-                  <Badge variant="outline" className="text-xs font-mono">
-                    {orderDetails.vat_rate}%
-                  </Badge>
-                </div>
-              )}
               {orderDetails.vat_type && orderDetails.vat_type !== 'none' && (
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Loại VAT:</span>

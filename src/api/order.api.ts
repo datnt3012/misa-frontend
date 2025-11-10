@@ -97,13 +97,31 @@ export interface Order {
   payment_status?: string;
   // Completion timestamp when order reached completed/delivered status
   completed_at?: string;
+  // VAT company information
+  taxCode?: string;
+  companyName?: string;
+  companyAddress?: string;
+  vatEmail?: string;
+  companyPhone?: string;
 }
 
 export interface CreateOrderRequest {
   customerId: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  customerAddressInfo?: {
+    provinceCode?: string;
+    districtCode?: string;
+    wardCode?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+  };
   code?: string;
   note?: string;
   status?: string;
+  orderType?: string;
   
   // VAT Information
   vatRate?: number; // VAT rate (optional, nếu không có sẽ lấy từ customer)
@@ -143,6 +161,8 @@ export interface CreateOrderRequest {
   description?: string;
   tags?: string[];
   isDeleted?: boolean;
+  contractNumber?: string;
+  purchaseOrderNumber?: string;
 }
 
 export interface UpdateOrderRequest {
@@ -170,6 +190,12 @@ export interface UpdateOrderRequest {
   contract_number?: string;
   purchase_order_number?: string;
   tags?: string[];
+  // VAT company information
+  taxCode?: string;
+  companyName?: string;
+  companyAddress?: string;
+  vatEmail?: string;
+  companyPhone?: string;
 }
 
 export interface CreateOrderItemRequest {
@@ -382,6 +408,12 @@ export const orderApi = {
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
+      // VAT company information
+      taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
+      companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
+      companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
+      vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
+      companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
@@ -539,6 +571,12 @@ export const orderApi = {
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
+      // VAT company information
+      taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
+      companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
+      companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
+      vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
+      companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
