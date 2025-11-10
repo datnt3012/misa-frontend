@@ -110,7 +110,16 @@ const SettingsContent = () => {
       }, []);
       
       if (uniqueRoles.length > 0) {
-        setUserRoles(uniqueRoles);
+        setUserRoles((prevRoles) => {
+          const roleMap = new Map(prevRoles.map((role) => [role.id, role]));
+
+          uniqueRoles.forEach((role) => {
+            const existing = roleMap.get(role.id);
+            roleMap.set(role.id, existing ? { ...existing, ...role } : role);
+          });
+
+          return Array.from(roleMap.values());
+        });
       }
     } catch (error: any) {
       console.error('❌ Error loading users from backend:', error);

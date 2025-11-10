@@ -44,8 +44,43 @@ const getResourceIcon = (module: string) => {
     'Notifications': Settings,
     'Settings': Settings,
     'Other': Shield,
+    'Export Slips': Package,
   };
   return iconMap[module] || Shield;
+};
+
+const getModuleDisplayName = (module: string) => {
+  const displayNameMap: Record<string, string> = {
+    // Core Business Modules
+    'Dashboard': 'Tổng quan',
+    'Orders': 'Đơn hàng',
+    'Customers': 'Khách hàng',
+    'Suppliers': 'Nhà cung cấp',
+
+    // Product & Inventory Management
+    'Products': 'Sản phẩm',
+    'Categories': 'Loại sản phẩm',
+    'Inventory': 'Tồn kho',
+    'Stock Levels': 'Số lượng tồn',
+    'Warehouses': 'Kho hàng',
+    'Warehouse Receipts': 'Phiếu nhập kho',
+    'Export Slips': 'Phiếu xuất kho',
+
+    // Reports & Analytics
+    'Reports': 'Báo cáo',
+    'Revenue': 'Doanh thu',
+
+    // System Administration
+    'Users': 'Người dùng',
+    'Roles': 'Vai trò',
+    'Permissions': 'Quyền hạn',
+    'Profiles': 'Hồ sơ',
+    'Notifications': 'Thông báo',
+    'Settings': 'Cài đặt',
+    'Other': 'Khác',
+  };
+
+  return displayNameMap[module] || module;
 };
 
 interface RolePermissionsManagerProps {
@@ -329,6 +364,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         if (module === 'HIDDEN') {
           return;
         }
+        // Hide Organizations permissions category from UI
+        if (module === 'Organizations') {
+          return;
+        }
         if (!categories[module]) {
           categories[module] = [];
         }
@@ -486,7 +525,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-sm font-medium flex items-center gap-2">
                             {React.createElement(getResourceIcon(category), { className: "w-4 h-4" })}
-                            {category}
+                            {getModuleDisplayName(category)}
                           </CardTitle>
                           <div className="flex gap-2">
                             <Button
@@ -697,7 +736,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
                           {React.createElement(getResourceIcon(category), { className: "w-4 h-4" })}
-                          {category}
+                          {getModuleDisplayName(category)}
                         </CardTitle>
                         <div className="flex gap-2">
                           <Button
@@ -847,7 +886,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
                           {React.createElement(getResourceIcon(category), { className: "w-4 h-4" })}
-                          {category} ({roleCategoryPermissions.length} quyền)
+                          {getModuleDisplayName(category)} ({roleCategoryPermissions.length} quyền)
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
