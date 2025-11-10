@@ -69,9 +69,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   const loadPaymentHistory = async () => {
     try {
-      console.log('[PaymentDialog] Loading payment history for order:', order.id);
       const payments = await paymentsApi.getPaymentsByOrder(order.id);
-      console.log('[PaymentDialog] Payment history loaded:', payments);
       
       // Sort payments by date (newest first)
       const sortedPayments = [...payments].sort((a, b) => {
@@ -102,7 +100,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               // Silently ignore - metadata is optional, fallback will be used
               // Only log if it's not a 404 (endpoint not available)
               if (!error?.message?.includes('404') && !error?.message?.includes('Not Found')) {
-                console.debug('[PaymentDialog] Could not fetch metadata for:', filePath);
+                // Metadata is optional; ignore errors silently
               }
             });
           }
@@ -140,7 +138,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           notes: paymentNotes || undefined,
           created_by: user?.id,
         });
-        console.log('[PaymentDialog] Payment record created successfully:', createdPayment);
       } catch (paymentError: any) {
         console.error('[PaymentDialog] Error creating payment:', paymentError);
         toast({
@@ -155,7 +152,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       if (uploadedFiles.length > 0 && createdPayment?.id) {
         try {
           await paymentsApi.uploadFiles(createdPayment.id, uploadedFiles);
-          console.log('[PaymentDialog] Files uploaded successfully');
         } catch (uploadError: any) {
           console.error('[PaymentDialog] Error uploading files:', uploadError);
           toast({
@@ -329,10 +325,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
 
       // Handle 404 gracefully - endpoint might not be available yet
-      if (response.status === 404) {
-        console.log('[PaymentDialog] Metadata endpoint not found for:', filePath, '- using fallback');
-        return null;
-      }
+       if (response.status === 404) {
+         return null;
+       }
 
       if (!response.ok) {
         // For other errors, log but don't throw
@@ -363,9 +358,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       return null;
     } catch (error: any) {
       // Don't log as error if it's just a network error or endpoint not available
-      if (error?.message?.includes('Failed to fetch') || error?.message?.includes('404')) {
-        console.log('[PaymentDialog] Metadata endpoint not available for:', filePath, '- using fallback');
-      } else {
+       if (error?.message?.includes('Failed to fetch') || error?.message?.includes('404')) {
+         // Metadata endpoint not available; use fallback parsing
+       } else {
         console.warn('[PaymentDialog] Error fetching file metadata:', error, 'for:', filePath);
       }
       return null;
@@ -789,10 +784,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                                       const displayName = getDisplayFileNameSync(filePath, payment.id);
                                       
                                       // Debug log to see what we're working with
-                                      if (process.env.NODE_ENV === 'development') {
-                                        console.log('[PaymentDialog] File path:', filePath, 'Display name:', displayName);
-                                      }
-                                      
+                                       if (process.env.NODE_ENV === 'development') {
+                                         // In development we could log file info if needed
+                                       }
+                                       
                                       return (
                                         <div key={idx} className="flex items-center gap-1 text-xs">
                                           <FileText className="w-3 h-3 flex-shrink-0" />

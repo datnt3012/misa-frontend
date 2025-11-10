@@ -271,27 +271,6 @@ export const orderApi = {
     // Structure 2: { rows: [], summary: {} }
     const data = response?.data || response;
     
-    // Debug: Log summary from API
-    console.log('[Order API] Raw response:', response);
-    console.log('[Order API] Parsed data:', {
-      hasSummary: !!data?.summary,
-      summary: data?.summary,
-      hasRows: !!data?.rows,
-      count: data?.count,
-      totalPage: data?.totalPage,
-      allKeys: data ? Object.keys(data) : [],
-    });
-    
-    // Debug: Log raw response to see tags structure
-    if (data && data.rows && data.rows.length > 0) {
-      console.log('[Order API] Raw order API response (first order):', {
-        order_id: data.rows[0].id,
-        tags: data.rows[0].tags,
-        tag_names: data.rows[0].tags || [],
-        all_keys: Object.keys(data.rows[0])
-      });
-    }
-
     const normalizeItem = (it: any) => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
@@ -451,16 +430,6 @@ export const orderApi = {
   getOrder: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}`);
     const data = response?.data || response;
-    
-    console.log('[Order API] Raw order data:', {
-      vatRate: data?.vatRate,
-      vat_rate: data?.vat_rate,
-      vatAmount: data?.vatAmount,
-      vat_amount: data?.vat_amount,
-      type_vatRate: typeof data?.vatRate,
-      type_vat_rate: typeof data?.vat_rate
-    });
-
     const normalizeItem = (it: any) => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
@@ -587,21 +556,12 @@ export const orderApi = {
     });
 
     const normalizedOrder = normalizeOrder(data);
-    console.log('[Order API] Normalized order VAT:', {
-      vat_rate: normalizedOrder.vat_rate,
-      vat_amount: normalizedOrder.vat_amount,
-      type_vat_rate: typeof normalizedOrder.vat_rate,
-      type_vat_amount: typeof normalizedOrder.vat_amount
-    });
-    
     return normalizedOrder;
   },
 
   // Create order
   createOrder: async (data: CreateOrderRequest): Promise<Order> => {
     const response = await api.post<any>(API_ENDPOINTS.ORDERS.CREATE, data);
-    // Debug: Log response to see what backend returns
-    console.log('Create order response:', response);
     
     // Normalize the response to ensure consistent field mapping
     const normalizeItem = (it: any) => ({

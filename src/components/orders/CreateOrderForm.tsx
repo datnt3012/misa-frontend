@@ -98,13 +98,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         productApi.getProducts({ page: 1, limit: 1000 }),
         warehouseApi.getWarehouses({ page: 1, limit: 1000 })
       ]);
-
-      console.log('[CreateOrderForm] Customers loaded:', {
-        customersCount: customersRes.customers?.length || 0,
-        firstCustomer: customersRes.customers?.[0],
-        firstCustomerVatRate: customersRes.customers?.[0]?.vatRate,
-        vatRateType: typeof customersRes.customers?.[0]?.vatRate
-      });
       setCustomers(customersRes.customers || []);
       setProducts(productsRes.products || []);
       setWarehouses(warehousesRes.warehouses || []);
@@ -216,17 +209,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     const vatAmount = subtotal * (validVatRate / 100);
     const total = subtotal + vatAmount;
     const debt = total - (newOrder.initial_payment || 0);
-    
-    // Debug logging
-    if (validVatRate > 0) {
-      console.log('[CreateOrderForm] Calculating VAT:', {
-        subtotal,
-        vatRate: newOrder.vat_rate,
-        validVatRate,
-        vatAmount,
-        total
-      });
-    }
     
     return { subtotal, vatAmount, total, debt };
   };
@@ -409,21 +391,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         // Tự động lấy VAT rate từ customer nếu có (already parsed as number by customer.api)
                         vat_rate: (() => {
                           if (!customer?.vatRate) {
-                            console.log('[CreateOrderForm] No VAT rate in customer:', customer);
                             return prev.vat_rate;
                           }
                           // customer.vatRate should already be a number from customer.api normalization
                           const vatRateValue = typeof customer.vatRate === 'number' 
                             ? customer.vatRate 
                             : (typeof customer.vatRate === 'string' ? parseFloat(customer.vatRate) : Number(customer.vatRate));
-                          console.log('[CreateOrderForm] Setting VAT rate from customer:', {
-                            customerId: customer.id,
-                            customerName: customer.name,
-                            customerVatRate: customer.vatRate,
-                            type: typeof customer.vatRate,
-                            converted: vatRateValue,
-                            isValid: !isNaN(vatRateValue) && vatRateValue > 0
-                          });
                           return (!isNaN(vatRateValue) && vatRateValue > 0) ? vatRateValue : prev.vat_rate;
                         })(),
                         // do NOT auto-fill VAT company fields from customer
@@ -487,20 +460,20 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     }))}
                     placeholder="Tự động từ khách hàng"
                   />
-                  {newOrder.customer_id && (() => {
-                    const customer = customers.find(c => c.id === newOrder.customer_id);
-                    const customerVatRate = customer?.vatRate;
-                    if (!customerVatRate) return null;
-                    const vatRateValue = typeof customerVatRate === 'string' 
-                      ? parseFloat(customerVatRate) 
-                      : Number(customerVatRate);
-                    if (isNaN(vatRateValue) || vatRateValue === 0) return null;
-                    return (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Mặc định từ khách hàng: {vatRateValue}%
-                      </p>
-                    );
-                  })()}
+                   {newOrder.customer_id && (() => {
+                     const customer = customers.find(c => c.id === newOrder.customer_id);
+                     const customerVatRate = customer?.vatRate;
+                     if (!customerVatRate) return null;
+                     const vatRateValue = typeof customerVatRate === 'string' 
+                       ? parseFloat(customerVatRate) 
+                       : Number(customerVatRate);
+                     if (isNaN(vatRateValue) || vatRateValue === 0) return null;
+                     return (
+                       <p className="text-xs text-muted-foreground mt-1">
+                         Mặc định từ khách hàng: {vatRateValue}%
+                       </p>
+                     );
+                   })()}
                 </div>
               </div>
               {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}

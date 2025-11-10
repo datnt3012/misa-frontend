@@ -99,10 +99,6 @@ export const customerApi = {
 
     const response = await api.get<any>(url);
     const data = response?.data || response;
-    
-    // Debug: Log the actual response structure
-    console.log('🔍 Raw customer API response:', response);
-    console.log('🔍 Customer data structure:', data);
 
     const normalize = (row: any): Customer => {
       const normalized = {

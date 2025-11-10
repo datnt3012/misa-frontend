@@ -59,25 +59,12 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
   const loadOrderDetails = async () => {
     if (!order?.id) {
-      console.log('No order ID provided');
       return;
     }
     
     setLoading(true);
     try {
-      console.log('Loading order details for ID:', order.id);
       const orderData = await orderApi.getOrder(order.id);
-      console.log('Order data loaded:', orderData);
-      console.log('VAT Info:', {
-        vat_type: orderData.vat_type,
-        vat_rate: orderData.vat_rate,
-        vat_amount: orderData.vat_amount,
-        items_vat: orderData.items?.map((item: OrderItem) => ({
-          product_code: item.product_code,
-          vat_rate: item.vat_rate,
-          vat_amount: item.vat_amount
-        }))
-      });
       setOrderDetails(orderData);
       // Always fetch fresh customer info for authoritative address
       if (orderData.customer_id) {
