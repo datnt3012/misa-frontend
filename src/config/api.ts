@@ -130,6 +130,16 @@ export const API_ENDPOINTS = {
     ITEMS: (id: string) => `/orders/${id}/items`,
     DETAILS: (orderId: string, itemId: string) => `/orders/${orderId}/details/${itemId}`,
     PAYMENTS: (id: string) => `/orders/${id}/payments`,
+    HISTORY: (id: string) => `/orders/${id}/history`,
+  },
+  
+  // History
+  HISTORY: {
+    LIST: '/history',
+    ENTITY: (entityType: string, entityId: string) => `/history/entity/${entityType}/${entityId}`,
+    // Legacy endpoints (kept for backward compatibility)
+    ORDER: (orderId: string) => `/history/entity/order/${orderId}`,
+    ORDERS_BY_ID: (id: string) => `/orders/${id}/history`, // Alternative endpoint
   },
   
   // Order Items

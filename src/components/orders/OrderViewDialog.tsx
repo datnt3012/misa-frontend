@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -42,34 +42,64 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [activityHistory, setActivityHistory] = useState<StatusHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyApiCalled, setHistoryApiCalled] = useState<boolean>(false);
   const { toast } = useToast();
+  // Use ref to track current orderId to prevent race conditions
+  const currentOrderIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (open && order) {
-      loadOrderDetails();
-      loadPaymentHistory();
-      loadActivityHistory();
+    if (open && order?.id) {
+      // Reset state when opening dialog or order changes
+      const newOrderId = order.id;
+      currentOrderIdRef.current = newOrderId;
+      setHistoryApiCalled(false);
+      setOrderDetails(null);
+      setPaymentHistory([]);
+      setActivityHistory([]);
+      setLoading(true);
+      
+      // Load data for the current order
+      loadOrderDetails(newOrderId);
+      loadPaymentHistory(newOrderId);
+    } else if (!open) {
+      // Reset state when dialog closes
+      currentOrderIdRef.current = null;
+      setHistoryApiCalled(false);
+      setOrderDetails(null);
+      setPaymentHistory([]);
+      setActivityHistory([]);
+      setLoading(false);
     }
-  }, [open, order]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, order?.id]);
 
-  const loadOrderDetails = async () => {
-    if (!order?.id) {
+  const loadOrderDetails = async (orderId: string) => {
+    if (!orderId) {
       return;
     }
     
     setLoading(true);
     try {
-      const orderData = await orderApi.getOrder(order.id);
-      setOrderDetails(orderData);
+      const orderData = await orderApi.getOrder(orderId);
+      // Only update if this is still the current order
+      if (currentOrderIdRef.current === orderId) {
+        setOrderDetails(orderData);
+      }
     } catch (error) {
       console.error('Error loading order details:', error);
-      toast({
-        title: "Lỗi",
-        description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
-        variant: "destructive",
-      });
+      // Only show error if this is still the current order
+      if (currentOrderIdRef.current === orderId) {
+        toast({
+          title: "Lỗi",
+          description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
+          variant: "destructive",
+        });
+        setLoading(false);
+      }
     } finally {
-      setLoading(false);
+      if (currentOrderIdRef.current === orderId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -91,31 +121,107 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     return methods[method] || method;
   };
 
-  const loadPaymentHistory = async () => {
-    if (!order?.id) {
+  const loadPaymentHistory = async (orderId: string) => {
+    if (!orderId) {
       return;
     }
     
     try {
-      const payments = await paymentsApi.getPaymentsByOrder(order.id);
+      const payments = await paymentsApi.getPaymentsByOrder(orderId);
       // Sort by payment date, most recent first
       payments.sort((a, b) => 
         new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
       );
-      setPaymentHistory(payments);
+      // Only update if this is still the current order
+      if (currentOrderIdRef.current === orderId) {
+        setPaymentHistory(payments);
+        // Load activity history after payment history is loaded, passing payments as parameter
+        loadActivityHistory(orderId, payments);
+      }
     } catch (error) {
       console.error('Error loading payment history:', error);
-      setPaymentHistory([]);
+      // Only update if this is still the current order
+      if (currentOrderIdRef.current === orderId) {
+        setPaymentHistory([]);
+        // Still try to load activity history even if payment history fails
+        loadActivityHistory(orderId, []);
+      }
     }
   };
 
-  const loadActivityHistory = async () => {
-    if (!order?.id || !orderDetails) {
+  const loadActivityHistory = async (orderId: string, currentPaymentHistory?: Payment[]) => {
+    if (!orderId) {
       return;
     }
     
+    // Mark that we've called the API
+    setHistoryApiCalled(true);
+    
     try {
-      // Create activity history from order data and payment history
+      // Try to get history from backend API first
+      const historyData = await orderApi.getOrderHistory(orderId);
+      
+      // Only update if this is still the current order
+      if (currentOrderIdRef.current !== orderId) {
+        return;
+      }
+      
+      if (historyData && historyData.length > 0) {
+        // Normalize and map backend history data
+        const activities: StatusHistoryItem[] = historyData.map((item: any) => ({
+          id: item.id || `history-${item.changed_at}`,
+          old_status: item.old_status || item.oldStatus,
+          new_status: item.new_status || item.newStatus,
+          old_paid_amount: item.old_paid_amount ?? item.oldPaidAmount,
+          new_paid_amount: item.new_paid_amount ?? item.newPaidAmount,
+          notes: item.notes || item.note,
+          changed_by: item.changed_by || item.changedBy,
+          changed_at: item.changed_at || item.changedAt,
+          user_profile: item.user_profile || item.userProfile || item.creator_profile || item.creatorProfile || {
+            full_name: item.creator?.full_name || item.creator?.fullName || item.changed_by_user?.full_name || 'Hệ thống'
+          },
+        }));
+
+        // Sort by date, most recent first
+        activities.sort((a, b) => 
+          new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
+        );
+        
+        // Double check this is still the current order before updating state
+        if (currentOrderIdRef.current === orderId) {
+          setActivityHistory(activities);
+        }
+        return;
+      }
+      
+      // If API returns empty, set empty array
+      // Fallback will be created in useEffect when orderDetails is ready
+      if (currentOrderIdRef.current === orderId) {
+        setActivityHistory([]);
+      }
+    } catch (error) {
+      console.error('Error loading activity history:', error);
+      // On error, set empty array
+      // Fallback will be created in useEffect when orderDetails is ready
+      if (currentOrderIdRef.current === orderId) {
+        setActivityHistory([]);
+      }
+    }
+  };
+
+  // Create fallback activity history when orderDetails and paymentHistory are available
+  // This runs when API returns empty or fails
+  useEffect(() => {
+    const currentOrderId = currentOrderIdRef.current;
+    if (!currentOrderId || !orderDetails || orderDetails.id !== currentOrderId) {
+      return;
+    }
+
+    // Only create fallback if:
+    // 1. API was called (historyApiCalled === true)
+    // 2. Activity history is empty (API returned empty or failed)
+    // 3. We have orderDetails
+    if (historyApiCalled && activityHistory.length === 0 && orderDetails) {
       const activities: StatusHistoryItem[] = [];
       
       // Add order creation activity
@@ -130,7 +236,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       });
 
       // Add payment activities
-      paymentHistory.forEach((payment, index) => {
+      paymentHistory.forEach((payment) => {
         activities.push({
           id: `payment-${payment.id}`,
           new_status: orderDetails.status,
@@ -143,7 +249,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
 
       // Add status change if updated
       if (orderDetails.updated_at && orderDetails.updated_at !== orderDetails.created_at) {
-        // Only add if it's not too close to creation time (within 1 second)
         const timeDiff = new Date(orderDetails.updated_at).getTime() - new Date(orderDetails.created_at).getTime();
         if (timeDiff > 1000) {
           activities.push({
@@ -172,20 +277,13 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
         new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
       );
       
-      setActivityHistory(activities);
-    } catch (error) {
-      console.error('Error loading activity history:', error);
-      setActivityHistory([]);
-    }
-  };
-
-  // Reload activity history when orderDetails or paymentHistory changes
-  useEffect(() => {
-    if (orderDetails) {
-      loadActivityHistory();
+      // Only update if this is still the current order
+      if (currentOrderIdRef.current === currentOrderId) {
+        setActivityHistory(activities);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderDetails, paymentHistory]);
+  }, [orderDetails?.id, paymentHistory.length, historyApiCalled, activityHistory.length]);
 
   const formatDateTime = (dateString: string) => {
     return format(new Date(dateString), "dd/MM/yyyy HH:mm", { locale: vi });
@@ -583,14 +681,40 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                             </div>
                             
                             <div className="space-y-2">
-                              {item.new_status && item.id !== 'payment' && (
+                              {/* Show status change if old_status and new_status are different */}
+                              {item.old_status && item.new_status && item.old_status !== item.new_status && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">Thay đổi trạng thái:</span>
+                                  {getStatusBadge(item.old_status)}
+                                  <span>→</span>
+                                  {getStatusBadge(item.new_status)}
+                                </div>
+                              )}
+                              
+                              {/* Show status if only new_status exists and no old_status */}
+                              {item.new_status && !item.old_status && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm">Trạng thái:</span>
                                   {getStatusBadge(item.new_status)}
                                 </div>
                               )}
                               
-                              {item.new_paid_amount && item.id?.startsWith('payment') && (
+                              {/* Show payment amount change */}
+                              {item.old_paid_amount !== undefined && item.new_paid_amount !== undefined && item.old_paid_amount !== item.new_paid_amount && (
+                                <div className="flex items-center gap-2">
+                                  <DollarSign className="w-4 h-4 text-green-600" />
+                                  <span className="text-sm">Thanh toán:</span>
+                                  <span className="text-green-600 font-medium">
+                                    +{formatCurrency(item.new_paid_amount - (item.old_paid_amount || 0))}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({formatCurrency(item.old_paid_amount || 0)} → {formatCurrency(item.new_paid_amount)})
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {/* Show payment amount if only new_paid_amount exists */}
+                              {item.new_paid_amount && item.old_paid_amount === undefined && (
                                 <div className="flex items-center gap-2">
                                   <DollarSign className="w-4 h-4 text-green-600" />
                                   <span className="text-sm font-medium text-green-600">

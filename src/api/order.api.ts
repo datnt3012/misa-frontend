@@ -840,5 +840,115 @@ export const orderApi = {
   deleteOrderItem: async (orderId: string, itemId: string): Promise<{ message: string }> => {
     // Use /orders/{orderId}/details/{itemId} endpoint
     return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DETAILS(orderId, itemId));
-  }
+  },
+
+  // Get order history
+  getOrderHistory: async (orderId: string): Promise<{
+    id: string;
+    order_id?: string;
+    old_status?: string;
+    new_status?: string;
+    old_paid_amount?: number;
+    new_paid_amount?: number;
+    notes?: string;
+    changed_by?: string;
+    changed_at: string;
+    user_profile?: {
+      full_name: string;
+    };
+    export_slip?: {
+      slip_number: string;
+      status: string;
+    };
+  }[]> => {
+    try {
+      // Use the new History API endpoint: GET /history/entity/order/:orderId
+      const response = await api.get<any>(API_ENDPOINTS.HISTORY.ENTITY('order', orderId));
+      console.log('[orderApi] History API response:', response);
+      
+      // Extract data from response (handle JsonDTORsp format)
+      let historyItems: any[] = [];
+      const responseData = response?.data || response;
+      
+      // Backend returns JsonDTORsp with structure: { code, data, message }
+      // data can be an array or an object with { count, rows, page, limit, totalPage }
+      if (responseData?.data) {
+        if (Array.isArray(responseData.data)) {
+          historyItems = responseData.data;
+        } else if (responseData.data?.rows && Array.isArray(responseData.data.rows)) {
+          historyItems = responseData.data.rows;
+        } else if (responseData.data?.data && Array.isArray(responseData.data.data)) {
+          historyItems = responseData.data.data;
+        }
+      } else if (Array.isArray(responseData)) {
+        historyItems = responseData;
+      } else if (responseData?.rows && Array.isArray(responseData.rows)) {
+        historyItems = responseData.rows;
+      }
+      
+      console.log('[orderApi] Found', historyItems.length, 'history items');
+      
+      // Transform History entity format to frontend format
+      const transformedHistory = historyItems.map((item: any) => {
+        // History entity has: id, entityType, entityId, action, title, message, oldValue, newValue, metadata, userId, createdAt, user
+        const transformed: any = {
+          id: item.id,
+          order_id: item.entityId || item.entity_id || orderId,
+          changed_at: item.createdAt || item.created_at || new Date().toISOString(),
+          notes: item.message || item.title || '',
+          changed_by: item.userId || item.user_id || null,
+          user_profile: item.user ? {
+            full_name: item.user.firstName && item.user.lastName 
+              ? `${item.user.firstName} ${item.user.lastName}`.trim()
+              : item.user.fullName || item.user.email || 'Hệ thống'
+          } : { full_name: 'Hệ thống' }
+        };
+        
+        // Map action and values based on HistoryAction type
+        const action = item.action?.toLowerCase() || '';
+        
+        if (action === 'status_changed') {
+          // Extract status from oldValue and newValue
+          transformed.old_status = item.oldValue?.status || item.oldValue?.oldStatus || null;
+          transformed.new_status = item.newValue?.status || item.newValue?.newStatus || null;
+        } else if (action === 'payment_added') {
+          // Extract payment amount from newValue
+          transformed.new_paid_amount = item.newValue?.amount || item.newValue?.paymentAmount || null;
+          transformed.old_paid_amount = item.oldValue?.amount || item.oldValue?.paymentAmount || null;
+        } else if (action === 'created') {
+          // For created action, new_status is the initial status
+          transformed.new_status = item.newValue?.status || item.metadata?.status || null;
+        } else if (action === 'updated') {
+          // For updated action, check if status changed
+          if (item.oldValue?.status !== item.newValue?.status) {
+            transformed.old_status = item.oldValue?.status || null;
+            transformed.new_status = item.newValue?.status || null;
+          }
+        }
+        
+        // Extract export slip info from metadata if available
+        if (item.metadata?.exportSlip || item.metadata?.export_slip) {
+          const exportSlip = item.metadata.exportSlip || item.metadata.export_slip;
+          transformed.export_slip = {
+            slip_number: exportSlip.slipNumber || exportSlip.slip_number || '',
+            status: exportSlip.status || ''
+          };
+        }
+        
+        return transformed;
+      });
+      
+      // Sort by date, most recent first
+      transformedHistory.sort((a, b) => 
+        new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
+      );
+      
+      return transformedHistory;
+    } catch (error: any) {
+      console.error('[orderApi] Error loading order history:', error);
+      console.error('[orderApi] Endpoint:', API_ENDPOINTS.HISTORY.ENTITY('order', orderId));
+      // Return empty array if API doesn't exist or fails (will trigger fallback)
+      return [];
+    }
+  },
 };
