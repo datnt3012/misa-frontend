@@ -19,8 +19,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
+    username: '',
     firstName: '',
     lastName: '',
+    phoneNumber: '',
+    address: '',
   });
   const { toast } = useToast();
   const { user: currentUser, refreshUser } = useAuth();
@@ -29,8 +32,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     if (open && currentUser) {
       setFormData({
         email: currentUser.email || '',
+        username: (currentUser as any).username || (currentUser as any).user_metadata?.username || '',
         firstName: currentUser.firstName || currentUser.user_metadata?.firstName || '',
         lastName: currentUser.lastName || currentUser.user_metadata?.lastName || '',
+        phoneNumber: (currentUser as any).phoneNumber || (currentUser as any).phone_number || '',
+        address: (currentUser as any).address || '',
       });
     }
   }, [open, currentUser]);
@@ -56,11 +62,18 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
       setSaving(true);
       
       // Cập nhật thông tin người dùng
-      const updateData = {
+      const updateData: any = {
         email: formData.email,
         firstName: formData.firstName,
         lastName: formData.lastName,
+        phoneNumber: formData.phoneNumber || undefined,
+        address: formData.address || undefined,
       };
+      
+      // Thêm username nếu có
+      if (formData.username) {
+        updateData.username = formData.username;
+      }
 
       // Gọi API cập nhật thông tin người dùng hiện tại
       await authApi.updateProfile(updateData);
@@ -91,8 +104,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     if (currentUser) {
       setFormData({
         email: currentUser.email || '',
+        username: (currentUser as any).username || (currentUser as any).user_metadata?.username || '',
         firstName: currentUser.firstName || currentUser.user_metadata?.firstName || '',
         lastName: currentUser.lastName || currentUser.user_metadata?.lastName || '',
+        phoneNumber: (currentUser as any).phoneNumber || (currentUser as any).phone_number || '',
+        address: (currentUser as any).address || '',
       });
     }
     onOpenChange(false);
@@ -100,7 +116,7 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Chỉnh sửa thông tin cá nhân</DialogTitle>
           <DialogDescription>
@@ -109,15 +125,28 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
         </DialogHeader>
         
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="Nhập email"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                placeholder="Nhập email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="username">Tên đăng nhập (Username)</Label>
+              <Input
+                id="username"
+                type="text"
+                value={formData.username}
+                onChange={(e) => handleInputChange('username', e.target.value)}
+                placeholder="Nhập tên đăng nhập"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -142,6 +171,28 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
                 placeholder="Nhập họ"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phoneNumber">Số điện thoại</Label>
+            <Input
+              id="phoneNumber"
+              type="tel"
+              value={formData.phoneNumber}
+              onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+              placeholder="Nhập số điện thoại"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="address">Địa chỉ</Label>
+            <Input
+              id="address"
+              type="text"
+              value={formData.address}
+              onChange={(e) => handleInputChange('address', e.target.value)}
+              placeholder="Nhập địa chỉ"
+            />
           </div>
         </div>
 

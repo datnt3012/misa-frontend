@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Try real backend authentication first
 
-      const response = await authApi.login({ email: emailOrUsername, password });
+      const response = await authApi.login({ username: emailOrUsername, password });
 
       // Handle both API response format and direct response
       const result = response.data || response;
@@ -178,7 +178,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Update user state directly from API response
         setUser(userData);
         setSession(sessionData);
-        setUserRole(userData.roleId); // Set roleId, will be resolved by usePermissions
+        // Set role name from role object if available, otherwise use roleId
+        const roleName = (userData as any).role?.name || userData.roleId;
+        setUserRole(roleName);
 
         // Store tokens directly in localStorage for axios interceptor
         localStorage.setItem('access_token', result.access_token);
@@ -188,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('user-session', JSON.stringify({
           user: userData,
           session: sessionData,
-          userRole: userData.roleId // Store roleId, will be resolved by usePermissions
+          userRole: roleName // Store role name instead of roleId
         }));
 
 
@@ -211,10 +213,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error.response?.data?.message) {
         // Backend returned structured error response
-        errorMessage = error.response.data.message;
+        if (Array.isArray(error.response.data.message)) {
+          errorMessage = error.response.data.message.join('\n');
+        } else {
+          errorMessage = error.response.data.message;
+        }
       } else if (error.response?.data?.error) {
         // Backend returned error field
-        errorMessage = error.response.data.error;
+        if (Array.isArray(error.response.data.error)) {
+          errorMessage = error.response.data.error.join('\n');
+        } else {
+          errorMessage = error.response.data.error;
+        }
       } else if (error.message) {
         // Use generic error message
         errorMessage = error.message;
@@ -251,6 +261,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Update user state
       setUser(userData);
       
+      // Get role name from role object if available
+      const roleName = (userData as any).role?.name || (userData as any).roleId;
+      setUserRole(roleName);
+      
       // Update session if exists
       if (session) {
         const updatedSession = { ...session, user: userData };
@@ -260,7 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('user-session', JSON.stringify({
           user: userData,
           session: updatedSession,
-          userRole: userData.roleId
+          userRole: roleName // Store role name instead of roleId
         }));
       }
     } catch (error) {

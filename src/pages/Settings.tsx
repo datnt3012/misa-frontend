@@ -34,7 +34,11 @@ const SettingsContent = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserName, setNewUserName] = useState("");
+  const [newUserUsername, setNewUserUsername] = useState("");
+  const [newUserFirstName, setNewUserFirstName] = useState("");
+  const [newUserLastName, setNewUserLastName] = useState("");
+  const [newUserAddress, setNewUserAddress] = useState("");
+  const [newUserPhoneNumber, setNewUserPhoneNumber] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("accountant");
   const [loading, setLoading] = useState(false);
@@ -208,7 +212,7 @@ const SettingsContent = () => {
     if (!newUserEmail.trim() || !newUserPassword.trim()) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng nhập đầy đủ thông tin tài khoản và mật khẩu",
+        description: "Vui lòng nhập đầy đủ email và mật khẩu",
         variant: "destructive",
       });
       return;
@@ -233,8 +237,12 @@ const SettingsContent = () => {
 
       const resp = await usersApi.createUser({
         email: newUserEmail,
+        username: newUserUsername || undefined,
         password: newUserPassword,
-        firstName: newUserName || newUserEmail.split('@')[0],
+        firstName: newUserFirstName || undefined,
+        lastName: newUserLastName || undefined,
+        phoneNumber: newUserPhoneNumber || undefined,
+        address: newUserAddress || undefined,
         roleId: newUserRole,
       });
 
@@ -245,7 +253,11 @@ const SettingsContent = () => {
 
       // Reset form
       setNewUserEmail("");
-      setNewUserName("");
+      setNewUserUsername("");
+      setNewUserFirstName("");
+      setNewUserLastName("");
+      setNewUserAddress("");
+      setNewUserPhoneNumber("");
       setNewUserPassword("");
       setNewUserRole("");
       setShowCreateUserForm(false);
@@ -764,24 +776,70 @@ const SettingsContent = () => {
                       <>
                         <div className="grid grid-cols-1 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="user-email">Tài khoản đăng nhập</Label>
+                            <Label htmlFor="user-email">Email</Label>
                             <Input
                               id="user-email"
-                              type="text"
+                              type="email"
                               value={newUserEmail}
                               onChange={(e) => setNewUserEmail(e.target.value)}
-                              placeholder="Nhập tài khoản (có thể là email hoặc username)"
+                              placeholder="Nhập email"
                             />
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="user-name">Tên hiển thị</Label>
+                            <Label htmlFor="user-username">Tên đăng nhập (Username)</Label>
                             <Input
-                              id="user-name"
+                              id="user-username"
                               type="text"
-                              value={newUserName}
-                              onChange={(e) => setNewUserName(e.target.value)}
-                              placeholder="Nhập tên hiển thị"
+                              value={newUserUsername}
+                              onChange={(e) => setNewUserUsername(e.target.value)}
+                              placeholder="Nhập tên đăng nhập"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="user-firstname">Họ</Label>
+                              <Input
+                                id="user-firstname"
+                                type="text"
+                                value={newUserFirstName}
+                                onChange={(e) => setNewUserFirstName(e.target.value)}
+                                placeholder="Nhập họ"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="user-lastname">Tên</Label>
+                              <Input
+                                id="user-lastname"
+                                type="text"
+                                value={newUserLastName}
+                                onChange={(e) => setNewUserLastName(e.target.value)}
+                                placeholder="Nhập tên"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="user-address">Địa chỉ</Label>
+                            <Input
+                              id="user-address"
+                              type="text"
+                              value={newUserAddress}
+                              onChange={(e) => setNewUserAddress(e.target.value)}
+                              placeholder="Nhập địa chỉ"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="user-phone">Số điện thoại</Label>
+                            <Input
+                              id="user-phone"
+                              type="tel"
+                              value={newUserPhoneNumber}
+                              onChange={(e) => setNewUserPhoneNumber(e.target.value)}
+                              placeholder="Nhập số điện thoại"
                             />
                           </div>
 
@@ -820,7 +878,11 @@ const SettingsContent = () => {
                             onClick={() => {
                               setShowCreateUserForm(false);
                               setNewUserEmail("");
-                              setNewUserName("");
+                              setNewUserUsername("");
+                              setNewUserFirstName("");
+                              setNewUserLastName("");
+                              setNewUserAddress("");
+                              setNewUserPhoneNumber("");
                               setNewUserPassword("");
                               setNewUserRole("");
                             }}

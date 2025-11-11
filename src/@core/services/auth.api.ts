@@ -53,7 +53,7 @@ export function login(emailOrUsername: string, password: string) {
   }
 
   return authApi.login({ 
-    email: emailOrUsername, 
+    username: emailOrUsername, 
     password 
   });
 }

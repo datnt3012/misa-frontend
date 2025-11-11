@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import UserProfileDialog from "@/components/UserProfileDialog";
 import { authApi } from "@/api/auth.api";
+import { usersApi } from "@/api/users.api";
 import { User as UserType } from "@/types/auth";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
@@ -42,7 +44,8 @@ const Layout = ({ children }: LayoutProps) => {
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
   const location = useLocation();
-  const { user, signOut, userRole } = useAuth();
+  const { user, signOut, userRole: userRoleFromAuth } = useAuth();
+  const { userRole: userRoleFromPermissions } = usePermissions();
   const { toast } = useToast();
 
   // Fetch current user info from API
@@ -173,20 +176,48 @@ const Layout = ({ children }: LayoutProps) => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">
-                          {currentUser?.full_name || currentUser?.email || user?.email}
-                        </p>
-                        <p className="text-xs leading-none text-muted-foreground">
-                          {currentUser?.email || user?.email}
-                        </p>
-                      </div>
+                    <DropdownMenuLabel className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {(() => {
+                          // Get firstName and lastName from currentUser or user
+                          const firstName = (currentUser as any)?.firstName || (user as any)?.firstName || '';
+                          const lastName = (currentUser as any)?.lastName || (user as any)?.lastName || '';
+                          
+                          // If we have firstName or lastName, display them
+                          if (firstName || lastName) {
+                            return `${firstName} ${lastName}`.trim();
+                          }
+                          
+                          // Fallback to email, never show ID
+                          return currentUser?.email || user?.email || 'Người dùng';
+                        })()}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {currentUser?.email || user?.email || ''}
+                      </p>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1.5">
                       <Badge variant="secondary" className="text-xs">
-                        {userRole}
+                        {(() => {
+                          // Priority 1: Get role name from usePermissions hook (same as PermissionGuard)
+                          if (userRoleFromPermissions?.name) {
+                            return userRoleFromPermissions.name;
+                          }
+                          
+                          // Priority 2: Get role name from currentUser or user object
+                          const roleFromUser = (currentUser as any)?.role?.name || (user as any)?.role?.name;
+                          if (roleFromUser) return roleFromUser;
+                          
+                          // Priority 3: Check if userRoleFromAuth is a name (not UUID)
+                          if (userRoleFromAuth) {
+                            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userRoleFromAuth);
+                            if (!isUUID) return userRoleFromAuth;
+                          }
+                          
+                          // Fallback
+                          return 'Chưa phân quyền';
+                        })()}
                       </Badge>
                     </div>
                     <DropdownMenuSeparator />

@@ -42,7 +42,12 @@ export function getErrorMessage(error: any, fallbackMessage: string = 'Có lỗi
     
     // Check for validation errors
     if (data.errors && Array.isArray(data.errors)) {
-      return data.errors.map((err: any) => err.message || err).join(', ');
+      return data.errors.map((err: any) => err.message || err).join('\n');
+    }
+    
+    // Check if message is an array (validation errors from backend)
+    if (Array.isArray(data.message)) {
+      return data.message.join('\n');
     }
   }
 

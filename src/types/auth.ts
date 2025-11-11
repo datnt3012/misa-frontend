@@ -18,7 +18,7 @@ export type UserRole =
   | 'shipper';
 
 export interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
 }
 

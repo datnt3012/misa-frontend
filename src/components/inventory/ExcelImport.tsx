@@ -424,7 +424,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       
       if (error?.response?.data?.message) {
         if (Array.isArray(error.response.data.message)) {
-          errorMessage = error.response.data.message.join(', ');
+          errorMessage = error.response.data.message.join('\n');
         } else {
           errorMessage = error.response.data.message;
         }
