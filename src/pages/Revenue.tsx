@@ -1347,6 +1347,7 @@ function RevenueContent() {
 }
 
 export default function Revenue() {
+  // Revenue page requires REVENUE_VIEW permission only
   return (
     <PermissionGuard requiredPermissions={['REVENUE_VIEW']}>
       <RevenueContent />

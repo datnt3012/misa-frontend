@@ -1,7 +1,8 @@
 import { useAuth } from './useAuth';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usersApi } from '@/api/users.api';
 import { authApi } from '@/api/auth.api';
+import { getPermissionDisplayName as getPermissionNameFromCache, initializePermissionNames } from '@/utils/permissionNames';
 
 interface Permission {
   id: string;
@@ -26,6 +27,8 @@ export function usePermissions() {
   const [hasFetched, setHasFetched] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [lastError, setLastError] = useState<Error | null>(null);
+  const [permissionNamesLoaded, setPermissionNamesLoaded] = useState(false);
+  const translationsLoadStarted = useRef<string | null>(null);
 
   // Map roleId to role name (fallback when API doesn't return role info)
   const getRoleNameFromId = (roleId: string): string | null => {
@@ -155,6 +158,74 @@ export function usePermissions() {
     ];
   };
 
+  // Initialize permission names cache (shared with permissionMessageConverter)
+  // Load after user role is fetched to ensure user is authenticated
+  // This avoids 403 errors when trying to access /permissions endpoint
+  useEffect(() => {
+    // Only load when user is authenticated and user role has been fetched
+    // Don't check loading state as it might create a loop
+    if (!user || authLoading || !userRole) {
+      // If user logs out, reset permission names loaded state
+      if (!user && !authLoading) {
+        setPermissionNamesLoaded(false);
+      }
+      return;
+    }
+
+    // Try to load all permissions from /permissions endpoint to supplement cache
+    // Permission names from user role are already in cache (populated in fetchUserRole)
+    // This will merge with existing cache to get all permissions (not just user's permissions)
+    const loadAllPermissionNames = async () => {
+      try {
+        console.log('🔄 Loading translations from /public/translations endpoint...');
+        await initializePermissionNames();
+        
+        // Check if translations were loaded successfully
+        const { areTranslationsLoaded } = await import('@/utils/translations');
+        const { arePermissionsLoaded } = await import('@/utils/permissionNames');
+        
+        if (areTranslationsLoaded() || arePermissionsLoaded()) {
+          setPermissionNamesLoaded(true);
+          console.log('✅ Translations/permissions loaded successfully');
+        } else {
+          console.warn('⚠ Translations not loaded, but marking as ready to avoid blocking UI');
+          setPermissionNamesLoaded(true);
+        }
+      } catch (error: any) {
+        console.error('❌ Failed to load translations:', error);
+        
+        // Check if we have any permissions in cache (from user role or translations)
+        const { arePermissionsLoaded } = await import('@/utils/permissionNames');
+        const { areTranslationsLoaded } = await import('@/utils/translations');
+        
+        if (areTranslationsLoaded() || arePermissionsLoaded()) {
+          console.log('✅ Using existing translations/permissions cache');
+        } else {
+          console.warn('⚠ No translations/permissions available. Error messages will show formatted codes.');
+        }
+        
+        // Always set to true to avoid blocking UI
+        // Even without translations, we can still format codes for better UX
+        setPermissionNamesLoaded(true);
+      }
+    };
+    
+    // Always try to load translations from /public/translations
+    // Even if we have permissions from user role, we need ALL permissions for error messages
+    // Use a ref to track if we've already initiated the load for this userRole to avoid duplicate calls
+    const userRoleId = userRole?.id;
+    const loadKey = `${user?.id}-${userRoleId}`;
+    
+    // Always try to load translations - use ref to prevent duplicate calls for same user/role
+    if (translationsLoadStarted.current !== loadKey) {
+      translationsLoadStarted.current = loadKey;
+      console.log('🚀 Starting translations load for user/role:', loadKey);
+      loadAllPermissionNames();
+    } else {
+      console.log('⏳ Translations load already started for:', loadKey);
+    }
+  }, [user?.id, authLoading, userRole?.id]);
+
   // Reset retry count when user changes
   useEffect(() => {
     setRetryCount(0);
@@ -200,6 +271,17 @@ export function usePermissions() {
             // Extract permission codes from the permissions array
             const permissionCodes = userData.role.permissions?.map((perm: any) => perm.code) || [];
             
+            // Update permission name cache from user role permissions FIRST
+            // This ensures we have permission names even if /permissions endpoint is not accessible
+            if (userData.role.permissions && Array.isArray(userData.role.permissions)) {
+              // Update permission name cache with permissions from user role
+              // This ensures we have permission names even if user doesn't have access to /permissions endpoint
+              const { updatePermissionNameCacheFromRole } = await import('@/utils/permissionNames');
+              updatePermissionNameCacheFromRole(userData.role.permissions);
+              
+              // Don't mark as loaded yet - we still need to load translations from /public/translations
+              // to get ALL permission names, not just the ones from user role
+            }
             
             setUserRole(userData.role);
             setPermissions(permissionCodes);
@@ -363,12 +445,13 @@ export function usePermissions() {
           // Only apply fallback logic for page access, not for action access
           if (isPageAccess) {
             // Check if module has VIEW action available
-            const hasViewAction = findRelatedPermissions(module, 'view').length > 0;
+            const viewPermissions = findRelatedPermissions(module, 'view');
+            const hasViewAction = viewPermissions.length > 0;
             
             if (hasViewAction) {
-              // Module has VIEW action (like products) - require VIEW for page access
+              // Module has VIEW action (like products, revenue) - require VIEW for page access
               if (action === 'view') {
-                // For view action, try READ as fallback only if no VIEW found
+                // For view action, try READ as fallback if no VIEW found
                 const readPermissions = findRelatedPermissions(module, 'read');
                 if (readPermissions.length > 0) {
                   return readPermissions;
@@ -386,12 +469,22 @@ export function usePermissions() {
             }
           }
           // For action access (API calls), don't apply any fallback - require exact permission
+        } else {
+          // If we found VIEW permissions, also include READ permissions as fallback for page access
+          // This allows users with REVENUE_READ to access revenue page even if REVENUE_VIEW is required
+          if (isPageAccess && action === 'view') {
+            const readPermissions = findRelatedPermissions(module, 'read');
+            // Merge VIEW and READ permissions, removing duplicates
+            const allPermissions = [...new Set([...mappedPermissions, ...readPermissions])];
+            return allPermissions;
+          }
         }
         
         return mappedPermissions;
       }
       
-      // Fallback: return the permission as-is
+      // For direct permission codes, return as-is (no automatic fallback)
+      // Revenue page specifically requires REVENUE_VIEW, not REVENUE_READ
       return [permission];
     };
     
@@ -444,94 +537,11 @@ export function usePermissions() {
   };
 
   // Convert permission codes to more readable names
+  // Uses shared permission names cache from backend API (same as RolePermissionsManager and permissionMessageConverter)
+  // No hardcoded mapping to avoid name discrepancies
   const getPermissionDisplayName = (permissionCode: string): string => {
-    const permissionMap: Record<string, string> = {
-      'USERS_VIEW': 'Xem người dùng',
-      'USERS_READ': 'Đọc người dùng',
-      'USERS_CREATE': 'Tạo người dùng',
-      'USERS_UPDATE': 'Cập nhật người dùng',
-      'USERS_DELETE': 'Xóa người dùng',
-      'ROLES_VIEW': 'Xem vai trò',
-      'ROLES_READ': 'Đọc vai trò',
-      'ROLES_CREATE': 'Tạo vai trò',
-      'ROLES_UPDATE': 'Cập nhật vai trò',
-      'ROLES_DELETE': 'Xóa vai trò',
-      'PERMISSIONS_VIEW': 'Xem quyền',
-      'PERMISSIONS_READ': 'Đọc quyền',
-      'PERMISSIONS_CREATE': 'Tạo quyền',
-      'PERMISSIONS_UPDATE': 'Cập nhật quyền',
-      'PERMISSIONS_DELETE': 'Xóa quyền',
-      'PRODUCTS_VIEW': 'Xem sản phẩm',
-      'PRODUCTS_READ': 'Đọc sản phẩm',
-      'PRODUCTS_CREATE': 'Tạo sản phẩm',
-      'PRODUCTS_UPDATE': 'Cập nhật sản phẩm',
-      'PRODUCTS_DELETE': 'Xóa sản phẩm',
-      'CATEGORIES_VIEW': 'Xem danh mục',
-      'CATEGORIES_READ': 'Đọc danh mục',
-      'CATEGORIES_CREATE': 'Tạo danh mục',
-      'CATEGORIES_UPDATE': 'Cập nhật danh mục',
-      'CATEGORIES_DELETE': 'Xóa danh mục',
-      'INVENTORY_VIEW': 'Xem kho',
-      'INVENTORY_READ': 'Đọc kho',
-      'INVENTORY_CREATE': 'Tạo kho',
-      'INVENTORY_UPDATE': 'Cập nhật kho',
-      'INVENTORY_DELETE': 'Xóa kho',
-      'STOCK_LEVELS_VIEW': 'Xem mức tồn kho',
-      'STOCK_LEVELS_READ': 'Đọc mức tồn kho',
-      'STOCK_LEVELS_CREATE': 'Tạo mức tồn kho',
-      'STOCK_LEVELS_UPDATE': 'Cập nhật mức tồn kho',
-      'STOCK_LEVELS_DELETE': 'Xóa mức tồn kho',
-      'WAREHOUSES_VIEW': 'Xem kho hàng',
-      'WAREHOUSES_READ': 'Đọc kho hàng',
-      'WAREHOUSES_CREATE': 'Tạo kho hàng',
-      'WAREHOUSES_UPDATE': 'Cập nhật kho hàng',
-      'WAREHOUSES_DELETE': 'Xóa kho hàng',
-      'WAREHOUSE_RECEIPTS_VIEW': 'Xem phiếu nhập kho',
-      'WAREHOUSE_RECEIPTS_READ': 'Đọc phiếu nhập kho',
-      'WAREHOUSE_RECEIPTS_CREATE': 'Tạo phiếu nhập kho',
-      'WAREHOUSE_RECEIPTS_UPDATE': 'Cập nhật phiếu nhập kho',
-      'WAREHOUSE_RECEIPTS_DELETE': 'Xóa phiếu nhập kho',
-      'EXPORT_SLIPS_VIEW': 'Xem phiếu xuất kho',
-      'ORDERS_VIEW': 'Xem đơn hàng',
-      'ORDERS_READ': 'Đọc đơn hàng',
-      'ORDERS_CREATE': 'Tạo đơn hàng',
-      'ORDERS_UPDATE': 'Cập nhật đơn hàng',
-      'ORDERS_DELETE': 'Xóa đơn hàng',
-      'CUSTOMERS_VIEW': 'Xem khách hàng',
-      'CUSTOMERS_READ': 'Đọc khách hàng',
-      'CUSTOMERS_CREATE': 'Tạo khách hàng',
-      'CUSTOMERS_UPDATE': 'Cập nhật khách hàng',
-      'CUSTOMERS_DELETE': 'Xóa khách hàng',
-      'SUPPLIERS_VIEW': 'Xem nhà cung cấp',
-      'SUPPLIERS_READ': 'Đọc nhà cung cấp',
-      'SUPPLIERS_CREATE': 'Tạo nhà cung cấp',
-      'SUPPLIERS_UPDATE': 'Cập nhật nhà cung cấp',
-      'SUPPLIERS_DELETE': 'Xóa nhà cung cấp',
-      'DASHBOARD_VIEW': 'Xem trang chủ',
-      'SETTINGS_VIEW': 'Xem cài đặt',
-      'SETTINGS_READ': 'Đọc cài đặt',
-      'SETTINGS_CREATE': 'Tạo cài đặt',
-      'SETTINGS_UPDATE': 'Cập nhật cài đặt',
-      'SETTINGS_DELETE': 'Xóa cài đặt',
-      'REPORTS_VIEW': 'Xem báo cáo',
-      'REPORTS_READ': 'Đọc báo cáo',
-      'REPORTS_CREATE': 'Tạo báo cáo',
-      'REPORTS_UPDATE': 'Cập nhật báo cáo',
-      'REPORTS_DELETE': 'Xóa báo cáo',
-      'REVENUE_VIEW': 'Xem doanh thu',
-      'REVENUE_READ': 'Đọc doanh thu',
-      'REVENUE_CREATE': 'Tạo doanh thu',
-      'REVENUE_UPDATE': 'Cập nhật doanh thu',
-      'REVENUE_DELETE': 'Xóa doanh thu',
-      'REVENUE_PROFIT_VIEW': 'Xem lợi nhuận',
-      'NOTIFICATIONS_VIEW': 'Xem thông báo',
-      'NOTIFICATIONS_READ': 'Đọc thông báo',
-      'NOTIFICATIONS_CREATE': 'Tạo thông báo',
-      'NOTIFICATIONS_UPDATE': 'Cập nhật thông báo',
-      'NOTIFICATIONS_DELETE': 'Xóa thông báo'
-    };
-    
-    return permissionMap[permissionCode] || permissionCode;
+    // Use shared permission name cache
+    return getPermissionNameFromCache(permissionCode);
   };
 
   // Get error message for permission check
@@ -545,13 +555,16 @@ export function usePermissions() {
     }
     
     // Check if user has the required permissions
+    // Note: For revenue page, we only check REVENUE_VIEW, not REVENUE_READ
     const hasAccess = requireAll 
-      ? permissionList.every(permission => hasPermission(permission))
-      : permissionList.some(permission => hasPermission(permission));
+      ? permissionList.every(permission => hasPermission(permission, false)) // No fallback for revenue
+      : permissionList.some(permission => hasPermission(permission, false)); // No fallback for revenue
     
     if (!hasAccess) {
       // Convert permission codes to readable names
-      const permissionNames = permissionList.map(getPermissionDisplayName);
+      // This uses permission name cache from /permissions endpoint (same as settings page)
+      const permissionNames = permissionList.map(code => getPermissionDisplayName(code));
+      
       if (requireAll) {
         return `Bạn cần tất cả các quyền sau: ${permissionNames.join(', ')}`;
       } else {
@@ -572,6 +585,7 @@ export function usePermissions() {
     hasActionPermission,
     hasAnyActionPermission,
     getPermissionErrorMessage,
+    permissionNamesLoaded,
     isAdmin: userRole?.code === 'ADMIN' || userRole?.name?.toLowerCase().includes('admin'),
   };
 }

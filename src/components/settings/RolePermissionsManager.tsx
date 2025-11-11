@@ -122,6 +122,18 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       ]);
       setRoles(rolesData);
       setPermissions(permissionsData);
+      
+      // Update global permission name cache with all permissions from backend
+      // This ensures error messages can display translated permission names
+      if (permissionsData && Array.isArray(permissionsData) && permissionsData.length > 0) {
+        try {
+          const { updatePermissionNameCacheFromRole } = await import('@/utils/permissionNames');
+          updatePermissionNameCacheFromRole(permissionsData);
+          console.log('✅ Updated global permission name cache from RolePermissionsManager');
+        } catch (e) {
+          console.warn('Could not update permission name cache:', e);
+        }
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast({

@@ -17,9 +17,11 @@ export function PermissionGuard({
   showFallback = true,
   requireAll = false
 }: PermissionGuardProps) {
-  const { hasAnyPermission, hasAllPermissions, loading, userRole, getPermissionErrorMessage } = usePermissions();
+  const { hasAnyPermission, hasAllPermissions, loading, userRole, getPermissionErrorMessage, permissionNamesLoaded } = usePermissions();
 
-  if (loading) {
+  // Wait for both user permissions AND permission names to load
+  // This ensures permission names are available when displaying error messages
+  if (loading || !permissionNamesLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
