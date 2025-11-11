@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { getOrderStatusConfig } from "@/constants/order-status.constants";
 
 interface OrderViewDialogProps {
   order: any;
@@ -290,17 +291,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-      processing: { label: 'Đang xử lý', variant: 'secondary' },
-      shipped: { label: 'Đã xuất kho', variant: 'default' },
-      completed: { label: 'Hoàn thành', variant: 'default' },
-      cancelled: { label: 'Đã hủy', variant: 'destructive' },
-      pending: { label: 'Chờ xử lý', variant: 'secondary' },
-      confirmed: { label: 'Đã xác nhận', variant: 'default' },
-      delivered: { label: 'Đã giao', variant: 'default' },
-    };
-
-    const config = statusConfig[status] || { label: status, variant: 'outline' };
+    const config = getOrderStatusConfig(status);
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 

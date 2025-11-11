@@ -25,6 +25,7 @@ import { orderApi } from "@/api/order.api";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getOrderStatusConfig } from "@/constants/order-status.constants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Dialog,
@@ -415,16 +416,8 @@ const CustomersContent = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap = {
-      'pending': { variant: 'secondary' as const, text: 'Chờ xử lý' },
-      'confirmed': { variant: 'default' as const, text: 'Đã xác nhận' },
-      'shipping': { variant: 'default' as const, text: 'Đang giao' },
-      'delivered': { variant: 'default' as const, text: 'Đã giao' },
-      'cancelled': { variant: 'destructive' as const, text: 'Đã hủy' }
-    };
-    
-    const statusInfo = statusMap[status as keyof typeof statusMap] || { variant: 'secondary' as const, text: status };
-    return <Badge variant={statusInfo.variant}>{statusInfo.text}</Badge>;
+    const config = getOrderStatusConfig(status);
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const filteredCustomers = customers.filter(customer => {

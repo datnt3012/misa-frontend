@@ -27,6 +27,7 @@ import { dashboardApi } from '@/api/dashboard.api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from '@/constants/order-status.constants';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', {
@@ -552,13 +553,8 @@ function RevenueContent() {
     }
     
     if (selectedOrderStatus !== 'all') {
-      const statusMap: { [key: string]: string } = {
-        'pending': 'Chờ xử lý',
-        'processing': 'Đang xử lý',
-        'completed': 'Hoàn thành',
-        'cancelled': 'Đã hủy'
-      };
-      filterDescriptions.push(`Trạng thái: ${statusMap[selectedOrderStatus] || selectedOrderStatus}`);
+      const config = getOrderStatusConfig(selectedOrderStatus);
+      filterDescriptions.push(`Trạng thái: ${config.label}`);
     }
     
     if (valueFrom !== "0" || valueTo !== "999,999,999") {
@@ -871,10 +867,11 @@ function RevenueContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                      <SelectItem value="pending">Chờ xử lý</SelectItem>
-                      <SelectItem value="processing">Đang xử lý</SelectItem>
-                      <SelectItem value="completed">Hoàn thành</SelectItem>
-                      <SelectItem value="cancelled">Đã hủy</SelectItem>
+                      {ORDER_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {ORDER_STATUS_LABELS_VI[status]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1244,16 +1241,10 @@ function RevenueContent() {
                     };
                     
                     const getStatusBadge = (status: string) => {
-                      const statusMap: { [key: string]: { label: string; variant: "default" | "secondary" | "destructive" | "outline" } } = {
-                        'pending': { label: 'Chờ xử lý', variant: 'secondary' },
-                        'processing': { label: 'Đang xử lý', variant: 'default' },
-                        'completed': { label: 'Hoàn thành', variant: 'outline' },
-                        'cancelled': { label: 'Đã hủy', variant: 'destructive' }
-                      };
-                      const statusInfo = statusMap[status] || { label: status, variant: 'default' };
+                      const config = getOrderStatusConfig(status);
                       return (
-                        <Badge variant={statusInfo.variant}>
-                          {statusInfo.label}
+                        <Badge variant={config.variant}>
+                          {config.label}
                         </Badge>
                       );
                     };

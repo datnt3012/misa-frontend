@@ -14,6 +14,8 @@ import { vi } from "date-fns/locale";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock } from "lucide-react";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
+import { getOrderStatusConfig } from "@/constants/order-status.constants";
+import { Badge } from "@/components/ui/badge";
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('vi-VN', {
@@ -188,17 +190,13 @@ const DashboardContent = () => {
       
       // Set order status data - need to format to array
       // Ensure orderStatusData is an object before processing
-      const statusMap: { [key: string]: string } = {
-        'pending': 'Chờ xử lý',
-        'processing': 'Đang xử lý',
-        'delivered': 'Đã giao',
-        'completed': 'Hoàn thành',
-        'cancelled': 'Đã hủy',
-      };
-      const orderStatusArray = Object.entries(orderStatusData || {}).map(([key, value]) => ({
-        trangThai: statusMap[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1),
-        soLuong: value,
-      }));
+      const orderStatusArray = Object.entries(orderStatusData || {}).map(([key, value]) => {
+        const config = getOrderStatusConfig(key.toLowerCase());
+        return {
+          trangThai: config.label,
+          soLuong: value,
+        };
+      });
       setOrderStatus(orderStatusArray);
       
       // Set inventory data
@@ -1080,9 +1078,9 @@ const DashboardContent = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-medium">{o.order_number}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : o.status === 'processing' ? 'bg-blue-100 text-blue-700' : o.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
-                        >{o.status === 'pending' ? 'Chờ xử lý' : o.status === 'processing' ? 'Đang giao' : o.status === 'completed' ? 'Hoàn thành' : o.status}
-                        </span>
+                        <Badge variant={getOrderStatusConfig(o.status).variant}>
+                          {getOrderStatusConfig(o.status).label}
+                        </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
                     </div>

@@ -16,6 +16,7 @@ import { productApi } from "@/api/product.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PaymentDialog } from '@/components/PaymentDialog';
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
 interface OrderDetailDialogProps {
   order: any;
@@ -356,19 +357,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; variant: any }> = {
-      'pending': { label: 'Chờ xử lý', variant: 'secondary' },
-      'confirmed': { label: 'Đã xác nhận', variant: 'default' },
-      'processing': { label: 'Đang xử lý', variant: 'default' },
-      'picked': { label: 'Đã lấy hàng', variant: 'default' },
-      'handover': { label: 'Bàn giao ĐVVC', variant: 'default' },
-      'delivered': { label: 'Đã giao hàng', variant: 'default' },
-      'completed': { label: 'Hoàn thành', variant: 'default' },
-      'cancelled': { label: 'Đã hủy', variant: 'destructive' },
-    };
-    
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+    const config = getOrderStatusConfig(status);
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const getPaymentStatusBadge = (status: string) => {
@@ -861,14 +851,11 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                      </div>
                    </SelectTrigger>
                    <SelectContent>
-                     <SelectItem value="pending">Chờ xử lý</SelectItem>
-                     <SelectItem value="confirmed">Đã xác nhận</SelectItem>
-                     <SelectItem value="processing">Đang xử lý</SelectItem>
-                     <SelectItem value="picked">Đã lấy hàng</SelectItem>
-                     <SelectItem value="shipped">Đã giao</SelectItem>
-                     <SelectItem value="delivered">Đã nhận</SelectItem>
-                     <SelectItem value="cancelled">Đã hủy</SelectItem>
-                     <SelectItem value="completed">Đã hoàn thành</SelectItem>
+                     {ORDER_STATUSES.map((status) => (
+                       <SelectItem key={status} value={status}>
+                         {ORDER_STATUS_LABELS_VI[status]}
+                       </SelectItem>
+                     ))}
                    </SelectContent>
                  </Select>
                </div>

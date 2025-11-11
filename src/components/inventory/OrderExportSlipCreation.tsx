@@ -16,6 +16,7 @@ import { Package, Plus, Search, ShoppingCart, CheckCircle, Clock, Truck, Bell } 
 import { orderApi, type Order, type OrderItem } from "@/api/order.api";
 import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.api";
 import { Loading } from "@/components/ui/loading";
+import { getOrderStatusConfig } from "@/constants/order-status.constants";
 
 interface OrderExportSlipCreationProps {
   onExportSlipCreated?: () => void;
@@ -228,18 +229,8 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'processing':
-        return <Badge variant="default" className="bg-blue-100 text-blue-800">Đang xử lý</Badge>;
-      case 'shipped':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Đã gửi</Badge>;
-      case 'delivered':
-        return <Badge variant="default" className="bg-gray-100 text-gray-800">Đã giao</Badge>;
-      case 'cancelled':
-        return <Badge variant="destructive">Đã hủy</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+    const config = getOrderStatusConfig(status);
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const totalSelectedItems = selectedItems.filter(item => item.selected).length;

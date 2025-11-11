@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { getErrorMessage } from "@/lib/error-utils";
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
 
 const OrdersContent: React.FC = () => {
@@ -333,19 +334,8 @@ const OrdersContent: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; variant: any }> = {
-      'pending': { label: 'Chờ xử lý', variant: 'secondary' },
-      'confirmed': { label: 'Đã xác nhận', variant: 'default' },
-      'processing': { label: 'Đang xử lý', variant: 'default' },
-      'picked': { label: 'Đã lấy hàng', variant: 'default' },
-      'handover': { label: 'Bàn giao ĐVVC', variant: 'default' },
-      'delivered': { label: 'Đã giao hàng', variant: 'default' },
-      'completed': { label: 'Hoàn thành', variant: 'default' },
-      'cancelled': { label: 'Đã hủy', variant: 'destructive' },
-    };
-    
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+    const config = getOrderStatusConfig(status);
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   // Use summary from API if available, otherwise calculate from orders
@@ -781,14 +771,11 @@ const OrdersContent: React.FC = () => {
                                 </div>
                               </SelectTrigger>
                               <SelectContent className="min-w-[128px] sm:min-w-[144px]">
-                                <SelectItem value="pending">Chờ xử lý</SelectItem>
-                                <SelectItem value="confirmed">Đã xác nhận</SelectItem>
-                                <SelectItem value="processing">Đang xử lý</SelectItem>
-                                <SelectItem value="picked">Đã lấy hàng</SelectItem>
-                                <SelectItem value="shipped">Đã giao</SelectItem>
-                                <SelectItem value="delivered">Đã nhận</SelectItem>
-                                <SelectItem value="cancelled">Đã hủy</SelectItem>
-                                <SelectItem value="completed">Đã hoàn thành</SelectItem>
+                                {ORDER_STATUSES.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {ORDER_STATUS_LABELS_VI[status]}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </TableCell>
