@@ -18,6 +18,7 @@ const convertFrontendPermissionToBackend = (frontendCode: string): string => {
 export interface User {
   id: string;
   email: string;
+  username?: string;
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
@@ -50,6 +51,7 @@ export interface CreateUserRequest {
 
 export interface UpdateUserRequest {
   email?: string;
+  username?: string;
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
@@ -105,6 +107,7 @@ export const usersApi = {
     const normalize = (row: any): User => ({
       id: row.id,
       email: row.email ?? '',
+      username: row.username ?? row.user_name ?? undefined,
       firstName: row.firstName ?? row.first_name,
       lastName: row.lastName ?? row.last_name,
       phoneNumber: row.phoneNumber ?? row.phone_number,
@@ -149,6 +152,7 @@ export const usersApi = {
     const normalize = (row: any): User => ({
       id: row.id,
       email: row.email ?? '',
+      username: row.username ?? row.user_name ?? undefined,
       firstName: row.firstName ?? row.first_name,
       lastName: row.lastName ?? row.last_name,
       phoneNumber: row.phoneNumber ?? row.phone_number,
@@ -222,6 +226,7 @@ export const usersApi = {
     return {
       id: data.id,
       email: data.email ?? '',
+      username: data.username ?? data.user_name ?? undefined,
       firstName: data.firstName ?? data.first_name,
       lastName: data.lastName ?? data.last_name,
       phoneNumber: data.phoneNumber ?? data.phone_number,
@@ -249,6 +254,7 @@ export const usersApi = {
     return {
       id: data.id,
       email: data.email ?? '',
+      username: data.username ?? data.user_name ?? undefined,
       firstName: data.firstName ?? data.first_name,
       lastName: data.lastName ?? data.last_name,
       phoneNumber: data.phoneNumber ?? data.phone_number,

@@ -55,25 +55,80 @@ export const authApi = {
   updateProfile: async (userData: Partial<UpdateUserRequest>): Promise<User> => {
     // Get current user info first, then update via users API
     try {
-      const response = await api.get<any>(API_ENDPOINTS.AUTH.ME);
+      const meResponse = await api.get<any>(API_ENDPOINTS.AUTH.ME);
       
-      // Handle different response structures
-      let currentUser;
-      if (response.data) {
-        currentUser = response.data;
-      } else if (response.id) {
-        currentUser = response;
+      // Handle different response structures from /auth/me
+      // api.get() already unwraps response.data, so we need to check for nested structure
+      let currentUser: any;
+      if (meResponse && typeof meResponse === 'object') {
+        // Case 1: Response has nested data property
+        if ('data' in meResponse) {
+          currentUser = meResponse.data;
+        }
+        // Case 2: Response has code and data (structured response)
+        else if ('code' in meResponse && 'data' in meResponse) {
+          currentUser = meResponse.data;
+        }
+        // Case 3: Response is the user object directly (most common)
+        else if ('id' in meResponse || 'email' in meResponse) {
+          currentUser = meResponse;
+        }
+        // Case 4: Fallback
+        else {
+          currentUser = meResponse;
+        }
       } else {
-        currentUser = response;
+        currentUser = meResponse;
       }
       
-      const userId = currentUser.id || currentUser.user_id || currentUser.sub;
+      const userId = currentUser?.id || currentUser?.user_id || currentUser?.sub;
       
       if (!userId) {
         throw new Error('User ID not found in response');
       }
       
-      return api.patch<User>(API_ENDPOINTS.USERS.UPDATE(userId), userData);
+      // Update user via users API
+      // The response from updateUser should include the updated username
+      const updateResponse = await api.patch<any>(API_ENDPOINTS.USERS.UPDATE(userId), userData);
+      
+      // Handle different response structures from update API
+      // api.patch() already unwraps response.data
+      let updatedUser: any;
+      if (updateResponse && typeof updateResponse === 'object') {
+        // Case 1: Response has nested data property
+        if ('data' in updateResponse) {
+          updatedUser = updateResponse.data;
+        }
+        // Case 2: Response has code and data (structured response)
+        else if ('code' in updateResponse && 'data' in updateResponse) {
+          updatedUser = updateResponse.data;
+        }
+        // Case 3: Response is the user object directly (most common)
+        else if ('id' in updateResponse || 'email' in updateResponse) {
+          updatedUser = updateResponse;
+        }
+        // Case 4: Fallback
+        else {
+          updatedUser = updateResponse;
+        }
+      } else {
+        updatedUser = updateResponse;
+      }
+      
+      // Normalize the response to ensure username is included
+      return {
+        id: updatedUser.id || userId,
+        email: updatedUser.email || currentUser.email || '',
+        username: updatedUser.username || updatedUser.user_name || userData.username || currentUser.username || currentUser.user_name || undefined,
+        firstName: updatedUser.firstName || updatedUser.first_name || userData.firstName || currentUser.firstName || currentUser.first_name || undefined,
+        lastName: updatedUser.lastName || updatedUser.last_name || userData.lastName || currentUser.lastName || currentUser.last_name || undefined,
+        phoneNumber: updatedUser.phoneNumber || updatedUser.phone_number || userData.phoneNumber || currentUser.phoneNumber || currentUser.phone_number || undefined,
+        address: updatedUser.address || userData.address || currentUser.address || undefined,
+        roleId: updatedUser.roleId || updatedUser.role_id || currentUser.roleId || currentUser.role_id || '',
+        isActive: Boolean(updatedUser.isActive ?? updatedUser.is_active ?? currentUser.isActive ?? currentUser.is_active ?? true),
+        createdAt: updatedUser.createdAt || updatedUser.created_at || currentUser.createdAt || currentUser.created_at || '',
+        updatedAt: updatedUser.updatedAt || updatedUser.updated_at || currentUser.updatedAt || currentUser.updated_at || '',
+      } as User;
     } catch (error: any) {
       throw new Error('Unable to update profile: ' + (error.message || 'Unknown error'));
     }

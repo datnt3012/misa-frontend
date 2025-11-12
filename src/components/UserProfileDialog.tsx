@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { authApi } from "@/api/auth.api";
-import { User } from "@/types/auth";
 
 interface UserProfileDialogProps {
   open: boolean;
@@ -14,8 +13,6 @@ interface UserProfileDialogProps {
 }
 
 const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChange }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -29,14 +26,25 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
   const { user: currentUser, refreshUser } = useAuth();
 
   useEffect(() => {
+    if (open) {
+      // Refresh user data when dialog opens to ensure we have the latest data
+      // This is important because username might have been updated
+      refreshUser().catch(error => {
+        console.error('Error refreshing user data in dialog:', error);
+      });
+    }
+  }, [open]); // Only depend on open to avoid infinite loops
+
+  useEffect(() => {
     if (open && currentUser) {
+      // Update form data when currentUser changes
       setFormData({
         email: currentUser.email || '',
-        username: (currentUser as any).username || (currentUser as any).user_metadata?.username || '',
-        firstName: currentUser.firstName || currentUser.user_metadata?.firstName || '',
-        lastName: currentUser.lastName || currentUser.user_metadata?.lastName || '',
-        phoneNumber: (currentUser as any).phoneNumber || (currentUser as any).phone_number || '',
-        address: (currentUser as any).address || '',
+        username: currentUser.username || '',
+        firstName: currentUser.firstName || '',
+        lastName: currentUser.lastName || '',
+        phoneNumber: currentUser.phoneNumber || '',
+        address: currentUser.address || '',
       });
     }
   }, [open, currentUser]);
@@ -70,15 +78,17 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
         address: formData.address || undefined,
       };
       
-      // Thêm username nếu có
-      if (formData.username) {
-        updateData.username = formData.username;
-      }
+      // Thêm username (có thể là chuỗi rỗng để xóa username)
+      // Gửi username ngay cả khi rỗng để backend có thể xử lý
+      updateData.username = formData.username || undefined;
 
       // Gọi API cập nhật thông tin người dùng hiện tại
-      await authApi.updateProfile(updateData);
-
-      // Refresh user data to update UI
+      const updatedUserResponse = await authApi.updateProfile(updateData);
+      
+      // The updateProfile API returns the updated user data with username
+      // We need to update the global user state immediately so the UI reflects the change
+      // Refresh user data to update global state and localStorage
+      // This should fetch the updated username from the backend
       await refreshUser();
 
       toast({
@@ -86,7 +96,10 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
         description: "Đã cập nhật thông tin người dùng",
       });
 
-      onOpenChange(false);
+      // Close dialog after a short delay to ensure state is updated
+      setTimeout(() => {
+        onOpenChange(false);
+      }, 200);
     } catch (error: any) {
       console.error('Error updating user profile:', error);
       toast({
@@ -104,11 +117,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     if (currentUser) {
       setFormData({
         email: currentUser.email || '',
-        username: (currentUser as any).username || (currentUser as any).user_metadata?.username || '',
-        firstName: currentUser.firstName || currentUser.user_metadata?.firstName || '',
-        lastName: currentUser.lastName || currentUser.user_metadata?.lastName || '',
-        phoneNumber: (currentUser as any).phoneNumber || (currentUser as any).phone_number || '',
-        address: (currentUser as any).address || '',
+        username: currentUser.username || '',
+        firstName: currentUser.firstName || '',
+        lastName: currentUser.lastName || '',
+        phoneNumber: currentUser.phoneNumber || '',
+        address: currentUser.address || '',
       });
     }
     onOpenChange(false);
