@@ -335,7 +335,16 @@ const OrdersContent: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
+    const isLongLabel = status === 'delivery_failed';
+    return (
+      <Badge 
+        variant={config.variant} 
+        className={isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''}
+      >
+        {config.label}
+      </Badge>
+    );
   };
 
   // Use summary from API if available, otherwise calculate from orders

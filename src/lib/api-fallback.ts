@@ -129,7 +129,7 @@ export const mockOrders = [
     customer_name: 'Nguyễn Văn A',
     customer_phone: '0901234567',
     customer_address: '123 Đường XYZ, Quận 2, TP.HCM',
-    status: 'processing' as const,
+    status: 'pending' as const,
     order_type: 'sale' as const,
     total_amount: 30000000,
     paid_amount: 15000000,

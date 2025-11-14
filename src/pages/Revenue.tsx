@@ -269,9 +269,12 @@ function RevenueContent() {
       // status supported by API (map UI -> backend)
       if (selectedOrderStatus !== "all") {
         const statusMapToBackend: Record<string, string> = {
-          pending: 'draft',
-          processing: 'processing',
+          new: 'new',
+          pending: 'pending',
+          picking: 'picking',
+          picked: 'picked',
           delivered: 'delivered',
+          delivery_failed: 'delivery_failed',
           completed: 'completed',
           cancelled: 'cancelled',
         };
@@ -1242,8 +1245,13 @@ function RevenueContent() {
                     
                     const getStatusBadge = (status: string) => {
                       const config = getOrderStatusConfig(status);
+                      // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
+                      const isLongLabel = status === 'delivery_failed';
                       return (
-                        <Badge variant={config.variant}>
+                        <Badge 
+                          variant={config.variant}
+                          className={isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''}
+                        >
                           {config.label}
                         </Badge>
                       );

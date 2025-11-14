@@ -1,39 +1,39 @@
 // Order status constants matching backend
 export const ORDER_STATUSES = [
+  'new',
   'pending',
-  'confirmed',
-  'processing',
+  'picking',
   'picked',
-  'shipped',
   'delivered',
-  'cancelled',
+  'delivery_failed',
   'completed',
+  'cancelled',
 ] as const;
 
 export type OrderStatus = typeof ORDER_STATUSES[number];
 
 // Vietnamese labels for order statuses (matching backend ORDER_STATUS_LABELS_VI)
 export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {
+  new: 'Mới',
   pending: 'Chờ xử lý',
-  confirmed: 'Đã xác nhận',
-  processing: 'Đang xử lý',
+  picking: 'Đang lấy hàng',
   picked: 'Đã lấy hàng',
-  shipped: 'Đã giao',
-  delivered: 'Đã nhận',
+  delivered: 'Đã giao hàng',
+  delivery_failed: 'Giao hàng thất bại',
+  completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
-  completed: 'Đã hoàn thành',
 };
 
 // Badge variants for each status
 export const ORDER_STATUS_VARIANTS: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
+  new: 'secondary',
   pending: 'secondary',
-  confirmed: 'default',
-  processing: 'default',
+  picking: 'default',
   picked: 'default',
-  shipped: 'default',
   delivered: 'default',
-  cancelled: 'destructive',
+  delivery_failed: 'destructive',
   completed: 'default',
+  cancelled: 'destructive',
 };
 
 // Helper function to get status config

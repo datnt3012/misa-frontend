@@ -42,7 +42,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
   const [loading, setLoading] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('processing');
+  const [statusFilter, setStatusFilter] = useState('pending');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [orderSelectionOpen, setOrderSelectionOpen] = useState(false);
   
@@ -230,7 +230,16 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
 
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
+    const isLongLabel = status === 'delivery_failed';
+    return (
+      <Badge 
+        variant={config.variant}
+        className={isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''}
+      >
+        {config.label}
+      </Badge>
+    );
   };
 
   const totalSelectedItems = selectedItems.filter(item => item.selected).length;

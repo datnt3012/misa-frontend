@@ -35,7 +35,7 @@ export interface Order {
     districtName?: string;
     wardName?: string;
   };
-  status: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'completed';
+  status: 'new' | 'pending' | 'picking' | 'picked' | 'delivered' | 'delivery_failed' | 'completed' | 'cancelled';
   order_type: 'sale' | 'return';
   total_amount: number;
   initial_payment?: number;
@@ -180,7 +180,7 @@ export interface UpdateOrderRequest {
     districtCode?: string;
     wardCode?: string;
   };
-  status?: 'draft' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'completed';
+  status?: 'new' | 'pending' | 'picking' | 'picked' | 'delivered' | 'delivery_failed' | 'completed' | 'cancelled';
   order_type?: 'sale' | 'return';
   initialPayment?: number;
   paid_amount?: number;
@@ -370,7 +370,7 @@ export const orderApi = {
           wardName: ai.ward?.name ?? ai.wardName,
         };
       })(),
-      status: row.status ?? 'draft',
+      status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
@@ -533,7 +533,7 @@ export const orderApi = {
           wardName: ai.ward?.name ?? ai.wardName,
         };
       })(),
-      status: row.status ?? 'draft',
+      status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
@@ -655,7 +655,7 @@ export const orderApi = {
           wardName: ai.ward?.name ?? ai.wardName,
         };
       })(),
-      status: row.status ?? 'draft',
+      status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
@@ -770,7 +770,7 @@ export const orderApi = {
           wardName: ai.ward?.name,
         };
       })(),
-      status: row.status ?? 'draft',
+      status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0),

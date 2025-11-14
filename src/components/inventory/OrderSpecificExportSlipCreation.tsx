@@ -250,12 +250,20 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'processing':
-        return <Badge variant="default" className="bg-blue-100 text-blue-800">Đang xử lý</Badge>;
-      case 'shipped':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Đã gửi</Badge>;
+      case 'new':
+        return <Badge variant="secondary" className="bg-gray-100 text-gray-800">Mới</Badge>;
+      case 'pending':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Chờ xử lý</Badge>;
+      case 'picking':
+        return <Badge variant="default" className="bg-blue-100 text-blue-800">Đang lấy hàng</Badge>;
+      case 'picked':
+        return <Badge variant="default" className="bg-cyan-100 text-cyan-800">Đã lấy hàng</Badge>;
       case 'delivered':
-        return <Badge variant="default" className="bg-gray-100 text-gray-800">Đã giao</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800">Đã giao hàng</Badge>;
+      case 'delivery_failed':
+        return <Badge variant="destructive" className="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5">Giao hàng thất bại</Badge>;
+      case 'completed':
+        return <Badge variant="default" className="bg-gray-100 text-gray-800">Hoàn thành</Badge>;
       case 'cancelled':
         return <Badge variant="destructive">Đã hủy</Badge>;
       default:
