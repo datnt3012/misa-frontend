@@ -1078,9 +1078,14 @@ const DashboardContent = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-medium">{o.order_number}</span>
-                        <Badge variant={getOrderStatusConfig(o.status).variant}>
-                          {getOrderStatusConfig(o.status).label}
-                        </Badge>
+                        {(() => {
+                          const statusConfig = getOrderStatusConfig(o.status);
+                          return (
+                            <Badge variant={statusConfig.variant} className={statusConfig.className}>
+                              {statusConfig.label}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">{o.customer_name || 'Khách lẻ'} • {format(new Date(o.created_at), 'yyyy-MM-dd')}</div>
                     </div>

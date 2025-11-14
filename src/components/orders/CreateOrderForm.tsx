@@ -303,7 +303,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         contractNumber: newOrder.contract_number || undefined,
         purchaseOrderNumber: newOrder.purchase_order_number || undefined,
         note: newOrder.notes || undefined,
-        status: 'pending',
+        status: 'new',
         orderType: newOrder.order_type || 'sale',
         
         // VAT Information - removed VAT rate from UI, backend will handle

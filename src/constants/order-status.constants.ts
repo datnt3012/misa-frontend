@@ -36,13 +36,19 @@ export const ORDER_STATUS_VARIANTS: Record<OrderStatus, "default" | "secondary" 
   cancelled: 'destructive',
 };
 
+// Optional custom classes for badges (tailwind classes)
+export const ORDER_STATUS_CLASSES: Partial<Record<OrderStatus, string>> = {
+  completed: 'bg-green-100 text-green-800 border border-green-200 hover:bg-green-100 hover:text-green-800',
+};
+
 // Helper function to get status config
-export const getOrderStatusConfig = (status: string): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } => {
+export const getOrderStatusConfig = (status: string): { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string } => {
   const orderStatus = status as OrderStatus;
   if (ORDER_STATUSES.includes(orderStatus)) {
     return {
       label: ORDER_STATUS_LABELS_VI[orderStatus],
       variant: ORDER_STATUS_VARIANTS[orderStatus],
+      className: ORDER_STATUS_CLASSES[orderStatus],
     };
   }
   return {

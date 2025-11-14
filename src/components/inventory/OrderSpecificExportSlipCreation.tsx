@@ -263,7 +263,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       case 'delivery_failed':
         return <Badge variant="destructive" className="bg-red-100 text-red-800 text-[10px] px-1.5 py-0.5">Giao hàng thất bại</Badge>;
       case 'completed':
-        return <Badge variant="default" className="bg-gray-100 text-gray-800">Hoàn thành</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800 border border-green-200">Hoàn thành</Badge>;
       case 'cancelled':
         return <Badge variant="destructive">Đã hủy</Badge>;
       default:

@@ -1250,7 +1250,7 @@ function RevenueContent() {
                       return (
                         <Badge 
                           variant={config.variant}
-                          className={isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''}
+                          className={cn(config.className, isLongLabel ? 'text-[10px] px-1.5 py-0.5' : '')}
                         >
                           {config.label}
                         </Badge>

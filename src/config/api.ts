@@ -126,6 +126,7 @@ export const API_ENDPOINTS = {
     LIST: '/orders',
     CREATE: '/orders',
     UPDATE: (id: string) => `/orders/${id}`,
+    STATUS: (id: string) => `/orders/${id}/status`,
     DELETE: (id: string) => `/orders/${id}`,
     ITEMS: (id: string) => `/orders/${id}/items`,
     DETAILS: (orderId: string, itemId: string) => `/orders/${orderId}/details/${itemId}`,

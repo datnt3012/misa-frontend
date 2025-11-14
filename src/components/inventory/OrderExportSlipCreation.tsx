@@ -17,6 +17,7 @@ import { orderApi, type Order, type OrderItem } from "@/api/order.api";
 import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.api";
 import { Loading } from "@/components/ui/loading";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
+import { cn } from "@/lib/utils";
 
 interface OrderExportSlipCreationProps {
   onExportSlipCreated?: () => void;
@@ -235,7 +236,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
     return (
       <Badge 
         variant={config.variant}
-        className={isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''}
+        className={cn(config.className, isLongLabel ? 'text-[10px] px-1.5 py-0.5' : '')}
       >
         {config.label}
       </Badge>

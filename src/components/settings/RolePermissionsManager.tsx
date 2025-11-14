@@ -42,7 +42,6 @@ const getResourceIcon = (module: string) => {
     'Roles': Shield,
     'Permissions': Shield,
     'Organizations': Building2,
-    'Profiles': Users,
     'Notifications': Settings,
     'Settings': Settings,
     'Other': Shield,
@@ -78,7 +77,6 @@ const getModuleDisplayName = (module: string) => {
     'Users': 'Người dùng',
     'Roles': 'Vai trò',
     'Permissions': 'Quyền hạn',
-    'Profiles': 'Hồ sơ',
     'Notifications': 'Thông báo',
     'Settings': 'Cài đặt',
     'Other': 'Khác',
@@ -122,6 +120,14 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       ]);
       setRoles(rolesData);
       setPermissions(permissionsData);
+      
+      // Debug: Log permissions to check if ORDERS_UPDATE_STATUS exists
+      if (process.env.NODE_ENV === 'development') {
+        const ordersPermissions = permissionsData.filter((p: Permission) => p.code?.startsWith('ORDERS_'));
+        console.log('🔍 Orders permissions from backend:', ordersPermissions.map((p: Permission) => p.code));
+        const updateStatusPermission = permissionsData.find((p: Permission) => p.code === 'ORDERS_UPDATE_STATUS');
+        console.log('🔍 ORDERS_UPDATE_STATUS permission:', updateStatusPermission ? 'Found' : 'Not found');
+      }
       
       // Update global permission name cache with all permissions from backend
       // This ensures error messages can display translated permission names
@@ -384,6 +390,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         if (module === 'Organizations') {
           return;
         }
+        // Hide Profiles permissions category from UI
+        if (module === 'Profiles') {
+          return;
+        }
         if (!categories[module]) {
           categories[module] = [];
         }
@@ -428,9 +438,12 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       return formatModuleName('EXPORT_SLIPS');
     }
     
+    // Handle ORDERS permissions (including ORDERS_UPDATE_STATUS)
     // Split by underscore and take the first part as module
     const parts = code.split('_');
     if (parts.length >= 2) {
+      // For codes like ORDERS_UPDATE_STATUS, take the first part (ORDERS)
+      // For codes like ORDERS_UPDATE, also take the first part (ORDERS)
       const module = parts[0];
       // Convert to human-readable format
       return formatModuleName(module);
@@ -475,7 +488,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'ROLES': 'Roles',
       'PERMISSIONS': 'Permissions',
       'ORGANIZATIONS': 'Organizations',
-      'PROFILES': 'Profiles',
       'NOTIFICATIONS': 'Notifications',
       'SETTINGS': 'Settings',
     };

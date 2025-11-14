@@ -417,7 +417,11 @@ const CustomersContent = () => {
 
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
   };
 
   const filteredCustomers = customers.filter(customer => {

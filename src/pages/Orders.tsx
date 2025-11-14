@@ -11,6 +11,7 @@ import { orderApi } from "@/api/order.api";
 import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
@@ -65,6 +66,7 @@ const OrdersContent: React.FC = () => {
   
   const { toast } = useToast();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
 
   // Fetch orders function
   const fetchOrders = useCallback(async () => {
@@ -287,10 +289,21 @@ const OrdersContent: React.FC = () => {
     }
   };
 
-  // Handle order status update
+  // Handle order status update (requires ORDERS_UPDATE_STATUS permission)
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      const response = await orderApi.updateOrder(orderId, { status: newStatus as any });
+      // Check permission first
+      if (!hasPermission('ORDERS_UPDATE_STATUS')) {
+        toast({
+          title: "Không có quyền",
+          description: "Bạn không có quyền cập nhật trạng thái đơn hàng",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Use the new endpoint specifically for status updates
+      const response = await orderApi.updateOrderStatus(orderId, newStatus);
       
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -337,10 +350,14 @@ const OrdersContent: React.FC = () => {
     const config = getOrderStatusConfig(status);
     // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
     const isLongLabel = status === 'delivery_failed';
+    const className = cn(
+      config.className,
+      isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''
+    );
     return (
       <Badge 
         variant={config.variant} 
-        className={isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''}
+        className={className}
       >
         {config.label}
       </Badge>
@@ -773,6 +790,7 @@ const OrdersContent: React.FC = () => {
                             <Select
                               value={order.status || 'pending'}
                               onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
+                              disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
                             >
                               <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
                                 <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
@@ -1013,6 +1031,9 @@ const OrdersContent: React.FC = () => {
                     title: "Thành công",
                     description: `Đã tạo phiếu xuất kho cho đơn hàng ${selectedOrderForExport.order_number}`,
                   });
+                  // Backend cập nhật trạng thái đơn hàng sau khi tạo phiếu xuất kho,
+                  // cần refetch danh sách để hiển thị đúng trạng thái mới
+                  fetchOrders();
                 }}
               />
             )}

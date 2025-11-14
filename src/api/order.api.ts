@@ -703,6 +703,16 @@ export const orderApi = {
     }
   },
 
+  // Update order status (requires ORDERS_UPDATE_STATUS permission)
+  updateOrderStatus: async (id: string, status: string): Promise<Order> => {
+    try {
+      const response = await api.patch<Order>(API_ENDPOINTS.ORDERS.STATUS(id), { status });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Delete order
   deleteOrder: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DELETE(id));
