@@ -42,7 +42,6 @@ const getResourceIcon = (module: string) => {
     'Roles': Shield,
     'Permissions': Shield,
     'Organizations': Building2,
-    'Notifications': Settings,
     'Settings': Settings,
     'Other': Shield,
     'Export Slips': Package,
@@ -77,7 +76,6 @@ const getModuleDisplayName = (module: string) => {
     'Users': 'Người dùng',
     'Roles': 'Vai trò',
     'Permissions': 'Quyền hạn',
-    'Notifications': 'Thông báo',
     'Settings': 'Cài đặt',
     'Other': 'Khác',
   };
@@ -119,22 +117,30 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         usersApi.getPermissions()
       ]);
       setRoles(rolesData);
-      setPermissions(permissionsData);
+      
+      // Filter out notification permissions - only keep permissions that don't start with NOTIFY_ or NOTIFICATIONS_
+      const filteredPermissions = (permissionsData || []).filter(
+        (p: Permission) => {
+          const codeUpper = p.code.toUpperCase();
+          return !codeUpper.startsWith('NOTIFY_') && !codeUpper.startsWith('NOTIFICATIONS_');
+        }
+      );
+      setPermissions(filteredPermissions);
       
       // Debug: Log permissions to check if ORDERS_UPDATE_STATUS exists
       if (process.env.NODE_ENV === 'development') {
-        const ordersPermissions = permissionsData.filter((p: Permission) => p.code?.startsWith('ORDERS_'));
+        const ordersPermissions = filteredPermissions.filter((p: Permission) => p.code?.startsWith('ORDERS_'));
         console.log('🔍 Orders permissions from backend:', ordersPermissions.map((p: Permission) => p.code));
-        const updateStatusPermission = permissionsData.find((p: Permission) => p.code === 'ORDERS_UPDATE_STATUS');
+        const updateStatusPermission = filteredPermissions.find((p: Permission) => p.code === 'ORDERS_UPDATE_STATUS');
         console.log('🔍 ORDERS_UPDATE_STATUS permission:', updateStatusPermission ? 'Found' : 'Not found');
       }
       
-      // Update global permission name cache with all permissions from backend
+      // Update global permission name cache with filtered permissions (excluding notifications)
       // This ensures error messages can display translated permission names
-      if (permissionsData && Array.isArray(permissionsData) && permissionsData.length > 0) {
+      if (filteredPermissions && Array.isArray(filteredPermissions) && filteredPermissions.length > 0) {
         try {
           const { updatePermissionNameCacheFromRole } = await import('@/utils/permissionNames');
-          updatePermissionNameCacheFromRole(permissionsData);
+          updatePermissionNameCacheFromRole(filteredPermissions);
           console.log('✅ Updated global permission name cache from RolePermissionsManager');
         } catch (e) {
           console.warn('Could not update permission name cache:', e);
@@ -381,7 +387,12 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     permissions.forEach(permission => {
       if (!permission.isDeleted && permission.isActive) {
         // Extract module from permission code (MODULE_ACTION format)
-        const module = extractModuleFromCode(permission.code);
+        let module = extractModuleFromCode(permission.code);
+        
+        // Normalize module name one more time to ensure grouping
+        // This handles cases where extractModuleFromCode might return variants
+        module = normalizeModuleName(module);
+        
         // Skip hidden permissions
         if (module === 'HIDDEN') {
           return;
@@ -430,12 +441,18 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
 
   // Extract module from permission code (MODULE_ACTION format)
   const extractModuleFromCode = (code: string): string => {
-    // Handle special cases with multiple parts
-    if (code.startsWith('WAREHOUSE_RECEIPTS_')) {
+    const codeUpper = code.toUpperCase();
+    
+    // Handle special cases with multiple parts - check these FIRST before general splitting
+    // Must check longer prefixes first to avoid matching shorter ones
+    if (codeUpper.startsWith('WAREHOUSE_RECEIPTS_')) {
       return formatModuleName('WAREHOUSE_RECEIPTS');
     }
-    if (code.startsWith('EXPORT_SLIPS_')) {
+    if (codeUpper.startsWith('EXPORT_SLIPS_') || codeUpper.startsWith('EXPORT_SLIP_')) {
       return formatModuleName('EXPORT_SLIPS');
+    }
+    if (codeUpper.startsWith('STOCK_LEVELS_') || codeUpper.startsWith('STOCK_LEVEL_')) {
+      return formatModuleName('STOCK_LEVELS');
     }
     
     // Handle ORDERS permissions (including ORDERS_UPDATE_STATUS)
@@ -444,14 +461,41 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     if (parts.length >= 2) {
       // For codes like ORDERS_UPDATE_STATUS, take the first part (ORDERS)
       // For codes like ORDERS_UPDATE, also take the first part (ORDERS)
-      const module = parts[0];
+      const module = parts[0].toUpperCase();
+      
+      // Special handling: Group related permissions together
+      // EXPORT_* (not EXPORT_SLIPS_*) → Export Slips
+      if (module === 'EXPORT') {
+        return formatModuleName('EXPORT_SLIPS');
+      }
+      
+      // WAREHOUSE_* (not WAREHOUSE_RECEIPTS_*) → Warehouse Receipts
+      // But WAREHOUSES_* (plural) should stay as Warehouses
+      if (module === 'WAREHOUSE') {
+        // Check if second part is RECEIPTS (already handled above, but double-check)
+        if (parts.length >= 2 && parts[1].toUpperCase() !== 'RECEIPTS') {
+          return formatModuleName('WAREHOUSE_RECEIPTS');
+        }
+      }
+      
+      // STOCK_* (not STOCK_LEVELS_*) → Stock Levels
+      if (module === 'STOCK') {
+        return formatModuleName('STOCK_LEVELS');
+      }
+      
       // Convert to human-readable format
-      return formatModuleName(module);
+      return formatModuleName(parts[0]);
     }
     
     // If no underscore, try to extract from resource field as fallback
     const permission = permissions.find(p => p.code === code);
     if (permission?.resource) {
+      // Use normalizeModuleName first to ensure grouping
+      const normalizedResource = normalizeModuleName(permission.resource);
+      if (normalizedResource !== permission.resource) {
+        return normalizedResource;
+      }
+      // Then format normally
       return formatModuleName(permission.resource);
     }
     
@@ -459,8 +503,41 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     return 'Other';
   };
 
+  // Normalize module name to ensure variants are grouped together
+  const normalizeModuleName = (module: string): string => {
+    if (!module) return module;
+    
+    // Normalize: remove spaces, dashes, underscores, convert to uppercase for comparison
+    const normalized = module.toUpperCase().replace(/[\s\-_]/g, '');
+    
+    // STOCK related → Stock Levels
+    if (normalized === 'STOCK' || normalized.startsWith('STOCKLEVEL') || normalized.startsWith('STOCKLEVELS')) {
+      return 'Stock Levels';
+    }
+    
+    // EXPORT related → Export Slips
+    if (normalized === 'EXPORT' || normalized.startsWith('EXPORTSLIP') || normalized.startsWith('EXPORTSLIPS')) {
+      return 'Export Slips';
+    }
+    
+    // WAREHOUSE (but not WAREHOUSES) → Warehouse Receipts
+    if (normalized === 'WAREHOUSE' || (normalized.startsWith('WAREHOUSE') && !normalized.startsWith('WAREHOUSES'))) {
+      return 'Warehouse Receipts';
+    }
+    
+    return module;
+  };
+
   // Format module name to be more human-readable in English
   const formatModuleName = (module: string): string => {
+    // First normalize to group variants
+    const normalized = normalizeModuleName(module);
+    if (normalized !== module) {
+      return normalized;
+    }
+    
+    const moduleUpper = module.toUpperCase().replace(/[\s\-_]/g, '');
+    
     const moduleMap: Record<string, string> = {
       // Core Business Modules
       'DASHBOARD': 'Dashboard',
@@ -472,12 +549,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'PRODUCTS': 'Products',
       'CATEGORIES': 'Categories',
       'INVENTORY': 'Inventory',
-      'STOCK': 'Stock',
-      'STOCK_LEVELS': 'Stock Levels',
-      'WAREHOUSE': 'Warehouses',
+      'STOCKLEVELS': 'Stock Levels',
+      'STOCKLEVEL': 'Stock Levels',
+      'STOCK': 'Stock Levels',
       'WAREHOUSES': 'Warehouses',
-      'WAREHOUSE_RECEIPTS': 'Warehouse Receipts',
-      'EXPORT_SLIPS': 'Export Slips',
+      'WAREHOUSERECEIPTS': 'Warehouse Receipts',
+      'EXPORTSLIPS': 'Export Slips',
+      'EXPORTSLIP': 'Export Slips',
       
       // Reports & Analytics
       'REPORTS': 'Reports',
@@ -488,11 +566,21 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'ROLES': 'Roles',
       'PERMISSIONS': 'Permissions',
       'ORGANIZATIONS': 'Organizations',
-      'NOTIFICATIONS': 'Notifications',
       'SETTINGS': 'Settings',
     };
     
-    return moduleMap[module.toUpperCase()] || module.charAt(0).toUpperCase() + module.slice(1).toLowerCase();
+    const mapped = moduleMap[moduleUpper];
+    if (mapped) {
+      return mapped;
+    }
+    
+    // Fallback: try normalize again in case it wasn't caught
+    const normalizedAgain = normalizeModuleName(module);
+    if (normalizedAgain !== module) {
+      return normalizedAgain;
+    }
+    
+    return module.charAt(0).toUpperCase() + module.slice(1).toLowerCase();
   };
 
   // Convert backend permission to frontend format
