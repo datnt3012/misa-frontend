@@ -173,6 +173,27 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     }
   }, [selectedWard, selectedWardName, allWards, dataLoaded]);
 
+  // Track if address change is from user typing
+  const isAddressTypingRef = useRef(false);
+
+  // Update address detail when value.address changes (e.g., when customer is selected)
+  useEffect(() => {
+    // Skip if user is currently typing in the textarea
+    if (isAddressTypingRef.current) {
+      return;
+    }
+    
+    // Skip if this is an internal update from other fields (province/district/ward selection)
+    if (isInternalUpdateRef.current) {
+      return;
+    }
+    
+    // Update addressDetail when value.address is provided from parent and it's different
+    if (value?.address !== undefined && value.address !== addressDetail) {
+      setAddressDetail(value.address || '');
+    }
+  }, [value?.address, addressDetail]);
+
   // Hydrate selections when opening edit with existing values
   useEffect(() => {
     // Skip hydration if this is an internal update (user selection)
@@ -448,7 +469,14 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
           id="address-detail"
           placeholder="Số nhà, tên đường, tòa nhà, căn hộ..."
           value={addressDetail}
-          onChange={(e) => setAddressDetail(e.target.value)}
+          onChange={(e) => {
+            isAddressTypingRef.current = true;
+            setAddressDetail(e.target.value);
+            // Reset flag after a short delay to allow external updates again
+            setTimeout(() => {
+              isAddressTypingRef.current = false;
+            }, 100);
+          }}
           disabled={disabled}
           className="min-h-[60px] resize-none"
           rows={2}
