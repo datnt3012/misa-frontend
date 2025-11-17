@@ -83,13 +83,14 @@ export const warehouseReceiptsApi = {
     };
   },
 
-  getReceipts: async (params?: { page?: number; limit?: number; search?: string; warehouse_id?: string; status?: string }): Promise<{ receipts: WarehouseReceipt[]; total: number; page: number; limit: number }> => {
+  getReceipts: async (params?: { page?: number; limit?: number; search?: string; warehouse_id?: string; status?: string; type?: 'import' | 'export' | string }): Promise<{ receipts: WarehouseReceipt[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
     if (params?.search) queryParams.append('search', params.search);
     if (params?.warehouse_id) queryParams.append('warehouse_id', params.warehouse_id);
     if (params?.status) queryParams.append('status', params.status);
+    if (params?.type) queryParams.append('type', params.type);
 
     const url = queryParams.toString()
       ? `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`
@@ -157,20 +158,31 @@ export const warehouseReceiptsApi = {
         : undefined,
     });
 
+    const filterByType = (receipts: WarehouseReceipt[]) => {
+      if (params?.type) {
+        return receipts.filter((receipt) => (receipt.type || '').toLowerCase() === params.type?.toLowerCase());
+      }
+      return receipts;
+    };
+
     if (data && Array.isArray(data.rows)) {
+      const rows = data.rows.map(normalize);
+      const filteredRows = filterByType(rows);
       return {
-        receipts: data.rows.map(normalize),
-        total: Number(data.count ?? data.rows.length ?? 0),
+        receipts: filteredRows,
+        total: params?.type ? filteredRows.length : Number(data.count ?? rows.length ?? 0),
         page: Number(data.page ?? params?.page ?? 1),
-        limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
+        limit: Number(data.limit ?? params?.limit ?? rows.length ?? 0),
       };
     }
 
+    const fallbackReceipts = (response?.receipts || []).map(normalize);
+    const filteredFallback = filterByType(fallbackReceipts);
     return {
-      receipts: (response?.receipts || []).map(normalize),
-      total: Number(response?.total ?? 0),
+      receipts: filteredFallback,
+      total: params?.type ? filteredFallback.length : Number(response?.total ?? fallbackReceipts.length ?? 0),
       page: Number(response?.page ?? params?.page ?? 1),
-      limit: Number(response?.limit ?? params?.limit ?? 0),
+      limit: Number(response?.limit ?? params?.limit ?? fallbackReceipts.length ?? 0),
     };
   },
 

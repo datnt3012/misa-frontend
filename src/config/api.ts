@@ -199,7 +199,7 @@ export const API_ENDPOINTS = {
   // Notifications
   NOTIFICATIONS: {
     LIST: '/notifications',
-    MARK_READ: (id: string) => `/notifications/${id}/read`,
+    DETAIL: (id: string) => `/notifications/${id}`,
     MARK_ALL_READ: '/notifications/mark-all-read',
   },
   

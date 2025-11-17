@@ -305,12 +305,12 @@ export const usersApi = {
 
   updateRole: async (id: string, roleData: { name?: string; description?: string; permissions?: string[] }): Promise<UserRole> => {
     const backendData: any = {};
-    if (roleData.name) {
+    if (typeof roleData.name === 'string' && roleData.name.trim().length > 0) {
       backendData.name = roleData.name;
-      // Update code when name changes
-      backendData.code = roleData.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
     }
-    if (roleData.description) backendData.description = roleData.description;
+    if (typeof roleData.description === 'string') {
+      backendData.description = roleData.description;
+    }
     // Note: Permissions are managed separately, not in role update
     
     const response = await api.patch<any>(`${API_ENDPOINTS.ROLES.LIST}/${id}`, backendData);

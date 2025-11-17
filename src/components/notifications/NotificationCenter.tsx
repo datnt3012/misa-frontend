@@ -1,6 +1,5 @@
 import React from "react";
-import { Bell, Check, CheckCheck, FileText, Package } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Bell, Check, CheckCheck, FileText, Package, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,8 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/hooks/useNotifications";
 
 export const NotificationCenter = () => {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
-  const navigate = useNavigate();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, loadMore, hasMore, isLoading } = useNotifications();
 
 
   const getNotificationIcon = (type: string) => {
@@ -50,11 +48,6 @@ export const NotificationCenter = () => {
     if (!notification.isRead) {
       markAsRead(notification.id);
     }
-    
-    // Navigate to export slips page if notification is about export slip
-    if (notification.title.includes('phiếu xuất') || notification.message.includes('phiếu xuất')) {
-      navigate('/export-slips');
-    }
   };
 
   return (
@@ -75,58 +68,88 @@ export const NotificationCenter = () => {
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Thông báo</span>
-          {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={markAllAsRead}
-              className="text-xs"
-            >
-              <CheckCheck className="w-4 h-4 mr-1" />
-              Đánh dấu tất cả
-            </Button>
-          )}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={markAllAsRead}
+            className="text-xs"
+            disabled={unreadCount === 0}
+          >
+            <CheckCheck className="w-4 h-4 mr-1" />
+            Đánh dấu tất cả
+          </Button>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
         <ScrollArea className="h-96">
-          {notifications.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground">
-              Không có thông báo nào
-            </div>
-          ) : (
-            notifications.map((notification) => (
-              <DropdownMenuItem
-                key={notification.id}
-                className={`flex items-start gap-3 p-3 cursor-pointer ${
-                  !notification.isRead ? 'bg-blue-50' : ''
-                }`}
-                onClick={() => handleNotificationClick(notification)}
-              >
-                <div className="flex-shrink-0 mt-1">
-                  {getNotificationIcon(notification.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-medium truncate">
-                      {notification.title}
-                    </h4>
-                    {!notification.isRead && (
-                      <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+          <div
+            className="h-full overflow-y-auto pr-2"
+            onScroll={(event) => handleScroll(event, hasMore, isLoading, loadMore)}
+          >
+            {notifications.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground">
+                Không có thông báo nào
+              </div>
+            ) : (
+              <>
+                {notifications.map((notification) => (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    className={`flex items-start gap-3 p-3 cursor-pointer ${
+                      !notification.isRead ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    <div className="flex-shrink-0 mt-1">
+                      {getNotificationIcon(notification.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-medium truncate">
+                          {notification.title}
+                        </h4>
+                        {!notification.isRead && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {notification.message}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatTime(notification.createdAt)}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+                {hasMore && (
+                  <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Button variant="ghost" size="sm" onClick={loadMore}>
+                        Tải thêm
+                      </Button>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {notification.message}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatTime(notification.createdAt)}
-                  </p>
-                </div>
-              </DropdownMenuItem>
-            ))
-          )}
+                )}
+              </>
+            )}
+          </div>
         </ScrollArea>
       </DropdownMenuContent>
     </DropdownMenu>
   );
+};
+
+const handleScroll = (
+  event: React.UIEvent<HTMLDivElement>,
+  hasMore: boolean,
+  isLoading: boolean,
+  loadMore: () => Promise<void>
+) => {
+  const target = event.currentTarget;
+  const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
+  if (nearBottom && hasMore && !isLoading) {
+    loadMore();
+  }
 };

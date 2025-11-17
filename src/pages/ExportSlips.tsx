@@ -12,7 +12,6 @@ import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
 import { orderApi } from '@/api/order.api';
-import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -25,28 +24,10 @@ function ExportSlipsContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const { user } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
 
-  // Status update permissions based on role - Only 3 statuses
-  const canUpdateStatus = hasPermission('WAREHOUSE_RECEIPTS_UPDATE');
-  
-  // More flexible role checking
-  const isWarehouseKeeper = user?.roleId === '0d1e0d2e-7fdc-4af7-88e6-574497282798';
-  const isAdmin = user?.roleId === '48cf005a-e5ed-4859-968d-237d1c1edf85' || 
-                 user?.roleId === '1db8203f-8618-4092-9215-5854e6aaa368';
-  
-  // Fallback: if user has any update permission, allow basic status updates
-  const hasAnyUpdatePermission = canUpdateStatus || hasPermission('WAREHOUSE_RECEIPTS_UPDATE') || hasPermission('EXPORT_SLIPS_VIEW');
-  
-  console.log('User role info:', {
-    roleId: user?.roleId,
-    isWarehouseKeeper,
-    isAdmin,
-    canUpdateStatus,
-    hasAnyUpdatePermission
-  });
+  const canDirectExport = hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
 
   // Get available status options based on current status and role
   const getAvailableStatusOptions = (currentStatus: string) => {
@@ -61,8 +42,8 @@ function ExportSlipsContent() {
         label: 'Đã lấy hàng', 
         description: 'Xác nhận đã lấy hàng từ kho' 
       });
-      // Only show direct export for admin
-      if (isAdmin) {
+      // Only show direct export when user has admin-level permission
+      if (canDirectExport) {
         options.push({ 
           value: 'exported', 
           label: 'Đã xuất kho', 

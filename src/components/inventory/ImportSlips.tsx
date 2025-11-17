@@ -128,7 +128,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const loadImportSlips = async () => {
     try {
       setLoading(true);
-      const resp = await warehouseReceiptsApi.getReceipts({ page: 1, limit: 100 });
+      const resp = await warehouseReceiptsApi.getReceipts({ page: 1, limit: 100, type: 'import' });
       const list = (resp.receipts || []).map((r: any) => ({
         id: r.id,
         slip_number: r.code,
@@ -221,7 +221,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Get the specific receipt with details
       const response = await warehouseReceiptsApi.getReceipts({ 
         page: 1, 
-        limit: 1000 
+        limit: 1000,
+        type: 'import'
       });
       
       // Find the specific receipt by ID
@@ -370,7 +371,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // First, get the warehouse receipt details to check items
       const receiptDetails = await warehouseReceiptsApi.getReceipts({ 
         page: 1, 
-        limit: 1000 
+        limit: 1000,
+        type: 'import'
       });
       
       const receipt = receiptDetails.receipts.find(r => r.id === slipId);

@@ -744,22 +744,20 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                  <Label htmlFor="edit-role-name">Tên vai trò *</Label>
-                  <Input
-                    id="edit-role-name"
-                    value={editRole.name}
-                    onChange={(e) => setEditRole(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Nhập tên vai trò"
-                    minLength={2}
-                    maxLength={100}
-                  />
-                  {editRole.name && (
-                    <p className="text-sm text-muted-foreground">
-                      Mã vai trò sẽ là: <code className="bg-muted px-1 rounded">
-                        {editRole.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}
-                      </code>
-                    </p>
-                  )}
+                <Label htmlFor="edit-role-name">Tên vai trò *</Label>
+                <Input
+                  id="edit-role-name"
+                  value={editRole.name}
+                  onChange={(e) => setEditRole(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Nhập tên vai trò"
+                  minLength={2}
+                  maxLength={100}
+                />
+                {selectedRole?.code && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Mã vai trò: <code className="bg-muted px-1 rounded">{selectedRole.code}</code> (không thay đổi)
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="edit-role-description">Mô tả</Label>
