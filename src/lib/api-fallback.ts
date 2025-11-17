@@ -53,30 +53,7 @@ export const createApiFallback = <T, P extends any[] = []>(
 };
 
 // Mock data for development
-export const mockNotifications = [
-  {
-    id: '1',
-    userId: 'current-user',
-    title: 'Chào mừng!',
-    message: 'Hệ thống đã được cập nhật thành công.',
-    type: 'success' as const,
-    isRead: false,
-    isDeleted: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    userId: 'current-user',
-    title: 'Thông báo',
-    message: 'Backend đang được cấu hình. Một số tính năng có thể chưa hoạt động.',
-    type: 'info' as const,
-    isRead: false,
-    isDeleted: false,
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000).toISOString(),
-  }
-];
+export const mockNotifications = [];
 
 export const mockWarehouses = [
   {

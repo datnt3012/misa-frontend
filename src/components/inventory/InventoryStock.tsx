@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import { stockLevelsApi, StockLevel } from "@/api/stockLevels.api";
 import { ProductWithStock } from "@/api/product.api";
@@ -25,6 +25,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   warehouses,
   canViewCostPrice
 }) => {
+  const { toast } = useToast();
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -42,7 +43,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     } catch (error: any) {
       console.error('Error loading stock levels:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tải dữ liệu tồn kho';
-      toast.error(convertPermissionCodesInMessage(errorMessage));
+      toast({
+        title: "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -286,7 +291,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     const filename = `Bao_cao_ton_kho_${dateStr}_${timeStr}.xlsx`;
 
     XLSX.writeFile(wb, filename);
-    toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
+    toast({
+      title: "Thành công",
+      description: `Đã xuất ${exportData.length} sản phẩm ra file Excel`,
+    });
   };
 
   if (loading) {
