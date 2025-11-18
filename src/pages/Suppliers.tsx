@@ -279,7 +279,7 @@ const SuppliersContent: React.FC = () => {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="name">Tên nhà cung cấp *</Label>
+                <Label htmlFor="name">Tên nhà cung cấp <span className="text-red-500">*</span></Label>
                 <Input
                   id="name"
                   value={newSupplier.name}
@@ -297,7 +297,7 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="phone">Số điện thoại *</Label>
+                <Label htmlFor="phone">Số điện thoại <span className="text-red-500">*</span></Label>
                 <Input
                   id="phone"
                   value={newSupplier.phoneNumber}
@@ -306,7 +306,7 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
                 <Input
                   id="email"
                   type="email"
@@ -316,7 +316,7 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Địa chỉ</Label>
+                <Label>Địa chỉ <span className="text-red-500">*</span></Label>
                 <AddressFormSeparate
                   value={{
                     address: newSupplier.address,
@@ -490,7 +490,7 @@ const SuppliersContent: React.FC = () => {
           {editingSupplier && (
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-name">Tên nhà cung cấp *</Label>
+                <Label htmlFor="edit-name">Tên nhà cung cấp <span className="text-red-500">*</span></Label>
                 <Input
                   id="edit-name"
                   value={editingSupplier.name}
@@ -508,7 +508,7 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-phone">Số điện thoại *</Label>
+                <Label htmlFor="edit-phone">Số điện thoại <span className="text-red-500">*</span></Label>
                 <Input
                   id="edit-phone"
                   value={editingSupplier.contact_phone}
@@ -527,7 +527,7 @@ const SuppliersContent: React.FC = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Địa chỉ</Label>
+                <Label>Địa chỉ <span className="text-red-500">*</span></Label>
                 <AddressFormSeparate
                   value={{
                     address: editingSupplier.address,

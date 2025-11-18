@@ -849,7 +849,7 @@ const InventoryContent = () => {
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="warehouse-name">Tên kho *</Label>
+                        <Label htmlFor="warehouse-name">Tên kho <span className="text-red-500">*</span></Label>
                         <Input
                           id="warehouse-name"
                           value={newWarehouse.name}
@@ -876,7 +876,7 @@ const InventoryContent = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <Label>Địa chỉ kho</Label>
+                        <Label>Địa chỉ kho <span className="text-red-500">*</span></Label>
                         <AddressFormSeparate
                           value={(() => {
                             const value = {
@@ -902,7 +902,7 @@ const InventoryContent = () => {
                               }
                             }));
                           }}
-                          required={false}
+                          required={true}
                         />
                       </div>
                     </div>

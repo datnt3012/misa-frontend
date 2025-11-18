@@ -374,7 +374,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* Province Autocomplete */}
         <div className="space-y-1">
-          <Label className="text-xs">Tỉnh/TP {required && <span className="text-red-500">*</span>}</Label>
+          <Label className="text-xs">Tỉnh/TP {required}</Label>
           <Popover open={openProvince} onOpenChange={setOpenProvince}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || loading}>
@@ -403,7 +403,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
 
         {/* District Autocomplete */}
         <div className="space-y-1">
-          <Label className="text-xs">Quận/Huyện {required && <span className="text-red-500">*</span>}</Label>
+          <Label className="text-xs">Quận/Huyện {required}</Label>
           <Popover open={openDistrict} onOpenChange={setOpenDistrict}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedProvince}>
@@ -432,7 +432,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
 
         {/* Ward Autocomplete */}
         <div className="space-y-1">
-          <Label className="text-xs">Phường/Xã {required && <span className="text-red-500">*</span>}</Label>
+          <Label className="text-xs">Phường/Xã {required}</Label>
           <Popover open={openWard} onOpenChange={setOpenWard}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedDistrict}>

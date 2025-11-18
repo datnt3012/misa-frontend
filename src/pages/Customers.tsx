@@ -508,7 +508,7 @@ const CustomersContent = () => {
                   </p>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="name">Tên khách hàng *</Label>
+                  <Label htmlFor="name">Tên khách hàng <span className="text-red-500">*</span></Label>
                   <Input
                     id="name"
                     value={newCustomer.name}
@@ -517,7 +517,7 @@ const CustomersContent = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="phone">Số điện thoại</Label>
+                  <Label htmlFor="phone">Số điện thoại <span className="text-red-500">*</span></Label>
                   <Input
                     id="phone"
                     value={newCustomer.phone}
@@ -526,7 +526,7 @@ const CustomersContent = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
                   <Input
                     id="email"
                     type="email"
@@ -682,7 +682,7 @@ const CustomersContent = () => {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-name">Tên khách hàng *</Label>
+                <Label htmlFor="edit-name">Tên khách hàng <span className="text-red-500">*</span></Label>
                 <Input
                   id="edit-name"
                   value={editCustomer.name}

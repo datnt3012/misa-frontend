@@ -104,7 +104,7 @@ export default function Auth() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="signin-email">Tài khoản hoặc Email</Label>
+              <Label htmlFor="signin-email">Tài khoản hoặc Email <span className="text-red-500">*</span></Label>
               <Input
                 id="signin-email"
                 type="text"
@@ -117,7 +117,7 @@ export default function Auth() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="signin-password">Mật khẩu</Label>
+              <Label htmlFor="signin-password">Mật khẩu <span className="text-red-500">*</span></Label>
               <Input
                 id="signin-password"
                 type="password"

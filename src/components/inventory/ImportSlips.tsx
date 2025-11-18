@@ -510,7 +510,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="supplier">Nhà cung cấp *</Label>
+                        <Label htmlFor="supplier">Nhà cung cấp <span className="text-red-500">*</span></Label>
                         <Select 
                           value={newSlip.supplier_id} 
                           onValueChange={(value) => {
@@ -672,7 +672,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="warehouse">Kho nhập *</Label>
+                        <Label htmlFor="warehouse">Kho nhập <span className="text-red-500">*</span></Label>
                         <Select
                           value={newSlip.warehouse_id}
                           onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}
@@ -711,7 +711,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-5 gap-2">
                       <div>
-                        <Label>Sản phẩm *</Label>
+                        <Label>Sản phẩm <span className="text-red-500">*</span></Label>
                         <Select value={newItem.product_id} onValueChange={(value) => {
                           const selectedProduct = products.find(p => p.id === value);
                           setNewItem({
@@ -733,7 +733,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         </Select>
                       </div>
                       <div>
-                        <Label>Số lượng *</Label>
+                        <Label>Số lượng <span className="text-red-500">*</span></Label>
                         <Input
                           type="number"
                           value={newItem.quantity}
@@ -742,7 +742,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         />
                       </div>
                       <div>
-                        <Label>Đơn giá</Label>
+                        <Label>Đơn giá <span className="text-red-500">*</span></Label>
                         <Input
                           type="number"
                           value={newItem.unit_price}

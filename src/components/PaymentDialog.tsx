@@ -608,7 +608,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             <h4 className="font-medium">Thêm thanh toán mới</h4>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="payment-amount">Số tiền thanh toán</Label>
+                <Label htmlFor="payment-amount">Số tiền thanh toán <span className="text-red-500">*</span></Label>
                 <Input
                   id="payment-amount"
                   type="number"
@@ -618,7 +618,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 />
               </div>
               <div>
-                <Label htmlFor="payment-method">Phương thức</Label>
+                <Label htmlFor="payment-method">Phương thức <span className="text-red-500">*</span></Label>
                 <Select 
                   value={paymentMethod} 
                   onValueChange={(value) => {
@@ -645,7 +645,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             {/* Bank Account Selection for Bank Transfer */}
             {paymentMethod === 'bank_transfer' && (
               <div>
-                <Label htmlFor="bank-account">Tài khoản ngân hàng</Label>
+                <Label htmlFor="bank-account">Tài khoản ngân hàng <span className="text-red-500">*</span></Label>
                 <Select value={bankAccount} onValueChange={setBankAccount}>
                   <SelectTrigger>
                     <SelectValue placeholder="Chọn tài khoản ngân hàng" />

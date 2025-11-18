@@ -390,7 +390,7 @@ const CategoriesContent: React.FC = () => {
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="space-y-2">
-              <Label htmlFor="add-name" className="text-sm font-medium">Tên loại sản phẩm *</Label>
+              <Label htmlFor="add-name" className="text-sm font-medium">Tên loại sản phẩm <span className="text-red-500">*</span></Label>
               <Input
                 id="add-name"
                 value={newCategory.name}
@@ -431,7 +431,7 @@ const CategoriesContent: React.FC = () => {
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name" className="text-sm font-medium">Tên loại sản phẩm *</Label>
+              <Label htmlFor="edit-name" className="text-sm font-medium">Tên loại sản phẩm <span className="text-red-500">*</span></Label>
               <Input
                 id="edit-name"
                 value={editCategory.name || ''}

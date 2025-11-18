@@ -776,7 +776,7 @@ const SettingsContent = () => {
                       <>
                         <div className="grid grid-cols-1 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="user-email">Email</Label>
+                            <Label htmlFor="user-email">Email <span className="text-red-500">*</span></Label>
                             <Input
                               id="user-email"
                               type="email"
@@ -784,6 +784,7 @@ const SettingsContent = () => {
                               onChange={(e) => setNewUserEmail(e.target.value)}
                               placeholder="Nhập email"
                             />
+                            <p className="text-xs text-muted-foreground">Bắt buộc nếu không có username</p>
                           </div>
 
                           <div className="space-y-2">
@@ -795,6 +796,7 @@ const SettingsContent = () => {
                               onChange={(e) => setNewUserUsername(e.target.value)}
                               placeholder="Nhập tên đăng nhập"
                             />
+                            <p className="text-xs text-muted-foreground">Bắt buộc nếu không có email</p>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
@@ -844,7 +846,7 @@ const SettingsContent = () => {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="user-password">Mật khẩu</Label>
+                            <Label htmlFor="user-password">Mật khẩu <span className="text-red-500">*</span></Label>
                             <Input
                               id="user-password"
                               type="password"
@@ -856,7 +858,7 @@ const SettingsContent = () => {
                           </div>
                           
                           <div className="space-y-2">
-                            <Label htmlFor="user-role">Vai trò</Label>
+                            <Label htmlFor="user-role">Vai trò <span className="text-red-500">*</span></Label>
                             <Select value={newUserRole} onValueChange={setNewUserRole}>
                               <SelectTrigger>
                                 <SelectValue />

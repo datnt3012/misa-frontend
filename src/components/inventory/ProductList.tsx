@@ -438,7 +438,7 @@ const ProductList: React.FC<ProductListProps> = ({
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-name" className="text-right">Tên sản phẩm *</Label>
+                        <Label htmlFor="product-name" className="text-right">Tên sản phẩm <span className="text-red-500">*</span></Label>
                         <Input 
                           id="product-name" 
                           className="col-span-3"
@@ -458,7 +458,7 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="product-category" className="text-right">Loại sản phẩm</Label>
+                  <Label htmlFor="product-category" className="text-right">Loại sản phẩm <span className="text-red-500">*</span></Label>
                   <div className="col-span-3">
                     <Popover open={categoryComboOpen} onOpenChange={setCategoryComboOpen}>
                       <PopoverTrigger asChild>
@@ -522,7 +522,7 @@ const ProductList: React.FC<ProductListProps> = ({
                   </div>
                 </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="unit" className="text-right">Đơn vị tính *</Label>
+                        <Label htmlFor="unit" className="text-right">Đơn vị tính <span className="text-red-500">*</span></Label>
                         <Input 
                           id="unit" 
                           className="col-span-3"
@@ -555,7 +555,7 @@ const ProductList: React.FC<ProductListProps> = ({
                         </div>
                       )}
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
+                        <Label htmlFor="sell-price" className="text-right">Giá bán <span className="text-red-500">*</span></Label>
                         <Input 
                           id="sell-price" 
                           type="number" 
@@ -603,7 +603,7 @@ const ProductList: React.FC<ProductListProps> = ({
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-product-name" className="text-right">Tên sản phẩm *</Label>
+                  <Label htmlFor="edit-product-name" className="text-right">Tên sản phẩm <span className="text-red-500">*</span></Label>
                   <Input 
                     id="edit-product-name" 
                     className="col-span-3"
@@ -687,7 +687,7 @@ const ProductList: React.FC<ProductListProps> = ({
                   </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-unit" className="text-right">Đơn vị tính *</Label>
+                  <Label htmlFor="edit-unit" className="text-right">Đơn vị tính <span className="text-red-500">*</span></Label>
                   <Input 
                     id="edit-unit" 
                     className="col-span-3"

@@ -402,7 +402,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="customer">Khách hàng</Label>
+                  <Label htmlFor="customer">Khách hàng <span className="text-red-500">*</span></Label>
                   <Select 
                     value={newOrder.customer_id} 
                     onValueChange={(value) => {
@@ -439,7 +439,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="customer_name">Tên khách hàng *</Label>
+                  <Label htmlFor="customer_name">Tên khách hàng <span className="text-red-500">*</span></Label>
                   <Input
                     id="customer_name"
                     value={newOrder.customer_name}
@@ -587,10 +587,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <Table className="border border-border/30 rounded-lg overflow-hidden">
                 <TableHeader>
                   <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số lượng</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số lượng <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá <span className="text-red-500">*</span></TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Thành tiền</TableHead>
                     <TableHead className="font-semibold text-slate-700"></TableHead>
                   </TableRow>
@@ -697,7 +697,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   />
                 </div>
                 <div>
-                  <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
+                  <Label htmlFor="initial_payment_method">Phương thức thanh toán <span className="text-red-500">*</span></Label>
                   <Select 
                     value={newOrder.initial_payment_method} 
                     onValueChange={(value) => setNewOrder(prev => ({ 
@@ -716,9 +716,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     </SelectContent>
                   </Select>
                 </div>
-                {newOrder.initial_payment_method === "bank_transfer" && (
+                {newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment > 0 && (
                   <div>
-                    <Label htmlFor="initial_payment_bank">Ngân hàng</Label>
+                    <Label htmlFor="initial_payment_bank">Ngân hàng <span className="text-red-500">*</span></Label>
                     <Select 
                       value={newOrder.initial_payment_bank} 
                       onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_bank: value }))}

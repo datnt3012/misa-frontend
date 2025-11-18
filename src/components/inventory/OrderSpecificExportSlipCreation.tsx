@@ -375,7 +375,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
 
         {/* Warehouse Selection */}
         <div>
-          <Label htmlFor="warehouse-select">Chọn kho xuất hàng *</Label>
+          <Label htmlFor="warehouse-select">Chọn kho xuất hàng <span className="text-red-500">*</span></Label>
           <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn kho xuất hàng" />
@@ -392,7 +392,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
 
         {/* Supplier Selection */}
         <div>
-          <Label htmlFor="supplier-select">Chọn nhà cung cấp *</Label>
+          <Label htmlFor="supplier-select">Chọn nhà cung cấp <span className="text-red-500">*</span></Label>
           <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn nhà cung cấp" />
@@ -409,7 +409,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
 
         {/* Slip Code */}
         <div>
-          <Label htmlFor="slip-code">Mã phiếu xuất kho *</Label>
+          <Label htmlFor="slip-code">Mã phiếu xuất kho <span className="text-red-500">*</span></Label>
           <Input
             id="slip-code"
             value={slipCode}

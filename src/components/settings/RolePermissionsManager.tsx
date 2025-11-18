@@ -621,7 +621,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="role-name">Tên vai trò *</Label>
+                  <Label htmlFor="role-name">Tên vai trò <span className="text-red-500">*</span></Label>
                   <Input
                     id="role-name"
                     value={newRole.name}
@@ -832,7 +832,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="edit-role-name">Tên vai trò *</Label>
+                <Label htmlFor="edit-role-name">Tên vai trò <span className="text-red-500">*</span></Label>
                 <Input
                   id="edit-role-name"
                   value={editRole.name}
