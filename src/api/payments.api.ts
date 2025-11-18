@@ -13,6 +13,7 @@ export interface Payment {
   notes?: string;
   note?: string; // Support both formats
   filePaths?: string[] | null; // Array of file paths
+  bank?: string; // Bank name or ID when payment method is bank_transfer
   created_by?: string;
   createdBy?: string; // Support both formats
   created_at: string;
@@ -54,6 +55,7 @@ const normalizePayment = (row: any): Payment => ({
   notes: row.notes ?? row.note ?? undefined,
   note: row.note ?? row.notes,
   filePaths: row.filePaths ?? row.file_paths ?? null, // Support both camelCase and snake_case
+  bank: row.bank ?? undefined, // Bank name or ID when payment method is bank_transfer
   created_by: row.created_by ?? row.createdBy ?? row.user_id ?? row.userId ?? '',
   createdBy: row.createdBy ?? row.created_by,
   created_at: row.created_at ?? row.createdAt ?? new Date().toISOString(),

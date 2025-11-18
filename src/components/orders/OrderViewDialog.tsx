@@ -44,6 +44,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   const [activityHistory, setActivityHistory] = useState<StatusHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [historyApiCalled, setHistoryApiCalled] = useState<boolean>(false);
+  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const { toast } = useToast();
   // Use ref to track current orderId to prevent race conditions
   const currentOrderIdRef = useRef<string | null>(null);
@@ -62,6 +63,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       // Load data for the current order
       loadOrderDetails(newOrderId);
       loadPaymentHistory(newOrderId);
+      loadBanks();
     } else if (!open) {
       // Reset state when dialog closes
       currentOrderIdRef.current = null;
@@ -120,6 +122,29 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       other: 'Khác',
     };
     return methods[method] || method;
+  };
+
+  const loadBanks = async () => {
+    try {
+      const banksList = await orderApi.getBanks();
+      setBanks(banksList || []);
+    } catch (error) {
+      console.error('[OrderViewDialog] Error loading banks:', error);
+      // Don't show error toast - just log and continue with empty array
+      setBanks([]);
+    }
+  };
+
+  const getBankName = (bankIdOrName: string | undefined): string => {
+    if (!bankIdOrName) return '';
+    // First try to find by ID
+    const bankById = banks.find(b => b.id === bankIdOrName);
+    if (bankById) return bankById.name;
+    // Then try to find by name (in case API returns name directly)
+    const bankByName = banks.find(b => b.name === bankIdOrName);
+    if (bankByName) return bankByName.name;
+    // If not found in banks list, return the value as-is (might be name from API)
+    return bankIdOrName;
   };
 
   const loadPaymentHistory = async (orderId: string) => {
@@ -609,32 +634,49 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                     Chưa có lịch sử thanh toán
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {paymentHistory.map((payment) => (
-                      <div key={payment.id} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">{getPaymentMethodLabel(payment.payment_method)}</Badge>
-                            <span className="text-lg font-semibold text-green-600">
-                              {formatCurrency(payment.amount)}
-                            </span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {formatDateTime(payment.payment_date)}
-                          </div>
-                        </div>
-                        {payment.notes && (
-                          <div className="text-sm text-muted-foreground mt-2">
-                            {payment.notes}
-                          </div>
-                        )}
-                        {payment.creator_profile && (
-                          <div className="text-xs text-muted-foreground mt-2">
-                            Người tạo: {payment.creator_profile.full_name}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[120px]">Ngày giờ</TableHead>
+                          <TableHead className="text-right">Số tiền</TableHead>
+                          <TableHead className="text-center">Phương thức</TableHead>
+                          <TableHead>Ngân hàng</TableHead>
+                          <TableHead>Ghi chú</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paymentHistory.map((payment) => (
+                          <TableRow key={payment.id}>
+                            <TableCell className="text-sm">
+                              <div>
+                                <div>{formatDateTime(payment.payment_date)}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className={`font-medium ${payment.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {payment.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(payment.amount))}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="mx-auto">
+                                {getPaymentMethodLabel(payment.payment_method)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {payment.payment_method === 'bank_transfer' && payment.bank ? (
+                                <span>{getBankName(payment.bank)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {payment.notes || payment.note || '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </CardContent>

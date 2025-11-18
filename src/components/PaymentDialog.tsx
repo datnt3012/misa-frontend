@@ -551,12 +551,24 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     return methods[method] || method;
   };
 
+  const getBankName = (bankIdOrName: string | undefined): string => {
+    if (!bankIdOrName) return '';
+    // First try to find by ID
+    const bankById = banks.find(b => b.id === bankIdOrName);
+    if (bankById) return bankById.name;
+    // Then try to find by name (in case API returns name directly)
+    const bankByName = banks.find(b => b.name === bankIdOrName);
+    if (bankByName) return bankByName.name;
+    // If not found in banks list, return the value as-is (might be name from API)
+    return bankIdOrName;
+  };
+
   const newPaidAmount = paidAmount + parseFloat(paymentAmount || '0');
   const newDebtAmount = totalAmount - newPaidAmount;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Thêm Thanh Toán</DialogTitle>
           <DialogDescription>
@@ -764,7 +776,8 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                       <TableRow>
                         <TableHead className="w-[120px]">Ngày giờ</TableHead>
                         <TableHead className="text-right">Số tiền</TableHead>
-                        <TableHead>Phương thức</TableHead>
+                        <TableHead className="text-center">Phương thức</TableHead>
+                        <TableHead>Ngân hàng</TableHead>
                         <TableHead>Ghi chú</TableHead>
                         <TableHead className="w-[220px]">Tệp tin</TableHead>
                       </TableRow>
@@ -797,10 +810,17 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                                 {payment.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(payment.amount))} đ
                               </span>
                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs">
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="text-xs w-fit mx-auto">
                                 {getPaymentMethodText(payment.payment_method)}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {payment.payment_method === 'bank_transfer' && payment.bank ? (
+                                <span>{getBankName(payment.bank)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
                               {payment.notes || payment.note || '-'}
