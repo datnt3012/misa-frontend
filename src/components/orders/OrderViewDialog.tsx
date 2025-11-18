@@ -335,8 +335,12 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   }
 
   const totalAmount = orderDetails.total_amount || 0;
-  const paidAmount = orderDetails.paid_amount || 0;
-  const debtAmount = orderDetails.debt_amount || 0;
+  // Calculate paid amount from payment history (most accurate source)
+  // If payment history exists, sum all payments; otherwise fallback to orderDetails.paid_amount
+  const paidAmount = paymentHistory.length > 0
+    ? paymentHistory.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
+    : (orderDetails.paid_amount || 0);
+  const debtAmount = Math.max(0, totalAmount - paidAmount);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -148,6 +148,7 @@ export interface CreateOrderRequest {
   paymentMethod: string;
   initialPayment?: number;
   totalAmount: number;
+  bank?: string; // Bank ID or code when payment method is bank_transfer
   
   // Order details
   details: {
@@ -958,6 +959,34 @@ export const orderApi = {
       console.error('[orderApi] Error loading order history:', error);
       console.error('[orderApi] Endpoint:', API_ENDPOINTS.HISTORY.ENTITY('order', orderId));
       // Return empty array if API doesn't exist or fails (will trigger fallback)
+      return [];
+    }
+  },
+
+  // Get banks list
+  getBanks: async (): Promise<Array<{ id: string; name: string; code?: string }>> => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.ORDERS.BANKS);
+      const data = response?.data || response;
+      
+      // Handle different response structures
+      if (Array.isArray(data)) {
+        return data.map((bank: any) => ({
+          id: bank.id || bank.code || bank.name,
+          name: bank.name || bank.code || bank.id,
+          code: bank.code,
+        }));
+      } else if (data?.rows && Array.isArray(data.rows)) {
+        return data.rows.map((bank: any) => ({
+          id: bank.id || bank.code || bank.name,
+          name: bank.name || bank.code || bank.id,
+          code: bank.code,
+        }));
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('[orderApi] Error loading banks:', error);
       return [];
     }
   },

@@ -46,6 +46,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   
   const [newOrder, setNewOrder] = useState({
     customer_id: "",
@@ -93,14 +94,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes, warehousesRes] = await Promise.all([
+      const [customersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
         customerApi.getCustomers({ page: 1, limit: 1000 }),
         productApi.getProducts({ page: 1, limit: 1000 }),
-        warehouseApi.getWarehouses({ page: 1, limit: 1000 })
+        warehouseApi.getWarehouses({ page: 1, limit: 1000 }),
+        orderApi.getBanks()
       ]);
       setCustomers(customersRes.customers || []);
       setProducts(productsRes.products || []);
       setWarehouses(warehousesRes.warehouses || []);
+      setBanks(banksRes || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -265,6 +268,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       return;
     }
 
+    // Validate bank selection for bank transfer
+    if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate warehouse selection for items
     if (newOrder.items.some(item => !item.warehouse_id)) {
       toast({
@@ -328,6 +341,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         paymentMethod: newOrder.initial_payment_method || "cash",
         initialPayment: newOrder.initial_payment || 0,
         totalAmount: subtotal,
+        bank: newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment_bank 
+          ? newOrder.initial_payment_bank 
+          : undefined,
         
         // Order details
         details: newOrder.items.map(it => ({
@@ -684,7 +700,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
                   <Select 
                     value={newOrder.initial_payment_method} 
-                    onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_method: value }))}
+                    onValueChange={(value) => setNewOrder(prev => ({ 
+                      ...prev, 
+                      initial_payment_method: value,
+                      // Reset bank when payment method is not bank_transfer
+                      initial_payment_bank: value === "bank_transfer" ? prev.initial_payment_bank : ""
+                    }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn phương thức" />
@@ -706,14 +727,15 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         <SelectValue placeholder="Chọn ngân hàng" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="vietcombank">Vietcombank</SelectItem>
-                        <SelectItem value="techcombank">Techcombank</SelectItem>
-                        <SelectItem value="bidv">BIDV</SelectItem>
-                        <SelectItem value="agribank">Agribank</SelectItem>
-                        <SelectItem value="mbbank">MB Bank</SelectItem>
-                        <SelectItem value="vpbank">VPBank</SelectItem>
-                        <SelectItem value="acb">ACB</SelectItem>
-                        <SelectItem value="sacombank">Sacombank</SelectItem>
+                        {banks.length > 0 ? (
+                          banks.map((bank) => (
+                            <SelectItem key={bank.id} value={bank.id}>
+                              {bank.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="" disabled>Đang tải danh sách ngân hàng...</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

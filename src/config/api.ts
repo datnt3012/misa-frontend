@@ -132,6 +132,7 @@ export const API_ENDPOINTS = {
     DETAILS: (orderId: string, itemId: string) => `/orders/${orderId}/details/${itemId}`,
     PAYMENTS: (id: string) => `/orders/${id}/payments`,
     HISTORY: (id: string) => `/orders/${id}/history`,
+    BANKS: '/orders/banks',
   },
   
   // History

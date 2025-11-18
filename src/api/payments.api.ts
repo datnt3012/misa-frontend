@@ -31,6 +31,7 @@ export interface CreatePaymentRequest {
   payment_date: string;
   notes?: string;
   created_by?: string; // Optional - may be set by backend from auth token
+  bank?: string; // Bank ID or code when payment method is bank_transfer
 }
 
 export interface UpdatePaymentRequest {
@@ -139,6 +140,8 @@ export const paymentsApi = {
         note: paymentData.notes,
         // createdBy is usually set by backend from auth token, but include if provided
         ...(paymentData.created_by && { createdBy: paymentData.created_by }),
+        // Include bank if payment method is bank_transfer
+        ...(paymentData.payment_method === 'bank_transfer' && paymentData.bank && { bank: paymentData.bank }),
       }, {
         headers: {
           'Content-Type': 'application/json',

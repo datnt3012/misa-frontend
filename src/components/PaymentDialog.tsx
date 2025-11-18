@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { paymentsApi } from "@/api/payments.api";
+import { orderApi } from "@/api/order.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { API_CONFIG } from "@/config/api";
 import { DollarSign, Clock, Upload, X, FileText, Image, Eye } from "lucide-react";
@@ -45,15 +46,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     mimeType?: string;
     extension?: string;
   }>>({});
-  const [bankAccounts, setBankAccounts] = useState<string[]>([
-    'MB Bank',
-    'TP Bank', 
-    'Vietcombank',
-    'Techcombank',
-    'VietinBank',
-    'BIDV',
-    'Sacombank'
-  ]);
+  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -64,8 +57,20 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   useEffect(() => {
     if (open && order?.id) {
       loadPaymentHistory();
+      loadBanks();
     }
   }, [open, order?.id]);
+
+  const loadBanks = async () => {
+    try {
+      const banksList = await orderApi.getBanks();
+      setBanks(banksList || []);
+    } catch (error) {
+      console.error('[PaymentDialog] Error loading banks:', error);
+      // Don't show error toast - just log and continue with empty array
+      setBanks([]);
+    }
+  };
 
   const loadPaymentHistory = async () => {
     try {
@@ -123,6 +128,16 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       return;
     }
 
+    // Validate bank selection for bank transfer
+    if (paymentMethod === 'bank_transfer' && !bankAccount) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const amount = parseFloat(paymentAmount);
@@ -137,6 +152,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           payment_date: new Date().toISOString(),
           notes: paymentNotes || undefined,
           created_by: user?.id,
+          bank: paymentMethod === 'bank_transfer' && bankAccount ? bankAccount : undefined,
         });
       } catch (paymentError: any) {
         console.error('[PaymentDialog] Error creating payment:', paymentError);
@@ -591,7 +607,16 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </div>
               <div>
                 <Label htmlFor="payment-method">Phương thức</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <Select 
+                  value={paymentMethod} 
+                  onValueChange={(value) => {
+                    setPaymentMethod(value);
+                    // Reset bank when payment method is not bank_transfer
+                    if (value !== 'bank_transfer') {
+                      setBankAccount('');
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -614,9 +639,15 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                     <SelectValue placeholder="Chọn tài khoản ngân hàng" />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankAccounts.map((bank) => (
-                      <SelectItem key={bank} value={bank}>{bank}</SelectItem>
-                    ))}
+                    {banks.length > 0 ? (
+                      banks.map((bank) => (
+                        <SelectItem key={bank.id} value={bank.id}>
+                          {bank.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>Đang tải danh sách ngân hàng...</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
