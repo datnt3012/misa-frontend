@@ -18,14 +18,21 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
     const formatCurrency = (num: number | string): string => {
       const numValue = typeof num === 'string' ? parseFloat(num.replace(/\./g, '')) || 0 : num || 0;
       if (numValue === 0) return '0';
-      return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      const absValue = Math.abs(numValue);
+      const formatted = absValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return numValue < 0 ? '-' + formatted : formatted;
     };
 
     // Remove thousand separators and convert to number
     const parseCurrency = (str: string): number => {
+      if (!str || str === '' || str === '-') return 0;
       const cleaned = str.replace(/\./g, '').replace(/[^0-9-]/g, '');
       if (cleaned === '' || cleaned === '-') return 0;
-      return parseFloat(cleaned) || 0;
+      const isNegative = cleaned.startsWith('-');
+      const numPart = isNegative ? cleaned.substring(1) : cleaned;
+      if (numPart === '') return 0;
+      const numValue = parseFloat(numPart) || 0;
+      return isNegative ? -numValue : numValue;
     };
 
     const [displayValue, setDisplayValue] = React.useState(formatCurrency(numericValue));
@@ -49,23 +56,47 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
         return;
       }
       
-      // Remove all non-digit characters except minus sign at the start
-      inputValue = inputValue.replace(/[^0-9-]/g, '');
-      
-      // Only allow minus at the start
-      if (inputValue.includes('-') && inputValue.indexOf('-') !== 0) {
-        inputValue = inputValue.replace(/-/g, '');
+      // Allow "-" at the start for negative numbers
+      // If user types "-" first, allow it
+      if (inputValue === '-') {
+        setDisplayValue('-');
+        onChange(0);
+        return;
       }
       
-      // Remove leading zeros (but keep single zero or negative zero)
-      // If user is typing and current value is 0, replace it with new input
-      if (inputValue.length > 1) {
-        if (inputValue[0] === '0' && inputValue[1] !== '-') {
-          inputValue = inputValue.substring(1);
-        }
-        if (inputValue.length > 2 && inputValue[0] === '-' && inputValue[1] === '0' && inputValue[2] !== '-') {
-          inputValue = '-' + inputValue.substring(2);
-        }
+      // Remove all non-digit characters except minus sign
+      inputValue = inputValue.replace(/[^0-9-]/g, '');
+      
+      // Handle minus sign - always move to start if present
+      const hasMinus = inputValue.includes('-');
+      const digitsOnly = inputValue.replace(/-/g, '');
+      
+      // If user typed "-" anywhere, move it to start and make number negative
+      if (hasMinus) {
+        inputValue = '-' + digitsOnly;
+      } else {
+        inputValue = digitsOnly;
+      }
+      
+      // Handle negative number input
+      const isNegative = inputValue.startsWith('-');
+      let numPart = isNegative ? inputValue.substring(1) : inputValue;
+      
+      // Remove leading zeros (but keep single zero)
+      if (numPart.length > 1 && numPart[0] === '0') {
+        numPart = numPart.replace(/^0+/, '') || '0';
+      }
+      
+      // Reconstruct input value
+      inputValue = isNegative ? '-' + numPart : numPart;
+      
+      // If user is typing "-" followed by numbers, show it immediately with formatting
+      if (isNegative && numPart && numPart !== '0') {
+        const numValue = parseFloat(numPart) || 0;
+        const formattedNum = numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        setDisplayValue('-' + formattedNum);
+        onChange(-numValue);
+        return;
       }
       
       // Parse and format
@@ -90,12 +121,13 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
-      // If value is 0, clear it so user can type new number
+      // If value is 0, clear it so user can type new number (including "-")
       if (numericValue === 0) {
         setDisplayValue('');
       } else {
-        // Select all text on focus for easy editing
-        e.target.select();
+        // Don't select all - allow user to easily add "-" at the start
+        // Just move cursor to start
+        e.target.setSelectionRange(0, 0);
       }
     };
 
