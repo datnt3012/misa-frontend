@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -734,19 +736,18 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                       </div>
                       <div>
                         <Label>Số lượng <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="number"
+                        <NumberInput
                           value={newItem.quantity}
-                          onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                          onChange={(value) => setNewItem({...newItem, quantity: value})}
+                          min={1}
                           placeholder="0"
                         />
                       </div>
                       <div>
                         <Label>Đơn giá <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="number"
+                        <CurrencyInput
                           value={newItem.unit_price}
-                          onChange={(e) => setNewItem({...newItem, unit_price: parseFloat(e.target.value) || 0})}
+                          onChange={(value) => setNewItem({...newItem, unit_price: value})}
                           placeholder="Tự động điền khi chọn sản phẩm"
                         />
                       </div>

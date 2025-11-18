@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +32,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   order,
   onUpdate
 }) => {
-  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [bankAccount, setBankAccount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
@@ -119,7 +120,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   };
 
   const handleAddPayment = async () => {
-    if (!paymentAmount || parseFloat(paymentAmount) === 0) {
+    if (!paymentAmount || paymentAmount === 0) {
       toast({
         title: "Thông báo",
         description: "Vui lòng nhập số tiền thanh toán",
@@ -140,7 +141,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
     setLoading(true);
     try {
-      const amount = parseFloat(paymentAmount);
+      const amount = paymentAmount;
       
       // Step 1: Create payment (JSON only)
       let createdPayment;
@@ -563,7 +564,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     return bankIdOrName;
   };
 
-  const newPaidAmount = paidAmount + parseFloat(paymentAmount || '0');
+  const newPaidAmount = paidAmount + (paymentAmount || 0);
   const newDebtAmount = totalAmount - newPaidAmount;
 
   return (
@@ -609,11 +610,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="payment-amount">Số tiền thanh toán <span className="text-red-500">*</span></Label>
-                <Input
+                <CurrencyInput
                   id="payment-amount"
-                  type="number"
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  onChange={(value) => setPaymentAmount(value)}
                   placeholder="Nhập số tiền (cho phép số âm để điều chỉnh)"
                 />
               </div>
@@ -734,7 +734,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </div>
 
             {/* New Payment Summary */}
-            {paymentAmount && parseFloat(paymentAmount) !== 0 && (
+            {paymentAmount && paymentAmount !== 0 && (
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
                   <h5 className="font-medium mb-2">Sau khi thanh toán:</h5>

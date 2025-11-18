@@ -18,6 +18,7 @@ import React from "react";
 import { productApi } from "@/api/product.api";
 import { categoriesApi } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
+import { CurrencyInput } from "@/components/ui/currency-input";
 
 interface ProductListProps {
   products: any[];
@@ -544,24 +545,22 @@ const ProductList: React.FC<ProductListProps> = ({
                       {canViewCostPrice && (
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
-                          <Input 
+                          <CurrencyInput 
                             id="cost-price" 
-                            type="number" 
                             className="col-span-3"
                             value={newProduct.costPrice}
-                            onChange={(e) => setNewProduct(prev => ({ ...prev, costPrice: parseInt(e.target.value) || 0 }))}
+                            onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
                             placeholder="0"
                           />
                         </div>
                       )}
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="sell-price" className="text-right">Giá bán <span className="text-red-500">*</span></Label>
-                        <Input 
+                        <CurrencyInput 
                           id="sell-price" 
-                          type="number" 
                           className="col-span-3"
                           value={newProduct.price}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, price: parseInt(e.target.value) || 0 }))}
+                          onChange={(value) => setNewProduct(prev => ({ ...prev, price: value }))}
                           placeholder="0"
                         />
                       </div>
@@ -709,24 +708,22 @@ const ProductList: React.FC<ProductListProps> = ({
                 {canViewCostPrice && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
-                    <Input 
+                    <CurrencyInput 
                       id="edit-cost-price" 
-                      type="number" 
                       className="col-span-3"
                       value={newProduct.costPrice}
-                      onChange={(e) => setNewProduct(prev => ({ ...prev, costPrice: parseInt(e.target.value) || 0 }))}
+                      onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
                       placeholder="0"
                     />
                   </div>
                 )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-sell-price" className="text-right">Giá bán</Label>
-                  <Input 
+                  <CurrencyInput 
                     id="edit-sell-price" 
-                    type="number" 
                     className="col-span-3"
                     value={newProduct.price}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, price: parseInt(e.target.value) || 0 }))}
+                    onChange={(value) => setNewProduct(prev => ({ ...prev, price: value }))}
                     placeholder="0"
                   />
                 </div>

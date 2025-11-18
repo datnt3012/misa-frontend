@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -634,10 +636,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-4">
                         <div className="space-y-1">
-                          <Input
-                            type="number"
+                          <NumberInput
                             value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                            onChange={(value) => updateItem(index, 'quantity', value)}
+                            min={1}
                             className="w-20"
                           />
                           {item.current_stock !== undefined && (
@@ -653,10 +655,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         </div>
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-4">
-                        <Input
-                          type="number"
+                        <CurrencyInput
                           value={item.unit_price}
-                          onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
+                          onChange={(value) => updateItem(index, 'unit_price', value)}
                           className="w-32"
                         />
                       </TableCell>
@@ -688,11 +689,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="initial_payment">Thanh toán ban đầu</Label>
-                  <Input
+                  <CurrencyInput
                     id="initial_payment"
-                    type="number"
                     value={newOrder.initial_payment}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, initial_payment: Number(e.target.value) }))}
+                    onChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment: value }))}
                     placeholder="0"
                   />
                 </div>

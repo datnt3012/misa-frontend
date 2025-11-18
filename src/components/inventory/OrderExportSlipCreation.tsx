@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -570,13 +571,12 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                           {item.requested_quantity}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Input
-                            type="number"
-                            min="1"
+                          <NumberInput
+                            min={1}
                             max={item.requested_quantity}
                             value={item.requested_quantity}
-                            onChange={(e) => 
-                              handleQuantityChange(item.id, parseInt(e.target.value) || 1)
+                            onChange={(value) => 
+                              handleQuantityChange(item.id, value)
                             }
                             className="w-20 text-right"
                             disabled={!item.selected}

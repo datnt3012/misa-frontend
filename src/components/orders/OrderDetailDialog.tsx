@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { NumberInput } from "@/components/ui/number-input";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import { Trash2, Plus, Edit2, X, Check } from "lucide-react";
 // Tag management is not available in this dialog
@@ -741,11 +743,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                         <TableCell className="text-center">-</TableCell>
                         <TableCell className="text-center">
                           {isEditing ? (
-                            <Input
-                              type="number"
-                              min="1"
+                            <NumberInput
+                              min={1}
                               value={editedItem.quantity || 0}
-                              onChange={(e) => updateEditingItem(item.id || '', 'quantity', Number(e.target.value) || 1)}
+                              onChange={(value) => updateEditingItem(item.id || '', 'quantity', value)}
                               className="w-20 text-center"
                             />
                           ) : (
@@ -754,11 +755,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                         </TableCell>
                         <TableCell className="text-right">
                           {isEditing ? (
-                            <Input
-                              type="number"
-                              min="0"
+                            <CurrencyInput
                               value={editedItem.unit_price || 0}
-                              onChange={(e) => updateEditingItem(item.id || '', 'unit_price', Number(e.target.value) || 0)}
+                              onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
                               className="w-24 text-right"
                             />
                           ) : (
