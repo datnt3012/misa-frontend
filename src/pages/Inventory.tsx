@@ -103,15 +103,31 @@ const InventoryContent = () => {
     }
   };
 
-  const [newWarehouse, setNewWarehouse] = useState({ 
+  const [newWarehouse, setNewWarehouse] = useState<{
+    name: string;
+    code: string;
+    description: string;
+    address: string;
+    addressInfo: {
+      provinceCode?: string;
+      districtCode?: string;
+      wardCode?: string;
+      provinceName?: string;
+      districtName?: string;
+      wardName?: string;
+    };
+  }>({ 
     name: "", 
     code: "", 
     description: "", 
     address: "",
     addressInfo: {
-      provinceCode: '',
-      districtCode: '',
-      wardCode: ''
+      provinceCode: undefined,
+      districtCode: undefined,
+      wardCode: undefined,
+      provinceName: undefined,
+      districtName: undefined,
+      wardName: undefined
     }
   });
   const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
@@ -448,6 +464,17 @@ const InventoryContent = () => {
       return;
     }
 
+    // Validate address
+    if (!newWarehouse.address || !newWarehouse.address.trim()) {
+      toast({ title: "Lỗi", description: "Địa chỉ chi tiết là bắt buộc", variant: "destructive" });
+      return;
+    }
+
+    if (!newWarehouse.addressInfo?.provinceCode || !newWarehouse.addressInfo?.districtCode || !newWarehouse.addressInfo?.wardCode) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn đầy đủ Tỉnh/TP, Quận/Huyện và Phường/Xã", variant: "destructive" });
+      return;
+    }
+
     try {
       const createResp: any = await warehouseApi.createWarehouse({
         name: newWarehouse.name,
@@ -468,11 +495,16 @@ const InventoryContent = () => {
         description: "", 
         address: "",
         addressInfo: {
-          provinceCode: '',
-          districtCode: '',
-          wardCode: ''
+          provinceCode: undefined,
+          districtCode: undefined,
+          wardCode: undefined,
+          provinceName: undefined,
+          districtName: undefined,
+          wardName: undefined
         }
       });
+      setIsEditingWarehouse(false);
+      setEditingWarehouse(null);
       loadData();
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
@@ -503,7 +535,10 @@ const InventoryContent = () => {
       addressInfo: {
         provinceCode: warehouse.addressInfo?.provinceCode ?? warehouse.addressInfo?.province?.code ?? '',
         districtCode: warehouse.addressInfo?.districtCode ?? warehouse.addressInfo?.district?.code ?? '',
-        wardCode: warehouse.addressInfo?.wardCode ?? warehouse.addressInfo?.ward?.code ?? ''
+        wardCode: warehouse.addressInfo?.wardCode ?? warehouse.addressInfo?.ward?.code ?? '',
+        provinceName: warehouse.addressInfo?.province?.name ?? warehouse.addressInfo?.provinceName ?? '',
+        districtName: warehouse.addressInfo?.district?.name ?? warehouse.addressInfo?.districtName ?? '',
+        wardName: warehouse.addressInfo?.ward?.name ?? warehouse.addressInfo?.wardName ?? ''
       }
     });
     setIsEditingWarehouse(true);
@@ -517,9 +552,12 @@ const InventoryContent = () => {
       description: "", 
       address: "",
       addressInfo: {
-        provinceCode: '',
-        districtCode: '',
-        wardCode: ''
+        provinceCode: undefined,
+        districtCode: undefined,
+        wardCode: undefined,
+        provinceName: undefined,
+        districtName: undefined,
+        wardName: undefined
       }
     });
     setIsEditingWarehouse(false);
@@ -878,27 +916,27 @@ const InventoryContent = () => {
                       <div className="md:col-span-2">
                         <Label>Địa chỉ kho <span className="text-red-500">*</span></Label>
                         <AddressFormSeparate
-                          value={(() => {
-                            const value = {
-                              address: newWarehouse.address,
-                              provinceCode: (editingWarehouse as any)?.addressInfo?.provinceCode ?? (editingWarehouse as any)?.addressInfo?.province?.code ?? newWarehouse.addressInfo?.provinceCode,
-                              districtCode: (editingWarehouse as any)?.addressInfo?.districtCode ?? (editingWarehouse as any)?.addressInfo?.district?.code ?? newWarehouse.addressInfo?.districtCode,
-                              wardCode: (editingWarehouse as any)?.addressInfo?.wardCode ?? (editingWarehouse as any)?.addressInfo?.ward?.code ?? newWarehouse.addressInfo?.wardCode,
-                              provinceName: (editingWarehouse as any)?.addressInfo?.province?.name ?? newWarehouse.addressInfo?.provinceName,
-                              districtName: (editingWarehouse as any)?.addressInfo?.district?.name ?? newWarehouse.addressInfo?.districtName,
-                              wardName: (editingWarehouse as any)?.addressInfo?.ward?.name ?? newWarehouse.addressInfo?.wardName
-                            };
-                            console.log('🔍 AddressFormSeparate value:', value);
-                            return value;
-                          })()}
+                          key={isEditingWarehouse ? `edit-${editingWarehouse?.id}` : 'create'}
+                          value={{
+                            address: newWarehouse.address || '',
+                            provinceCode: newWarehouse.addressInfo?.provinceCode,
+                            districtCode: newWarehouse.addressInfo?.districtCode,
+                            wardCode: newWarehouse.addressInfo?.wardCode,
+                            provinceName: newWarehouse.addressInfo?.provinceName,
+                            districtName: newWarehouse.addressInfo?.districtName,
+                            wardName: newWarehouse.addressInfo?.wardName
+                          }}
                           onChange={(data) => {
                             setNewWarehouse(prev => ({
                               ...prev,
-                              address: data.address,
+                              address: data.address || '',
                               addressInfo: {
-                                provinceCode: data.provinceCode,
-                                districtCode: data.districtCode,
-                                wardCode: data.wardCode
+                                provinceCode: data.provinceCode || undefined,
+                                districtCode: data.districtCode || undefined,
+                                wardCode: data.wardCode || undefined,
+                                provinceName: data.provinceName || undefined,
+                                districtName: data.districtName || undefined,
+                                wardName: data.wardName || undefined
                               }
                             }));
                           }}
