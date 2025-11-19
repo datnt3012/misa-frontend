@@ -25,6 +25,7 @@ import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
 import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
+import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 import React from "react";
@@ -42,10 +43,12 @@ const InventoryContent = () => {
   const [activeTab, setActiveTab] = useState("inventory");
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<ProductWithStock[]>([]);
+  const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorStates, setErrorStates] = useState({
     products: null as string | null,
-    warehouses: null as string | null
+    warehouses: null as string | null,
+    stockLevels: null as string | null
   });
 
   // Permission checks
@@ -204,12 +207,31 @@ const InventoryContent = () => {
         promiseLabels.push('warehouses');
       }
 
+      // Load stock levels for summary cards
+      promises.push(
+        stockLevelsApi.getStockLevels({ 
+          page: 1, 
+          limit: 1000,
+          includeDeleted: false 
+        }).catch(error => {
+          if (error?.response?.status === 403) {
+            setErrorStates(prev => ({ 
+              ...prev, 
+              stockLevels: 'Không có quyền truy cập dữ liệu tồn kho' 
+            }));
+          }
+          return { stockLevels: [] };
+        })
+      );
+      promiseLabels.push('stockLevels');
+
       if (promises.length > 0) {
         const responses = await Promise.all(promises);
         
         // Process responses
         let productsResponse = { products: [] };
         let warehousesResponse = { warehouses: [] };
+        let stockLevelsResponse = { stockLevels: [] };
         
         responses.forEach((response, index) => {
           const label = promiseLabels[index];
@@ -217,8 +239,13 @@ const InventoryContent = () => {
             productsResponse = response;
           } else if (label === 'warehouses') {
             warehousesResponse = response;
+          } else if (label === 'stockLevels') {
+            stockLevelsResponse = response;
           }
         });
+
+        // Store stock levels
+        setStockLevels(stockLevelsResponse.stockLevels || []);
 
         // Transform products to include stock information (mock data for now)
         const productsWithStock: ProductWithStock[] = (productsResponse.products || []).map(product => ({
@@ -256,7 +283,7 @@ const InventoryContent = () => {
   const getStatusBadge = (stock: number) => {
     if (stock === 0) {
       return <Badge variant="destructive">Hết hàng</Badge>;
-    } else if (stock < 10) {
+    } else if (stock > 1 && stock < 100) {
       return <Badge variant="outline" className="text-orange-600 border-orange-600">Sắp hết</Badge>;
     } else {
       return <Badge variant="secondary" className="text-green-600 border-green-600">Còn hàng</Badge>;
@@ -268,8 +295,8 @@ const InventoryContent = () => {
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === "all" || 
-                         (filterStatus === "in-stock" && product.current_stock >= 10) ||
-                         (filterStatus === "low-stock" && product.current_stock > 0 && product.current_stock < 10) ||
+                         (filterStatus === "in-stock" && product.current_stock >= 100) ||
+                         (filterStatus === "low-stock" && product.current_stock > 1 && product.current_stock < 100) ||
                          (filterStatus === "out-of-stock" && product.current_stock === 0);
     
     const matchesCategory = filterCategory === "all" || 
@@ -659,7 +686,7 @@ const InventoryContent = () => {
         'Giá bán (VND)': product.price || 0,
         'Kho': warehouse?.name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
-                     product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
+                     (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
         'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
       };
 
@@ -780,53 +807,82 @@ const InventoryContent = () => {
             </Card>
           )}
           
-          {errorStates.products ? (
-            <PermissionErrorCard title="Còn Hàng" error={errorStates.products} />
-          ) : (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Còn Hàng</CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {products.filter(p => p.current_stock >= 10).length}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {errorStates.products ? (
-            <PermissionErrorCard title="Sắp Hết" error={errorStates.products} />
-          ) : (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Sắp Hết</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {products.filter(p => p.current_stock > 0 && p.current_stock < 10).length}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {errorStates.products ? (
-            <PermissionErrorCard title="Hết Hàng" error={errorStates.products} />
-          ) : (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Hết Hàng</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  {products.filter(p => p.current_stock === 0).length}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {(() => {
+            // Calculate aggregated stock per product (sum across all warehouses)
+            const productStockMap = new Map<string, number>();
+            stockLevels.forEach(stock => {
+              const currentTotal = productStockMap.get(stock.productId) || 0;
+              productStockMap.set(stock.productId, currentTotal + stock.quantity);
+            });
+            
+            // Calculate statistics
+            const inStockCount = products.filter(p => {
+              const totalStock = productStockMap.get(p.id) || 0;
+              return totalStock >= 100;
+            }).length;
+
+            const lowStockCount = products.filter(p => {
+              const totalStock = productStockMap.get(p.id) || 0;
+              return totalStock > 1 && totalStock < 100;
+            }).length;
+
+            const outOfStockCount = products.filter(p => {
+              const totalStock = productStockMap.get(p.id) || 0;
+              return totalStock === 0;
+            }).length;
+
+            return (
+              <>
+                {errorStates.products || errorStates.stockLevels ? (
+                  <PermissionErrorCard title="Còn Hàng" error={errorStates.products || errorStates.stockLevels} />
+                ) : (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Còn Hàng</CardTitle>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">
+                        {inStockCount}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {errorStates.products || errorStates.stockLevels ? (
+                  <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.stockLevels} />
+                ) : (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Sắp Hết</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-orange-600">
+                        {lowStockCount}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {errorStates.products || errorStates.stockLevels ? (
+                  <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.stockLevels} />
+                ) : (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Hết Hàng</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-red-600">
+                        {outOfStockCount}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Tabs for different sections */}

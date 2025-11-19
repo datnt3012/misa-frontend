@@ -65,6 +65,8 @@ interface Product {
   name: string;
   unit_price: number;
   current_stock: number;
+  price?: number;
+  costPrice?: number;
 }
 
 interface ImportSlipsProps {
@@ -280,8 +282,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       product_code: product.code,
       product_name: product.name,
       quantity: newItem.quantity,
-      unit_price: newItem.unit_price || product.unit_price,
-      total_price: newItem.quantity * (newItem.unit_price || product.unit_price),
+      unit_price: newItem.unit_price || product.costPrice || product.unit_price || 0,
+      total_price: newItem.quantity * (newItem.unit_price || product.costPrice || product.unit_price || 0),
       po_number: newItem.po_number,
       notes: newItem.notes
     };
@@ -719,7 +721,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                           setNewItem({
                             ...newItem, 
                             product_id: value,
-                            unit_price: selectedProduct?.price || 0
+                            unit_price: selectedProduct?.costPrice || selectedProduct?.unit_price || 0
                           });
                         }}>
                           <SelectTrigger>

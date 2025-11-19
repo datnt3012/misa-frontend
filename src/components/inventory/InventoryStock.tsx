@@ -97,7 +97,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const getStatusBadge = (stock: number) => {
     if (stock === 0) {
       return <Badge variant="destructive">Hết hàng</Badge>;
-    } else if (stock < 10) {
+    } else if (stock > 1 && stock < 100) {
       return <Badge variant="outline" className="text-orange-600 border-orange-600">Sắp hết</Badge>;
     } else {
       return <Badge variant="secondary" className="text-green-600 border-green-600">Còn hàng</Badge>;
@@ -109,8 +109,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === "all" || 
-                         (filterStatus === "in-stock" && product.current_stock >= 10) ||
-                         (filterStatus === "low-stock" && product.current_stock > 0 && product.current_stock < 10) ||
+                         (filterStatus === "in-stock" && product.current_stock >= 100) ||
+                         (filterStatus === "low-stock" && product.current_stock > 1 && product.current_stock < 100) ||
                          (filterStatus === "out-of-stock" && product.current_stock === 0);
     
     const matchesCategory = filterCategory === "all" || 
@@ -248,7 +248,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         'Giá bán (VND)': product.price || 0,
         'Kho': product.warehouse_name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
-                     product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
+                     (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
         'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
       };
 
