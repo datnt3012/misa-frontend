@@ -338,12 +338,12 @@ const CategoriesContent: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[200px]">Tên loại sản phẩm</TableHead>
-                    <TableHead className="min-w-[250px]">Mô tả</TableHead>
-                    <TableHead className="w-[140px]">Trạng thái</TableHead>
-                    <TableHead className="w-[120px]">Ngày tạo</TableHead>
+                    <TableHead className="w-[200px] text-left">Tên loại sản phẩm</TableHead>
+                    <TableHead className="min-w-[250px] text-left">Mô tả</TableHead>
+                    <TableHead className="w-[140px] text-center">Trạng thái</TableHead>
+                    <TableHead className="w-[120px] text-center">Ngày tạo</TableHead>
                     {(canUpdate || canDelete) && (
-                      <TableHead className="w-[120px] text-right">Thao tác</TableHead>
+                      <TableHead className="w-[120px] text-center">Thao tác</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
@@ -361,11 +361,7 @@ const CategoriesContent: React.FC = () => {
                       <TableCell>
                         <Badge 
                           variant="outline"
-                          className={
-                            canUpdate 
-                              ? "cursor-pointer hover:opacity-80 transition-opacity" 
-                              : ""
-                          }
+                          className={`${canUpdate ? "cursor-pointer hover:opacity-80 transition-opacity" : ""} whitespace-nowrap px-4 py-1 text-sm font-semibold flex items-center gap-2`}
                           style={{
                             backgroundColor: category.isActive ? '#10b981' : '#ef4444',
                             color: 'white',
