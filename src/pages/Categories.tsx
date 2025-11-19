@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,7 +59,7 @@ const CategoriesContent: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -84,14 +84,15 @@ const CategoriesContent: React.FC = () => {
 
   // Hybrid permission system: Frontend controls UI visibility, Backend blocks API calls
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+      const isActiveFilter = statusFilter === 'all' ? undefined : statusFilter === 'active';
+      const response = await categoriesApi.getCategories({ 
+        page: 1, 
+        limit: 1000,
+        ...(isActiveFilter !== undefined ? { isActive: isActiveFilter } : {})
+      });
       setCategories(response.categories || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -103,7 +104,11 @@ const CategoriesContent: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, toast]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   const handleAddCategory = async () => {
     if (!newCategory.name.trim()) {
@@ -200,15 +205,40 @@ const CategoriesContent: React.FC = () => {
     setIsDeleteDialogOpen(true);
   };
 
+  const handleToggleStatus = async (category: Category) => {
+    if (!canUpdate) {
+      toast({
+        title: "Lỗi",
+        description: "Bạn không có quyền cập nhật loại sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const newStatus = !category.isActive;
+      await categoriesApi.updateCategory(category.id, { isActive: newStatus });
+      toast({
+        title: "Thành công",
+        description: newStatus 
+          ? "Đã kích hoạt loại sản phẩm" 
+          : "Đã vô hiệu hóa loại sản phẩm",
+      });
+      fetchCategories();
+    } catch (error) {
+      console.error('Error toggling category status:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái loại sản phẩm",
+        variant: "destructive",
+      });
+    }
+  };
+
   const filteredCategories = categories.filter(category => {
     const matchesSearch = category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesStatus = statusFilter === 'all' || 
-                         (statusFilter === 'active' && !category.isDeleted) ||
-                         (statusFilter === 'deleted' && category.isDeleted);
-    
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   if (loading) {
@@ -269,7 +299,7 @@ const CategoriesContent: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="all">Tất cả</SelectItem>
                   <SelectItem value="active">Đang hoạt động</SelectItem>
-                  <SelectItem value="deleted">Đã xóa</SelectItem>
+                  <SelectItem value="inactive">Không hoạt động</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -329,8 +359,30 @@ const CategoriesContent: React.FC = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={!category.isDeleted ? "default" : "secondary"}>
-                          {!category.isDeleted ? (
+                        <Badge 
+                          variant="outline"
+                          className={
+                            canUpdate 
+                              ? "cursor-pointer hover:opacity-80 transition-opacity" 
+                              : ""
+                          }
+                          style={{
+                            backgroundColor: category.isActive ? '#10b981' : '#ef4444',
+                            color: 'white',
+                            borderColor: category.isActive ? '#10b981' : '#ef4444',
+                          }}
+                          onClick={canUpdate ? () => handleToggleStatus(category) : undefined}
+                          onKeyDown={canUpdate ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleToggleStatus(category);
+                            }
+                          } : undefined}
+                          role={canUpdate ? "button" : undefined}
+                          tabIndex={canUpdate ? 0 : undefined}
+                          title={canUpdate ? (category.isActive ? "Nhấn để vô hiệu hóa" : "Nhấn để kích hoạt") : undefined}
+                        >
+                          {category.isActive ? (
                             <>
                               <CheckCircle className="w-3 h-3 mr-1" />
                               Đang hoạt động
@@ -338,7 +390,7 @@ const CategoriesContent: React.FC = () => {
                           ) : (
                             <>
                               <XCircle className="w-3 h-3 mr-1" />
-                              Đã xóa
+                              Không hoạt động
                             </>
                           )}
                         </Badge>

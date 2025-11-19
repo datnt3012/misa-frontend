@@ -5,7 +5,7 @@ export interface Category {
   id: string;
   name: string;
   description?: string;
-  isDeleted: boolean;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -19,6 +19,7 @@ export interface CreateCategoryRequest {
 export interface UpdateCategoryRequest {
   name?: string;
   description?: string;
+  isActive?: boolean;
 }
 
 export const categoriesApi = {
@@ -27,11 +28,15 @@ export const categoriesApi = {
     page?: number;
     limit?: number;
     search?: string;
+    isActive?: boolean;
   }): Promise<{ categories: Category[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.isActive !== undefined) {
+      queryParams.append('isActive', params.isActive.toString());
+    }
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.CATEGORIES.LIST}?${queryParams.toString()}`
@@ -44,7 +49,7 @@ export const categoriesApi = {
       id: row.id,
       name: row.name,
       description: row.description ?? undefined,
-      isDeleted: row.isDeleted ?? row.is_deleted ?? false,
+      isActive: row.isActive ?? row.is_active ?? true, // Default value: true
       createdAt: row.createdAt ?? row.created_at ?? '',
       updatedAt: row.updatedAt ?? row.updated_at ?? '',
       deletedAt: row.deletedAt ?? row.deleted_at ?? null,
@@ -76,7 +81,7 @@ export const categoriesApi = {
       id: data.id,
       name: data.name,
       description: data.description ?? undefined,
-      isDeleted: data.isDeleted ?? data.is_deleted ?? false,
+      isActive: data.isActive ?? data.is_active ?? true, // Default value: true
       createdAt: data.createdAt ?? data.created_at ?? '',
       updatedAt: data.updatedAt ?? data.updated_at ?? '',
       deletedAt: data.deletedAt ?? data.deleted_at ?? null,
@@ -92,7 +97,7 @@ export const categoriesApi = {
       id: data.id,
       name: data.name,
       description: data.description ?? undefined,
-      isDeleted: data.isDeleted ?? data.is_deleted ?? false,
+      isActive: data.isActive ?? data.is_active ?? true, // Default value: true
       createdAt: data.createdAt ?? data.created_at ?? '',
       updatedAt: data.updatedAt ?? data.updated_at ?? '',
       deletedAt: data.deletedAt ?? data.deleted_at ?? null,
@@ -101,14 +106,21 @@ export const categoriesApi = {
 
   // Update category
   updateCategory: async (id: string, categoryData: UpdateCategoryRequest): Promise<Category> => {
-    const response = await api.patch<any>(API_ENDPOINTS.CATEGORIES.UPDATE(id), categoryData);
+    // Map isActive to is_active for backend
+    const requestData: any = { ...categoryData };
+    if (categoryData.isActive !== undefined) {
+      requestData.is_active = categoryData.isActive;
+      delete requestData.isActive;
+    }
+    
+    const response = await api.patch<any>(API_ENDPOINTS.CATEGORIES.UPDATE(id), requestData);
     const data = response?.data || response;
     
     return {
       id: data.id,
       name: data.name,
       description: data.description ?? undefined,
-      isDeleted: data.isDeleted ?? data.is_deleted ?? false,
+      isActive: data.isActive ?? data.is_active ?? true, // Default value: true
       createdAt: data.createdAt ?? data.created_at ?? '',
       updatedAt: data.updatedAt ?? data.updated_at ?? '',
       deletedAt: data.deletedAt ?? data.deleted_at ?? null,

@@ -129,7 +129,7 @@ const Layout = ({ children }: LayoutProps) => {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Package className="h-4 w-4" />
               </div>
-              <span className="text-xl font-bold">QuanLyKho</span>
+              <span className="text-xl font-bold">WareHub</span>
             </div>
           </div>
           <NavLinks />
@@ -152,7 +152,7 @@ const Layout = ({ children }: LayoutProps) => {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Package className="h-4 w-4" />
             </div>
-            <span className="text-xl font-bold">QuanLyKho</span>
+            <span className="text-xl font-bold">WareHub</span>
           </div>
           <NavLinks />
         </SheetContent>

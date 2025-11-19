@@ -118,7 +118,7 @@ const OrdersContent: React.FC = () => {
       try {
         const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
         // Filter out deleted categories
-        const activeCategories = response.categories.filter(cat => !cat.isDeleted);
+        const activeCategories = response.categories.filter(cat => cat.isActive);
         setCategories(activeCategories);
       } catch (error) {
         console.error('Error fetching categories:', error);
