@@ -5,21 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Search, 
-  Plus, 
-  Phone, 
-  Mail, 
-  MapPin, 
+import {
+  Search,
+  Plus,
+  Phone,
+  Mail,
+  MapPin,
   Eye,
   ShoppingCart,
   TrendingUp,
   Calendar,
   Edit,
-  Trash2
+  Trash2,
+  Receipt,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { AddressInfo, customerApi } from "@/api/customer.api";
+import { customerApi } from "@/api/customer.api";
 import { organizationApi, Organization } from "@/api/organization.api";
 import { orderApi } from "@/api/order.api";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
@@ -48,6 +49,14 @@ import {
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
+interface CustomerVatInfo {
+  taxCode?: string | null;
+  companyName?: string | null;
+  companyAddress?: string | null;
+  vatEmail?: string | null;
+  companyPhone?: string | null;
+}
+
 interface Customer {
   id: string;
   code?: string;
@@ -56,6 +65,7 @@ interface Customer {
   phoneNumber?: string;
   email?: string;
   address?: string;
+  vatRate?: number;
   userId?: string;
   isDeleted?: boolean;
   createdAt: string;
@@ -69,7 +79,111 @@ interface Customer {
   provinceName?: string;
   districtName?: string;
   wardName?: string;
+  vatInfo?: CustomerVatInfo;
 }
+
+interface CustomerFormVatInfoState {
+  taxCode: string;
+  companyName: string;
+  companyAddress: string;
+  vatEmail: string;
+  companyPhone: string;
+}
+
+interface CustomerFormAddressState {
+  organizationId: string;
+  provinceCode: string;
+  districtCode: string;
+  wardCode: string;
+  provinceName: string;
+  districtName: string;
+  wardName: string;
+}
+
+interface CustomerFormState {
+  customer_code: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  vatRate: number | undefined;
+  organizationId?: string;
+  addressInfo: CustomerFormAddressState;
+  vatInfo: CustomerFormVatInfoState;
+}
+
+const createEmptyAddressInfo = (): CustomerFormAddressState => ({
+  organizationId: "",
+  provinceCode: "",
+  districtCode: "",
+  wardCode: "",
+  provinceName: "",
+  districtName: "",
+  wardName: "",
+});
+
+const createEmptyVatInfoState = (): CustomerFormVatInfoState => ({
+  taxCode: "",
+  companyName: "",
+  companyAddress: "",
+  vatEmail: "",
+  companyPhone: "",
+});
+
+const createEmptyCustomerFormState = (): CustomerFormState => ({
+  customer_code: "",
+  name: "",
+  phone: "",
+  email: "",
+  address: "",
+  vatRate: undefined,
+  organizationId: "none",
+  addressInfo: createEmptyAddressInfo(),
+  vatInfo: createEmptyVatInfoState(),
+});
+
+const populateVatInfoState = (info?: CustomerVatInfo | null): CustomerFormVatInfoState => ({
+  taxCode: info?.taxCode ?? "",
+  companyName: info?.companyName ?? "",
+  companyAddress: info?.companyAddress ?? "",
+  vatEmail: info?.vatEmail ?? "",
+  companyPhone: info?.companyPhone ?? "",
+});
+
+const sanitizeVatField = (value?: string) => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const buildVatInfoPayload = (
+  info: CustomerFormVatInfoState
+): CustomerVatInfo | undefined => {
+  const payload: CustomerVatInfo = {
+    taxCode: sanitizeVatField(info.taxCode),
+    companyName: sanitizeVatField(info.companyName),
+    companyAddress: sanitizeVatField(info.companyAddress),
+    vatEmail: sanitizeVatField(info.vatEmail),
+    companyPhone: sanitizeVatField(info.companyPhone),
+  };
+
+  return Object.values(payload).some(Boolean) ? payload : undefined;
+};
+
+const buildAddressInfoState = (info?: any): CustomerFormAddressState => {
+  const base = createEmptyAddressInfo();
+  if (!info) return base;
+
+  return {
+    organizationId: info.organizationId ?? base.organizationId,
+    provinceCode: info.provinceCode ?? info.province?.code ?? base.provinceCode,
+    districtCode: info.districtCode ?? info.district?.code ?? base.districtCode,
+    wardCode: info.wardCode ?? info.ward?.code ?? base.wardCode,
+    provinceName: info.provinceName ?? info.province?.name ?? base.provinceName,
+    districtName: info.districtName ?? info.district?.name ?? base.districtName,
+    wardName: info.wardName ?? info.ward?.name ?? base.wardName,
+  };
+};
 
 interface Order {
   id: string;
@@ -118,42 +232,9 @@ const CustomersContent = () => {
   };
 
   // Form states
-  const [newCustomer, setNewCustomer] = useState({
-    customer_code: "",
-    name: "",
-    phone: "",
-    email: "",
-    address: "",
-    vatRate: undefined as number | undefined,
-    organizationId: "none",
-    addressInfo: {
-      organizationId: "",
-      provinceCode: "",
-      districtCode: "",
-      wardCode: "",
-      provinceName: "",
-      districtName: "",
-      wardName: ""
-    }
-  });
+  const [newCustomer, setNewCustomer] = useState<CustomerFormState>(() => createEmptyCustomerFormState());
 
-  const [editCustomer, setEditCustomer] = useState({
-    customer_code: "",
-    name: "",
-    phone: "",
-    email: "",
-    address: "",
-    vatRate: undefined as number | undefined,
-    addressInfo: {
-      organizationId: "",
-      provinceCode: "",
-      districtCode: "",
-      wardCode: "",
-      provinceName: "",
-      districtName: "",
-      wardName: ""
-    }
-  });
+  const [editCustomer, setEditCustomer] = useState<CustomerFormState>(() => createEmptyCustomerFormState());
 
   // Check permissions
   const { hasPermission } = usePermissions();
@@ -267,6 +348,7 @@ const CustomersContent = () => {
 
   const handleAddCustomer = async () => {
     try {
+      const vatInfoPayload = buildVatInfoPayload(newCustomer.vatInfo);
       const insertData: any = {
         name: newCustomer.name,
         phoneNumber: newCustomer.phone || null,
@@ -280,29 +362,16 @@ const CustomersContent = () => {
         }
       };
 
+      if (vatInfoPayload) {
+        insertData.vatInfo = vatInfoPayload;
+      }
+
       // Backend will auto-generate customer code
 
       const data = await customerApi.createCustomer(insertData);
 
       setCustomers([data, ...customers]);
-      setNewCustomer({ 
-        customer_code: "", 
-        name: "", 
-        phone: "", 
-        email: "", 
-        address: "",
-        vatRate: undefined,
-        organizationId: "none",
-        addressInfo: {
-          organizationId: "",
-          provinceCode: "",
-          districtCode: "",
-          wardCode: "",
-          provinceName: "",
-          districtName: "",
-          wardName: ""
-        }
-      });
+      setNewCustomer(createEmptyCustomerFormState());
       setIsAddDialogOpen(false);
       // Clear URL parameters
       setSearchParams({});
@@ -323,22 +392,16 @@ const CustomersContent = () => {
 
   const handleEditCustomer = (customer: Customer) => {
     setEditingCustomer(customer);
-      setEditCustomer({
+    setEditCustomer({
       customer_code: customer.customer_code || "",
-      name: customer.name,
+      name: customer.name || "",
       phone: customer.phoneNumber || "",
       email: customer.email || "",
       address: customer.address || "",
       vatRate: customer.vatRate,
-      addressInfo: customer.addressInfo || {
-        organizationId: "",
-        provinceCode: "",
-        districtCode: "",
-        wardCode: "",
-        provinceName: "",
-        districtName: "",
-        wardName: ""
-      }
+      organizationId: customer.organizationId ?? "none",
+      addressInfo: buildAddressInfoState(customer.addressInfo),
+      vatInfo: populateVatInfoState(customer.vatInfo),
     });
     setIsEditDialogOpen(true);
     // Save state to URL
@@ -349,7 +412,8 @@ const CustomersContent = () => {
     if (!editingCustomer) return;
 
     try {
-      await customerApi.updateCustomer(editingCustomer.id, {
+      const vatInfoPayload = buildVatInfoPayload(editCustomer.vatInfo);
+      const updatePayload: any = {
         name: editCustomer.name,
         phoneNumber: editCustomer.phone || null,
         email: editCustomer.email || null,
@@ -360,12 +424,19 @@ const CustomersContent = () => {
           districtCode: editCustomer.addressInfo?.districtCode || null,
           wardCode: editCustomer.addressInfo?.wardCode || null
         }
-      });
+      };
+
+      if (vatInfoPayload) {
+        updatePayload.vatInfo = vatInfoPayload;
+      }
+
+      await customerApi.updateCustomer(editingCustomer.id, updatePayload);
 
       // Reload customers to get updated data
       await loadCustomers();
       setIsEditDialogOpen(false);
       setEditingCustomer(null);
+      setEditCustomer(createEmptyCustomerFormState());
       // Clear URL parameters
       setSearchParams({});
       
@@ -479,6 +550,7 @@ const CustomersContent = () => {
               setSearchParams({ action: 'add' });
             } else {
               setSearchParams({});
+              setNewCustomer(createEmptyCustomerFormState());
             }
           }}>
             <DialogTrigger asChild>
@@ -565,11 +637,93 @@ const CustomersContent = () => {
                     required={false}
                   />
                 </div>
+                <div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-muted/20 p-4">
+                  <div>
+                    <Label className="font-medium">Thông tin hóa đơn VAT</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Cập nhật thông tin doanh nghiệp để xuất hóa đơn điện tử.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="vat-tax-code">Mã số thuế</Label>
+                      <Input
+                        id="vat-tax-code"
+                        value={newCustomer.vatInfo.taxCode}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            vatInfo: { ...prev.vatInfo, taxCode: e.target.value },
+                          }))
+                        }
+                        placeholder="Ví dụ: 0123456789"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="vat-company-name">Tên công ty/đơn vị</Label>
+                      <Input
+                        id="vat-company-name"
+                        value={newCustomer.vatInfo.companyName}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            vatInfo: { ...prev.vatInfo, companyName: e.target.value },
+                          }))
+                        }
+                        placeholder="Nhập tên công ty"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="vat-email">Email nhận hóa đơn</Label>
+                      <Input
+                        id="vat-email"
+                        type="email"
+                        value={newCustomer.vatInfo.vatEmail}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            vatInfo: { ...prev.vatInfo, vatEmail: e.target.value },
+                          }))
+                        }
+                        placeholder="vd: hoadon@abc.com"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="vat-company-phone">Số điện thoại công ty</Label>
+                      <Input
+                        id="vat-company-phone"
+                        value={newCustomer.vatInfo.companyPhone}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            vatInfo: { ...prev.vatInfo, companyPhone: e.target.value },
+                          }))
+                        }
+                        placeholder="vd: +84987654321"
+                      />
+                    </div>
+                    <div className="grid gap-2 md:col-span-2">
+                      <Label htmlFor="vat-company-address">Địa chỉ công ty</Label>
+                      <Textarea
+                        id="vat-company-address"
+                        value={newCustomer.vatInfo.companyAddress}
+                        onChange={(e) =>
+                          setNewCustomer((prev) => ({
+                            ...prev,
+                            vatInfo: { ...prev.vatInfo, companyAddress: e.target.value },
+                          }))
+                        }
+                        placeholder="Nhập địa chỉ ghi trên hóa đơn"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
                 setIsAddDialogOpen(false);
                 setSearchParams({});
+                setNewCustomer(createEmptyCustomerFormState());
               }}>
                   Hủy
                 </Button>
@@ -637,6 +791,12 @@ const CustomersContent = () => {
                      <span className="truncate">{formatAddress(customer)}</span>
                   </div>
                 )}
+                {customer.vatInfo?.taxCode && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Receipt className="h-4 w-4" />
+                    Mã số thuế: {customer.vatInfo.taxCode}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
                   Tham gia: {customer.createdAt && customer.createdAt !== '' ? format(new Date(customer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
@@ -662,6 +822,7 @@ const CustomersContent = () => {
           if (!open) {
             setSearchParams({});
             setEditingCustomer(null);
+            setEditCustomer(createEmptyCustomerFormState());
           }
         }}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -717,9 +878,9 @@ const CustomersContent = () => {
                     provinceCode: editCustomer.addressInfo?.provinceCode,
                     districtCode: editCustomer.addressInfo?.districtCode,
                     wardCode: editCustomer.addressInfo?.wardCode,
-                    provinceName: (editCustomer as any).addressInfo?.province?.name ?? editCustomer.addressInfo?.provinceName,
-                    districtName: (editCustomer as any).addressInfo?.district?.name ?? editCustomer.addressInfo?.districtName,
-                    wardName: (editCustomer as any).addressInfo?.ward?.name ?? editCustomer.addressInfo?.wardName
+                    provinceName: editCustomer.addressInfo?.provinceName,
+                    districtName: editCustomer.addressInfo?.districtName,
+                    wardName: editCustomer.addressInfo?.wardName
                   }}
                   onChange={(data) => {
                     setEditCustomer(prev => ({
@@ -739,12 +900,94 @@ const CustomersContent = () => {
                   required={false}
                 />
               </div>
+              <div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-muted/20 p-4">
+                <div>
+                  <Label className="font-medium">Thông tin hóa đơn VAT</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Cập nhật để đồng bộ với hệ thống xuất hóa đơn.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-vat-tax-code">Mã số thuế</Label>
+                    <Input
+                      id="edit-vat-tax-code"
+                      value={editCustomer.vatInfo.taxCode}
+                      onChange={(e) =>
+                        setEditCustomer((prev) => ({
+                          ...prev,
+                          vatInfo: { ...prev.vatInfo, taxCode: e.target.value },
+                        }))
+                      }
+                      placeholder="Ví dụ: 0123456789"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-vat-company-name">Tên công ty/đơn vị</Label>
+                    <Input
+                      id="edit-vat-company-name"
+                      value={editCustomer.vatInfo.companyName}
+                      onChange={(e) =>
+                        setEditCustomer((prev) => ({
+                          ...prev,
+                          vatInfo: { ...prev.vatInfo, companyName: e.target.value },
+                        }))
+                      }
+                      placeholder="Nhập tên công ty"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-vat-email">Email nhận hóa đơn</Label>
+                    <Input
+                      id="edit-vat-email"
+                      type="email"
+                      value={editCustomer.vatInfo.vatEmail}
+                      onChange={(e) =>
+                        setEditCustomer((prev) => ({
+                          ...prev,
+                          vatInfo: { ...prev.vatInfo, vatEmail: e.target.value },
+                        }))
+                      }
+                      placeholder="vd: hoadon@abc.com"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-vat-company-phone">Số điện thoại công ty</Label>
+                    <Input
+                      id="edit-vat-company-phone"
+                      value={editCustomer.vatInfo.companyPhone}
+                      onChange={(e) =>
+                        setEditCustomer((prev) => ({
+                          ...prev,
+                          vatInfo: { ...prev.vatInfo, companyPhone: e.target.value },
+                        }))
+                      }
+                      placeholder="vd: +84987654321"
+                    />
+                  </div>
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label htmlFor="edit-vat-company-address">Địa chỉ công ty</Label>
+                    <Textarea
+                      id="edit-vat-company-address"
+                      value={editCustomer.vatInfo.companyAddress}
+                      onChange={(e) =>
+                        setEditCustomer((prev) => ({
+                          ...prev,
+                          vatInfo: { ...prev.vatInfo, companyAddress: e.target.value },
+                        }))
+                      }
+                      placeholder="Nhập địa chỉ ghi trên hóa đơn"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
                 setIsEditDialogOpen(false);
                 setSearchParams({});
                 setEditingCustomer(null);
+                setEditCustomer(createEmptyCustomerFormState());
               }}>
                 Hủy
               </Button>
@@ -787,33 +1030,75 @@ const CustomersContent = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        {selectedCustomer.phoneNumber && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          {selectedCustomer.phoneNumber && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span>{selectedCustomer.phoneNumber}</span>
+                            </div>
+                          )}
+                          {selectedCustomer.email && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              <span>{selectedCustomer.email}</span>
+                            </div>
+                          )}
+                           {(selectedCustomer.address || (selectedCustomer as any).addressInfo) && (
+                             <div className="flex items-center gap-2">
+                               <MapPin className="h-4 w-4 text-muted-foreground" />
+                               <span>{formatAddress(selectedCustomer)}</span>
+                             </div>
+                           )}
+                        </div>
+                        <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{selectedCustomer.phoneNumber}</span>
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>Tham gia: {selectedCustomer.createdAt && selectedCustomer.createdAt !== '' ? format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}</span>
                           </div>
-                        )}
-                        {selectedCustomer.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            <span>{selectedCustomer.email}</span>
-                          </div>
-                        )}
-                         {(selectedCustomer.address || (selectedCustomer as any).addressInfo) && (
-                           <div className="flex items-center gap-2">
-                             <MapPin className="h-4 w-4 text-muted-foreground" />
-                             <span>{formatAddress(selectedCustomer)}</span>
-                           </div>
-                         )}
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>Tham gia: {selectedCustomer.createdAt && selectedCustomer.createdAt !== '' ? format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}</span>
                         </div>
                       </div>
+                      {selectedCustomer.vatInfo && (
+                        <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/10 p-4">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                            <Receipt className="h-4 w-4" />
+                            Thông tin VAT
+                          </div>
+                          <div className="mt-3 grid gap-2 text-sm">
+                            {selectedCustomer.vatInfo.companyName && (
+                              <div>
+                                <span className="text-muted-foreground">Đơn vị: </span>
+                                {selectedCustomer.vatInfo.companyName}
+                              </div>
+                            )}
+                            {selectedCustomer.vatInfo.taxCode && (
+                              <div>
+                                <span className="text-muted-foreground">Mã số thuế: </span>
+                                {selectedCustomer.vatInfo.taxCode}
+                              </div>
+                            )}
+                            {selectedCustomer.vatInfo.companyAddress && (
+                              <div>
+                                <span className="text-muted-foreground">Địa chỉ: </span>
+                                {selectedCustomer.vatInfo.companyAddress}
+                              </div>
+                            )}
+                            {selectedCustomer.vatInfo.vatEmail && (
+                              <div>
+                                <span className="text-muted-foreground">Email hóa đơn: </span>
+                                {selectedCustomer.vatInfo.vatEmail}
+                              </div>
+                            )}
+                            {selectedCustomer.vatInfo.companyPhone && (
+                              <div>
+                                <span className="text-muted-foreground">SĐT công ty: </span>
+                                {selectedCustomer.vatInfo.companyPhone}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

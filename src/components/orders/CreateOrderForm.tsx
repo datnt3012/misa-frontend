@@ -13,7 +13,7 @@ import { Trash2, Plus } from "lucide-react";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { customerApi } from "@/api/customer.api";
+import { customerApi, VatInfo, Customer } from "@/api/customer.api";
 import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
@@ -40,55 +40,156 @@ interface OrderItem {
   current_stock?: number;
 }
 
+interface OrderFormState {
+  customer_id: string;
+  customer_name: string;
+  customer_code: string;
+  customer_phone: string;
+  order_type: string;
+  notes: string;
+  contract_number: string;
+  purchase_order_number: string;
+  vat_tax_code: string;
+  vat_company_name: string;
+  vat_company_address: string;
+  vat_company_phone: string;
+  vat_company_addressInfo: {
+    provinceCode: string;
+    districtCode: string;
+    wardCode: string;
+  };
+  vat_invoice_email: string;
+  vat_rate?: number;
+  shipping_recipient_name: string;
+  shipping_recipient_phone: string;
+  shipping_address: string;
+  shipping_addressInfo: {
+    provinceCode: string;
+    districtCode: string;
+    wardCode: string;
+    provinceName?: string;
+    districtName?: string;
+    wardName?: string;
+  };
+  initial_payment: number;
+  initial_payment_method: string;
+  initial_payment_bank: string;
+  items: OrderItem[];
+}
+
+const sanitizeVatField = (value?: string | null) => {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = typeof value === "string" ? value.trim() : String(value);
+  return trimmed.length ? trimmed : undefined;
+};
+
+const extractVatInfoFromOrder = (order: OrderFormState): VatInfo | undefined => {
+  const vatInfo: VatInfo = {
+    taxCode: sanitizeVatField(order.vat_tax_code),
+    companyName: sanitizeVatField(order.vat_company_name),
+    companyAddress: sanitizeVatField(order.vat_company_address),
+    vatEmail: sanitizeVatField(order.vat_invoice_email),
+    companyPhone: sanitizeVatField(order.vat_company_phone),
+  };
+
+  return Object.values(vatInfo).some(Boolean) ? vatInfo : undefined;
+};
+
+const buildVatInfoFromCustomer = (customer?: Customer) => ({
+  vat_tax_code: customer?.vatInfo?.taxCode ?? "",
+  vat_company_name: customer?.vatInfo?.companyName ?? "",
+  vat_company_address: customer?.vatInfo?.companyAddress ?? "",
+  vat_company_phone: customer?.vatInfo?.companyPhone ?? "",
+  vat_invoice_email: customer?.vatInfo?.vatEmail ?? "",
+});
+
+const buildShippingInfoFromCustomer = (customer?: Customer) => ({
+  shipping_recipient_name: customer?.name ?? "",
+  shipping_recipient_phone: customer?.phoneNumber ?? "",
+  shipping_address: customer?.address ?? "",
+  shipping_addressInfo: {
+    provinceCode:
+      customer?.addressInfo?.provinceCode ?? customer?.addressInfo?.province?.code ?? "",
+    districtCode:
+      customer?.addressInfo?.districtCode ?? customer?.addressInfo?.district?.code ?? "",
+    wardCode:
+      customer?.addressInfo?.wardCode ?? customer?.addressInfo?.ward?.code ?? "",
+    provinceName:
+      customer?.addressInfo?.provinceName ?? customer?.addressInfo?.province?.name ?? "",
+    districtName:
+      customer?.addressInfo?.districtName ?? customer?.addressInfo?.district?.name ?? "",
+    wardName:
+      customer?.addressInfo?.wardName ?? customer?.addressInfo?.ward?.name ?? "",
+  },
+});
+
+const hasCustomerVatInfo = (info?: VatInfo | null) => {
+  if (!info) return false;
+  return Object.values(info).some((value) => Boolean(sanitizeVatField(value)));
+};
+
+const createInitialOrderState = (): OrderFormState => ({
+  customer_id: "",
+  customer_name: "",
+  customer_code: "",
+  customer_phone: "",
+  // Removed customer address fields from UI; will derive from selected customer
+  order_type: "sale",
+  notes: "",
+  contract_number: "",
+  purchase_order_number: "",
+  
+  // VAT Information (for invoice)
+  vat_tax_code: "",
+  vat_company_name: "",
+  vat_company_address: "",
+  vat_company_phone: "",
+  vat_company_addressInfo: {
+    provinceCode: "",
+    districtCode: "",
+    wardCode: ""
+  },
+  vat_invoice_email: "",
+  vat_rate: undefined as number | undefined, // VAT rate (sẽ lấy từ customer nếu không có)
+  
+  // Shipping Information (auto-fill from selected customer)
+  shipping_recipient_name: "",
+  shipping_recipient_phone: "",
+  shipping_address: "",
+  shipping_addressInfo: {
+    provinceCode: "",
+    districtCode: "",
+    wardCode: "",
+    provinceName: "",
+    districtName: "",
+    wardName: "",
+  },
+  
+  initial_payment: 0,
+  initial_payment_method: "cash",
+  initial_payment_bank: "",
+  items: []
+});
+
 const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   
-  const [newOrder, setNewOrder] = useState({
-    customer_id: "",
-    customer_name: "",
-    customer_code: "",
-    customer_phone: "",
-    // Removed customer address fields from UI; will derive from selected customer
-    order_type: "sale",
-    notes: "",
-    contract_number: "",
-    purchase_order_number: "",
-    
-    // VAT Information (for invoice)
-    vat_tax_code: "",
-    vat_company_name: "",
-    vat_company_address: "",
-    vat_company_phone: "",
-    vat_company_addressInfo: {
-      provinceCode: "",
-      districtCode: "",
-      wardCode: ""
-    },
-    vat_invoice_email: "",
-    vat_rate: undefined as number | undefined, // VAT rate (sẽ lấy từ customer nếu không có)
-    
-    // Shipping Information (auto-fill from selected customer)
-    shipping_recipient_name: "",
-    shipping_recipient_phone: "",
-    shipping_address: "",
-    shipping_addressInfo: {
-      provinceCode: "",
-      districtCode: "",
-      wardCode: ""
-    },
-    
-    initial_payment: 0,
-    initial_payment_method: "cash",
-    initial_payment_bank: "",
-    items: [] as OrderItem[]
-  });
+  const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
+  const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
+
+  useEffect(() => {
+    if (open) {
+      setNewOrder(createInitialOrderState());
+      setShippingAddressVersion((v) => v + 1);
+    }
+  }, [open]);
 
   useEffect(() => {
     loadData();
@@ -307,6 +408,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         longitude: selectedCustomer.addressInfo.longitude,
       } : undefined;
       
+      const orderVatInfo = extractVatInfoFromOrder(newOrder);
+
       // Create order via backend API
       const orderData = await orderApi.createOrder({
         customerId: newOrder.customer_id || "",
@@ -323,11 +426,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         
         // VAT Information - removed VAT rate from UI, backend will handle
         vatRate: undefined,
-        taxCode: newOrder.vat_tax_code || undefined,
-        companyName: newOrder.vat_company_name || undefined,
-        companyAddress: newOrder.vat_company_address || undefined,
-        vatEmail: newOrder.vat_invoice_email || undefined,
-        companyPhone: newOrder.vat_company_phone || undefined,
+        taxCode: orderVatInfo?.taxCode,
+        companyName: orderVatInfo?.companyName,
+        companyAddress: orderVatInfo?.companyAddress,
+        vatEmail: orderVatInfo?.vatEmail,
+        companyPhone: orderVatInfo?.companyPhone,
         
         // Receiver Information
         receiverName: newOrder.shipping_recipient_name || undefined,
@@ -366,11 +469,34 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                        orderData.id || 
                        'thành công';
 
+      if (
+        selectedCustomer?.id &&
+        orderVatInfo &&
+        !hasCustomerVatInfo(selectedCustomer.vatInfo)
+      ) {
+        try {
+          const updatedCustomer = await customerApi.updateCustomer(selectedCustomer.id, {
+            vatInfo: orderVatInfo,
+          });
+          setCustomers((prev) =>
+            prev.map((cust) =>
+              cust.id === updatedCustomer.id
+                ? { ...cust, vatInfo: updatedCustomer.vatInfo ?? orderVatInfo }
+                : cust
+            )
+          );
+        } catch (vatError) {
+          console.error("Failed to update customer VAT info:", vatError);
+        }
+      }
+
       toast({
         title: "Thành công",
         description: `Đã tạo đơn hàng ${orderCode}`,
       });
 
+      setNewOrder(createInitialOrderState());
+      setShippingAddressVersion((v) => v + 1);
       onOrderCreated();
     } catch (error) {
       toast({
@@ -409,23 +535,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     value={newOrder.customer_id} 
                     onValueChange={(value) => {
                       const customer = customers.find(c => c.id === value);
+                      const vatInfo = buildVatInfoFromCustomer(customer);
+                      const shippingInfo = buildShippingInfoFromCustomer(customer);
                       setNewOrder(prev => ({
                         ...prev,
                         customer_id: value,
                         customer_name: customer?.name || "",
                         customer_code: customer?.customer_code || "",
                         customer_phone: customer?.phoneNumber || "",
-                        // do NOT auto-fill VAT company fields from customer
-                        // shipping auto-fill from customer
-                        shipping_recipient_name: customer?.name || "",
-                        shipping_recipient_phone: customer?.phoneNumber || "",
-                        shipping_address: customer?.address || prev.shipping_address || "",
-                        shipping_addressInfo: {
-                          provinceCode: customer?.addressInfo?.provinceCode || customer?.addressInfo?.province?.code || "",
-                          districtCode: customer?.addressInfo?.districtCode || customer?.addressInfo?.district?.code || "",
-                          wardCode: customer?.addressInfo?.wardCode || customer?.addressInfo?.ward?.code || "",
-                        }
+                        ...vatInfo,
+                        ...shippingInfo,
                       }));
+                      setShippingAddressVersion((v) => v + 1);
                     }}
                   >
                     <SelectTrigger>
@@ -552,20 +673,27 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <div>
                 <Label>Địa chỉ nhận hàng</Label>
                 <AddressFormSeparate
+                  key={shippingAddressVersion}
                   value={{
                     address: newOrder.shipping_address,
                     provinceCode: newOrder.shipping_addressInfo?.provinceCode,
                     districtCode: newOrder.shipping_addressInfo?.districtCode,
-                    wardCode: newOrder.shipping_addressInfo?.wardCode
+                    wardCode: newOrder.shipping_addressInfo?.wardCode,
+                    provinceName: newOrder.shipping_addressInfo?.provinceName,
+                    districtName: newOrder.shipping_addressInfo?.districtName,
+                    wardName: newOrder.shipping_addressInfo?.wardName,
                   }}
                   onChange={(data) => {
                     setNewOrder(prev => ({
                       ...prev,
                       shipping_address: data.address,
                       shipping_addressInfo: {
-                        provinceCode: data.provinceCode,
-                        districtCode: data.districtCode,
-                        wardCode: data.wardCode
+                        provinceCode: data.provinceCode || "",
+                        districtCode: data.districtCode || "",
+                        wardCode: data.wardCode || "",
+                        provinceName: data.provinceName || "",
+                        districtName: data.districtName || "",
+                        wardName: data.wardName || "",
                       }
                     }));
                   }}
