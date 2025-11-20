@@ -229,11 +229,22 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       onExportSlipCreated?.();
     } catch (error: any) {
       console.error('Error creating export slip:', error);
-      toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho",
-        variant: "destructive",
-      });
+      const errorMessage = error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho";
+      
+      // Check if error is about order already having an export slip
+      if (errorMessage.includes('đã có phiếu xuất kho') || errorMessage.includes('already has') || errorMessage.includes('export slip')) {
+        toast({
+          title: "Lỗi",
+          description: "Đơn hàng này đã có phiếu xuất kho. Mỗi đơn hàng chỉ có thể có một phiếu xuất kho.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Lỗi",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }

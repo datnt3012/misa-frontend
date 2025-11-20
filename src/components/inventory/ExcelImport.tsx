@@ -369,7 +369,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
           warehouseId: group.warehouseId,
           supplierId: group.supplierId,
           code: code,
-          description: `Nhập kho từ file Excel - ${file?.name || 'Unknown'}`,
+          description: undefined,
           status: 'pending',
           type: 'import',
           details: group.records.map(record => ({

@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Bell, Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Bell, Package, CheckCircle, Clock, AlertCircle, XCircle } from "lucide-react";
 import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
 
 interface ExportSlipNotification {
@@ -89,6 +89,8 @@ export const ExportSlipNotifications: React.FC<ExportSlipNotificationsProps> = (
         return <Package className="w-4 h-4 text-blue-600" />;
       case 'exported':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'cancelled':
+        return <XCircle className="w-4 h-4 text-red-600" />;
       default:
         return <AlertCircle className="w-4 h-4 text-gray-600" />;
     }
@@ -102,6 +104,8 @@ export const ExportSlipNotifications: React.FC<ExportSlipNotificationsProps> = (
         return <Badge variant="default" className="bg-blue-100 text-blue-800">Đã lấy hàng</Badge>;
       case 'exported':
         return <Badge variant="default" className="bg-green-100 text-green-800">Đã xuất kho</Badge>;
+      case 'cancelled':
+        return <Badge variant="default" className="bg-red-100 text-red-800 border-red-200">Hủy lấy hàng</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }

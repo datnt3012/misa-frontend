@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Package, CheckCircle, Clock, Truck, AlertTriangle, Info } from "lucide-react";
+import { Package, CheckCircle, Clock, Truck, AlertTriangle, Info, XCircle } from "lucide-react";
 import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
 
 interface ExportSlipStatusManagerProps {
@@ -50,6 +50,14 @@ const STATUS_TRANSITIONS: StatusTransition[] = [
     description: 'Admin/Giám đốc chuyển trực tiếp từ Chờ → Đã xuất kho',
     inventoryImpact: 'Trừ tồn kho ngay tại thời điểm đổi',
     requiresPermission: 'ADMIN'
+  },
+  {
+    from: 'pending',
+    to: 'cancelled',
+    action: 'Hủy lấy hàng',
+    description: 'Hủy phiếu xuất kho khi chưa trừ tồn kho',
+    inventoryImpact: 'Không ảnh hưởng tồn kho vì chưa trừ hàng',
+    requiresPermission: 'WAREHOUSE_MANAGE'
   }
 ];
 
@@ -87,6 +95,13 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
           <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
             <CheckCircle className="w-3 h-3" />
             Đã xuất kho
+          </Badge>
+        );
+      case 'cancelled':
+        return (
+          <Badge variant="default" className="flex items-center gap-1 bg-red-100 text-red-800 border-red-200">
+            <XCircle className="w-3 h-3" />
+            Hủy lấy hàng
           </Badge>
         );
       default:
@@ -131,6 +146,9 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
           } else {
             result = await exportSlipsApi.markAsExported(exportSlip.id, transitionNotes);
           }
+          break;
+        case 'cancelled':
+          result = await exportSlipsApi.markAsCancelled(exportSlip.id, transitionNotes);
           break;
         default:
           throw new Error('Invalid transition');
@@ -232,6 +250,7 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
                   <li><strong>Chờ:</strong> Không trừ tồn kho</li>
                   <li><strong>Đã lấy hàng:</strong> Hệ thống trừ tồn kho theo số lượng hàng hóa trong phiếu</li>
                   <li><strong>Đã xuất kho:</strong> Chỉ thay đổi trạng thái, không trừ thêm</li>
+                  <li><strong>Hủy lấy hàng:</strong> Hủy phiếu, không ảnh hưởng tồn kho (chỉ áp dụng khi chưa trừ tồn)</li>
                   <li><strong>Ngoại lệ:</strong> Nếu chuyển trực tiếp từ Chờ → Đã xuất kho thì hệ thống trừ tồn kho ngay</li>
                 </ul>
               </div>

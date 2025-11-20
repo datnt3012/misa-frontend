@@ -122,8 +122,8 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-card px-6 pb-4 border-r">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-56 lg:flex-col">
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-card px-4 pb-4 border-r">
           <div className="flex h-16 shrink-0 items-center">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -147,7 +147,7 @@ const Layout = ({ children }: LayoutProps) => {
             <Menu className="h-4 w-4" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64">
+        <SheetContent side="left" className="w-56">
           <div className="flex items-center gap-2 mb-6">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Package className="h-4 w-4" />
@@ -159,7 +159,7 @@ const Layout = ({ children }: LayoutProps) => {
       </Sheet>
 
       {/* Main Content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-56">
         {/* Top Header */}
         <div className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-x-4 border-b bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">

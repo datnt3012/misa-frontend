@@ -96,11 +96,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
 
   const getStatusBadge = (stock: number) => {
     if (stock === 0) {
-      return <Badge variant="destructive">Hết hàng</Badge>;
+      return <Badge variant="destructive" className="whitespace-nowrap">Hết hàng</Badge>;
     } else if (stock > 1 && stock < 100) {
-      return <Badge variant="outline" className="text-orange-600 border-orange-600">Sắp hết</Badge>;
+      return <Badge variant="outline" className="text-orange-600 border-orange-600 whitespace-nowrap">Sắp hết</Badge>;
     } else {
-      return <Badge variant="secondary" className="text-green-600 border-green-600">Còn hàng</Badge>;
+      return <Badge variant="secondary" className="text-green-600 border-green-600 whitespace-nowrap">Còn hàng</Badge>;
     }
   };
 
@@ -535,7 +535,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     <TableCell>
                       {product.warehouse_name || product.location || '-'}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {getStatusBadge(product.current_stock)}
                     </TableCell>
                     <TableCell>

@@ -336,7 +336,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         warehouseId: newSlip.warehouse_id,
         supplierId: supplierId,
         code: slipNumber,
-        description: newSlip.notes || 'Import slip',
+        description: newSlip.notes || undefined,
         status: 'pending',
         type: 'import',
         details: currentItems.map(item => ({
@@ -485,9 +485,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Phiếu nhập kho</h3>
-          <p className="text-sm text-muted-foreground">Quản lý các phiếu nhập kho và phê duyệt</p>
+        <div className="mt-6 ml-7">
+          <h1 className="text-3xl font-bold">Quản lý phiếu nhập kho</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Quản lý các phiếu nhập kho và phê duyệt</p>
         </div>
         {canManageImports && (
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -836,18 +836,19 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
       <Card className="shadow-sm">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="min-w-full">
+          <div className="overflow-x-auto w-full">
+            <Table className="min-w-[1200px] w-full">
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold text-center">Số phiếu</TableHead>
-                  <TableHead className="font-semibold text-center">Nhà cung cấp</TableHead>
-                  <TableHead className="font-semibold text-center w-32">Kho nhập</TableHead>
-                  <TableHead className="font-semibold text-center w-28">Ngày nhập</TableHead>
-                  <TableHead className="font-semibold text-center">Tổng tiền (VNĐ)</TableHead>
-                  <TableHead className="font-semibold text-center w-24">Trạng thái</TableHead>
-                  <TableHead className="font-semibold text-center w-32">Ngày tạo</TableHead>
-                  <TableHead className="font-semibold text-center w-32">Thao tác</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[120px]">Số phiếu</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]">Nhà cung cấp</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[150px]">Kho nhập</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[110px]">Ngày nhập</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[130px]">Tổng tiền (VNĐ)</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[120px]">Trạng thái</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[150px]">Ngày tạo</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -873,7 +874,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     </TableCell>
                     <TableCell className="text-center">{getStatusBadge(slip.status)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm text-center">{slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm text-center">
+                      <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
+                        {slip.notes || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex items-center justify-center space-x-1">
                         <Button
                           variant="outline"
@@ -883,7 +889,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             loadSlipItems(slip.id);
                             loadInventoryHistory(slip.id);
                           }}
-                          className="h-8 px-2 text-xs"
+                          className="h-8 px-2 text-xs whitespace-nowrap"
                         >
                           <Package className="w-3 h-3 mr-1" />
                           Chi tiết
@@ -894,7 +900,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               variant="outline"
                               size="sm"
                               onClick={() => approveImportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
+                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
                             >
                               <CheckCircle className="w-3 h-3 mr-1" />
                               Duyệt
@@ -903,7 +909,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               variant="outline"
                               size="sm"
                               onClick={() => rejectImportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
                             >
                               <XCircle className="w-3 h-3 mr-1" />
                               Từ chối
@@ -915,7 +921,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             variant="outline"
                             size="sm"
                             onClick={() => deleteImportSlip(slip.id)}
-                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
                           >
                             <Trash2 className="w-3 h-3 mr-1" />
                             Xóa

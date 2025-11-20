@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
 import { orderApi } from '@/api/order.api';
@@ -50,6 +50,12 @@ function ExportSlipsContent() {
           description: 'Xuất kho trực tiếp' 
         });
       }
+      // Hủy lấy hàng xuống cuối cùng
+      options.push({ 
+        value: 'cancelled', 
+        label: 'Hủy lấy hàng', 
+        description: 'Hủy phiếu xuất kho (chưa trừ tồn kho)' 
+      });
     } else if (currentStatus === 'picked') {
       options.push({ 
         value: 'exported', 
@@ -57,7 +63,7 @@ function ExportSlipsContent() {
         description: 'Xác nhận hàng đã rời khỏi kho' 
       });
     }
-    // No options for 'exported' status - it's final
+    // No options for 'exported' or 'cancelled' status - they are final
     
     console.log('Available options:', options);
     return options;
@@ -219,13 +225,22 @@ function ExportSlipsContent() {
         case 'exported':
           response = await exportSlipsApi.markAsExported(slipId, notes);
           break;
+        case 'cancelled':
+          response = await exportSlipsApi.markAsCancelled(slipId, notes);
+          break;
         default:
           throw new Error('Trạng thái không hợp lệ');
       }
 
+      const statusLabels: Record<string, string> = {
+        'picked': 'Đã lấy hàng',
+        'exported': 'Đã xuất kho',
+        'cancelled': 'Hủy lấy hàng'
+      };
+
       toast({
         title: "Thành công",
-        description: response.message || `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
+        description: response.message || `Đã cập nhật trạng thái thành ${statusLabels[newStatus] || newStatus}`,
       });
 
       fetchExportSlips();
@@ -247,6 +262,8 @@ function ExportSlipsContent() {
         return <Badge variant="outline" className="text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
       case 'exported':
         return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
+      case 'cancelled':
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Hủy lấy hàng</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -667,6 +684,10 @@ function ExportSlipsContent() {
                                     {option.value === 'picked' ? (
                                       <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
                                         <Package className="w-3 h-3 text-blue-600" />
+                                      </div>
+                                    ) : option.value === 'cancelled' ? (
+                                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                                        <XCircle className="w-3 h-3 text-red-600" />
                                       </div>
                                     ) : (
                                       <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">

@@ -20,8 +20,8 @@ const ExportImportContent = () => {
 
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-full mx-auto space-y-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Xuất Nhập Kho</h1>
           <p className="text-muted-foreground">Quản lý phiếu xuất kho, nhập kho và theo dõi lịch sử</p>

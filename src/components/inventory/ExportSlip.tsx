@@ -167,6 +167,13 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
             Đã xuất kho
           </Badge>
         );
+      case 'cancelled':
+        return (
+          <Badge variant="default" className="flex items-center gap-1 bg-red-100 text-red-800 border-red-200">
+            <XCircle className="w-3 h-3" />
+            Hủy lấy hàng
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{status}</Badge>;
     }

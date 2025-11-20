@@ -16,7 +16,7 @@ export interface ExportSlip {
   id: string;
   code: string; // slip number
   order_id: string;
-  status: 'pending' | 'picked' | 'exported'; // New status values
+  status: 'pending' | 'picked' | 'exported' | 'cancelled'; // New status values including cancelled
   notes?: string;
   approval_notes?: string;
   export_notes?: string;
@@ -290,6 +290,14 @@ export const exportSlipsApi = {
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
       status: 'exported',
       description: export_notes
+    });
+  },
+
+  // Mark as cancelled (hủy lấy hàng)
+  markAsCancelled: async (id: string, notes?: string): Promise<{ message: string }> => {
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
+      status: 'cancelled',
+      description: notes
     });
   },
 };
