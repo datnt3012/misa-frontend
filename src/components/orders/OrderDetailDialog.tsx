@@ -15,6 +15,7 @@ import { Trash2, Plus, Edit2, X, Check } from "lucide-react";
 import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { customerApi } from "@/api/customer.api";
 import { productApi } from "@/api/product.api";
+import { orderTagsApi, OrderTag } from "@/api/orderTags.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PaymentDialog } from '@/components/PaymentDialog';
@@ -41,6 +42,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
+  const [availableTags, setAvailableTags] = useState<OrderTag[]>([]);
   // Tags are display-only here
   const { toast } = useToast();
 
@@ -48,6 +50,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     if (open && order) {
       loadOrderDetails();
       loadProducts();
+      loadTags();
     }
   }, [open, order]);
 
@@ -57,6 +60,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setProducts(response.products || []);
     } catch (error) {
       console.error('Error loading products:', error);
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      // Only load tags with type 'order'
+      const tags = await orderTagsApi.getAllTags({ type: 'order' });
+      setAvailableTags(tags);
+    } catch (error) {
+      console.error('Error loading tags:', error);
+      // Fallback to empty array if API fails
+      setAvailableTags([]);
     }
   };
 
@@ -386,22 +401,31 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     return 'partially_paid';
   };
 
+  // Helper function to get display name for tag
+  const getTagDisplayName = (tag: OrderTag) => {
+    return tag.display_name || tag.name || tag.raw_name || tag.id;
+  };
+
   // Convert tags from string array to OrderTag objects for display
   const getTagsForDisplay = () => {
     if (!orderDetails?.tags || !Array.isArray(orderDetails.tags)) return [];
     
-    const predefinedTags = [
-      { id: 'returning_customer', name: 'Khách hàng quay lại', color: '#3B82F6' },
-      { id: 'priority', name: 'Ưu tiên', color: '#EF4444' },
-      { id: 'reconciled', name: 'Đã đối soát', color: '#10B981' },
-      { id: 'error', name: 'Lỗi', color: '#F59E0B' },
-      { id: 'unreconciled', name: 'Chưa đối soát', color: '#6B7280' },
-      { id: 'new_customer', name: 'Khách mới', color: '#8B5CF6' },
-    ];
-    
     return orderDetails.tags.map(tagName => {
-      const predefinedTag = predefinedTags.find(t => t.name === tagName);
-      return predefinedTag || { id: tagName, name: tagName, color: '#6B7280' };
+      // Try to find tag by name, display_name, or raw_name
+      const tag = availableTags.find(t => 
+        t.name === tagName || 
+        t.display_name === tagName || 
+        t.raw_name === tagName
+      );
+      
+      // If tag found, return it; otherwise create a default tag object
+      return tag || { 
+        id: tagName, 
+        name: tagName, 
+        color: '#6B7280',
+        display_name: tagName,
+        raw_name: tagName
+      };
     });
   };
   
@@ -616,7 +640,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                          key={tag.id} 
                          style={{ backgroundColor: tag.color, color: 'white' }}
                        >
-                         {tag.name}
+                         {getTagDisplayName(tag)}
                        </Badge>
                      ))
                    ) : (

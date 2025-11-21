@@ -152,10 +152,20 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/order-items/${id}`,
   },
   
-  // Order Tags (handled via order API)
+  // Tags
+  TAGS: {
+    LIST: '/tags',
+    CREATE: '/tags',
+    DETAIL: (id: string) => `/tags/${id}`,
+    UPDATE: (id: string) => `/tags/${id}`,
+    DELETE: (id: string) => `/tags/${id}`,
+    RESTORE: (id: string) => `/tags/${id}/restore`,
+    SYNC_FROM_ORDERS: '/tags/sync-from-orders',
+  },
+
+  // Order Tags (assign tags to specific orders)
   ORDER_TAGS: {
-    // Tags are managed through order API updates
-    // No separate endpoints needed
+    ASSIGN: (orderId: string) => `/orders/${orderId}/tags`,
   },
   
   // Export Slips

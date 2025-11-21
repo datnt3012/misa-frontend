@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
+import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +27,23 @@ import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
+const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
+const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
+const PENDING_TAG_NAMES = ["chưa đối soát", "pending reconciliation"];
+
+const tagMatchesNames = (tag: ApiOrderTag, names: string[]) => {
+  const normalizedTargets = names.map(normalizeTagLabel);
+  const candidates = [tag.name, tag.raw_name, tag.display_name];
+  return candidates.some(candidate => normalizedTargets.includes(normalizeTagLabel(candidate)));
+};
+
+const isReconciledDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, RECONCILED_TAG_NAMES);
+const isPendingDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, PENDING_TAG_NAMES);
+
+// Helper function to get display name for tag
+const getTagDisplayName = (tag: ApiOrderTag) => {
+  return tag.display_name || tag.name || tag.raw_name || tag.id;
+};
 
 const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -51,6 +69,7 @@ const OrdersContent: React.FC = () => {
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
+  const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,6 +86,21 @@ const OrdersContent: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+
+  const loadOrderTagsCatalog = useCallback(async () => {
+    try {
+      // Only load tags with type 'order'
+      const tags = await orderTagsApi.getAllTags({ type: 'order' });
+      setAvailableTags(tags);
+    } catch (error) {
+      console.error('Error loading order tags catalog:', error);
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể tải danh sách nhãn"),
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
 
   // Fetch orders function
   const fetchOrders = useCallback(async () => {
@@ -229,6 +263,10 @@ const OrdersContent: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage]); // Fetch when pagination changes
 
+  useEffect(() => {
+    loadOrderTagsCatalog();
+  }, [loadOrderTagsCatalog]);
+
   // Removed automatic refresh - only reload on user actions
 
   const fetchCreators = async () => {
@@ -269,6 +307,54 @@ const OrdersContent: React.FC = () => {
     }
     return address;
   };
+
+  const mapOrderTags = useCallback((tagNames?: string[]): ApiOrderTag[] => {
+    if (!Array.isArray(tagNames)) return [];
+    return tagNames
+      .map((tagName) => {
+        if (!tagName) return null;
+        
+        // Check if tagName looks like a UUID (ID format)
+        // UUID format: 8-4-4-4-12 hex characters
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tagName);
+        
+        // If it's a UUID, prioritize finding by ID (API returns IDs in order.tags)
+        if (isUUID) {
+          const matchedById = availableTags.find((tag) => tag.id === tagName);
+          if (matchedById) {
+            return matchedById;
+          }
+          // If not found by ID, create a fallback tag with the UUID as ID
+          // This will be resolved later in OrderTagsManager when allTags is loaded
+          return {
+            id: tagName,
+            name: tagName, // Temporary, will be resolved later
+            display_name: tagName,
+            raw_name: tagName,
+            color: "#94a3b8",
+          } as ApiOrderTag;
+        }
+        
+        // If not a UUID, try to find by name/display_name/raw_name
+        const matchedByName = availableTags.find((tag) =>
+          tagMatchesNames(tag, [tagName])
+        );
+        if (matchedByName) {
+          return matchedByName;
+        }
+        
+        // Fallback: create a tag with prefix
+        const fallbackId = `tag_${normalizeTagLabel(tagName) || Date.now().toString()}`;
+        return {
+          id: fallbackId,
+          name: tagName,
+          display_name: tagName,
+          raw_name: tagName,
+          color: "#94a3b8",
+        } as ApiOrderTag;
+      })
+      .filter((tag): tag is ApiOrderTag => Boolean(tag));
+  }, [availableTags]);
 
   // Handle quick note update
   const handleQuickNote = async (orderId: string, note: string) => {
@@ -594,24 +680,10 @@ const OrdersContent: React.FC = () => {
                   </TableRow>
                 ) : (
                   orders.map((order) => {
-                    // Convert tag names to tag objects for display
-                    const tagNames = order.tags || [];
-                    const allPredefinedTags = [
-                      { id: 'tag_chua_doi_soat', name: 'Chưa đối soát', color: '#ef4444' },
-                      { id: 'tag_da_doi_soat', name: 'Đã đối soát', color: '#10b981' },
-                      { id: 'tag_khach_moi', name: 'Khách mới', color: '#3b82f6' },
-                      { id: 'tag_khach_quay_lai', name: 'Khách hàng quay lại', color: '#8b5cf6' },
-                      { id: 'tag_uu_tien', name: 'Ưu tiên', color: '#f59e0b' },
-                      { id: 'tag_loi', name: 'Lỗi', color: '#dc2626' },
-                    ];
-                    
-                    const tags = tagNames.map(tagName => 
-                      allPredefinedTags.find(tag => tag.name === tagName)
-                    ).filter(Boolean);
-                    
-                    const specialTags = tags.filter((t: any) => t.name === 'Đã đối soát' || t.name === 'Chưa đối soát');
-                    const otherTags = tags.filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
-                    const hasReconciliation = specialTags.some((tag: any) => tag.name === 'Đã đối soát');
+                    const tags = mapOrderTags(order.tags || []);
+                    const specialTags = tags.filter((tag) => isReconciledDisplayTag(tag) || isPendingDisplayTag(tag));
+                    const otherTags = tags.filter((tag) => !specialTags.includes(tag));
+                    const hasReconciliation = specialTags.some((tag) => isReconciledDisplayTag(tag));
                     
                     return (
                       <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
@@ -645,7 +717,7 @@ const OrdersContent: React.FC = () => {
                                          : 'bg-red-100 text-red-800 hover:bg-red-100'
                                      )}
                                    >
-                                     {tag.name}
+                                     {getTagDisplayName(tag)}
                                    </Badge>
                                  ))
                                ) : (
@@ -973,27 +1045,18 @@ const OrdersContent: React.FC = () => {
           onOpenChange={setShowTagsManager}
           onTagsUpdated={() => {
             fetchOrders();
+            loadOrderTagsCatalog();
             // Also refresh the selected order data
             if (selectedOrder) {
               orderApi.getOrder(selectedOrder.id).then(updatedOrder => {
                 setSelectedOrder(updatedOrder);
-              }).catch(error => {
-                // If individual order fetch fails, just refresh the list
+              }).catch(() => {
                 fetchOrders();
               });
             }
           }}
-          currentTags={selectedOrder.tags?.map(tagName => {
-            const allPredefinedTags = [
-              { id: 'tag_chua_doi_soat', name: 'Chưa đối soát', color: '#ef4444' },
-              { id: 'tag_da_doi_soat', name: 'Đã đối soát', color: '#10b981' },
-              { id: 'tag_khach_moi', name: 'Khách mới', color: '#3b82f6' },
-              { id: 'tag_khach_quay_lai', name: 'Khách hàng quay lại', color: '#8b5cf6' },
-              { id: 'tag_uu_tien', name: 'Ưu tiên', color: '#f59e0b' },
-              { id: 'tag_loi', name: 'Lỗi', color: '#dc2626' },
-            ];
-            return allPredefinedTags.find(tag => tag.name === tagName);
-          }).filter(Boolean) || []}
+          currentTags={mapOrderTags(selectedOrder.tags || [])}
+          availableTags={availableTags}
         />
       )}
 
