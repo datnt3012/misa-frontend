@@ -328,23 +328,40 @@ export const dashboardApi = {
     }
   },
   
-  // Get recent activities (orders + notifications)
+  // Get recent activities from history table only
   getRecentActivities: async (limit: number = 8): Promise<any[]> => {
     try {
-      const response = await api.get<any>(`/dashboard/recent-activities?limit=${limit}`);
+      // Use /history endpoint instead of /dashboard/recent-activities
+      const response = await api.get<any>(`/history?limit=${limit}&orderBy=createdAt&order=desc`);
       const data = response?.data || response;
       
+      // Handle different response structures
+      let historyItems: any[] = [];
+      
       if (Array.isArray(data)) {
-        return data;
+        historyItems = data;
+      } else if (data && Array.isArray(data.data)) {
+        historyItems = data.data;
+      } else if (data && Array.isArray(data.rows)) {
+        historyItems = data.rows;
+      } else if (data && data.data && Array.isArray(data.data.rows)) {
+        historyItems = data.data.rows;
       }
       
-      if (data && Array.isArray(data.rows)) {
-        return data.rows;
-      }
-      
-      return [];
+      // Transform history items to match the expected format for dashboard
+      return historyItems.slice(0, limit).map((item: any) => ({
+        id: item.id,
+        title: item.title || item.message || 'Hoạt động',
+        message: item.message || item.title || '',
+        type: item.type || 'info',
+        amount: item.amount || item.metadata?.amount,
+        createdAt: item.createdAt || item.created_at || item.created_at,
+        entityType: item.entityType || item.entity_type,
+        entityId: item.entityId || item.entity_id,
+        action: item.action,
+      }));
     } catch (error) {
-      console.error('Error fetching recent activities:', error);
+      console.error('Error fetching recent activities from history:', error);
       return [];
     }
   },
