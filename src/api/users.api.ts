@@ -58,6 +58,7 @@ export interface UpdateUserRequest {
   address?: string;
   roleId?: string;
   isActive?: boolean;
+  password?: string;
 }
 
 export interface UserRole {

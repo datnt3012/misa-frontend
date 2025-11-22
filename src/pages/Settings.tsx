@@ -235,7 +235,7 @@ const SettingsContent = () => {
         throw new Error('Vai trò không hợp lệ');
       }
 
-      const resp = await usersApi.createUser({
+      const newUser = await usersApi.createUser({
         email: newUserEmail,
         username: newUserUsername || undefined,
         password: newUserPassword,
@@ -244,11 +244,6 @@ const SettingsContent = () => {
         phoneNumber: newUserPhoneNumber || undefined,
         address: newUserAddress || undefined,
         roleId: newUserRole,
-      });
-
-      toast({
-        title: "Thành công",
-        description: resp?.message || "Đã tạo tài khoản người dùng mới",
       });
 
       // Reset form
@@ -262,8 +257,14 @@ const SettingsContent = () => {
       setNewUserRole("");
       setShowCreateUserForm(false);
 
-      // Reload users
+      // Reload users and roles to update both table and dropdown
       await loadUsers();
+      await loadUserRoles();
+
+      toast({
+        title: "Thành công",
+        description: `Đã tạo tài khoản cho ${newUser.firstName || ''} ${newUser.lastName || ''} (${newUser.email})`,
+      });
 
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -362,32 +363,10 @@ const SettingsContent = () => {
     try {
       setResetPasswordLoading(true);
 
-      // Backend API call will be implemented later
-      const session = null; // Placeholder
-      if (!session) {
-        throw new Error('User not authenticated');
-      }
-
-      // Backend API call will be implemented later
-      const response = { ok: false, status: 501 }; // Placeholder
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          toast({
-            title: "Không có quyền",
-            description: convertPermissionCodesInMessage("Bạn không có quyền thực hiện hành động này"),
-            variant: "destructive",
-          });
-          return;
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to reset password');
-      }
+      // Call PATCH /users/{userId} with password field - backend handles authorization/permission check
+      await usersApi.updateUser(selectedUserId, {
+        password: newUserPasswordReset,
+      });
 
       toast({
         title: "Thành công",
@@ -400,9 +379,13 @@ const SettingsContent = () => {
       setShowResetPasswordForm(false);
     } catch (error: any) {
       console.error('Reset user password error:', error);
+      
+      // Backend will return appropriate error messages for permission/authorization issues
+      const errorMessage = error.response?.data?.message || error.message || "Không thể đổi mật khẩu nhân viên";
+      
       toast({
-        title: "Lỗi",
-        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể đổi mật khẩu nhân viên"),
+        title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
         variant: "destructive",
       });
     } finally {
@@ -659,7 +642,14 @@ const SettingsContent = () => {
                   <CardContent className="space-y-4">
                     {!showResetPasswordForm ? (
                       <Button 
-                        onClick={() => setShowResetPasswordForm(true)}
+                        onClick={async () => {
+                          // Load users when form is opened
+                          if (!usersLoaded) {
+                            await loadUsers();
+                            setUsersLoaded(true);
+                          }
+                          setShowResetPasswordForm(true);
+                        }}
                         className="w-full"
                       >
                         <Key className="w-4 h-4 mr-2" />
@@ -675,16 +665,22 @@ const SettingsContent = () => {
                                 <SelectValue placeholder="Chọn nhân viên cần đổi mật khẩu" />
                               </SelectTrigger>
                               <SelectContent>
-                                {users
-                                  .filter(user => {
-                                    // Không cho đổi mật khẩu chính mình
-                                    return user.id !== user?.id;
-                                  })
-                                  .map((user) => (
-                                    <SelectItem key={user.id} value={user.id}>
-                                      {user.firstName} {user.lastName} ({user.role?.name || 'Chưa phân quyền'})
-                                    </SelectItem>
-                                  ))}
+                                {users.length === 0 ? (
+                                  <div className="p-2 text-sm text-muted-foreground text-center">
+                                    Đang tải danh sách nhân viên...
+                                  </div>
+                                ) : (
+                                  users
+                                    .filter(u => {
+                                      // Không cho đổi mật khẩu chính mình
+                                      return u.id !== user?.id;
+                                    })
+                                    .map((u) => (
+                                      <SelectItem key={u.id} value={u.id}>
+                                        {u.firstName || ''} {u.lastName || ''} ({u.role?.name || 'Chưa phân quyền'})
+                                      </SelectItem>
+                                    ))
+                                )}
                               </SelectContent>
                             </Select>
                           </div>

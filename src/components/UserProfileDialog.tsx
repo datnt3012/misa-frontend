@@ -3,9 +3,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { authApi } from "@/api/auth.api";
+import { Key, Loader2 } from "lucide-react";
 
 interface UserProfileDialogProps {
   open: boolean;
@@ -14,6 +16,7 @@ interface UserProfileDialogProps {
 
 const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChange }) => {
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -21,6 +24,10 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     lastName: '',
     phoneNumber: '',
     address: '',
+  });
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: '',
   });
   const { toast } = useToast();
   const { user: currentUser, refreshUser } = useAuth();
@@ -45,6 +52,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
         lastName: currentUser.lastName || '',
         phoneNumber: currentUser.phoneNumber || '',
         address: currentUser.address || '',
+      });
+      // Reset password fields when dialog opens
+      setPasswordData({
+        newPassword: '',
+        confirmPassword: '',
       });
     }
   }, [open, currentUser]);
@@ -112,6 +124,64 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!passwordData.newPassword || !passwordData.confirmPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập đầy đủ mật khẩu mới và xác nhận mật khẩu",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Mật khẩu xác nhận không khớp",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: "Lỗi",
+        description: "Mật khẩu phải có ít nhất 6 ký tự",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+
+      // Update password using PATCH /users/{userId} with password field
+      await authApi.updateProfile({
+        password: passwordData.newPassword,
+      });
+
+      toast({
+        title: "Thành công",
+        description: "Đã đổi mật khẩu thành công",
+      });
+
+      // Clear password fields after successful change
+      setPasswordData({
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể đổi mật khẩu",
+        variant: "destructive",
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const handleCancel = () => {
     // Reset form data to original values
     if (currentUser) {
@@ -124,6 +194,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
         address: currentUser.address || '',
       });
     }
+    // Reset password fields
+    setPasswordData({
+      newPassword: '',
+      confirmPassword: '',
+    });
     onOpenChange(false);
   };
 
@@ -207,6 +282,56 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
               placeholder="Nhập địa chỉ"
             />
           </div>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Key className="w-5 h-5 text-muted-foreground" />
+            <Label className="text-base font-medium">Đổi mật khẩu</Label>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Mật khẩu mới</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Xác nhận mật khẩu mới</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                placeholder="Nhập lại mật khẩu mới"
+              />
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleChangePassword}
+            disabled={changingPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+            className="w-full"
+          >
+            {changingPassword ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Đang đổi mật khẩu...
+              </>
+            ) : (
+              <>
+                <Key className="w-4 h-4 mr-2" />
+                Đổi mật khẩu
+              </>
+            )}
+          </Button>
         </div>
 
         <DialogFooter>
