@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2 } from 'lucide-react';
+import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 // // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -478,6 +479,64 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     }
   };
 
+  const exportToExcel = () => {
+    // Prepare data for export
+    const exportData = importSlips.map((slip, index) => {
+      const warehouse = getWarehouseById(slip.warehouse_id);
+      const statusText = slip.status === 'pending' ? 'Chờ duyệt' :
+                        slip.status === 'approved' ? 'Đã duyệt' :
+                        slip.status === 'rejected' ? 'Đã từ chối' : slip.status;
+
+      return {
+        'STT': index + 1,
+        'Số phiếu': slip.slip_number,
+        'Nhà cung cấp': slip.supplier_name,
+        'Liên hệ': slip.supplier_contact || '',
+        'Kho nhập': warehouse?.name || 'N/A',
+        'Ngày nhập': slip.import_date ? format(new Date(slip.import_date), 'dd/MM/yyyy') : '',
+        'Tổng tiền (VND)': slip.total_amount,
+        'Trạng thái': statusText,
+        'Ngày tạo': slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : '',
+        'Ghi chú': slip.notes || '',
+      };
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const colWidths = [
+      { wch: 5 },   // STT
+      { wch: 18 },  // Số phiếu
+      { wch: 25 },  // Nhà cung cấp
+      { wch: 15 },  // Liên hệ
+      { wch: 20 },  // Kho nhập
+      { wch: 12 },  // Ngày nhập
+      { wch: 18 },  // Tổng tiền
+      { wch: 15 },  // Trạng thái
+      { wch: 20 },  // Ngày tạo
+      { wch: 40 },  // Ghi chú
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sách phiếu nhập kho');
+
+    // Generate filename with timestamp
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
+    const filename = `Danh_sach_phieu_nhap_kho_${dateStr}_${timeStr}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Thành công",
+      description: `Đã xuất ${exportData.length} phiếu nhập kho ra file Excel`,
+    });
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center p-8">Đang tải...</div>;
   }
@@ -835,6 +894,27 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       </div>
 
       <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Danh Sách Phiếu Nhập Kho
+              </CardTitle>
+              <CardDescription>
+                Tất cả phiếu nhập kho trong hệ thống
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => exportToExcel()}
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Xuất Excel
+            </Button>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto w-full">
             <Table className="min-w-[1200px] w-full">

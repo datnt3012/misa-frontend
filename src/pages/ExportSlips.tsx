@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
 import { orderApi } from '@/api/order.api';
@@ -328,6 +329,76 @@ function ExportSlipsContent() {
       : <ChevronDown className="w-4 h-4 text-gray-600" />;
   };
 
+  const exportToExcel = () => {
+    // Prepare data for export
+    const exportData = filteredAndSortedSlips.map((slip, index) => {
+      // Get product details for each slip
+      const productDetails = slip.order?.order_items?.map((item) => {
+        const exportItem = slip.export_slip_items?.find(
+          ei => ei.product_code === item.product_code
+        );
+        return {
+          'Mã SP': item.product_code,
+          'Tên sản phẩm': item.product_name,
+          'SL Yêu cầu': item.quantity,
+          'Đơn giá': item.unit_price,
+          'Thành tiền': (exportItem?.actual_quantity || 0) * item.unit_price,
+        };
+      }) || [];
+
+      return {
+        'STT': index + 1,
+        'Số phiếu': slip.code,
+        'Đơn hàng': slip.order?.order_number || '',
+        'Khách hàng': slip.order?.customer_name || '',
+        'Địa chỉ': slip.order?.customer_address ? formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo) : '',
+        'SĐT': slip.order?.customer_phone || '',
+        'Trạng thái': slip.status === 'pending' ? 'Chờ' : 
+                     slip.status === 'picked' ? 'Đã lấy hàng' :
+                     slip.status === 'exported' ? 'Đã xuất kho' :
+                     slip.status === 'cancelled' ? 'Hủy lấy hàng' : slip.status,
+        'Tổng giá trị': slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0,
+        'Ngày tạo': slip.created_at ? new Date(slip.created_at).toLocaleString('vi-VN') : '',
+        'Chi tiết sản phẩm': productDetails.map(p => `${p['Tên sản phẩm']} (${p['SL Yêu cầu']})`).join('; '),
+      };
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const colWidths = [
+      { wch: 5 },   // STT
+      { wch: 18 },  // Số phiếu
+      { wch: 15 },  // Đơn hàng
+      { wch: 25 },  // Khách hàng
+      { wch: 40 },  // Địa chỉ
+      { wch: 15 },  // SĐT
+      { wch: 15 },  // Trạng thái
+      { wch: 15 },  // Tổng giá trị
+      { wch: 20 },  // Ngày tạo
+      { wch: 60 },  // Chi tiết sản phẩm
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sách phiếu xuất kho');
+
+    // Generate filename with timestamp
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
+    const filename = `Danh_sach_phieu_xuat_kho_${dateStr}_${timeStr}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Thành công",
+      description: `Đã xuất ${exportData.length} phiếu xuất kho ra file Excel`,
+    });
+  };
+
   // Filter and sort export slips
   const filteredAndSortedSlips = exportSlips
     .filter(slip => {
@@ -402,6 +473,14 @@ function ExportSlipsContent() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => exportToExcel()}
+                className="flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Xuất Excel
+              </Button>
               <Label htmlFor="display-limit" className="text-sm font-medium">
                 Hiển thị:
               </Label>
@@ -588,9 +667,7 @@ function ExportSlipsContent() {
                                       <TableRow>
                                         <TableHead>Tên sản phẩm</TableHead>
                                         <TableHead>Mã SP</TableHead>
-                                        <TableHead className="text-right">SL Yêu cầu</TableHead>
-                                        <TableHead className="text-right">SL Thực xuất</TableHead>
-                                        <TableHead className="text-right">SL Còn lại</TableHead>
+                                        <TableHead className="text-right">Số lượng</TableHead>
                                         <TableHead className="text-right">Đơn giá</TableHead>
                                         <TableHead className="text-right">Thành tiền</TableHead>
                                       </TableRow>
@@ -604,19 +681,16 @@ function ExportSlipsContent() {
                                         
                                         const requestedQuantity = orderItem.quantity;
                                         const actualQuantity = exportItem?.actual_quantity || 0;
-                                        const remainingQuantity = requestedQuantity - actualQuantity;
                                         
                                         return (
                                           <TableRow key={index}>
                                             <TableCell className="font-medium">{orderItem.product_name}</TableCell>
                                             <TableCell>{orderItem.product_code}</TableCell>
-                            <TableCell className="text-right font-medium text-blue-600">{requestedQuantity}</TableCell>
-                            <TableCell className="text-right font-medium text-green-600">{actualQuantity}</TableCell>
-                            <TableCell className="text-right font-medium text-orange-600">{remainingQuantity}</TableCell>
+                                            <TableCell className="text-right font-medium text-blue-600">{requestedQuantity}</TableCell>
                                             <TableCell className="text-right">{formatCurrency(orderItem.unit_price)}</TableCell>
-                                             <TableCell className="text-right font-medium">
-                                               {formatCurrency(actualQuantity * orderItem.unit_price)}
-                                             </TableCell>
+                                            <TableCell className="text-right font-medium">
+                                              {formatCurrency(actualQuantity * orderItem.unit_price)}
+                                            </TableCell>
                                           </TableRow>
                                         );
                                       })}
