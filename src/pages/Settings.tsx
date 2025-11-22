@@ -288,43 +288,26 @@ const SettingsContent = () => {
     try {
       setDeleteUserLoading(userId);
       
-      // Backend API call will be implemented later
-      const session = null; // Placeholder
-      if (!session) {
-        throw new Error('User not authenticated');
-      }
-
-      // Backend API call will be implemented later
-      const response = { ok: false, status: 501 }; // Placeholder
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          toast({
-            title: "Không có quyền",
-            description: convertPermissionCodesInMessage("Bạn không có quyền thực hiện hành động này"),
-            variant: "destructive",
-          });
-          return;
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to delete user');
-      }
+      // Call backend API - let backend handle authorization/permission check
+      const result = await usersApi.deleteUser(userId);
 
       toast({
         title: "Thành công",
-        description: "Đã xóa tài khoản người dùng",
+        description: result?.message || "Đã xóa tài khoản người dùng",
       });
 
-      loadUserRoles();
+      // Reload users and roles after deletion
+      await loadUsers();
+      await loadUserRoles();
     } catch (error: any) {
+      console.error('Delete user error:', error);
+      
+      // Backend will return appropriate error messages for permission/authorization issues
+      const errorMessage = error.response?.data?.message || error.message || "Không thể xóa tài khoản người dùng";
+      
       toast({
-        title: "Lỗi",
-        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa tài khoản người dùng"),
+        title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
         variant: "destructive",
       });
     } finally {
