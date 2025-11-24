@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { customerApi } from "@/api/customer.api";
-import { organizationApi, Organization } from "@/api/organization.api";
+import { administrativeApi, AdministrativeUnit } from "@/api/administrative.api";
 import { orderApi } from "@/api/order.api";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import { useToast } from "@/hooks/use-toast";
@@ -91,7 +91,7 @@ interface CustomerFormVatInfoState {
 }
 
 interface CustomerFormAddressState {
-  organizationId: string;
+  administrativeUnitId: string;
   provinceCode: string;
   districtCode: string;
   wardCode: string;
@@ -107,13 +107,13 @@ interface CustomerFormState {
   email: string;
   address: string;
   vatRate: number | undefined;
-  organizationId?: string;
+  administrativeUnitId?: string;
   addressInfo: CustomerFormAddressState;
   vatInfo: CustomerFormVatInfoState;
 }
 
 const createEmptyAddressInfo = (): CustomerFormAddressState => ({
-  organizationId: "",
+  administrativeUnitId: "",
   provinceCode: "",
   districtCode: "",
   wardCode: "",
@@ -137,7 +137,7 @@ const createEmptyCustomerFormState = (): CustomerFormState => ({
   email: "",
   address: "",
   vatRate: undefined,
-  organizationId: "none",
+  administrativeUnitId: "none",
   addressInfo: createEmptyAddressInfo(),
   vatInfo: createEmptyVatInfoState(),
 });
@@ -175,7 +175,7 @@ const buildAddressInfoState = (info?: any): CustomerFormAddressState => {
   if (!info) return base;
 
   return {
-    organizationId: info.organizationId ?? base.organizationId,
+    administrativeUnitId: info.administrativeUnitId ?? base.administrativeUnitId,
     provinceCode: info.provinceCode ?? info.province?.code ?? base.provinceCode,
     districtCode: info.districtCode ?? info.district?.code ?? base.districtCode,
     wardCode: info.wardCode ?? info.ward?.code ?? base.wardCode,
@@ -205,7 +205,7 @@ interface CustomerStats {
 const CustomersContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [administrativeUnits, setAdministrativeUnits] = useState<AdministrativeUnit[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [customerStats, setCustomerStats] = useState<CustomerStats>({ total_orders: 0, total_spent: 0, current_debt: 0 });
@@ -259,8 +259,8 @@ const CustomersContent = () => {
     }
   };
 
-  // Load provinces data (organizations = provinces)
-  const loadOrganizations = async () => {
+  // Load provinces data (administrative units = provinces)
+  const loadAdministrativeUnits = async () => {
     try {
       // Fetch provinces from API
       const response = await fetch('https://provinces.open-api.vn/api/?depth=1');
@@ -273,25 +273,25 @@ const CustomersContent = () => {
         code: p.code,
         description: p.name
       }));
-      setOrganizations(provincesData);
+      setAdministrativeUnits(provincesData);
     } catch (error) {
       console.error('Error fetching provinces:', error);
       // Fallback data for common provinces
-      const fallbackProvinces: Organization[] = [
+      const fallbackProvinces: AdministrativeUnit[] = [
         { id: 'HN', name: 'Hà Nội', code: 'HN', level: '1' },
         { id: 'HCM', name: 'TP. Hồ Chí Minh', code: 'HCM', level: '1' },
         { id: 'DN', name: 'Đà Nẵng', code: 'DN', level: '1' },
         { id: 'HP', name: 'Hải Phòng', code: 'HP', level: '1' },
         { id: 'CT', name: 'Cần Thơ', code: 'CT', level: '1' }
       ];
-      setOrganizations(fallbackProvinces);
+      setAdministrativeUnits(fallbackProvinces);
     }
   };
 
   // Load data when permissions are available
   useEffect(() => {
     loadCustomers();
-    loadOrganizations();
+    loadAdministrativeUnits();
   }, [canReadCustomers]);
 
   // Restore form state from URL parameters after page reload
@@ -399,7 +399,7 @@ const CustomersContent = () => {
       email: customer.email || "",
       address: customer.address || "",
       vatRate: customer.vatRate,
-      organizationId: customer.organizationId ?? "none",
+      administrativeUnitId: customer.administrativeUnitId ?? "none",
       addressInfo: buildAddressInfoState(customer.addressInfo),
       vatInfo: populateVatInfoState(customer.vatInfo),
     });

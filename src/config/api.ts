@@ -106,12 +106,12 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/suppliers/${id}`,
   },
   
-  // Organizations
-  ORGANIZATIONS: {
-    LIST: '/organizations',
-    CREATE: '/organizations',
-    UPDATE: (id: string) => `/organizations/${id}`,
-    DELETE: (id: string) => `/organizations/${id}`,
+  // Administrative Units
+  ADMINISTRATIVE: {
+    LIST: '/administrative',
+    CREATE: '/administrative',
+    UPDATE: (code: string) => `/administrative/${code}`,
+    DELETE: (code: string) => `/administrative/${code}`,
   },
   
   // Stock Levels

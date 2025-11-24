@@ -41,7 +41,7 @@ const getResourceIcon = (module: string) => {
     'Users': Users,
     'Roles': Shield,
     'Permissions': Shield,
-    'Organizations': Building2,
+    'Administrative Units': Building2,
     'Settings': Settings,
     'Other': Shield,
     'Export Slips': Package,
@@ -397,8 +397,8 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         if (module === 'HIDDEN') {
           return;
         }
-        // Hide Organizations permissions category from UI
-        if (module === 'Organizations') {
+        // Hide Administrative Units permissions category from UI
+        if (module === 'Administrative Units') {
           return;
         }
         // Hide Profiles permissions category from UI
@@ -565,7 +565,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'USERS': 'Users',
       'ROLES': 'Roles',
       'PERMISSIONS': 'Permissions',
-      'ORGANIZATIONS': 'Organizations',
+      'ADMINISTRATIVE': 'Administrative Units',
       'SETTINGS': 'Settings',
     };
     

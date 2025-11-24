@@ -844,7 +844,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     </SelectContent>
                   </Select>
                 </div>
-                {newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment > 0 && (
+                {newOrder.initial_payment_method === "bank_transfer" && (
                   <div>
                     <Label htmlFor="initial_payment_bank">Ngân hàng <span className="text-red-500">*</span></Label>
                     <Select 
