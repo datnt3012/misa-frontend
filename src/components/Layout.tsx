@@ -188,12 +188,12 @@ const Layout = ({ children }: LayoutProps) => {
                             return `${firstName} ${lastName}`.trim();
                           }
                           
-                          // Fallback to email, never show ID
-                          return currentUser?.email || user?.email || 'Người dùng';
+                          // Fallback to email or username, never show ID
+                          return currentUser?.email || user?.email || currentUser?.username || user?.username || 'Người dùng';
                         })()}
                       </p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        {currentUser?.email || user?.email || ''}
+                        {currentUser?.email || user?.email || currentUser?.username || user?.username || ''}
                       </p>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />

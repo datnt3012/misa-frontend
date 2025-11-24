@@ -3,7 +3,8 @@ import { authApi } from '@/api/auth.api';
 
 interface UserInfo {
   id: string;
-  email: string;
+  email?: string;
+  username?: string;
   full_name?: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -47,6 +48,7 @@ export const useUserInfo = (userId: string | null) => {
           setUserInfo({
             id: user.id,
             email: user.email,
+            username: user.username,
             full_name: user.full_name,
             firstName: user.firstName,
             lastName: user.lastName,

@@ -209,10 +209,10 @@ const SettingsContent = () => {
 
   const handleCreateUser = async () => {
     
-    if (!newUserEmail.trim() || !newUserPassword.trim()) {
+    if (!newUserUsername.trim() || !newUserPassword.trim()) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng nhập đầy đủ email và mật khẩu",
+        description: "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu",
         variant: "destructive",
       });
       return;
@@ -236,8 +236,8 @@ const SettingsContent = () => {
       }
 
       const newUser = await usersApi.createUser({
-        email: newUserEmail,
-        username: newUserUsername || undefined,
+        email: newUserEmail.trim() || undefined,
+        username: newUserUsername.trim(),
         password: newUserPassword,
         firstName: newUserFirstName || undefined,
         lastName: newUserLastName || undefined,
@@ -261,9 +261,14 @@ const SettingsContent = () => {
       await loadUsers();
       await loadUserRoles();
 
+      const userDisplayName = newUser.firstName || newUser.lastName 
+        ? `${newUser.firstName || ''} ${newUser.lastName || ''}`.trim()
+        : newUser.username;
+      const userIdentifier = newUser.email || newUser.username;
+      
       toast({
         title: "Thành công",
-        description: `Đã tạo tài khoản cho ${newUser.firstName || ''} ${newUser.lastName || ''} (${newUser.email})`,
+        description: `Đã tạo tài khoản cho ${userDisplayName} (${userIdentifier})`,
       });
 
     } catch (error: any) {
@@ -278,10 +283,10 @@ const SettingsContent = () => {
     }
   };
 
-  const handleDeleteUserAccount = async (userId: string, userEmail: string, userRole: string) => {
+  const handleDeleteUserAccount = async (userId: string, userIdentifier: string, userRole: string) => {
     // Permission checks removed - let backend handle authorization
 
-    if (!confirm(`Bạn có chắc muốn xóa tài khoản "${userEmail}"? Hành động này không thể hoàn tác.`)) {
+    if (!confirm(`Bạn có chắc muốn xóa tài khoản "${userIdentifier}"? Hành động này không thể hoàn tác.`)) {
       return;
     }
 
@@ -755,19 +760,7 @@ const SettingsContent = () => {
                       <>
                         <div className="grid grid-cols-1 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="user-email">Email <span className="text-red-500">*</span></Label>
-                            <Input
-                              id="user-email"
-                              type="email"
-                              value={newUserEmail}
-                              onChange={(e) => setNewUserEmail(e.target.value)}
-                              placeholder="Nhập email"
-                            />
-                            <p className="text-xs text-muted-foreground">Bắt buộc nếu không có username</p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="user-username">Tên đăng nhập (Username)</Label>
+                            <Label htmlFor="user-username">Tên đăng nhập (Username) <span className="text-red-500">*</span></Label>
                             <Input
                               id="user-username"
                               type="text"
@@ -775,7 +768,19 @@ const SettingsContent = () => {
                               onChange={(e) => setNewUserUsername(e.target.value)}
                               placeholder="Nhập tên đăng nhập"
                             />
-                            <p className="text-xs text-muted-foreground">Bắt buộc nếu không có email</p>
+                            <p className="text-xs text-muted-foreground">Dùng để đăng nhập vào hệ thống</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="user-email">Email</Label>
+                            <Input
+                              id="user-email"
+                              type="email"
+                              value={newUserEmail}
+                              onChange={(e) => setNewUserEmail(e.target.value)}
+                              placeholder="Nhập email (tùy chọn)"
+                            />
+                            <p className="text-xs text-muted-foreground">Có thể dùng email hoặc username để đăng nhập</p>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
@@ -873,7 +878,7 @@ const SettingsContent = () => {
                           </Button>
                           <Button 
                             onClick={handleCreateUser}
-                            disabled={createUserLoading || !newUserEmail.trim() || !newUserPassword.trim()}
+                            disabled={createUserLoading || !newUserUsername.trim() || !newUserPassword.trim()}
                             className="animate-fade-in"
                           >
                             {createUserLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -920,7 +925,7 @@ const SettingsContent = () => {
                                  <TableCell>
                                    <div>
                                      <p className="font-medium">{userItem.firstName} {userItem.lastName}</p>
-                                     <p className="text-sm text-muted-foreground">{userItem.email}</p>
+                                     <p className="text-sm text-muted-foreground">{userItem.email || userItem.username}</p>
                                      <p className="text-xs text-muted-foreground">ID: {userItem.id.slice(0, 8)}...</p>
                                    </div>
                                  </TableCell>
@@ -995,7 +1000,7 @@ const SettingsContent = () => {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleDeleteUserAccount(userItem.id, userItem.email, userItem.role?.name || '')}
+                                  onClick={() => handleDeleteUserAccount(userItem.id, userItem.email || userItem.username, userItem.role?.name || '')}
                                   className="animate-fade-in text-red-600 hover:text-red-700"
                                   disabled={deleteUserLoading === userItem.id}
                                 >
