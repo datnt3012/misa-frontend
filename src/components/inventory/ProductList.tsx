@@ -11,10 +11,14 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
+import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import React from "react";
+import { productApi } from "@/api/product.api";
+import { categoriesApi } from "@/api/categories.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
+import { CurrencyInput } from "@/components/ui/currency-input";
 
 interface ProductListProps {
   products: any[];
@@ -31,6 +35,7 @@ const ProductList: React.FC<ProductListProps> = ({
   canManageProducts,
   onProductsUpdate
 }) => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
@@ -39,12 +44,14 @@ const ProductList: React.FC<ProductListProps> = ({
   const [categories, setCategories] = useState<any[]>([]);
   const [categoryComboOpen, setCategoryComboOpen] = useState(false);
   const [editCategoryComboOpen, setEditCategoryComboOpen] = useState(false);
+  const [categorySearchTerm, setCategorySearchTerm] = useState('');
+  const [editCategorySearchTerm, setEditCategorySearchTerm] = useState('');
   const [newProduct, setNewProduct] = useState({
     name: '',
     code: '',
     category: '',
     costPrice: 0,
-    sellPrice: 0,
+    price: 0,
     unit: 'cái',
     barcode: ''
   });
@@ -54,73 +61,107 @@ const ProductList: React.FC<ProductListProps> = ({
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const [isEditProductDialogOpen, setIsEditProductDialogOpen] = useState(false);
 
+  const sortedCategories = React.useMemo(() => {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories]);
+
+  const findCategoryByValue = React.useCallback(
+    (value?: string | null) => {
+      if (!value) return undefined;
+      const trimmed = typeof value === "string" ? value.trim() : value;
+      if (!trimmed) return undefined;
+      return categories.find(
+        (cat) =>
+          cat.id === trimmed ||
+          (typeof trimmed === "string" &&
+            cat.name.toLowerCase() === trimmed.toLowerCase())
+      );
+    },
+    [categories]
+  );
+
+  const getCategoryNameFromValue = React.useCallback(
+    (value?: string | null) => {
+      if (!value) return "";
+      const match = findCategoryByValue(value);
+      return match?.name ?? (typeof value === "string" ? value : "");
+    },
+    [findCategoryByValue]
+  );
+
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
+    const productCategory = findCategoryByValue(product.category);
     const matchesCategory = filterCategory === "all" || 
-                           (product.category && product.category.toLowerCase().includes(filterCategory.toLowerCase()));
+                           (productCategory?.id && productCategory.id === filterCategory);
     
     return matchesSearch && matchesCategory;
   });
 
-  // Get unique categories for filters (from both products and categories table)
-  const uniqueCategories = [...new Set([
-    ...products.map(p => p.category).filter(Boolean),
-    ...categories.map(c => c.name)
-  ])].sort();
-
-  // Load categories from database
-  const loadCategories = async () => {
+  // Load categories from categories API
+  const loadCategories = React.useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setCategories(data || []);
+      // Load categories from categories API
+      const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+      const activeCategories = response.categories.filter(cat => cat.isActive);
+      setCategories(activeCategories);
     } catch (error) {
       console.error('Error loading categories:', error);
+      // Fallback: extract unique categories from products
+      const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
+      setCategories(uniqueCategories.map(name => ({ id: name, name })));
     }
-  };
+  }, [products]);
 
   React.useEffect(() => {
     loadCategories();
-  }, []);
+  }, [loadCategories]);
 
-  // Save new category to database if it doesn't exist
-  const saveNewCategory = async (categoryName: string) => {
-    if (!categoryName.trim()) return;
-    
-    try {
-      const { data: existingCategory } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('name', categoryName.trim())
-        .maybeSingle();
-
-      if (!existingCategory && canManageProducts) {
-        // Get current user ID
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        const { error } = await supabase
-          .from('categories')
-          .insert({ 
-            name: categoryName.trim(),
-            created_by: user?.id || null
-          });
-
-        if (!error) {
-          loadCategories(); // Reload categories after adding new one
-        }
+  React.useEffect(() => {
+    if (categoryComboOpen) {
+      setCategorySearchTerm('');
+      if (!categories.length) {
+        loadCategories();
       }
-    } catch (error) {
-      console.error('Error saving category:', error);
     }
-  };
+  }, [categoryComboOpen]);
 
-  // Sorting logic
+  React.useEffect(() => {
+    if (editCategoryComboOpen) {
+      setEditCategorySearchTerm('');
+      if (!categories.length) {
+        loadCategories();
+      }
+    }
+  }, [editCategoryComboOpen]);
+
+  const ensureCategoryId = React.useCallback(async (categoryValue?: string | null) => {
+    if (!categoryValue) return null;
+    const trimmed = typeof categoryValue === "string" ? categoryValue.trim() : categoryValue;
+    if (!trimmed) return null;
+
+    const existingCategory = findCategoryByValue(trimmed);
+    if (existingCategory) {
+      return existingCategory.id;
+    }
+
+    try {
+      const newCategory = await categoriesApi.createCategory({
+        name: typeof trimmed === "string" ? trimmed : String(trimmed),
+        description: `Category created from product form`
+      });
+      await loadCategories();
+      return newCategory.id;
+    } catch (error: any) {
+      console.error('Error saving category:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo danh mục mới';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
+      return null;
+    }
+  }, [findCategoryByValue, loadCategories, toast]);
+
   const sortedProducts = React.useMemo(() => {
     if (!sortConfig) return filteredProducts;
 
@@ -138,8 +179,8 @@ const ProductList: React.FC<ProductListProps> = ({
           bValue = b.name;
           break;
         case 'category':
-          aValue = a.category || '';
-          bValue = b.category || '';
+          aValue = getCategoryNameFromValue(a.category) || '';
+          bValue = getCategoryNameFromValue(b.category) || '';
           break;
         case 'cost_price':
           aValue = a.cost_price;
@@ -165,7 +206,7 @@ const ProductList: React.FC<ProductListProps> = ({
       }
       return 0;
     });
-  }, [filteredProducts, sortConfig]);
+  }, [filteredProducts, sortConfig, getCategoryNameFromValue]);
 
   // Pagination logic
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
@@ -206,50 +247,45 @@ const ProductList: React.FC<ProductListProps> = ({
   };
 
   const addProduct = async () => {
-    if (!newProduct.name || !newProduct.code) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+    if (!newProduct.name) {
+      toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
+      return;
+    }
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0', variant: 'destructive' });
       return;
     }
 
     try {
       setIsAddingProduct(true);
 
-      // Save new category if it doesn't exist
-      if (newProduct.category) {
-        await saveNewCategory(newProduct.category);
-      }
+      const categoryId = await ensureCategoryId(newProduct.category);
 
-      const { error } = await supabase.from('products').insert({
+      const response = await productApi.createProduct({
         name: newProduct.name,
-        code: newProduct.code,
-        category: newProduct.category,
-        current_stock: 0,
-        cost_price: newProduct.costPrice,
-        unit_price: newProduct.sellPrice,
+        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
+        category: categoryId ?? undefined,
         unit: newProduct.unit,
-        barcode: newProduct.barcode || null,
-        min_stock_level: 10
+        price: newProduct.price,
+        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Đã thêm sản phẩm vào danh mục!');
+      toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
       setNewProduct({
         name: '',
         code: '',
         category: '',
         costPrice: 0,
-        sellPrice: 0,
+        price: 0,
         unit: 'cái',
         barcode: ''
       });
       setIsAddProductDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding product:', error);
-      toast.error('Có lỗi khi thêm sản phẩm');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setIsAddingProduct(false);
     }
@@ -260,9 +296,9 @@ const ProductList: React.FC<ProductListProps> = ({
     setNewProduct({
       name: product.name,
       code: product.code,
-      category: product.category || '',
-      costPrice: product.cost_price || 0,
-      sellPrice: product.unit_price || 0,
+      category: findCategoryByValue(product.category)?.id || product.category || '',
+      costPrice: product.costPrice || 0,
+      price: product.price || 0,
       unit: product.unit || 'cái',
       barcode: product.barcode || ''
     });
@@ -270,37 +306,31 @@ const ProductList: React.FC<ProductListProps> = ({
   };
 
   const updateProduct = async () => {
-    if (!newProduct.name || !newProduct.code) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+    if (!newProduct.name) {
+      toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
+      return;
+    }
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0', variant: 'destructive' });
       return;
     }
 
     try {
       setIsEditingProduct(true);
 
-      // Save new category if it doesn't exist
-      if (newProduct.category) {
-        await saveNewCategory(newProduct.category);
-      }
+      const categoryId = await ensureCategoryId(newProduct.category);
 
-      const { error } = await supabase
-        .from('products')
-        .update({
-          name: newProduct.name,
-          code: newProduct.code,
-          category: newProduct.category,
-          cost_price: newProduct.costPrice,
-          unit_price: newProduct.sellPrice,
-          unit: newProduct.unit,
-          barcode: newProduct.barcode || null,
-        })
-        .eq('id', editingProduct.id);
+      const response = await productApi.updateProduct(editingProduct.id, {
+        name: newProduct.name,
+        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
+        category: categoryId ?? undefined,
+        unit: newProduct.unit,
+        price: newProduct.price,
+        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }), // Include costPrice if provided
+        ...(newProduct.barcode && { barcode: newProduct.barcode }), // Include barcode if provided
+      });
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Đã cập nhật sản phẩm!');
+      toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
       onProductsUpdate();
       setEditingProduct(null);
       setNewProduct({
@@ -308,14 +338,15 @@ const ProductList: React.FC<ProductListProps> = ({
         code: '',
         category: '',
         costPrice: 0,
-        sellPrice: 0,
+        price: 0,
         unit: 'cái',
         barcode: ''
       });
       setIsEditProductDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating product:', error);
-      toast.error('Có lỗi khi cập nhật sản phẩm');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi cập nhật sản phẩm';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setIsEditingProduct(false);
     }
@@ -327,27 +358,21 @@ const ProductList: React.FC<ProductListProps> = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
+      const response = await productApi.deleteProduct(productId);
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Đã xóa sản phẩm!');
+      toast({ title: 'Thành công', description: response.message || 'Đã xóa sản phẩm!' });
       onProductsUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting product:', error);
-      toast.error('Có lỗi khi xóa sản phẩm');
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi xóa sản phẩm';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
   const formatCurrency = (amount: number) => {
+    
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -357,14 +382,14 @@ const ProductList: React.FC<ProductListProps> = ({
         'STT': index + 1,
         'Mã sản phẩm': product.code,
         'Tên sản phẩm': product.name,
-        'Loại': product.category || '',
+        'Loại': getCategoryNameFromValue(product.category) || '',
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.unit_price || 0,
-        'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
+        'Giá bán (VND)': product.price || 0,
+        'Cập nhật': product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : ''
       };
 
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.cost_price || 0;
+        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -399,7 +424,7 @@ const ProductList: React.FC<ProductListProps> = ({
     const filename = `Danh_sach_san_pham_${dateStr}_${timeStr}.xlsx`;
 
     XLSX.writeFile(wb, filename);
-    toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
+    toast({ title: 'Thành công', description: `Đã xuất ${exportData.length} sản phẩm ra file Excel` });
   };
 
   return (
@@ -427,9 +452,9 @@ const ProductList: React.FC<ProductListProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả loại</SelectItem>
-                {uniqueCategories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                {sortedCategories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -453,7 +478,7 @@ const ProductList: React.FC<ProductListProps> = ({
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-name" className="text-right">Tên sản phẩm *</Label>
+                        <Label htmlFor="product-name" className="text-right">Tên sản phẩm <span className="text-red-500">*</span></Label>
                         <Input 
                           id="product-name" 
                           className="col-span-3"
@@ -463,17 +488,17 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm *</Label>
+                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm (tùy chọn)</Label>
                         <Input 
                           id="product-code" 
                           className="col-span-3"
                           value={newProduct.code}
                           onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Nhập mã sản phẩm"
+                          placeholder="Để trống để hệ thống tự tạo"
                         />
                       </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="product-category" className="text-right">Loại sản phẩm</Label>
+                  <Label htmlFor="product-category" className="text-right">Loại sản phẩm <span className="text-red-500">*</span></Label>
                   <div className="col-span-3">
                     <Popover open={categoryComboOpen} onOpenChange={setCategoryComboOpen}>
                       <PopoverTrigger asChild>
@@ -483,7 +508,7 @@ const ProductList: React.FC<ProductListProps> = ({
                           aria-expanded={categoryComboOpen}
                           className="w-full justify-between"
                         >
-                          {newProduct.category || "Chọn hoặc nhập loại sản phẩm..."}
+                          {getCategoryNameFromValue(newProduct.category) || "Chọn hoặc nhập loại sản phẩm..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -491,22 +516,26 @@ const ProductList: React.FC<ProductListProps> = ({
                         <Command>
                           <CommandInput 
                             placeholder="Tìm kiếm hoặc nhập loại mới..." 
-                            value={newProduct.category}
-                            onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
+                            value={categorySearchTerm}
+                            onValueChange={setCategorySearchTerm}
                           />
                           <CommandList>
                             <CommandEmpty>
-                              {newProduct.category ? (
+                              {categorySearchTerm ? (
                                 <div className="p-2">
                                   <div className="text-sm text-muted-foreground mb-2">Không tìm thấy loại này</div>
                                   <Button 
                                     size="sm" 
                                     className="w-full"
                                     onClick={() => {
+                                      if (categorySearchTerm.trim()) {
+                                        setNewProduct(prev => ({ ...prev, category: categorySearchTerm.trim() }));
+                                      }
                                       setCategoryComboOpen(false);
+                                      setCategorySearchTerm('');
                                     }}
                                   >
-                                    Sử dụng "{newProduct.category}"
+                                    Sử dụng "{categorySearchTerm}"
                                   </Button>
                                 </div>
                               ) : (
@@ -514,19 +543,20 @@ const ProductList: React.FC<ProductListProps> = ({
                               )}
                             </CommandEmpty>
                             <CommandGroup>
-                              {uniqueCategories.map((category) => (
+                              {sortedCategories.map((category) => (
                                 <CommandItem
-                                  key={category}
-                                  value={category}
+                                  key={category.id}
+                                  value={category.name}
                                   onSelect={() => {
-                                    setNewProduct(prev => ({ ...prev, category: category }));
+                                    setNewProduct(prev => ({ ...prev, category: category.id }));
                                     setCategoryComboOpen(false);
+                                    setCategorySearchTerm('');
                                   }}
                                 >
                                   <Check
-                                    className={`mr-2 h-4 w-4 ${newProduct.category === category ? "opacity-100" : "opacity-0"}`}
+                                    className={`mr-2 h-4 w-4 ${newProduct.category === category.id ? "opacity-100" : "opacity-0"}`}
                                   />
-                                  {category}
+                                  {category.name}
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -537,7 +567,7 @@ const ProductList: React.FC<ProductListProps> = ({
                   </div>
                 </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="unit" className="text-right">Đơn vị tính *</Label>
+                        <Label htmlFor="unit" className="text-right">Đơn vị tính <span className="text-red-500">*</span></Label>
                         <Input 
                           id="unit" 
                           className="col-span-3"
@@ -559,24 +589,22 @@ const ProductList: React.FC<ProductListProps> = ({
                       {canViewCostPrice && (
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
-                          <Input 
+                          <CurrencyInput 
                             id="cost-price" 
-                            type="number" 
                             className="col-span-3"
                             value={newProduct.costPrice}
-                            onChange={(e) => setNewProduct(prev => ({ ...prev, costPrice: parseInt(e.target.value) || 0 }))}
+                            onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
                             placeholder="0"
                           />
                         </div>
                       )}
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
-                        <Input 
+                        <Label htmlFor="sell-price" className="text-right">Giá bán <span className="text-red-500">*</span></Label>
+                        <CurrencyInput 
                           id="sell-price" 
-                          type="number" 
                           className="col-span-3"
-                          value={newProduct.sellPrice}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, sellPrice: parseInt(e.target.value) || 0 }))}
+                          value={newProduct.price}
+                          onChange={(value) => setNewProduct(prev => ({ ...prev, price: value }))}
                           placeholder="0"
                         />
                       </div>
@@ -618,7 +646,7 @@ const ProductList: React.FC<ProductListProps> = ({
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-product-name" className="text-right">Tên sản phẩm *</Label>
+                  <Label htmlFor="edit-product-name" className="text-right">Tên sản phẩm <span className="text-red-500">*</span></Label>
                   <Input 
                     id="edit-product-name" 
                     className="col-span-3"
@@ -628,13 +656,13 @@ const ProductList: React.FC<ProductListProps> = ({
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-product-code" className="text-right">Mã sản phẩm *</Label>
+                  <Label htmlFor="edit-product-code" className="text-right">Mã sản phẩm (tùy chọn)</Label>
                   <Input 
                     id="edit-product-code" 
                     className="col-span-3"
                     value={newProduct.code}
                     onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                    placeholder="Nhập mã sản phẩm"
+                    placeholder="Để trống để hệ thống tự tạo"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -648,7 +676,7 @@ const ProductList: React.FC<ProductListProps> = ({
                           aria-expanded={editCategoryComboOpen}
                           className="w-full justify-between"
                         >
-                          {newProduct.category || "Chọn hoặc nhập loại sản phẩm..."}
+                          {getCategoryNameFromValue(newProduct.category) || "Chọn hoặc nhập loại sản phẩm..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -656,22 +684,26 @@ const ProductList: React.FC<ProductListProps> = ({
                         <Command>
                           <CommandInput 
                             placeholder="Tìm kiếm hoặc nhập loại mới..." 
-                            value={newProduct.category}
-                            onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
+                            value={editCategorySearchTerm}
+                            onValueChange={setEditCategorySearchTerm}
                           />
                           <CommandList>
                             <CommandEmpty>
-                              {newProduct.category ? (
+                              {editCategorySearchTerm ? (
                                 <div className="p-2">
                                   <div className="text-sm text-muted-foreground mb-2">Không tìm thấy loại này</div>
                                   <Button 
                                     size="sm" 
                                     className="w-full"
                                     onClick={() => {
+                                      if (editCategorySearchTerm.trim()) {
+                                        setNewProduct(prev => ({ ...prev, category: editCategorySearchTerm.trim() }));
+                                      }
                                       setEditCategoryComboOpen(false);
+                                      setEditCategorySearchTerm('');
                                     }}
                                   >
-                                    Sử dụng "{newProduct.category}"
+                                    Sử dụng "{editCategorySearchTerm}"
                                   </Button>
                                 </div>
                               ) : (
@@ -679,19 +711,20 @@ const ProductList: React.FC<ProductListProps> = ({
                               )}
                             </CommandEmpty>
                             <CommandGroup>
-                              {uniqueCategories.map((category) => (
+                              {sortedCategories.map((category) => (
                                 <CommandItem
-                                  key={category}
-                                  value={category}
+                                  key={category.id}
+                                  value={category.name}
                                   onSelect={() => {
-                                    setNewProduct(prev => ({ ...prev, category: category }));
+                                    setNewProduct(prev => ({ ...prev, category: category.id }));
                                     setEditCategoryComboOpen(false);
+                                    setEditCategorySearchTerm('');
                                   }}
                                 >
                                   <Check
-                                    className={`mr-2 h-4 w-4 ${newProduct.category === category ? "opacity-100" : "opacity-0"}`}
+                                    className={`mr-2 h-4 w-4 ${newProduct.category === category.id ? "opacity-100" : "opacity-0"}`}
                                   />
-                                  {category}
+                                  {category.name}
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -702,7 +735,7 @@ const ProductList: React.FC<ProductListProps> = ({
                   </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-unit" className="text-right">Đơn vị tính *</Label>
+                  <Label htmlFor="edit-unit" className="text-right">Đơn vị tính <span className="text-red-500">*</span></Label>
                   <Input 
                     id="edit-unit" 
                     className="col-span-3"
@@ -724,24 +757,22 @@ const ProductList: React.FC<ProductListProps> = ({
                 {canViewCostPrice && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
-                    <Input 
+                    <CurrencyInput 
                       id="edit-cost-price" 
-                      type="number" 
                       className="col-span-3"
                       value={newProduct.costPrice}
-                      onChange={(e) => setNewProduct(prev => ({ ...prev, costPrice: parseInt(e.target.value) || 0 }))}
+                      onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
                       placeholder="0"
                     />
                   </div>
                 )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-sell-price" className="text-right">Giá bán</Label>
-                  <Input 
+                  <CurrencyInput 
                     id="edit-sell-price" 
-                    type="number" 
                     className="col-span-3"
-                    value={newProduct.sellPrice}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, sellPrice: parseInt(e.target.value) || 0 }))}
+                    value={newProduct.price}
+                    onChange={(value) => setNewProduct(prev => ({ ...prev, price: value }))}
                     placeholder="0"
                   />
                 </div>
@@ -757,7 +788,7 @@ const ProductList: React.FC<ProductListProps> = ({
                       code: '',
                       category: '',
                       costPrice: 0,
-                      sellPrice: 0,
+                      price: 0,
                       unit: 'cái',
                       barcode: ''
                     });
@@ -799,8 +830,8 @@ const ProductList: React.FC<ProductListProps> = ({
           </div>
         </div>
 
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border overflow-x-auto">
+          <Table className="min-w-full">
             <TableHeader>
               <TableRow>
                 <TableHead 
@@ -868,7 +899,7 @@ const ProductList: React.FC<ProductListProps> = ({
             <TableBody>
               {paginatedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 7 : 6) : (canViewCostPrice ? 6 : 5)} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 8 : 7) : (canViewCostPrice ? 7 : 6)} className="text-center py-8 text-muted-foreground">
                     {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
                   </TableCell>
                 </TableRow>
@@ -877,14 +908,19 @@ const ProductList: React.FC<ProductListProps> = ({
                   <TableRow key={product.id}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.category || '-'}</TableCell>
+                    <TableCell>{getCategoryNameFromValue(product.category) || '-'}</TableCell>
                     <TableCell>{product.unit || 'cái'}</TableCell>
                     {canViewCostPrice && (
-                      <TableCell>{formatCurrency(product.cost_price || 0)}</TableCell>
+                      <TableCell>{formatCurrency(product.costPrice || 0)}</TableCell>
                     )}
-                    <TableCell>{formatCurrency(product.unit_price || 0)}</TableCell>
                     <TableCell>
-                      {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
+                      {(() => {
+                        const price = product.price || 0;
+                        return formatCurrency(price);
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                     {canManageProducts && (
                       <TableCell>
@@ -1024,3 +1060,4 @@ const ProductList: React.FC<ProductListProps> = ({
 };
 
 export default ProductList;
+

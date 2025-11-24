@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Package, CheckCircle, XCircle, Clock, FileText, Eye } from "lucide-react";
@@ -90,7 +90,7 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
       console.error('Error loading export slips:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách phiếu xuất kho",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho",
         variant: "destructive",
       });
     } finally {
@@ -255,3 +255,4 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
     </div>
   );
 };
+

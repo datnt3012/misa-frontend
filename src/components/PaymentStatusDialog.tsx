@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { DollarSign, AlertTriangle } from "lucide-react";
@@ -27,7 +28,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
   onUpdate
 }) => {
   const [newStatus, setNewStatus] = useState(order?.status || '');
-  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [statusNotes, setStatusNotes] = useState('');
@@ -35,11 +36,11 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
   const { user } = useAuth();
 
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-  const paidAmount = Number(order?.paid_amount) || 0;
+  const paidAmount = Number(order?.initial_payment || order?.paid_amount) || 0;
   const debtAmount = Math.max(0, totalAmount - paidAmount);
 
   const handleUpdate = async () => {
-    if (!paymentAmount && newStatus === order?.status) {
+    if (!paymentAmount || paymentAmount === 0 && newStatus === order?.status) {
       toast({
         title: "Thông báo",
         description: "Vui lòng nhập số tiền thanh toán hoặc thay đổi trạng thái",
@@ -51,7 +52,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
     try {
       // Validate completion rules
       if (newStatus === 'completed') {
-        const newPaidAmount = paidAmount + parseFloat(paymentAmount || '0');
+        const newPaidAmount = paidAmount + (paymentAmount || 0);
         if (newPaidAmount < totalAmount) {
           toast({
             title: "Không thể hoàn thành",
@@ -63,8 +64,8 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
       }
 
       // Add payment if amount is provided
-      if (paymentAmount && parseFloat(paymentAmount) !== 0) {
-        const amount = parseFloat(paymentAmount);
+      if (paymentAmount && paymentAmount !== 0) {
+        const amount = paymentAmount;
         const { error: paymentError } = await supabase
           .from('payments')
           .insert({
@@ -91,7 +92,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
 
       // Add status history entry when there's meaningful changes
       if (statusNotes || paymentAmount || newStatus !== order.status) {
-        const currentPaidAmount = parseFloat(paymentAmount || '0');
+        const currentPaidAmount = paymentAmount || 0;
         const { error: historyError } = await supabase
           .from('order_status_history')
           .insert({
@@ -116,7 +117,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             customerName: order.customer_name,
             oldStatus: order.status,
             newStatus: newStatus,
-            message: `Đơn hàng đã được cập nhật. ${paymentAmount && parseFloat(paymentAmount) > 0 ? `Thanh toán ${formatCurrency(parseFloat(paymentAmount))} qua ${paymentMethod}.` : ''} ${statusNotes || ''}`,
+            message: `Đơn hàng đã được cập nhật. ${paymentAmount && paymentAmount > 0 ? `Thanh toán ${formatCurrency(paymentAmount)} qua ${paymentMethod}.` : ''} ${statusNotes || ''}`,
             changeType: 'status'
           }
         });
@@ -125,7 +126,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
         // Don't fail the main operation if email fails
       }
 
-      const paymentAmt = parseFloat(paymentAmount || '0');
+      const paymentAmt = paymentAmount || 0;
       toast({
         title: "Thành công",
         description: paymentAmt !== 0 
@@ -155,12 +156,11 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
-  const newPaidAmount = paidAmount + parseFloat(paymentAmount || '0');
+  const newPaidAmount = paidAmount + (paymentAmount || 0);
   const newDebtAmount = totalAmount - newPaidAmount;
 
   return (
@@ -206,11 +206,10 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="payment-amount">Số tiền thanh toán</Label>
-                <Input
+                <CurrencyInput
                   id="payment-amount"
-                  type="number"
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  onChange={(value) => setPaymentAmount(value)}
                   placeholder="Nhập số tiền (cho phép số âm để điều chỉnh)"
                 />
               </div>
@@ -240,7 +239,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             </div>
 
             {/* New Payment Summary */}
-            {paymentAmount && parseFloat(paymentAmount) !== 0 && (
+            {paymentAmount && paymentAmount !== 0 && (
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
                   <h5 className="font-medium mb-2">Sau khi thanh toán:</h5>
@@ -314,7 +313,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
                 orderId={order?.id}
                 documentType="status_update"
                 label="Tải lên tài liệu liên quan"
-                onDocumentUploaded={(doc) => console.log('Document uploaded:', doc)}
+                onDocumentUploaded={(doc) => {}}
               />
             </div>
           </div>
@@ -332,3 +331,4 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
     </Dialog>
   );
 };
+

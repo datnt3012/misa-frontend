@@ -1,61 +1,56 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { orderApi } from "@/api/order.api";
+import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
+import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
+import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpecificExportSlipCreation";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import CreatorDisplay from "@/components/orders/CreatorDisplay";
+import { getErrorMessage } from "@/lib/error-utils";
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
-// Component to display creator name
-const CreatorDisplay: React.FC<{ createdBy: string }> = ({ createdBy }) => {
-  const [creatorName, setCreatorName] = useState<string>("");
+const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
+const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
+const PENDING_TAG_NAMES = ["chưa đối soát", "pending reconciliation"];
 
-  useEffect(() => {
-    const getCreatorName = async () => {
-      if (!createdBy) {
-        setCreatorName("-");
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', createdBy)
-          .single();
-
-        if (!error && data?.full_name) {
-          setCreatorName(data.full_name);
-        } else {
-          setCreatorName("-");
-        }
-      } catch (error) {
-        console.error('Error fetching creator name:', error);
-        setCreatorName("-");
-      }
-    };
-
-    getCreatorName();
-  }, [createdBy]);
-
-  return <div className="text-sm">{creatorName}</div>;
+const tagMatchesNames = (tag: ApiOrderTag, names: string[]) => {
+  const normalizedTargets = names.map(normalizeTagLabel);
+  const candidates = [tag.name, tag.raw_name, tag.display_name];
+  return candidates.some(candidate => normalizedTargets.includes(normalizeTagLabel(candidate)));
 };
 
-const Orders: React.FC = () => {
+const isReconciledDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, RECONCILED_TAG_NAMES);
+const isPendingDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, PENDING_TAG_NAMES);
+
+// Helper function to get display name for tag
+const getTagDisplayName = (tag: ApiOrderTag) => {
+  return tag.display_name || tag.name || tag.raw_name || tag.id;
+};
+
+const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -63,122 +58,164 @@ const Orders: React.FC = () => {
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showOrderDetailDialog, setShowOrderDetailDialog] = useState(false);
+  const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
+  const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
+  const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [totalOrders, setTotalOrders] = useState(0);
+  
+  // Summary state from API
+  const [summary, setSummary] = useState<{
+    totalAmount: number;
+    totalInitialPayment: number;
+    totalDebt: number;
+  } | null>(null);
+  
   const { toast } = useToast();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
 
-  // Handle creating export slip
-  const handleCreateExportSlip = async (order: any) => {
+  const loadOrderTagsCatalog = useCallback(async () => {
     try {
-      // Check if export slip already exists
-      const { data: existingSlip } = await supabase
-        .from('export_slips')
-        .select('id')
-        .eq('order_id', order.id)
-        .single();
-
-      if (existingSlip) {
-        toast({
-          title: "Thông báo",
-          description: "Phiếu xuất kho đã tồn tại cho đơn hàng này",
-          variant: "default",
-        });
-        return;
-      }
-
-      // Create new export slip
-      const { error } = await supabase
-        .from('export_slips')
-        .insert({
-          order_id: order.id,
-          slip_number: `PX${Date.now()}`,
-          created_by: user?.id
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Thành công",
-        description: "Đã tạo phiếu xuất kho",
-        variant: "default",
-      });
-
-      fetchOrders();
+      // Only load tags with type 'order'
+      const tags = await orderTagsApi.getAllTags({ type: 'order' });
+      setAvailableTags(tags);
     } catch (error) {
-      console.error('Error creating export slip:', error);
+      console.error('Error loading order tags catalog:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tạo phiếu xuất kho",
+        description: getErrorMessage(error, "Không thể tải danh sách nhãn"),
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
-  useEffect(() => {
-    fetchOrders();
-    fetchCreators();
-    const interval = setInterval(fetchOrders, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, [sortField, sortDirection]);
-
-  const fetchCreators = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .order('full_name');
-      
-      if (error) throw error;
-      setCreators(data || []);
-    } catch (error) {
-      console.error('Error fetching creators:', error);
-    }
-  };
-
-  const fetchOrders = async () => {
+  // Fetch orders function
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (
-            id,
-            name,
-            phone,
-            address,
-            customer_code
-          ),
-          order_items (
-            id,
-            product_id,
-            product_code,
-            product_name,
-            quantity,
-            unit_price,
-            total_price
-          ),
-          order_tag_assignments (
-            order_tags (
-              id,
-              name,
-              color
-            )
-          )
-        `)
-        .order(sortField, { ascending: sortDirection === "asc" });
-
-      if (error) throw error;
-      setOrders(data || []);
+      const params: any = { page: currentPage, limit: itemsPerPage };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (categoryFilter !== 'all') params.categories = categoryFilter;
+      if (searchTerm) params.search = searchTerm;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
+      const resp = await orderApi.getOrders(params);
+      console.log('[Orders] API response:', {
+        ordersCount: resp.orders?.length || 0,
+        total: resp.total,
+        hasSummary: !!resp.summary,
+        summary: resp.summary,
+      });
+      
+      setOrders(resp.orders || []);
+      setTotalOrders(resp.total || 0);
+      
+      // Set summary from API if available
+      if (resp.summary) {
+        console.log('[Orders] Setting summary from API:', resp.summary);
+        setSummary(resp.summary);
+      } else {
+        console.log('[Orders] No summary from API, using fallback calculation');
+        // Fallback: calculate from orders if summary not available
+        setSummary(null);
+      }
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải danh sách đơn hàng",
+        description: error.response?.data?.message || error.message || "Không thể tải danh sách đơn hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+        // Filter out deleted categories
+        const activeCategories = response.categories.filter(cat => cat.isActive);
+        setCategories(activeCategories);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Handle creating export slip
+  const handleCreateExportSlip = (order: any) => {
+    setSelectedOrderForExport(order);
+    setShowExportSlipDialog(true);
+  };
+
+  // Handle checkbox selection
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedOrders.length === orders.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(orders.map(order => order.id));
+    }
+  };
+
+  // Handle delete orders
+  const handleDeleteOrders = async () => {
+    if (selectedOrders.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn đơn hàng cần xóa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const deletePromises = selectedOrders.map(orderId =>
+        orderApi.deleteOrder(orderId)
+      );
+      
+      const responses = await Promise.all(deletePromises);
+      
+      toast({
+        title: "Thành công",
+        description: `Đã xóa ${selectedOrders.length} đơn hàng`,
+      });
+      
+      setSelectedOrders([]);
+      setShowDeleteDialog(false);
+      fetchOrders();
+    } catch (error) {
+      console.error("Error deleting orders:", error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể xóa đơn hàng",
         variant: "destructive",
       });
     } finally {
@@ -186,8 +223,69 @@ const Orders: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN').format(amount);
+  // Handle delete single order
+  const handleDeleteSingleOrder = async () => {
+    if (!orderToDelete) {
+      toast({
+        title: "Lỗi",
+        description: "Không tìm thấy đơn hàng cần xóa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await orderApi.deleteOrder(orderToDelete.id);
+      
+      toast({
+        title: "Thành công",
+        description: response.message || `Đã xóa đơn hàng ${orderToDelete.order_number}`,
+      });
+      
+      setOrderToDelete(null);
+      setShowDeleteDialog(false);
+      fetchOrders();
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể xóa đơn hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage]); // Fetch when pagination changes
+
+  useEffect(() => {
+    loadOrderTagsCatalog();
+  }, [loadOrderTagsCatalog]);
+
+  // Removed automatic refresh - only reload on user actions
+
+  const fetchCreators = async () => {
+    setCreators([]); // Not implemented on BE yet
+  };
+
+  const formatCurrency = (amount: number | string | undefined | null) => {
+    const numAmount = Number(amount) || 0;
+    return new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: 0
+    }).format(numAmount);
+  };
+
+  // Format VND without currency symbol for per-item unit prices
+  const formatVndNoSymbol = (amount: number | string | undefined | null) => {
+    const numAmount = Number(amount) || 0;
+    return new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: 0
+    }).format(numAmount);
   };
 
   // Mask phone number - hide 4 middle digits
@@ -210,13 +308,58 @@ const Orders: React.FC = () => {
     return address;
   };
 
+  const mapOrderTags = useCallback((tagNames?: string[]): ApiOrderTag[] => {
+    if (!Array.isArray(tagNames)) return [];
+    return tagNames
+      .map((tagName) => {
+        if (!tagName) return null;
+        
+        // Check if tagName looks like a UUID (ID format)
+        // UUID format: 8-4-4-4-12 hex characters
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tagName);
+        
+        // If it's a UUID, prioritize finding by ID (API returns IDs in order.tags)
+        if (isUUID) {
+          const matchedById = availableTags.find((tag) => tag.id === tagName);
+          if (matchedById) {
+            return matchedById;
+          }
+          // If not found by ID, create a fallback tag with the UUID as ID
+          // This will be resolved later in OrderTagsManager when allTags is loaded
+          return {
+            id: tagName,
+            name: tagName, // Temporary, will be resolved later
+            display_name: tagName,
+            raw_name: tagName,
+            color: "#94a3b8",
+          } as ApiOrderTag;
+        }
+        
+        // If not a UUID, try to find by name/display_name/raw_name
+        const matchedByName = availableTags.find((tag) =>
+          tagMatchesNames(tag, [tagName])
+        );
+        if (matchedByName) {
+          return matchedByName;
+        }
+        
+        // Fallback: create a tag with prefix
+        const fallbackId = `tag_${normalizeTagLabel(tagName) || Date.now().toString()}`;
+        return {
+          id: fallbackId,
+          name: tagName,
+          display_name: tagName,
+          raw_name: tagName,
+          color: "#94a3b8",
+        } as ApiOrderTag;
+      })
+      .filter((tag): tag is ApiOrderTag => Boolean(tag));
+  }, [availableTags]);
+
   // Handle quick note update
   const handleQuickNote = async (orderId: string, note: string) => {
     try {
-      await supabase
-        .from('orders')
-        .update({ notes: note })
-        .eq('id', orderId);
+      await orderApi.updateOrder(orderId, { notes: note });
       
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -226,7 +369,41 @@ const Orders: React.FC = () => {
       console.error('Error updating note:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật ghi chú",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật ghi chú",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle order status update (requires ORDERS_UPDATE_STATUS permission)
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      // Check permission first
+      if (!hasPermission('ORDERS_UPDATE_STATUS')) {
+        toast({
+          title: "Không có quyền",
+          description: "Bạn không có quyền cập nhật trạng thái đơn hàng",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Use the new endpoint specifically for status updates
+      const response = await orderApi.updateOrderStatus(orderId, newStatus);
+      
+      // Update local state
+      setOrders(prev => prev.map(order => 
+        order.id === orderId ? { ...order, status: newStatus } : order
+      ));
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật trạng thái đơn hàng",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
     }
@@ -240,6 +417,11 @@ const Orders: React.FC = () => {
       setSortDirection("asc");
     }
   };
+  
+  const handleApplyFilters = () => {
+    setCurrentPage(1);
+    fetchOrders();
+  };
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -251,47 +433,37 @@ const Orders: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; variant: any }> = {
-      'pending': { label: 'Chờ xử lý', variant: 'secondary' },
-      'confirmed': { label: 'Đã xác nhận', variant: 'default' },
-      'processing': { label: 'Đang xử lý', variant: 'default' },
-      'picked': { label: 'Đã lấy hàng', variant: 'default' },
-      'handover': { label: 'Bàn giao ĐVVC', variant: 'default' },
-      'delivered': { label: 'Đã giao hàng', variant: 'default' },
-      'completed': { label: 'Hoàn thành', variant: 'default' },
-      'cancelled': { label: 'Đã hủy', variant: 'destructive' },
-    };
-    
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+    const config = getOrderStatusConfig(status);
+    // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
+    const isLongLabel = status === 'delivery_failed';
+    const className = cn(
+      config.className,
+      isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''
+    );
+    return (
+      <Badge 
+        variant={config.variant} 
+        className={className}
+      >
+        {config.label}
+      </Badge>
+    );
   };
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
-      order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_phone?.includes(searchTerm);
-      
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    
-    const matchesCreator = creatorFilter === "all" || order.created_by === creatorFilter;
-    
-    const orderDate = new Date(order.created_at);
-    const matchesStartDate = !startDate || orderDate >= new Date(startDate);
-    const matchesEndDate = !endDate || orderDate <= new Date(endDate + 'T23:59:59');
-    
-    return matchesSearch && matchesStatus && matchesCreator && matchesStartDate && matchesEndDate;
-  });
-
-  // Calculate totals
-  const totals = filteredOrders.reduce((acc, order) => ({
+  // Use summary from API if available, otherwise calculate from orders
+  const totals = summary ? {
+    totalAmount: summary.totalAmount,
+    paidAmount: summary.totalInitialPayment,
+    debtAmount: summary.totalDebt,
+  } : orders.reduce((acc, order) => ({
     totalAmount: acc.totalAmount + (order.total_amount || 0),
-    paidAmount: acc.paidAmount + (order.paid_amount || 0),
+    paidAmount: acc.paidAmount + (order.initial_payment || order.paid_amount || 0),
     debtAmount: acc.debtAmount + (order.debt_amount || 0),
   }), { totalAmount: 0, paidAmount: 0, debtAmount: 0 });
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-background p-2 sm:p-3 md:p-4">
+      <div className="w-full mx-auto space-y-3 sm:space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">📋 DANH SÁCH ĐƠN HÀNG</h1>
@@ -324,12 +496,26 @@ const Orders: React.FC = () => {
                 <SelectValue placeholder="Chọn trạng thái" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="all">Tất cả trạng thái</SelectItem>
                 <SelectItem value="pending">Chờ xử lý</SelectItem>
                 <SelectItem value="processing">Đang xử lý</SelectItem>
                 <SelectItem value="delivered">Đã giao</SelectItem>
                 <SelectItem value="completed">Hoàn thành</SelectItem>
                 <SelectItem value="cancelled">Đã hủy</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Chọn loại sản phẩm" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -366,6 +552,14 @@ const Orders: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Apply Filters Button */}
+            <Button 
+              onClick={handleApplyFilters}
+              className="ml-auto"
+            >
+              Áp dụng
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -375,7 +569,7 @@ const Orders: React.FC = () => {
         <CardContent className="pt-6">
           <div className="grid grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold">{filteredOrders.length}</div>
+              <div className="text-2xl font-bold">{totalOrders}</div>
               <div className="text-sm text-muted-foreground">Đơn hàng</div>
             </div>
             <div>
@@ -394,94 +588,157 @@ const Orders: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Action Bar */}
+      {selectedOrders.length > 0 && (
+        <Card className="shadow-sm border bg-blue-50">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-blue-700">
+                  Đã chọn {selectedOrders.length} đơn hàng
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={() => setShowDeleteDialog(true)}
+                  variant="destructive"
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  <Package className="w-4 h-4 mr-2" />
+                  Xóa
+                </Button>
+                <Button 
+                  onClick={() => setSelectedOrders([])}
+                  variant="outline"
+                  size="sm"
+                >
+                  Bỏ chọn
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Orders Table */}
       <Card className="shadow-sm border">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-full text-xs sm:text-sm">
               <TableHeader>
                 <TableRow className="border-b bg-slate-50/50">
-                  <TableHead className="w-12 py-3 border-r border-slate-200">
-                    <input type="checkbox" className="rounded" />
+                  <TableHead className="w-10 sm:w-12 py-1 sm:py-2 border-r border-slate-200">
+                    <input 
+                      type="checkbox" 
+                      className="rounded" 
+                      checked={selectedOrders.length === orders.length && orders.length > 0}
+                      onChange={handleSelectAll}
+                    />
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[96px] sm:min-w-[110px] text-center" 
                     onClick={() => handleSort("order_number")}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       ID
                       {getSortIcon("order_number")}
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-slate-100/50 py-3 font-medium text-slate-700 border-r border-slate-200" 
+                    className="cursor-pointer hover:bg-slate-100/50 py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[120px] sm:min-w-[140px] text-center" 
                     onClick={() => handleSort("customer_name")}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       Khách hàng
                       {getSortIcon("customer_name")}
                     </div>
                   </TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">Sản phẩm</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">Giá</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">SL</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200 text-center">Thanh toán</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200">Ghi chú</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200">Người tạo đơn</TableHead>
-                   <TableHead className="py-3 font-medium text-slate-700 border-r border-slate-200">Trạng thái</TableHead>
-                  <TableHead className="text-right py-3 font-medium text-slate-700">Thao tác</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ngày hoàn thành</TableHead>
+                  <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[88px] sm:min-w-[104px] text-center whitespace-nowrap">Trạng thái</TableHead>
+                  <TableHead className="text-center py-1 sm:py-2 font-medium text-slate-700 min-w-[80px] sm:min-w-[90px]">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-6">
                       Đang tải...
                     </TableCell>
                   </TableRow>
-                ) : filteredOrders.length === 0 ? (
+                ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-6">
                       Không có đơn hàng nào
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredOrders.map((order) => {
-                    const tags = order.order_tag_assignments?.map((assignment: any) => assignment.order_tags) || [];
-                    const hasReconciliation = tags.some((tag: any) => tag.name === 'Đã đối soát');
+                  orders.map((order) => {
+                    const tags = mapOrderTags(order.tags || []);
+                    const specialTags = tags.filter((tag) => isReconciledDisplayTag(tag) || isPendingDisplayTag(tag));
+                    const otherTags = tags.filter((tag) => !specialTags.includes(tag));
+                    const hasReconciliation = specialTags.some((tag) => isReconciledDisplayTag(tag));
                     
                     return (
                       <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
-                        <TableCell className="py-4 border-r border-slate-200">
-                          <input type="checkbox" className="rounded" />
+                        <TableCell className="py-3 border-r border-slate-200">
+                          <input 
+                            type="checkbox" 
+                            className="rounded" 
+                            checked={selectedOrders.includes(order.id)}
+                            onChange={() => handleSelectOrder(order.id)}
+                          />
                         </TableCell>
                          {/* ID Column */}
-                         <TableCell className="py-4 border-r border-slate-200">
+                         <TableCell className="py-3 border-r border-slate-200">
                            <div className="space-y-2">
                              <div className="font-mono text-sm font-medium text-blue-600">
                                {order.order_number}
                              </div>
                              <div className="text-xs text-muted-foreground">
-                               {format(new Date(order.created_at), 'dd/MM/yyyy HH:mm')}
+                               {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
                              </div>
-                             <div>
-                               <Badge 
-                                 variant={hasReconciliation ? "default" : "secondary"}
-                                 className={cn(
-                                   "text-xs",
-                                   hasReconciliation 
-                                     ? "bg-blue-100 text-blue-800 hover:bg-blue-100" 
-                                     : "bg-red-100 text-red-800 hover:bg-red-100"
-                                 )}
-                               >
-                                 {hasReconciliation ? "Đã đối soát" : "Chưa đối soát"}
-                               </Badge>
+                             <div className="flex gap-1 flex-wrap">
+                               {specialTags.length > 0 ? (
+                                 specialTags.map((tag: any, idx: number) => (
+                                   <Badge
+                                     key={idx}
+                                     variant={tag.name === 'Đã đối soát' ? 'default' : 'secondary'}
+                                     className={cn(
+                                       'text-xs',
+                                       tag.name === 'Đã đối soát'
+                                         ? 'bg-blue-100 text-blue-800 hover:bg-blue-100'
+                                         : 'bg-red-100 text-red-800 hover:bg-red-100'
+                                     )}
+                                   >
+                                     {getTagDisplayName(tag)}
+                                   </Badge>
+                                 ))
+                               ) : (
+                                 <Badge 
+                                   variant={hasReconciliation ? 'default' : 'secondary'}
+                                   className={cn(
+                                     'text-xs',
+                                     hasReconciliation 
+                                       ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' 
+                                       : 'bg-red-100 text-red-800 hover:bg-red-100'
+                                   )}
+                                 >
+                                   {hasReconciliation ? 'Đã đối soát' : 'Chưa đối soát'}
+                                 </Badge>
+                               )}
                              </div>
                            </div>
                          </TableCell>
                          
                          {/* Customer Column */}
-                         <TableCell className="py-4 border-r border-slate-200">
+                         <TableCell className="py-3 border-r border-slate-200">
                            <div className="space-y-1">
                              <div className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                                {maskPhoneNumber(order.customer_phone || "")}
@@ -490,8 +747,13 @@ const Orders: React.FC = () => {
                              <div className="text-sm text-muted-foreground">
                                {formatAddress(order.customer_address)}
                              </div>
+                             {order.notes && (
+                               <div className="text-xs text-blue-600 italic">
+                                 Ghi chú: {order.notes}
+                               </div>
+                             )}
                              <div className="flex flex-wrap gap-1 mt-1">
-                               {tags.map((tag: any, index: number) => tag && (
+                               {otherTags.map((tag: any, index: number) => tag && (
                                  <Badge 
                                    key={index}
                                    variant="outline"
@@ -505,56 +767,65 @@ const Orders: React.FC = () => {
                            </div>
                          </TableCell>
                          
-                           {/* Products Column */}
-                           <TableCell className="py-4 border-r border-slate-200 align-top text-center">
-                             <div className="space-y-3">
-                               {order.order_items?.map((item: any, index: number) => (
-                                 <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                   <div className="font-medium text-slate-900">{item.product_name}</div>
-                                 </div>
-                               ))}
-                             </div>
-                           </TableCell>
+                          {/* Products Column */}
+                          <TableCell className="p-0 border-r border-slate-200 text-center">
+                            <div className="divide-y divide-slate-100">
+                              {order.items?.map((item: any, index: number) => (
+                                <div key={index} className="text-sm py-5 px-5">
+                                  <div className="font-medium text-slate-900 truncate" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
+                                </div>
+                              ))}
+                              {(!order.items || order.items.length === 0) && (
+                                <div className="text-sm text-muted-foreground">Không có sản phẩm</div>
+                              )}
+                            </div>
+                          </TableCell>
                           
                           {/* Remove SL column - now included in products */}
                            
-                            {/* Price Column */}
-                            <TableCell className="py-4 border-r border-slate-200 align-top text-center">
-                              <div className="space-y-3">
-                                {order.order_items?.map((item: any, index: number) => (
-                                  <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                    <div className="font-medium text-slate-900">{formatCurrency(item.unit_price)}</div>
+                           {/* Price Column */}
+                           <TableCell className="p-0 border-r border-slate-200 text-center">
+                              <div className="divide-y divide-slate-100">
+                                {order.items?.map((item: any, index: number) => (
+                                  <div key={index} className="text-sm py-5 px-5">
+                                    <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
                                   </div>
                                 ))}
+                                {(!order.items || order.items.length === 0) && (
+                                  <div className="text-sm text-muted-foreground">-</div>
+                                )}
                               </div>
                             </TableCell>
                            
-                            {/* Quantity Column */}
-                            <TableCell className="py-4 border-r border-slate-200 align-top text-center">
-                              <div className="space-y-3">
-                                {order.order_items?.map((item: any, index: number) => (
-                                  <div key={index} className="text-sm py-1 border-b border-slate-100 last:border-b-0">
-                                    <div className="font-medium text-slate-900">{item.quantity}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            </TableCell>
+                           {/* Quantity Column */}
+                           <TableCell className="p-0 border-r border-slate-200 text-center">
+                             <div className="divide-y divide-slate-100">
+                               {order.items?.map((item: any, index: number) => (
+                                 <div key={index} className="text-sm py-5 px-5">
+                                   <div className="font-medium text-slate-900">{item.quantity || 0}</div>
+                                 </div>
+                               ))}
+                               {(!order.items || order.items.length === 0) && (
+                                 <div className="text-sm text-muted-foreground">-</div>
+                               )}
+                             </div>
+                           </TableCell>
                            
                             {/* Payment Column */}
-                            <TableCell className="py-4 border-r border-slate-200 text-center">
+                          <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
-                                  {formatCurrency(order.paid_amount)}
+                                  {formatVndNoSymbol(order.initial_payment || order.paid_amount)}
                                 </div>
                                 <div className="text-sm font-medium text-purple-600">
-                                  {formatCurrency(order.total_amount - order.paid_amount)}
+                                  {formatVndNoSymbol(order.total_amount - (order.initial_payment || order.paid_amount))}
                                 </div>
                               </div>
                             </TableCell>
                          
                           {/* Quick Notes Column */}
-                          <TableCell className="py-4 border-r border-slate-200">
+                          <TableCell className="py-3 border-r border-slate-200">
                             <div className="max-w-xs">
                               <Input
                                 defaultValue={order.notes || ""}
@@ -571,19 +842,45 @@ const Orders: React.FC = () => {
                           </TableCell>
                           
                            {/* Creator Column */}
-                           <TableCell className="py-4 border-r border-slate-200">
-                             <CreatorDisplay createdBy={order.created_by} />
+                          <TableCell className="py-3 border-r border-slate-200">
+                             <CreatorDisplay createdBy={order.created_by} creatorInfo={order.creator_info} />
                            </TableCell>
                           
-                          {/* Remove date column - now in ID */}
+                          {/* Completed At Column */}
+                          <TableCell className="py-3 border-r border-slate-200 text-center">
+                            {(() => {
+                              const completedAt = order.completed_at || order.updated_at;
+                              const showCompleted = ['delivered','completed'].includes(order.status);
+                              return showCompleted && completedAt
+                                ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm')
+                                : '-';
+                            })()}
+                          </TableCell>
                           
-                           {/* Status Column */}
-                           <TableCell className="py-4 border-r border-slate-200">
-                             {getStatusBadge(order.status)}
-                           </TableCell>
+                          {/* Status Column */}
+                          <TableCell className="py-4 border-r border-slate-200 min-w-[88px] sm:min-w-[104px]">
+                            <Select
+                              value={order.status || 'pending'}
+                              onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
+                              disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
+                            >
+                              <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
+                                <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
+                                  {getStatusBadge(order.status)}
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent className="min-w-[128px] sm:min-w-[144px]">
+                                {ORDER_STATUSES.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {ORDER_STATUS_LABELS_VI[status]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
                          
                          {/* Actions Column */}
-                         <TableCell className="text-right py-4">
+                          <TableCell className="text-center py-3">
                            <DropdownMenu>
                              <DropdownMenuTrigger asChild>
                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -591,6 +888,16 @@ const Orders: React.FC = () => {
                                </Button>
                              </DropdownMenuTrigger>
                              <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setSelectedOrder(order);
+                                    setShowOrderViewDialog(true);
+                                  }}
+                                  className="cursor-pointer hover:bg-muted"
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Xem chi tiết
+                                </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setSelectedOrder(order);
@@ -628,6 +935,16 @@ const Orders: React.FC = () => {
                                   <Package className="w-4 h-4 mr-2" />
                                   Tạo phiếu xuất kho
                                 </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setOrderToDelete(order);
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  className="cursor-pointer hover:bg-muted text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Xóa đơn hàng
+                                </DropdownMenuItem>
                              </DropdownMenuContent>
                            </DropdownMenu>
                          </TableCell>
@@ -639,6 +956,54 @@ const Orders: React.FC = () => {
             </Table>
           </div>
           
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Hiển thị</span>
+              <Select 
+                value={itemsPerPage.toString()} 
+                onValueChange={(value) => {
+                  setCurrentPage(1);
+                  setItemsPerPage(Number(value));
+                  // Will auto-fetch via useEffect below
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground">
+                trong tổng số {totalOrders} đơn hàng
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Trước
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Trang {currentPage} / {Math.max(1, Math.ceil(totalOrders / itemsPerPage))}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage >= Math.ceil(totalOrders / itemsPerPage)}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -652,11 +1017,24 @@ const Orders: React.FC = () => {
         }}
       />
 
-      {/* Order Detail Dialog */}
+      {/* Order View Dialog (Read-only) */}
+      <OrderViewDialog
+        order={selectedOrder}
+        open={showOrderViewDialog}
+        onOpenChange={setShowOrderViewDialog}
+      />
+
+      {/* Order Detail Dialog (Editable) */}
       <OrderDetailDialog
         order={selectedOrder}
         open={showOrderDetailDialog}
         onOpenChange={setShowOrderDetailDialog}
+        onOrderUpdated={() => {
+          fetchOrders();
+          if (selectedOrder) {
+            orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
+          }
+        }}
       />
 
       {/* Order Tags Manager */}
@@ -667,7 +1045,18 @@ const Orders: React.FC = () => {
           onOpenChange={setShowTagsManager}
           onTagsUpdated={() => {
             fetchOrders();
+            loadOrderTagsCatalog();
+            // Also refresh the selected order data
+            if (selectedOrder) {
+              orderApi.getOrder(selectedOrder.id).then(updatedOrder => {
+                setSelectedOrder(updatedOrder);
+              }).catch(() => {
+                fetchOrders();
+              });
+            }
           }}
+          currentTags={mapOrderTags(selectedOrder.tags || [])}
+          availableTags={availableTags}
         />
       )}
 
@@ -680,8 +1069,93 @@ const Orders: React.FC = () => {
           fetchOrders();
         }}
       />
-    </div>
+
+      {/* Export Slip Creation Dialog */}
+      <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tạo phiếu xuất kho</DialogTitle>
+            <DialogDescription>
+              {selectedOrderForExport ? (
+                <>Tạo phiếu xuất kho cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong></>
+              ) : (
+                'Chọn đơn hàng để tạo phiếu xuất kho'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {selectedOrderForExport && (
+              <OrderSpecificExportSlipCreation 
+                orderId={selectedOrderForExport.id}
+                onExportSlipCreated={() => {
+                  setShowExportSlipDialog(false);
+                  setSelectedOrderForExport(null);
+                  toast({
+                    title: "Thành công",
+                    description: `Đã tạo phiếu xuất kho cho đơn hàng ${selectedOrderForExport.order_number}`,
+                  });
+                  // Backend cập nhật trạng thái đơn hàng sau khi tạo phiếu xuất kho,
+                  // cần refetch danh sách để hiển thị đúng trạng thái mới
+                  fetchOrders();
+                }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => {
+        setShowDeleteDialog(open);
+        if (!open) {
+          setOrderToDelete(null);
+          setSelectedOrders([]);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa đơn hàng</DialogTitle>
+            <DialogDescription>
+              {orderToDelete ? (
+                <>Bạn có chắc chắn muốn xóa đơn hàng <strong>{orderToDelete.order_number}</strong>? Hành động này không thể hoàn tác.</>
+              ) : (
+                <>Bạn có chắc chắn muốn xóa {selectedOrders.length} đơn hàng đã chọn? Hành động này không thể hoàn tác.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setOrderToDelete(null);
+                setSelectedOrders([]);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={orderToDelete ? handleDeleteSingleOrder : handleDeleteOrders}
+              disabled={loading}
+            >
+              {loading ? "Đang xóa..." : "Xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+       </Dialog>
+       </div>
+     </div>
+   );
+ };
+
+const Orders: React.FC = () => {
+  return (
+    <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>
+      <OrdersContent />
+    </PermissionGuard>
   );
 };
 
 export default Orders;
+

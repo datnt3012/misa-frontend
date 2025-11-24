@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,11 +11,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { PlusCircle, Package, CheckCircle, Clock, X } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
+// // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
+import { productApi } from '@/api/product.api';
+import { warehouseApi } from '@/api/warehouse.api';
+import { supplierApi, Supplier } from '@/api/supplier.api';
+import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
+import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
+import { generateImportSlipCode } from '@/utils/importSlipUtils';
+import { stockLevelsApi } from '@/api/stockLevels.api';
 
 interface ImportSlip {
   id: string;
@@ -47,11 +58,7 @@ interface ImportSlipItem {
   notes: string;
 }
 
-interface Supplier {
-  id: string;
-  name: string;
-  contact_phone: string;
-}
+// Supplier interface is now imported from supplier.api.ts
 
 interface Product {
   id: string;
@@ -59,6 +66,8 @@ interface Product {
   name: string;
   unit_price: number;
   current_stock: number;
+  price?: number;
+  costPrice?: number;
 }
 
 interface ImportSlipsProps {
@@ -82,6 +91,16 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     supplier_id: '',
     supplier_name: '',
     supplier_contact: '',
+    supplier_email: '',
+    supplier_address: '',
+    supplier_addressInfo: {
+      provinceCode: '',
+      districtCode: '',
+      wardCode: '',
+      provinceName: '',
+      districtName: '',
+      wardName: ''
+    },
     warehouse_id: '',
     notes: '',
     import_date: new Date().toISOString().split('T')[0]
@@ -96,6 +115,13 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   });
 
   const [currentItems, setCurrentItems] = useState<ImportSlipItem[]>([]);
+  const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
+  const { toast } = useToast();
+
+  const getWarehouseById = (id?: string) => {
+    if (!id) return undefined;
+    return warehouses.find(w => w.id === id);
+  };
 
   useEffect(() => {
     loadImportSlips();
@@ -106,36 +132,29 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const loadImportSlips = async () => {
     try {
-      const { data: slipsData, error } = await supabase
-        .from('import_slips')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Load warehouse info separately for each slip
-      const slipsWithWarehouses = await Promise.all(
-        (slipsData || []).map(async (slip) => {
-          if (slip.warehouse_id) {
-            const { data: warehouseData } = await supabase
-              .from('warehouses')
-              .select('name, code')
-              .eq('id', slip.warehouse_id)
-              .single();
-            
-            return {
-              ...slip,
-              warehouses: warehouseData
-            };
-          }
-          return slip;
-        })
-      );
-
-      setImportSlips(slipsWithWarehouses);
-    } catch (error) {
+      setLoading(true);
+      const resp = await warehouseReceiptsApi.getReceipts({ page: 1, limit: 100, type: 'import' });
+      const list = (resp.receipts || []).map((r: any) => ({
+        id: r.id,
+        slip_number: r.code,
+        supplier_name: r.supplier_name || '',
+        supplier_contact: r.supplier_contact || '',
+        total_amount: r.total_amount || 0,
+        status: r.status,
+        notes: r.description || '',
+        import_date: r.created_at,
+        created_at: r.created_at,
+        approved_at: r.approved_at || '',
+        approved_by: '',
+        created_by: '',
+        warehouse_id: r.warehouse_id,
+        warehouses: undefined,
+      }));
+      setImportSlips(list);
+    } catch (error: any) {
       console.error('Error loading import slips:', error);
-      toast.error('Không thể tải danh sách phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách phiếu nhập kho';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -143,13 +162,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, code, name, unit_price, current_stock')
-        .order('name');
-
-      if (error) throw error;
-      setProducts(data || []);
+      const resp = await productApi.getProducts({ page: 1, limit: 1000 });
+      setProducts(resp.products || []);
     } catch (error) {
       console.error('Error loading products:', error);
     }
@@ -157,104 +171,106 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const loadSuppliers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setSuppliers(data || []);
-    } catch (error) {
+      const response = await supplierApi.getSuppliers({ page: 1, limit: 1000 });
+      setSuppliers(response.suppliers || []);
+    } catch (error: any) {
       console.error('Error loading suppliers:', error);
+      // Fallback to empty array if API fails
+      setSuppliers([]);
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách nhà cung cấp';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
   const loadWarehouses = async () => {
     try {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setWarehouses(data || []);
+      const resp = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
+      setWarehouses(resp.warehouses || []);
     } catch (error) {
       console.error('Error loading warehouses:', error);
     }
   };
 
-  const createOrSelectSupplier = async (supplierName: string, supplierContact: string) => {
+  const createOrSelectSupplier = async (supplierName: string, supplierContact: string, supplierEmail?: string, supplierAddress?: string) => {
     if (!supplierName) return null;
 
     // Check if supplier already exists
-    const existingSupplier = suppliers.find(s => s.name.toLowerCase() === supplierName.toLowerCase());
+    const existingSupplier = suppliers.find(s => s?.name?.toLowerCase() === supplierName.toLowerCase());
     if (existingSupplier) {
       return existingSupplier.id;
     }
 
     // Create new supplier
     try {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .insert({
-          name: supplierName,
-          contact_phone: supplierContact
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const newSupplier = await supplierApi.createSupplier({
+        name: supplierName,
+        phoneNumber: supplierContact,
+        email: supplierEmail || `${supplierName.toLowerCase().replace(/\s+/g, '')}@supplier.com`,
+        address: supplierAddress || 'Chưa cập nhật địa chỉ'
+      });
       
-      // Reload suppliers list
-      loadSuppliers();
+      // Add to local state
+      setSuppliers(prev => [...prev, newSupplier]);
       
-      return data.id;
-    } catch (error) {
+      return newSupplier.id;
+    } catch (error: any) {
       console.error('Error creating supplier:', error);
-      toast.error('Không thể tạo nhà cung cấp mới');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo nhà cung cấp mới';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
       return null;
     }
   };
 
   const loadSlipItems = async (slipId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('import_slip_items')
-        .select('*')
-        .eq('import_slip_id', slipId);
-
-      if (error) throw error;
-      setSlipItems(data || []);
+      // Get the specific receipt with details
+      const response = await warehouseReceiptsApi.getReceipts({ 
+        page: 1, 
+        limit: 1000,
+        type: 'import'
+      });
+      
+      // Find the specific receipt by ID
+      const receipt = response.receipts.find(r => r.id === slipId);
+      
+      if (receipt && receipt.items) {
+        // Transform items to match ImportSlipItem interface
+        const transformedItems = receipt.items.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          product_code: item.product?.code || '',
+          product_name: item.product?.name || '',
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+          po_number: item.po_number || '',
+          notes: item.notes || ''
+        }));
+        
+        setSlipItems(transformedItems);
+      } else {
+        setSlipItems([]);
+      }
     } catch (error) {
       console.error('Error loading slip items:', error);
+      setSlipItems([]);
     }
   };
 
   const loadInventoryHistory = async (slipId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('inventory_movements')
-        .select(`
-          *,
-          products (
-            code,
-            name
-          )
-        `)
-        .eq('reference_id', slipId)
-        .eq('reference_type', 'import_slip')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setInventoryHistory(data || []);
+      // For now, set empty array since we don't have a specific API for inventory movements
+      // This can be implemented later when the backend provides the endpoint
+      setInventoryHistory([]);
     } catch (error) {
       console.error('Error loading inventory history:', error);
+      setInventoryHistory([]);
     }
   };
 
   const addItemToSlip = () => {
     if (!newItem.product_id || newItem.quantity <= 0) {
-      toast.error('Vui lòng chọn sản phẩm và nhập số lượng hợp lệ');
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn sản phẩm và nhập số lượng hợp lệ', variant: 'destructive' });
       return;
     }
 
@@ -267,8 +283,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       product_code: product.code,
       product_name: product.name,
       quantity: newItem.quantity,
-      unit_price: newItem.unit_price || product.unit_price,
-      total_price: newItem.quantity * (newItem.unit_price || product.unit_price),
+      unit_price: newItem.unit_price || product.costPrice || product.unit_price || 0,
+      total_price: newItem.quantity * (newItem.unit_price || product.costPrice || product.unit_price || 0),
       po_number: newItem.po_number,
       notes: newItem.notes
     };
@@ -289,12 +305,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const createImportSlip = async () => {
     if ((!newSlip.supplier_id && !newSlip.supplier_name) || currentItems.length === 0) {
-      toast.error('Vui lòng chọn nhà cung cấp và thêm ít nhất một sản phẩm');
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn nhà cung cấp và thêm ít nhất một sản phẩm', variant: 'destructive' });
       return;
     }
 
     if (!newSlip.warehouse_id) {
-      toast.error('Vui lòng chọn kho nhập');
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn kho nhập', variant: 'destructive' });
       return;
     }
 
@@ -302,89 +318,135 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Handle supplier creation/selection
       let supplierId = newSlip.supplier_id;
       if (!supplierId && newSlip.supplier_name) {
-        supplierId = await createOrSelectSupplier(newSlip.supplier_name, newSlip.supplier_contact);
+        supplierId = await createOrSelectSupplier(
+          newSlip.supplier_name, 
+          newSlip.supplier_contact,
+          newSlip.supplier_email,
+          newSlip.supplier_address
+        );
         if (!supplierId) return;
       }
 
-      // Generate slip number
-      const { data: slipNumber } = await supabase.rpc('generate_import_slip_number');
+      // Generate slip number using utility function
+      const slipNumber = generateImportSlipCode();
       
       const totalAmount = currentItems.reduce((sum, item) => sum + item.total_price, 0);
 
-      // Create import slip
-      const { data: slip, error: slipError } = await supabase
-        .from('import_slips')
-        .insert({
-          slip_number: slipNumber,
-          supplier_id: supplierId,
-          supplier_name: newSlip.supplier_name,
-          supplier_contact: newSlip.supplier_contact,
-          warehouse_id: newSlip.warehouse_id,
-          total_amount: totalAmount,
-          notes: newSlip.notes,
-          import_date: newSlip.import_date,
-          created_by: user?.id
-        })
-        .select()
-        .single();
+      // Create import slip using backend API
+      const slipData = {
+        warehouseId: newSlip.warehouse_id,
+        supplierId: supplierId,
+        code: slipNumber,
+        description: newSlip.notes || undefined,
+        status: 'pending',
+        type: 'import',
+        details: currentItems.map(item => ({
+          productId: item.product_id,
+          quantity: item.quantity,
+          unitPrice: item.unit_price
+        }))
+      };
 
-      if (slipError) throw slipError;
 
-      // Create slip items
-      const { error: itemsError } = await supabase
-        .from('import_slip_items')
-        .insert(
-          currentItems.map(item => ({
-            import_slip_id: slip.id,
-            product_id: item.product_id,
-            product_code: item.product_code,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.total_price,
-            po_number: item.po_number || null,
-            notes: item.notes
-          }))
-        );
-
-      if (itemsError) throw itemsError;
-
-      toast.success('Tạo phiếu nhập kho thành công');
+      // Call real API
+      const newReceipt = await warehouseReceiptsApi.createReceipt(slipData);
+      toast({ title: 'Thành công', description: newReceipt.message || `Tạo phiếu nhập kho ${newReceipt.code} thành công` });
       setShowCreateDialog(false);
       setNewSlip({
         supplier_id: '',
         supplier_name: '',
         supplier_contact: '',
+        supplier_email: '',
+        supplier_address: '',
         warehouse_id: '',
         notes: '',
         import_date: new Date().toISOString().split('T')[0]
       });
       setCurrentItems([]);
       loadImportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating import slip:', error);
-      toast.error('Không thể tạo phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo phiếu nhập kho';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
   const approveImportSlip = async (slipId: string) => {
     try {
-      const { error } = await supabase
-        .from('import_slips')
-        .update({
-          status: 'approved',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString()
-        })
-        .eq('id', slipId);
+      // First, get the warehouse receipt details to check items
+      const receiptDetails = await warehouseReceiptsApi.getReceipts({ 
+        page: 1, 
+        limit: 1000,
+        type: 'import'
+      });
+      
+      const receipt = receiptDetails.receipts.find(r => r.id === slipId);
+      
+      if (!receipt) {
+        toast({ title: 'Lỗi', description: 'Không tìm thấy phiếu nhập kho', variant: 'destructive' });
+        return;
+      }
 
-      if (error) throw error;
+      // Check if receipt has items
+      if (!receipt.items || receipt.items.length === 0) {
+        toast({ title: 'Lỗi', description: 'Phiếu nhập kho không có sản phẩm nào', variant: 'destructive' });
+        return;
+      }
 
-      toast.success('Đã phê duyệt phiếu nhập kho');
+      // First, validate and update stock levels BEFORE approving
+      for (const item of receipt.items) {
+        // Validate data first
+        if (!receipt.warehouse_id || receipt.warehouse_id.trim() === '') {
+          throw new Error('Warehouse ID không được để trống');
+        }
+        if (!item.product_id) {
+          throw new Error('Product ID không được để trống');
+        }
+        if (!item.quantity || item.quantity <= 0) {
+          throw new Error('Số lượng phải lớn hơn 0');
+        }
+        
+        // Update stock level
+        await stockLevelsApi.updateStockQuantity(
+          receipt.warehouse_id,
+          item.product_id,
+          item.quantity
+        );
+      }
+      
+      // Only approve the warehouse receipt if all stock updates succeed
+      const approvedReceipt = await warehouseReceiptsApi.approveReceipt(slipId);
+      
+      toast({ title: 'Thành công', description: approvedReceipt.message || `Đã phê duyệt phiếu nhập kho ${approvedReceipt.code} và cập nhật tồn kho` });
       loadImportSlips();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error approving import slip:', error);
-      toast.error('Không thể phê duyệt phiếu nhập kho');
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể phê duyệt phiếu nhập kho';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
+    }
+  };
+
+  const rejectImportSlip = async (slipId: string) => {
+    try {
+      const response = await warehouseReceiptsApi.rejectReceipt(slipId);
+      toast({ title: 'Thành công', description: response.message || 'Đã từ chối phiếu nhập kho' });
+      loadImportSlips();
+    } catch (error: any) {
+      console.error('Error rejecting import slip:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể từ chối phiếu nhập kho';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
+    }
+  };
+
+  const deleteImportSlip = async (slipId: string) => {
+    try {
+      const response = await warehouseReceiptsApi.deleteReceipt(slipId);
+      toast({ title: 'Thành công', description: response.message || 'Đã xóa phiếu nhập kho' });
+      loadImportSlips();
+    } catch (error: any) {
+      console.error('Error deleting import slip:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể xóa phiếu nhập kho';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
 
@@ -394,6 +456,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
       case 'approved':
         return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
+      case 'rejected':
+        return <Badge variant="outline" className="text-red-600"><XCircle className="w-3 h-3 mr-1" />Đã từ chối</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -415,6 +479,64 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     }
   };
 
+  const exportToExcel = () => {
+    // Prepare data for export
+    const exportData = importSlips.map((slip, index) => {
+      const warehouse = getWarehouseById(slip.warehouse_id);
+      const statusText = slip.status === 'pending' ? 'Chờ duyệt' :
+                        slip.status === 'approved' ? 'Đã duyệt' :
+                        slip.status === 'rejected' ? 'Đã từ chối' : slip.status;
+
+      return {
+        'STT': index + 1,
+        'Số phiếu': slip.slip_number,
+        'Nhà cung cấp': slip.supplier_name,
+        'Liên hệ': slip.supplier_contact || '',
+        'Kho nhập': warehouse?.name || 'N/A',
+        'Ngày nhập': slip.import_date ? format(new Date(slip.import_date), 'dd/MM/yyyy') : '',
+        'Tổng tiền (VND)': slip.total_amount,
+        'Trạng thái': statusText,
+        'Ngày tạo': slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : '',
+        'Ghi chú': slip.notes || '',
+      };
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const colWidths = [
+      { wch: 5 },   // STT
+      { wch: 18 },  // Số phiếu
+      { wch: 25 },  // Nhà cung cấp
+      { wch: 15 },  // Liên hệ
+      { wch: 20 },  // Kho nhập
+      { wch: 12 },  // Ngày nhập
+      { wch: 18 },  // Tổng tiền
+      { wch: 15 },  // Trạng thái
+      { wch: 20 },  // Ngày tạo
+      { wch: 40 },  // Ghi chú
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sách phiếu nhập kho');
+
+    // Generate filename with timestamp
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
+    const filename = `Danh_sach_phieu_nhap_kho_${dateStr}_${timeStr}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Thành công",
+      description: `Đã xuất ${exportData.length} phiếu nhập kho ra file Excel`,
+    });
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center p-8">Đang tải...</div>;
   }
@@ -422,9 +544,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Phiếu nhập kho</h3>
-          <p className="text-sm text-muted-foreground">Quản lý các phiếu nhập kho và phê duyệt</p>
+        <div className="mt-6 ml-7">
+          <h1 className="text-3xl font-bold">Quản lý phiếu nhập kho</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Quản lý các phiếu nhập kho và phê duyệt</p>
         </div>
         {canManageImports && (
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -451,16 +573,26 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="supplier">Nhà cung cấp *</Label>
+                        <Label htmlFor="supplier">Nhà cung cấp <span className="text-red-500">*</span></Label>
                         <Select 
                           value={newSlip.supplier_id} 
                           onValueChange={(value) => {
-                            const supplier = suppliers.find(s => s.id === value);
+                            const supplier = suppliers.find(s => s?.id === value);
                             setNewSlip({
                               ...newSlip, 
                               supplier_id: value,
                               supplier_name: supplier?.name || '',
-                              supplier_contact: supplier?.contact_phone || ''
+                              supplier_contact: supplier?.contact_phone || '',
+                              supplier_email: supplier?.email || '',
+                              supplier_address: supplier?.address || '',
+                              supplier_addressInfo: {
+                                provinceCode: supplier?.addressInfo?.provinceCode || supplier?.addressInfo?.province?.code || '',
+                                districtCode: supplier?.addressInfo?.districtCode || supplier?.addressInfo?.district?.code || '',
+                                wardCode: supplier?.addressInfo?.wardCode || supplier?.addressInfo?.ward?.code || '',
+                                provinceName: supplier?.addressInfo?.province?.name || '',
+                                districtName: supplier?.addressInfo?.district?.name || '',
+                                wardName: supplier?.addressInfo?.ward?.name || ''
+                              }
                             });
                           }}
                         >
@@ -468,9 +600,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             <SelectValue placeholder="Chọn nhà cung cấp hoặc nhập mới bên dưới" />
                           </SelectTrigger>
                           <SelectContent>
-                            {suppliers.map((supplier) => (
-                              <SelectItem key={supplier.id} value={supplier.id}>
-                                {supplier.name} {supplier.contact_phone && `(${supplier.contact_phone})`}
+                            {suppliers.map((supplier, index) => (
+                              <SelectItem key={supplier?.id || `supplier-${index}`} value={supplier?.id || ''}>
+                                {supplier?.name} {supplier?.contact_phone && `(${supplier.contact_phone})`}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -481,9 +613,65 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         <Input
                           id="supplier_name"
                           value={newSlip.supplier_name}
-                          onChange={(e) => setNewSlip({...newSlip, supplier_name: e.target.value, supplier_id: ''})}
+                          onChange={(e) => {
+                            const newName = e.target.value;
+                            // Auto-fill phone number if supplier exists
+                            const existingSupplier = suppliers.find(s => 
+                              s?.name?.toLowerCase() === newName.toLowerCase()
+                            );
+                            
+                            setNewSlip({
+                              ...newSlip, 
+                              supplier_name: newName, 
+                              supplier_id: '',
+                              supplier_contact: existingSupplier?.contact_phone || newSlip.supplier_contact,
+                              supplier_email: existingSupplier?.email || newSlip.supplier_email,
+                              supplier_address: existingSupplier?.address || newSlip.supplier_address
+                            });
+                            
+                            // Show suggestions if there are matching suppliers
+                            setShowSupplierSuggestions(newName.length > 0 && !existingSupplier);
+                          }}
+                          onFocus={() => setShowSupplierSuggestions(newSlip.supplier_name.length > 0)}
+                          onBlur={() => setTimeout(() => setShowSupplierSuggestions(false), 200)}
                           placeholder="Tên nhà cung cấp mới"
                         />
+                        {/* Supplier suggestions dropdown */}
+                        {showSupplierSuggestions && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                            {suppliers
+                              .filter(s => s?.name?.toLowerCase()?.includes(newSlip.supplier_name.toLowerCase()))
+                              .slice(0, 5)
+                              .map((supplier) => (
+                                <div
+                                  key={supplier.id}
+                                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                  onClick={() => {
+                                    setNewSlip({
+                                      ...newSlip,
+                                      supplier_name: supplier.name,
+                                      supplier_id: supplier.id,
+                                      supplier_contact: supplier.contact_phone,
+                                      supplier_email: supplier.email || '',
+                                      supplier_address: supplier.address || '',
+                                      supplier_addressInfo: {
+                                        provinceCode: supplier.addressInfo?.provinceCode || supplier.addressInfo?.province?.code || '',
+                                        districtCode: supplier.addressInfo?.districtCode || supplier.addressInfo?.district?.code || '',
+                                        wardCode: supplier.addressInfo?.wardCode || supplier.addressInfo?.ward?.code || '',
+                                        provinceName: supplier.addressInfo?.province?.name || '',
+                                        districtName: supplier.addressInfo?.district?.name || '',
+                                        wardName: supplier.addressInfo?.ward?.name || ''
+                                      }
+                                    });
+                                    setShowSupplierSuggestions(false);
+                                  }}
+                                >
+                                  <div className="font-medium">{supplier.name}</div>
+                                  <div className="text-gray-500 text-xs">{supplier.contact_phone}</div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -497,6 +685,45 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         />
                       </div>
                       <div>
+                        <Label htmlFor="supplier_email">Email</Label>
+                        <Input
+                          id="supplier_email"
+                          type="email"
+                          value={newSlip.supplier_email}
+                          onChange={(e) => setNewSlip({...newSlip, supplier_email: e.target.value})}
+                          placeholder="Email nhà cung cấp"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <Label>Địa chỉ</Label>
+                        <AddressFormSeparate
+                          value={{
+                            address: newSlip.supplier_address,
+                            provinceCode: newSlip.supplier_addressInfo?.provinceCode,
+                            districtCode: newSlip.supplier_addressInfo?.districtCode,
+                            wardCode: newSlip.supplier_addressInfo?.wardCode,
+                            provinceName: newSlip.supplier_addressInfo?.provinceName,
+                            districtName: newSlip.supplier_addressInfo?.districtName,
+                            wardName: newSlip.supplier_addressInfo?.wardName
+                          }}
+                          onChange={(data) => {
+                            setNewSlip(prev => ({
+                              ...prev,
+                              supplier_address: data.address,
+                              supplier_addressInfo: {
+                                provinceCode: data.provinceCode,
+                                districtCode: data.districtCode,
+                                wardCode: data.wardCode
+                              }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
                         <Label htmlFor="import_date">Ngày nhập</Label>
                         <Input
                           id="import_date"
@@ -508,7 +735,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="warehouse">Kho nhập *</Label>
+                        <Label htmlFor="warehouse">Kho nhập <span className="text-red-500">*</span></Label>
                         <Select
                           value={newSlip.warehouse_id}
                           onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}
@@ -547,8 +774,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-5 gap-2">
                       <div>
-                        <Label>Sản phẩm *</Label>
-                        <Select value={newItem.product_id} onValueChange={(value) => setNewItem({...newItem, product_id: value})}>
+                        <Label>Sản phẩm <span className="text-red-500">*</span></Label>
+                        <Select value={newItem.product_id} onValueChange={(value) => {
+                          const selectedProduct = products.find(p => p.id === value);
+                          setNewItem({
+                            ...newItem, 
+                            product_id: value,
+                            unit_price: selectedProduct?.costPrice || selectedProduct?.unit_price || 0
+                          });
+                        }}>
                           <SelectTrigger>
                             <SelectValue placeholder="Chọn sản phẩm" />
                           </SelectTrigger>
@@ -562,21 +796,20 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         </Select>
                       </div>
                       <div>
-                        <Label>Số lượng *</Label>
-                        <Input
-                          type="number"
+                        <Label>Số lượng <span className="text-red-500">*</span></Label>
+                        <NumberInput
                           value={newItem.quantity}
-                          onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                          onChange={(value) => setNewItem({...newItem, quantity: value})}
+                          min={1}
                           placeholder="0"
                         />
                       </div>
                       <div>
-                        <Label>Đơn giá</Label>
-                        <Input
-                          type="number"
+                        <Label>Đơn giá <span className="text-red-500">*</span></Label>
+                        <CurrencyInput
                           value={newItem.unit_price}
-                          onChange={(e) => setNewItem({...newItem, unit_price: parseFloat(e.target.value) || 0})}
-                          placeholder="Giá mặc định"
+                          onChange={(value) => setNewItem({...newItem, unit_price: value})}
+                          placeholder="Tự động điền khi chọn sản phẩm"
                         />
                       </div>
                       <div>
@@ -603,7 +836,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                       <CardTitle className="text-base">Danh sách sản phẩm</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <Table>
+                      <div className="overflow-x-auto">
+                        <Table className="min-w-full">
                         <TableHeader>
                           <TableRow>
                             <TableHead>Mã SP</TableHead>
@@ -617,7 +851,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         </TableHeader>
                         <TableBody>
                           {currentItems.map((item, index) => (
-                            <TableRow key={index}>
+                            <TableRow key={item.id || `item-${index}`}>
                               <TableCell>{item.product_code}</TableCell>
                               <TableCell>{item.product_name}</TableCell>
                               <TableCell>{item.quantity}</TableCell>
@@ -636,7 +870,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             </TableRow>
                           ))}
                         </TableBody>
-                      </Table>
+                        </Table>
+                      </div>
                       <div className="mt-4 text-right">
                         <strong>Tổng tiền: {formatCurrency(currentItems.reduce((sum, item) => sum + item.total_price, 0))}</strong>
                       </div>
@@ -659,19 +894,41 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       </div>
 
       <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Danh Sách Phiếu Nhập Kho
+              </CardTitle>
+              <CardDescription>
+                Tất cả phiếu nhập kho trong hệ thống
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => exportToExcel()}
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Xuất Excel
+            </Button>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto w-full">
+            <Table className="min-w-[1200px] w-full">
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold text-center">Số phiếu</TableHead>
-                  <TableHead className="font-semibold text-center">Nhà cung cấp</TableHead>
-                  <TableHead className="font-semibold text-center w-32">Kho nhập</TableHead>
-                  <TableHead className="font-semibold text-center w-28">Ngày nhập</TableHead>
-                  <TableHead className="font-semibold text-center">Tổng tiền (VNĐ)</TableHead>
-                  <TableHead className="font-semibold text-center w-24">Trạng thái</TableHead>
-                  <TableHead className="font-semibold text-center w-32">Ngày tạo</TableHead>
-                  <TableHead className="font-semibold text-center w-32">Thao tác</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[120px]">Số phiếu</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]">Nhà cung cấp</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[150px]">Kho nhập</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[110px]">Ngày nhập</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[130px]">Tổng tiền (VNĐ)</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[120px]">Trạng thái</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[150px]">Ngày tạo</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -681,7 +938,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     <TableCell className="font-medium text-center">{slip.supplier_name}</TableCell>
                     <TableCell className="text-center">
                       <span className="inline-flex items-center px-2 py-1 rounded-md bg-secondary/50 text-secondary-foreground text-xs font-medium">
-                        {slip.warehouses?.name || 'N/A'}
+                        {getWarehouseById(slip.warehouse_id)?.name || 'N/A'}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-center">{format(new Date(slip.import_date), 'dd/MM/yyyy')}</TableCell>
@@ -696,8 +953,13 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                       </div>
                     </TableCell>
                     <TableCell className="text-center">{getStatusBadge(slip.status)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm text-center">{format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-muted-foreground text-sm text-center">{slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
+                    <TableCell className="text-sm text-center">
+                      <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
+                        {slip.notes || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex items-center justify-center space-x-1">
                         <Button
                           variant="outline"
@@ -707,20 +969,42 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             loadSlipItems(slip.id);
                             loadInventoryHistory(slip.id);
                           }}
-                          className="h-8 px-2 text-xs"
+                          className="h-8 px-2 text-xs whitespace-nowrap"
                         >
                           <Package className="w-3 h-3 mr-1" />
                           Chi tiết
                         </Button>
                         {canApproveImports && slip.status === 'pending' && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => approveImportSlip(slip.id)}
+                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Duyệt
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => rejectImportSlip(slip.id)}
+                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                            >
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Từ chối
+                            </Button>
+                          </>
+                        )}
+                        {canApproveImports && slip.status === 'rejected' && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => approveImportSlip(slip.id)}
-                            className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => deleteImportSlip(slip.id)}
+                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
                           >
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Duyệt
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Xóa
                           </Button>
                         )}
                       </div>
@@ -741,34 +1025,88 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
             <DialogDescription>
               Nhà cung cấp: {selectedSlip?.supplier_name} | 
               Ngày nhập: {selectedSlip && format(new Date(selectedSlip.import_date), 'dd/MM/yyyy')} | 
-              Kho nhập: {selectedSlip?.warehouses?.name} ({selectedSlip?.warehouses?.code})
+              Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name} ({getWarehouseById(selectedSlip?.warehouse_id)?.code})
             </DialogDescription>
           </DialogHeader>
           
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mã SP</TableHead>
-                <TableHead>Tên sản phẩm</TableHead>
-                <TableHead>Số lượng</TableHead>
-                <TableHead>Đơn giá</TableHead>
-                <TableHead>Thành tiền</TableHead>
-                <TableHead>Số PO</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {slipItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.product_code}</TableCell>
-                  <TableCell>{item.product_name}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>{formatCurrency(item.unit_price)}</TableCell>
-                  <TableCell>{formatCurrency(item.total_price)}</TableCell>
-                  <TableCell>{item.po_number || '-'}</TableCell>
+          {/* Additional Information Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+            <div className="space-y-2">
+              <div>
+                <Label className="font-medium text-sm">Thông tin nhà cung cấp:</Label>
+                <p className="text-sm text-muted-foreground">{selectedSlip?.supplier_name}</p>
+                {selectedSlip?.supplier_contact && (
+                  <p className="text-sm text-muted-foreground">Liên hệ: {selectedSlip.supplier_contact}</p>
+                )}
+              </div>
+              <div>
+                <Label className="font-medium text-sm">Trạng thái:</Label>
+                <div className="mt-1">{getStatusBadge(selectedSlip?.status || '')}</div>
+              </div>
+              <div>
+                <Label className="font-medium text-sm">Ngày tạo:</Label>
+                <p className="text-sm text-muted-foreground">
+                  {selectedSlip?.created_at ? format(new Date(selectedSlip.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {selectedSlip?.approved_at && (
+                <div>
+                  <Label className="font-medium text-sm">Ngày duyệt:</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {format(new Date(selectedSlip.approved_at), 'dd/MM/yyyy HH:mm')}
+                  </p>
+                </div>
+              )}
+              {selectedSlip?.approved_by && (
+                <div>
+                  <Label className="font-medium text-sm">Người duyệt:</Label>
+                  <p className="text-sm text-muted-foreground">{selectedSlip.approved_by}</p>
+                </div>
+              )}
+              {selectedSlip?.created_by && (
+                <div>
+                  <Label className="font-medium text-sm">Người tạo:</Label>
+                  <p className="text-sm text-muted-foreground">{selectedSlip.created_by}</p>
+                </div>
+              )}
+              {selectedSlip?.notes && (
+                <div>
+                  <Label className="font-medium text-sm">Ghi chú:</Label>
+                  <p className="text-sm text-muted-foreground">{selectedSlip.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="mt-6">
+            <h4 className="text-lg font-semibold mb-4">Danh sách sản phẩm nhập kho</h4>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã SP</TableHead>
+                  <TableHead>Tên sản phẩm</TableHead>
+                  <TableHead>Số lượng</TableHead>
+                  <TableHead>Đơn giá</TableHead>
+                  <TableHead>Thành tiền</TableHead>
+                  <TableHead>Số PO</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {slipItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.product_code}</TableCell>
+                    <TableCell>{item.product_name}</TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>{formatCurrency(item.unit_price)}</TableCell>
+                    <TableCell>{formatCurrency(item.total_price)}</TableCell>
+                    <TableCell>{item.po_number || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           
           <div className="text-right mt-4">
             <strong>Tổng tiền: {selectedSlip && formatCurrency(selectedSlip.total_amount)}</strong>
@@ -804,7 +1142,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         {movement.movement_type === 'stock_in' ? '+' : '-'}{movement.quantity}
                       </TableCell>
                       <TableCell>{movement.profiles?.full_name || 'Hệ thống'}</TableCell>
-                      <TableCell>{format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
+                      <TableCell>{movement.created_at ? format(new Date(movement.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                       <TableCell>{movement.notes || '-'}</TableCell>
                     </TableRow>
                   ))}
@@ -817,3 +1155,4 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     </div>
   );
 }
+

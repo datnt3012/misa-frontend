@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,9 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Trash2, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { customerApi, VatInfo, Customer } from "@/api/customer.api";
+import { productApi } from "@/api/product.api";
+import { warehouseApi } from "@/api/warehouse.api";
+import { orderApi } from "@/api/order.api";
+import { stockLevelsApi } from "@/api/stockLevels.api";
+import { getErrorMessage } from "@/lib/error-utils";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 
 interface CreateOrderFormProps {
   open: boolean;
@@ -28,43 +37,159 @@ interface OrderItem {
   vat_rate: number;
   vat_amount: number;
   warehouse_id: string;
+  current_stock?: number;
 }
+
+interface OrderFormState {
+  customer_id: string;
+  customer_name: string;
+  customer_code: string;
+  customer_phone: string;
+  order_type: string;
+  notes: string;
+  contract_number: string;
+  purchase_order_number: string;
+  vat_tax_code: string;
+  vat_company_name: string;
+  vat_company_address: string;
+  vat_company_phone: string;
+  vat_company_addressInfo: {
+    provinceCode: string;
+    districtCode: string;
+    wardCode: string;
+  };
+  vat_invoice_email: string;
+  vat_rate?: number;
+  shipping_recipient_name: string;
+  shipping_recipient_phone: string;
+  shipping_address: string;
+  shipping_addressInfo: {
+    provinceCode: string;
+    districtCode: string;
+    wardCode: string;
+    provinceName?: string;
+    districtName?: string;
+    wardName?: string;
+  };
+  initial_payment: number;
+  initial_payment_method: string;
+  initial_payment_bank: string;
+  items: OrderItem[];
+}
+
+const sanitizeVatField = (value?: string | null) => {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = typeof value === "string" ? value.trim() : String(value);
+  return trimmed.length ? trimmed : undefined;
+};
+
+const extractVatInfoFromOrder = (order: OrderFormState): VatInfo | undefined => {
+  const vatInfo: VatInfo = {
+    taxCode: sanitizeVatField(order.vat_tax_code),
+    companyName: sanitizeVatField(order.vat_company_name),
+    companyAddress: sanitizeVatField(order.vat_company_address),
+    vatEmail: sanitizeVatField(order.vat_invoice_email),
+    companyPhone: sanitizeVatField(order.vat_company_phone),
+  };
+
+  return Object.values(vatInfo).some(Boolean) ? vatInfo : undefined;
+};
+
+const buildVatInfoFromCustomer = (customer?: Customer) => ({
+  vat_tax_code: customer?.vatInfo?.taxCode ?? "",
+  vat_company_name: customer?.vatInfo?.companyName ?? "",
+  vat_company_address: customer?.vatInfo?.companyAddress ?? "",
+  vat_company_phone: customer?.vatInfo?.companyPhone ?? "",
+  vat_invoice_email: customer?.vatInfo?.vatEmail ?? "",
+});
+
+const buildShippingInfoFromCustomer = (customer?: Customer) => ({
+  shipping_recipient_name: customer?.name ?? "",
+  shipping_recipient_phone: customer?.phoneNumber ?? "",
+  shipping_address: customer?.address ?? "",
+  shipping_addressInfo: {
+    provinceCode:
+      customer?.addressInfo?.provinceCode ?? customer?.addressInfo?.province?.code ?? "",
+    districtCode:
+      customer?.addressInfo?.districtCode ?? customer?.addressInfo?.district?.code ?? "",
+    wardCode:
+      customer?.addressInfo?.wardCode ?? customer?.addressInfo?.ward?.code ?? "",
+    provinceName:
+      customer?.addressInfo?.provinceName ?? customer?.addressInfo?.province?.name ?? "",
+    districtName:
+      customer?.addressInfo?.districtName ?? customer?.addressInfo?.district?.name ?? "",
+    wardName:
+      customer?.addressInfo?.wardName ?? customer?.addressInfo?.ward?.name ?? "",
+  },
+});
+
+const hasCustomerVatInfo = (info?: VatInfo | null) => {
+  if (!info) return false;
+  return Object.values(info).some((value) => Boolean(sanitizeVatField(value)));
+};
+
+const createInitialOrderState = (): OrderFormState => ({
+  customer_id: "",
+  customer_name: "",
+  customer_code: "",
+  customer_phone: "",
+  // Removed customer address fields from UI; will derive from selected customer
+  order_type: "sale",
+  notes: "",
+  contract_number: "",
+  purchase_order_number: "",
+  
+  // VAT Information (for invoice)
+  vat_tax_code: "",
+  vat_company_name: "",
+  vat_company_address: "",
+  vat_company_phone: "",
+  vat_company_addressInfo: {
+    provinceCode: "",
+    districtCode: "",
+    wardCode: ""
+  },
+  vat_invoice_email: "",
+  vat_rate: undefined as number | undefined, // VAT rate (sẽ lấy từ customer nếu không có)
+  
+  // Shipping Information (auto-fill from selected customer)
+  shipping_recipient_name: "",
+  shipping_recipient_phone: "",
+  shipping_address: "",
+  shipping_addressInfo: {
+    provinceCode: "",
+    districtCode: "",
+    wardCode: "",
+    provinceName: "",
+    districtName: "",
+    wardName: "",
+  },
+  
+  initial_payment: 0,
+  initial_payment_method: "cash",
+  initial_payment_bank: "",
+  items: []
+});
 
 const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   
-  const [newOrder, setNewOrder] = useState({
-    customer_id: "",
-    customer_name: "",
-    customer_phone: "",
-    customer_address: "",
-    order_type: "sale",
-    notes: "",
-    contract_number: "",
-    purchase_order_number: "",
-    
-    // VAT Information (for invoice)
-    vat_tax_code: "",
-    vat_company_name: "",
-    vat_company_address: "",
-    vat_invoice_email: "",
-    
-    // Shipping Information
-    shipping_recipient_name: "",
-    shipping_recipient_phone: "",
-    shipping_address: "",
-    
-    initial_payment: 0,
-    initial_payment_method: "cash",
-    initial_payment_bank: "",
-    items: [] as OrderItem[]
-  });
+  const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
+  const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
+
+  useEffect(() => {
+    if (open) {
+      setNewOrder(createInitialOrderState());
+      setShippingAddressVersion((v) => v + 1);
+    }
+  }, [open]);
 
   useEffect(() => {
     loadData();
@@ -72,24 +197,21 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes, warehousesRes] = await Promise.all([
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('products').select('*').order('name'),
-        supabase.from('warehouses').select('*').order('name')
+      const [customersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
+        customerApi.getCustomers({ page: 1, limit: 1000 }),
+        productApi.getProducts({ page: 1, limit: 1000 }),
+        warehouseApi.getWarehouses({ page: 1, limit: 1000 }),
+        orderApi.getBanks()
       ]);
-
-      if (customersRes.error) throw customersRes.error;
-      if (productsRes.error) throw productsRes.error;
-      if (warehousesRes.error) throw warehousesRes.error;
-
-      setCustomers(customersRes.data || []);
-      setProducts(productsRes.data || []);
-      setWarehouses(warehousesRes.data || []);
+      setCustomers(customersRes.customers || []);
+      setProducts(productsRes.products || []);
+      setWarehouses(warehousesRes.warehouses || []);
+      setBanks(banksRes || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải dữ liệu",
+        description: error.response?.data?.message || error.message || "Không thể tải dữ liệu",
         variant: "destructive",
       });
     }
@@ -107,7 +229,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         total_price: 0,
         vat_rate: 0,
         vat_amount: 0,
-        warehouse_id: ""
+        warehouse_id: warehouses.length === 1 ? warehouses[0].id : ""
       }]
     }));
   };
@@ -131,7 +253,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           if (product) {
             items[index].product_code = product.code;
             items[index].product_name = product.name;
-            items[index].unit_price = product.unit_price;
+            items[index].unit_price = product.price;
+            
+            // Auto-fill warehouse if only one warehouse available
+            if (warehouses.length === 1 && !items[index].warehouse_id) {
+              items[index].warehouse_id = warehouses[0].id;
+            }
           }
         }
         
@@ -139,19 +266,59 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         items[index].total_price = subtotal;
       }
       
+      // Fetch stock level when product or warehouse changes
+      if (field === 'product_id' || field === 'warehouse_id') {
+        fetchStockLevel(index, items[index].product_id, items[index].warehouse_id);
+      }
+      
       return { ...prev, items };
     });
   };
 
+  const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
+    if (!productId || !warehouseId) return;
+    
+    try {
+      const stockLevels = await stockLevelsApi.getStockLevels({
+        productId,
+        warehouseId,
+        limit: 1
+      });
+      
+      const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
+      
+      setNewOrder(prev => {
+        const items = [...prev.items];
+        items[index].current_stock = currentStock;
+        return { ...prev, items };
+      });
+    } catch (error) {
+      console.warn('Could not fetch stock level:', error);
+      setNewOrder(prev => {
+        const items = [...prev.items];
+        items[index].current_stock = 0;
+        return { ...prev, items };
+      });
+    }
+  };
+
   const calculateTotals = () => {
     const subtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
-    const total = subtotal;
-    const debt = total - (newOrder.initial_payment || 0);
+    const debt = subtotal - (newOrder.initial_payment || 0);
     
-    return { subtotal, total, debt };
+    return { subtotal, debt };
   };
 
   const handleSubmit = async () => {
+    if (!newOrder.customer_id) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn khách hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newOrder.customer_name) {
       toast({
         title: "Lỗi",
@@ -163,8 +330,52 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
     if (newOrder.items.length === 0) {
       toast({
-        title: "Lỗi", 
+        title: "Lỗi",
         description: "Vui lòng thêm ít nhất một sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate all items have required fields
+    const invalidItems = newOrder.items.filter(item => 
+      !item.product_id || !item.product_name || !item.product_code || 
+      !item.quantity || !item.unit_price || !item.warehouse_id
+    );
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { subtotal } = calculateTotals();
+    if (subtotal < 0) {
+      toast({
+        title: "Lỗi",
+        description: "Tổng tiền không được âm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const paymentMethod = newOrder.initial_payment_method || "cash";
+    if (paymentMethod.length < 1 || paymentMethod.length > 20) {
+      toast({
+        title: "Lỗi",
+        description: "Phương thức thanh toán phải có độ dài từ 1-20 ký tự",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate bank selection for bank transfer
+    if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
         variant: "destructive",
       });
       return;
@@ -182,84 +393,115 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
     setLoading(true);
     try {
-      const { subtotal, total } = calculateTotals();
-      const paidAmount = newOrder.initial_payment || 0;
+      const { subtotal } = calculateTotals();
 
-      // Create order
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          order_number: `DH${String(Date.now()).slice(-6)}`,
-          customer_id: newOrder.customer_id || null,
-          customer_name: newOrder.customer_name,
-          customer_phone: newOrder.customer_phone,
-          customer_address: newOrder.customer_address,
-          total_amount: total,
-          paid_amount: paidAmount,
-          debt_amount: total - paidAmount,
-          status: 'pending', // Trạng thái pending ban đầu
-          order_status: 'new',
-          payment_status: paidAmount === 0 ? 'unpaid' : (paidAmount >= total ? 'paid' : 'partially_paid'),
-          completion_status: 'active',
-          order_type: newOrder.order_type,
-          notes: newOrder.notes,
-          contract_number: newOrder.contract_number,
-          purchase_order_number: newOrder.purchase_order_number,
-          vat_invoice_email: newOrder.vat_invoice_email,
-          initial_payment: paidAmount,
-          created_by: user?.id
-        })
-        .select()
-        .single();
+      // Get customer details for sending to backend
+      const selectedCustomer = customers.find(c => c.id === newOrder.customer_id);
+      
+      // Prepare customer address info if available
+      const customerAddressInfo = selectedCustomer?.addressInfo ? {
+        provinceCode: selectedCustomer.addressInfo.provinceCode || selectedCustomer.addressInfo.province?.code,
+        districtCode: selectedCustomer.addressInfo.districtCode || selectedCustomer.addressInfo.district?.code,
+        wardCode: selectedCustomer.addressInfo.wardCode || selectedCustomer.addressInfo.ward?.code,
+        postalCode: selectedCustomer.addressInfo.postalCode,
+        latitude: selectedCustomer.addressInfo.latitude,
+        longitude: selectedCustomer.addressInfo.longitude,
+      } : undefined;
+      
+      const orderVatInfo = extractVatInfoFromOrder(newOrder);
 
-      if (orderError) throw orderError;
-
-      // Create order items
-      for (const item of newOrder.items) {
-        const { error: itemError } = await supabase
-          .from('order_items')
-          .insert({
-            order_id: orderData.id,
-            product_id: item.product_id,
-            product_code: item.product_code,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.total_price,
-            vat_rate: item.vat_rate,
-            vat_amount: item.vat_amount,
-            warehouse_id: item.warehouse_id
-          });
+      // Create order via backend API
+      const orderData = await orderApi.createOrder({
+        customerId: newOrder.customer_id || "",
+        customerName: newOrder.customer_name || selectedCustomer?.name || "",
+        customerPhone: newOrder.customer_phone || selectedCustomer?.phoneNumber || undefined,
+        customerAddress: selectedCustomer?.address || undefined,
+        customerAddressInfo: customerAddressInfo,
+        code: newOrder.contract_number || undefined,
+        contractNumber: newOrder.contract_number || undefined,
+        purchaseOrderNumber: newOrder.purchase_order_number || undefined,
+        note: newOrder.notes || undefined,
+        status: 'new',
+        orderType: newOrder.order_type || 'sale',
         
-        if (itemError) throw itemError;
-      }
-
-      // Create initial payment if any
-      if (paidAmount > 0) {
-        const { error: paymentError } = await supabase
-          .from('payments')
-          .insert({
-            order_id: orderData.id,
-            amount: paidAmount,
-            payment_method: newOrder.initial_payment_method,
-            notes: 'Thanh toán ban đầu khi tạo đơn',
-            created_by: user?.id
-          });
+        // VAT Information - removed VAT rate from UI, backend will handle
+        vatRate: undefined,
+        taxCode: orderVatInfo?.taxCode,
+        companyName: orderVatInfo?.companyName,
+        companyAddress: orderVatInfo?.companyAddress,
+        vatEmail: orderVatInfo?.vatEmail,
+        companyPhone: orderVatInfo?.companyPhone,
         
-        if (paymentError) throw paymentError;
+        // Receiver Information
+        receiverName: newOrder.shipping_recipient_name || undefined,
+        receiverPhone: newOrder.shipping_recipient_phone || undefined,
+        receiverAddress: newOrder.shipping_address || undefined,
+        addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
+          provinceCode: newOrder.shipping_addressInfo.provinceCode,
+          districtCode: newOrder.shipping_addressInfo.districtCode,
+          wardCode: newOrder.shipping_addressInfo.wardCode
+        } : undefined,
+        
+        // Payment
+        paymentMethod: newOrder.initial_payment_method || "cash",
+        initialPayment: newOrder.initial_payment || 0,
+        totalAmount: subtotal,
+        bank: newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment_bank 
+          ? newOrder.initial_payment_bank 
+          : undefined,
+        
+        // Order details
+        details: newOrder.items.map(it => ({
+          productId: it.product_id,
+          warehouseId: it.warehouse_id,
+          quantity: it.quantity,
+          unitPrice: it.unit_price,
+        })),
+      });
+
+      // Items are included in order payload; adjust if BE requires separate calls
+
+      // TODO: initial payment can be handled via payments API if available
+
+
+      // Get order code from response
+      const orderCode = orderData.order_number || 
+                       orderData.id || 
+                       'thành công';
+
+      if (
+        selectedCustomer?.id &&
+        orderVatInfo &&
+        !hasCustomerVatInfo(selectedCustomer.vatInfo)
+      ) {
+        try {
+          const updatedCustomer = await customerApi.updateCustomer(selectedCustomer.id, {
+            vatInfo: orderVatInfo,
+          });
+          setCustomers((prev) =>
+            prev.map((cust) =>
+              cust.id === updatedCustomer.id
+                ? { ...cust, vatInfo: updatedCustomer.vatInfo ?? orderVatInfo }
+                : cust
+            )
+          );
+        } catch (vatError) {
+          console.error("Failed to update customer VAT info:", vatError);
+        }
       }
 
       toast({
         title: "Thành công",
-        description: `Đã tạo đơn hàng ${orderData.order_number}`,
+        description: `Đã tạo đơn hàng ${orderCode}`,
       });
 
+      setNewOrder(createInitialOrderState());
+      setShippingAddressVersion((v) => v + 1);
       onOrderCreated();
     } catch (error) {
-      console.error('Error creating order:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tạo đơn hàng",
+        description: getErrorMessage(error, "Không thể tạo đơn hàng"),
         variant: "destructive",
       });
     } finally {
@@ -288,18 +530,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="customer">Khách hàng</Label>
+                  <Label htmlFor="customer">Khách hàng <span className="text-red-500">*</span></Label>
                   <Select 
                     value={newOrder.customer_id} 
                     onValueChange={(value) => {
                       const customer = customers.find(c => c.id === value);
+                      const vatInfo = buildVatInfoFromCustomer(customer);
+                      const shippingInfo = buildShippingInfoFromCustomer(customer);
                       setNewOrder(prev => ({
                         ...prev,
                         customer_id: value,
                         customer_name: customer?.name || "",
-                        customer_phone: customer?.phone || "",
-                        customer_address: customer?.address || ""
+                        customer_code: customer?.customer_code || "",
+                        customer_phone: customer?.phoneNumber || "",
+                        ...vatInfo,
+                        ...shippingInfo,
                       }));
+                      setShippingAddressVersion((v) => v + 1);
                     }}
                   >
                     <SelectTrigger>
@@ -315,7 +562,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="customer_name">Tên khách hàng *</Label>
+                  <Label htmlFor="customer_name">Tên khách hàng <span className="text-red-500">*</span></Label>
                   <Input
                     id="customer_name"
                     value={newOrder.customer_name}
@@ -335,16 +582,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     placeholder="Nhập số điện thoại"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="customer_address">Địa chỉ</Label>
-                  <Input
-                    id="customer_address"
-                    value={newOrder.customer_address}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_address: e.target.value }))}
-                    placeholder="Nhập địa chỉ"
-                  />
-                </div>
               </div>
+              {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
             </CardContent>
           </Card>
 
@@ -384,14 +623,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   placeholder="Nhập tên công ty"
                 />
               </div>
-              <div>
-                <Label htmlFor="vat_company_address">Địa chỉ công ty</Label>
-                <Input
-                  id="vat_company_address"
-                  value={newOrder.vat_company_address}
-                  onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
-                  placeholder="Nhập địa chỉ công ty"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Điện thoại công ty</Label>
+                  <Input
+                    value={newOrder.vat_company_phone}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại công ty"
+                  />
+                </div>
+                <div>
+                  <Label>Địa chỉ công ty</Label>
+                  <Input
+                    value={newOrder.vat_company_address}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
+                    placeholder="Nhập địa chỉ công ty"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -423,12 +671,32 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </div>
               </div>
               <div>
-                <Label htmlFor="shipping_address">Địa chỉ nhận hàng</Label>
-                <Input
-                  id="shipping_address"
-                  value={newOrder.shipping_address}
-                  onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_address: e.target.value }))}
-                  placeholder="Nhập địa chỉ nhận hàng"
+                <Label>Địa chỉ nhận hàng</Label>
+                <AddressFormSeparate
+                  key={shippingAddressVersion}
+                  value={{
+                    address: newOrder.shipping_address,
+                    provinceCode: newOrder.shipping_addressInfo?.provinceCode,
+                    districtCode: newOrder.shipping_addressInfo?.districtCode,
+                    wardCode: newOrder.shipping_addressInfo?.wardCode,
+                    provinceName: newOrder.shipping_addressInfo?.provinceName,
+                    districtName: newOrder.shipping_addressInfo?.districtName,
+                    wardName: newOrder.shipping_addressInfo?.wardName,
+                  }}
+                  onChange={(data) => {
+                    setNewOrder(prev => ({
+                      ...prev,
+                      shipping_address: data.address,
+                      shipping_addressInfo: {
+                        provinceCode: data.provinceCode || "",
+                        districtCode: data.districtCode || "",
+                        wardCode: data.wardCode || "",
+                        provinceName: data.provinceName || "",
+                        districtName: data.districtName || "",
+                        wardName: data.wardName || "",
+                      }
+                    }));
+                  }}
                 />
               </div>
             </CardContent>
@@ -449,18 +717,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <Table className="border border-border/30 rounded-lg overflow-hidden">
                 <TableHeader>
                   <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">SL</TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số lượng <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá <span className="text-red-500">*</span></TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Thành tiền</TableHead>
                     <TableHead className="font-semibold text-slate-700"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {newOrder.items.map((item, index) => (
-                    <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
-                      <TableCell className="border-r border-slate-100">
+                    <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50 h-20">
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
                         <Select 
                           value={item.product_id} 
                           onValueChange={(value) => updateItem(index, 'product_id', value)}
@@ -477,7 +745,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
                         <Select 
                           value={item.warehouse_id} 
                           onValueChange={(value) => updateItem(index, 'warehouse_id', value)}
@@ -494,26 +762,37 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                          className="w-20"
-                        />
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
+                        <div className="space-y-1">
+                          <NumberInput
+                            value={item.quantity}
+                            onChange={(value) => updateItem(index, 'quantity', value)}
+                            min={1}
+                            className="w-20"
+                          />
+                          {item.current_stock !== undefined && (
+                            <div className="text-xs">
+                              <span className={`${item.quantity > item.current_stock ? 'text-red-600' : 'text-gray-600'}`}>
+                                Tồn kho: {item.current_stock}
+                              </span>
+                              {item.quantity > item.current_stock && (
+                                <span className="text-red-500 ml-1">⚠️</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
-                        <Input
-                          type="number"
+                      <TableCell className="border-r border-slate-100 align-top pt-4">
+                        <CurrencyInput
                           value={item.unit_price}
-                          onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
+                          onChange={(value) => updateItem(index, 'unit_price', value)}
                           className="w-32"
                         />
                       </TableCell>
-                      <TableCell className="border-r border-slate-100">
-                        {item.total_price.toLocaleString('vi-VN')}đ
+                      <TableCell className="border-r border-slate-100 align-top pt-7">
+                        {item.total_price.toLocaleString('vi-VN')}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="align-top pt-4">
                         <Button
                           variant="outline"
                           size="sm"
@@ -538,19 +817,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="initial_payment">Thanh toán ban đầu</Label>
-                  <Input
+                  <CurrencyInput
                     id="initial_payment"
-                    type="number"
                     value={newOrder.initial_payment}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, initial_payment: Number(e.target.value) }))}
+                    onChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment: value }))}
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
+                  <Label htmlFor="initial_payment_method">Phương thức thanh toán <span className="text-red-500">*</span></Label>
                   <Select 
                     value={newOrder.initial_payment_method} 
-                    onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_method: value }))}
+                    onValueChange={(value) => setNewOrder(prev => ({ 
+                      ...prev, 
+                      initial_payment_method: value,
+                      // Reset bank when payment method is not bank_transfer
+                      initial_payment_bank: value === "bank_transfer" ? prev.initial_payment_bank : ""
+                    }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn phương thức" />
@@ -561,9 +844,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     </SelectContent>
                   </Select>
                 </div>
-                {newOrder.initial_payment_method === "bank_transfer" && (
+                {newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment > 0 && (
                   <div>
-                    <Label htmlFor="initial_payment_bank">Ngân hàng</Label>
+                    <Label htmlFor="initial_payment_bank">Ngân hàng <span className="text-red-500">*</span></Label>
                     <Select 
                       value={newOrder.initial_payment_bank} 
                       onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_bank: value }))}
@@ -572,14 +855,15 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         <SelectValue placeholder="Chọn ngân hàng" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="vietcombank">Vietcombank</SelectItem>
-                        <SelectItem value="techcombank">Techcombank</SelectItem>
-                        <SelectItem value="bidv">BIDV</SelectItem>
-                        <SelectItem value="agribank">Agribank</SelectItem>
-                        <SelectItem value="mbbank">MB Bank</SelectItem>
-                        <SelectItem value="vpbank">VPBank</SelectItem>
-                        <SelectItem value="acb">ACB</SelectItem>
-                        <SelectItem value="sacombank">Sacombank</SelectItem>
+                        {banks.length > 0 ? (
+                          banks.map((bank) => (
+                            <SelectItem key={bank.id} value={bank.id}>
+                              {bank.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="" disabled>Đang tải danh sách ngân hàng...</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -595,6 +879,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   placeholder="Nhập ghi chú"
                 />
               </div>
+
+              {/* Order Summary */}
+              {(() => {
+                const { subtotal, debt } = calculateTotals();
+                return (
+                  <div className="border-t pt-4 space-y-2">
+                    <div className="flex justify-between text-lg font-bold">
+                      <span>Tổng tiền:</span>
+                      <span>{subtotal.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    {newOrder.initial_payment > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Còn nợ:</span>
+                        <span className="font-medium text-orange-600">{debt.toLocaleString('vi-VN')} đ</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -614,3 +917,4 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 };
 
 export default CreateOrderForm;
+

@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { Clock, DollarSign, User, Package } from "lucide-react";
+import { getOrderStatusConfig } from "@/constants/order-status.constants";
 
 interface OrderStatusHistoryProps {
   orderId: string;
@@ -124,8 +125,7 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -140,18 +140,12 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      processing: { label: 'Đang xử lý', variant: 'secondary' as const },
-      shipped: { label: 'Đã xuất kho', variant: 'default' as const },
-      completed: { label: 'Hoàn thành', variant: 'default' as const },
-      cancelled: { label: 'Đã hủy', variant: 'destructive' as const },
-      pending: { label: 'Chờ xử lý', variant: 'secondary' as const },
-      confirmed: { label: 'Đã xác nhận', variant: 'default' as const },
-      shipping: { label: 'Đang giao', variant: 'default' as const }
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || { label: status, variant: 'outline' as const };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const config = getOrderStatusConfig(status);
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
   };
 
   const getUserInitials = (name: string) => {
@@ -271,3 +265,4 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
     </Card>
   );
 };
+

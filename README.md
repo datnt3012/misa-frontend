@@ -1,6 +1,6 @@
 # Inventory Management System
 
-A comprehensive inventory management system built with React, TypeScript, and Supabase. This application provides complete warehouse management, order processing, export slip generation, and user role management capabilities.
+A comprehensive inventory management system built with React, TypeScript, and a custom backend API. This application provides complete warehouse management, order processing, export slip generation, and user role management capabilities.
 
 ## Features
 
@@ -148,12 +148,12 @@ This project is built with modern web technologies:
 - **Lucide React** - Beautiful icons
 
 ### Backend & Database
-- **Supabase** - Backend-as-a-Service platform
-  - PostgreSQL database with Row Level Security
-  - Real-time subscriptions
-  - Authentication and user management
-  - Edge functions for server-side logic
-  - File storage for documents
+- **Custom Backend API** - RESTful API built with Node.js/Express
+  - PostgreSQL database with proper authentication
+  - JWT-based authentication system
+  - Role-based access control
+  - RESTful endpoints for all operations
+  - File upload and management
 
 ### Development Tools
 - **ESLint** - Code linting and formatting
@@ -166,33 +166,44 @@ This project is built with modern web technologies:
 The application uses PostgreSQL with the following main tables:
 
 ### Core Tables
-- `auth.users` - User authentication (Supabase managed)
-- `public.user_roles` - User role assignments
-- `public.warehouses` - Warehouse information
-- `public.inventory` - Product inventory tracking
-- `public.customers` - Customer database
-- `public.orders` - Order management
-- `public.order_items` - Order line items
-- `public.export_slips` - Export slip tracking
-- `public.export_slip_items` - Export slip line items
+- `users` - User authentication and profiles
+- `user_roles` - User role assignments
+- `warehouses` - Warehouse information
+- `products` - Product catalog and inventory
+- `stock_levels` - Real-time stock tracking per warehouse
+- `customers` - Customer database
+- `suppliers` - Supplier management
+- `orders` - Order management
+- `order_items` - Order line items
+- `warehouse_receipts` - Import slip tracking
+- `warehouse_receipt_items` - Import slip line items
+- `export_slips` - Export slip tracking
+- `export_slip_items` - Export slip line items
+- `payments` - Payment tracking
+- `notifications` - System notifications
 
 ### Security
-All tables implement Row Level Security (RLS) policies to ensure data access is properly restricted based on user roles and ownership.
+The backend implements proper authentication and authorization middleware to ensure data access is properly restricted based on user roles and permissions.
 
 ## API Documentation
 
-### Supabase REST API Endpoints
+### Custom Backend REST API Endpoints
 
-The application uses Supabase's auto-generated REST API for database operations. All endpoints follow the pattern:
-`https://elogncohkxrriqmvapqo.supabase.co/rest/v1/{table_name}`
+The application uses a custom backend API built with Node.js/Express. All endpoints follow the pattern:
+`http://localhost:3274/api/v0/{endpoint}`
 
 #### Authentication Headers
 All API requests require authentication headers:
 ```
-Authorization: Bearer {access_token}
-apikey: {supabase_anon_key}
+Authorization: Bearer {jwt_token}
 Content-Type: application/json
 ```
+
+#### Base Configuration
+- **Base URL**: `http://localhost:3274/api/v0`
+- **Authentication**: JWT-based authentication
+- **Content-Type**: `application/json`
+- **Timeout**: 30 seconds
 
 ### Core Entity APIs
 
@@ -201,32 +212,42 @@ Content-Type: application/json
 ##### GET /warehouses
 List all warehouses
 ```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/warehouses" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/warehouses" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 ```
 
 **Response**:
 ```json
-[
-  {
-    "id": "uuid",
-    "code": "WH001",
-    "name": "Kho chính",
-    "address": "123 Main Street",
-    "description": "Kho hàng chính",
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
-  }
-]
+{
+  "code": 200,
+  "data": {
+    "count": 1,
+    "rows": [
+      {
+        "id": "uuid",
+        "code": "WH001",
+        "name": "Kho chính",
+        "address": "123 Main Street",
+        "description": "Kho hàng chính",
+        "isDeleted": false,
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "page": 1,
+    "limit": 100,
+    "totalPage": 1
+  },
+  "message": "Warehouses retrieved successfully"
+}
 ```
 
 ##### POST /warehouses
 Create new warehouse (inventory/admin/owner only)
 ```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/warehouses" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X POST "http://localhost:3274/api/v0/warehouses" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
     "code": "WH002",
@@ -236,12 +257,11 @@ curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/warehouses" \
   }'
 ```
 
-##### PATCH /warehouses?id=eq.{warehouse_id}
+##### PATCH /warehouses/{warehouse_id}
 Update warehouse
 ```bash
-curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/warehouses?id=eq.{warehouse_id}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X PATCH "http://localhost:3274/api/v0/warehouses/{warehouse_id}" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Updated warehouse name"}'
 ```
@@ -252,74 +272,81 @@ curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/warehouses?id=eq
 List all products with filtering and pagination
 ```bash
 # Get all products
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/products" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 
 # Filter by category
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products?category=eq.Electronics" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/products?category=Electronics" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 
 # Search by name
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products?name=ilike.*laptop*" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/products?search=laptop" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 
 # Pagination
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products?limit=20&offset=40" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/products?page=1&limit=20" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 ```
 
 **Response**:
 ```json
-[
-  {
-    "id": "uuid",
-    "code": "PRD001",
-    "name": "Laptop Dell",
-    "description": "Laptop Dell Inspiron 15",
-    "category": "Electronics",
-    "unit_price": 15000000,
-    "cost_price": 12000000,
-    "current_stock": 25,
-    "min_stock_level": 5,
-    "location": "A1-01",
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
-  }
-]
+{
+  "code": 200,
+  "data": {
+    "count": 1,
+    "rows": [
+      {
+        "id": "uuid",
+        "code": "PRD001",
+        "name": "Laptop Dell",
+        "description": "Laptop Dell Inspiron 15",
+        "category": "Electronics",
+        "price": "15000000.00",
+        "costPrice": "12000000.00",
+        "barcode": "1234567890123",
+        "unit": "piece",
+        "isDeleted": false,
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "page": 1,
+    "limit": 100,
+    "totalPage": 1
+  },
+  "message": "Products retrieved successfully"
+}
 ```
 
 ##### POST /products
 Create new product (inventory/owner only)
 ```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X POST "http://localhost:3274/api/v0/products" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
     "code": "PRD002",
     "name": "iPhone 15",
     "description": "iPhone 15 128GB",
     "category": "Electronics",
-    "unit_price": 25000000,
-    "cost_price": 20000000,
-    "current_stock": 10,
-    "min_stock_level": 2,
-    "location": "A2-05"
+    "price": 25000000,
+    "costPrice": 20000000,
+    "barcode": "9876543210987",
+    "unit": "piece"
   }'
 ```
 
-##### PATCH /products?id=eq.{product_id}
-Update product inventory
+##### PATCH /products/{product_id}
+Update product
 ```bash
-curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products?id=eq.{product_id}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X PATCH "http://localhost:3274/api/v0/products/{product_id}" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
-  -d '{"current_stock": 30, "unit_price": 16000000}'
+  -d '{"price": 16000000, "costPrice": 13000000}'
 ```
 
 #### 3. Customers API
@@ -374,73 +401,106 @@ curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/customers" \
 ##### GET /orders
 List orders with relationships
 ```bash
-# Get all orders with customer info
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?select=*,customers(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+# Get all orders
+curl -X GET "http://localhost:3274/api/v0/orders" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 
 # Filter by status
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?status=eq.processing" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/orders?status=processing" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 
-# Get orders with items
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?select=*,order_items(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+# Search orders
+curl -X GET "http://localhost:3274/api/v0/orders?search=customer_name" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
+
+# Pagination
+curl -X GET "http://localhost:3274/api/v0/orders?page=1&limit=20" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 ```
 
 **Response**:
 ```json
-[
-  {
-    "id": "uuid",
-    "order_number": "ORD-000001",
-    "customer_id": "uuid",
-    "customer_name": "Nguyen Van A",
-    "customer_phone": "0901234567",
-    "customer_address": "123 ABC Street",
-    "status": "processing",
-    "order_type": "sale",
-    "total_amount": 45000000,
-    "paid_amount": 20000000,
-    "debt_amount": 25000000,
-    "debt_date": "2024-02-01",
-    "notes": "Giao hàng trước 15h",
-    "contract_number": "CT001",
-    "contract_url": "https://...",
-    "purchase_order_number": "PO001",
-    "created_by": "uuid",
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
-  }
-]
+{
+  "code": 200,
+  "data": {
+    "count": 1,
+    "rows": [
+      {
+        "id": "uuid",
+        "order_number": "ORD-000001",
+        "customer_id": "uuid",
+        "customer_name": "Nguyen Van A",
+        "customer_phone": "0901234567",
+        "customer_address": "123 ABC Street",
+        "status": "processing",
+        "order_type": "sale",
+        "total_amount": "45000000.00",
+        "paid_amount": "20000000.00",
+        "debt_amount": "25000000.00",
+        "debt_date": "2024-02-01",
+        "notes": "Giao hàng trước 15h",
+        "contract_number": "CT001",
+        "purchase_order_number": "PO001",
+        "created_by": "uuid",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+        "customer": {
+          "id": "uuid",
+          "name": "Nguyen Van A",
+          "email": "customer@email.com",
+          "phone": "0901234567"
+        },
+        "items": [
+          {
+            "id": "uuid",
+            "product_id": "uuid",
+            "product_name": "Laptop Dell",
+            "product_code": "PRD001",
+            "quantity": 2,
+            "unit_price": "15000000.00",
+            "total_price": "30000000.00"
+          }
+        ]
+      }
+    ],
+    "page": 1,
+    "limit": 100,
+    "totalPage": 1
+  },
+  "message": "Orders retrieved successfully"
+}
 ```
 
 ##### POST /orders
 Create new order
 ```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X POST "http://localhost:3274/api/v0/orders" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_id": "uuid",
-    "customer_name": "Nguyen Van A",
-    "customer_phone": "0901234567",
-    "customer_address": "123 ABC Street",
-    "order_type": "sale",
-    "notes": "Giao hàng nhanh",
-    "created_by": "current_user_uuid"
+    "customerId": "uuid",
+    "paymentMethod": "cash",
+    "totalAmount": 45000000,
+    "details": [
+      {
+        "productId": "uuid",
+        "quantity": 2,
+        "unitPrice": 15000000,
+        "warehouseId": "uuid"
+      }
+    ]
   }'
 ```
 
-##### PATCH /orders?id=eq.{order_id}
+##### PATCH /orders/{order_id}
 Update order status and payment
 ```bash
-curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?id=eq.{order_id}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X PATCH "http://localhost:3274/api/v0/orders/{order_id}" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "shipped",
@@ -449,384 +509,208 @@ curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?id=eq.{or
   }'
 ```
 
-#### 5. Order Items API
+#### 5. Stock Levels API
 
-##### GET /order_items
-Get order items with product info
+##### GET /stock-levels
+Get real-time stock levels across warehouses
 ```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/order_items?order_id=eq.{order_id}&select=*,products(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/stock-levels" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 ```
 
-##### POST /order_items
-Add items to order
+**Response**:
+```json
+{
+  "code": 200,
+  "data": {
+    "count": 1,
+    "rows": [
+      {
+        "id": "uuid",
+        "productId": "uuid",
+        "warehouseId": "uuid",
+        "quantity": 25,
+        "product": {
+          "id": "uuid",
+          "code": "PRD001",
+          "name": "Laptop Dell"
+        },
+        "warehouse": {
+          "id": "uuid",
+          "code": "WH001",
+          "name": "Kho chính"
+        }
+      }
+    ]
+  },
+  "message": "Stock levels retrieved successfully"
+}
+```
+
+#### 6. Suppliers API
+
+##### GET /suppliers
+List all suppliers
 ```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/order_items" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X GET "http://localhost:3274/api/v0/suppliers" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
+```
+
+##### POST /suppliers
+Create new supplier
+```bash
+curl -X POST "http://localhost:3274/api/v0/suppliers" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
-    "order_id": "uuid",
-    "product_id": "uuid",
-    "product_name": "Laptop Dell",
-    "product_code": "PRD001",
-    "quantity": 2,
-    "unit_price": 15000000,
-    "total_price": 30000000
+    "code": "SUP001",
+    "name": "Nhà cung cấp A",
+    "phoneNumber": "0901234567",
+    "email": "supplier@email.com",
+    "address": "123 Supplier Street"
   }'
 ```
 
-#### 6. Export Slips API
+#### 7. Warehouse Receipts API (Import Slips)
 
-##### GET /export_slips
+##### GET /warehouse-receipts
+List warehouse receipts (import slips)
+```bash
+curl -X GET "http://localhost:3274/api/v0/warehouse-receipts" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
+```
+
+##### POST /warehouse-receipts
+Create new warehouse receipt
+```bash
+curl -X POST "http://localhost:3274/api/v0/warehouse-receipts" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "warehouseId": "uuid",
+    "supplierId": "uuid",
+    "code": "IMP001",
+    "description": "Nhập kho từ nhà cung cấp",
+    "status": "pending",
+    "type": "import",
+    "details": [
+      {
+        "productId": "uuid",
+        "quantity": 100,
+        "unitPrice": 50000
+      }
+    ]
+  }'
+```
+
+##### PATCH /warehouse-receipts/{receipt_id}/approve
+Approve warehouse receipt
+```bash
+curl -X PATCH "http://localhost:3274/api/v0/warehouse-receipts/{receipt_id}/approve" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approvalNotes": "Đã duyệt phiếu nhập kho"
+  }'
+```
+
+#### 8. Export Slips API
+
+##### GET /export-slips
 List export slips with relationships
 ```bash
-# Get export slips with order info
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/export_slips?select=*,orders(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-
-# Filter by status
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/export_slips?status=eq.pending" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X GET "http://localhost:3274/api/v0/export-slips" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 ```
 
-**Response**:
-```json
-[
-  {
-    "id": "uuid",
-    "order_id": "uuid",
-    "slip_number": "PX000001",
-    "status": "pending",
-    "notes": "Kiểm tra kỹ hàng hóa",
-    "approval_notes": null,
-    "export_notes": null,
-    "created_by": "uuid",
-    "approved_by": null,
-    "approved_at": null,
-    "export_completed_by": null,
-    "export_completed_at": null,
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-]
-```
-
-##### POST /export_slips
+##### POST /export-slips
 Create export slip (inventory users only)
 ```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/export_slips" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X POST "http://localhost:3274/api/v0/export-slips" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
-    "order_id": "uuid",
-    "notes": "Xuất kho theo đơn hàng",
-    "created_by": "current_user_uuid"
+    "orderId": "uuid",
+    "notes": "Xuất kho theo đơn hàng"
   }'
 ```
 
-##### PATCH /export_slips?id=eq.{slip_id}
-Update export slip status (approval/completion)
+##### PATCH /export-slips/{slip_id}/approve
+Approve export slip
 ```bash
-# Approve export slip (accountant only)
-curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/export_slips?id=eq.{slip_id}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X PATCH "http://localhost:3274/api/v0/export-slips/{slip_id}/approve" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
-    "status": "approved",
-    "approval_notes": "Đã duyệt phiếu xuất",
-    "approved_by": "current_user_uuid",
-    "approved_at": "2024-01-01T12:00:00Z"
-  }'
-
-# Complete export (inventory users only)
-curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/export_slips?id=eq.{slip_id}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "completed",
-    "export_notes": "Đã xuất kho hoàn thành",
-    "export_completed_by": "current_user_uuid",
-    "export_completed_at": "2024-01-01T15:00:00Z"
+    "approvalNotes": "Đã duyệt phiếu xuất"
   }'
 ```
 
-#### 7. Payments API
-
-##### GET /payments
-List payments (financial roles only)
+##### PATCH /export-slips/{slip_id}/complete
+Complete export slip
 ```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/payments?select=*,orders(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-```
-
-##### POST /payments
-Record payment (financial roles only)
-```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/payments" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X PATCH "http://localhost:3274/api/v0/export-slips/{slip_id}/complete" \
+  -H "Authorization: Bearer {jwt_token}" \
   -H "Content-Type: application/json" \
   -d '{
-    "order_id": "uuid",
-    "amount": 20000000,
-    "payment_method": "bank_transfer",
-    "payment_date": "2024-01-01",
-    "notes": "Chuyển khoản ngân hàng",
-    "created_by": "current_user_uuid"
+    "exportNotes": "Đã xuất kho hoàn thành"
   }'
 ```
 
-#### 8. Notifications API
+#### 9. Authentication API
 
-##### GET /notifications
-Get user notifications
+##### POST /auth/login
+User login
 ```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/notifications?user_id=eq.{user_id}&order=created_at.desc" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-```
-
-##### PATCH /notifications?id=eq.{notification_id}
-Mark notification as read
-```bash
-curl -X PATCH "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/notifications?id=eq.{notification_id}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
+curl -X POST "http://localhost:3274/api/v0/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"read_at": "2024-01-01T12:00:00Z"}'
-```
-
-### Supabase Edge Functions
-
-#### User Management Functions
-
-##### `create-user`
-Creates a new user with specified role and profile information.
-
-**Endpoint**: `POST /functions/v1/create-user`
-**Authentication**: Required (admin or owner_director only)
-
-**Request Body**:
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword",
-  "full_name": "John Doe",
-  "role": "sales"
-}
-```
-
-**Response**:
-```json
-{
-  "user": {
-    "id": "uuid",
+  -d '{
     "email": "user@example.com",
-    "created_at": "timestamp"
-  },
-  "profile": {
-    "id": "uuid",
-    "full_name": "John Doe"
-  },
-  "role": "sales"
-}
-```
-
-##### `delete-user`
-Removes a user from the system.
-
-**Endpoint**: `POST /functions/v1/delete-user`
-**Authentication**: Required (admin or owner_director only)
-**Note**: Admins cannot delete owner_director users, owner_directors cannot delete other owner_directors
-
-**Request Body**:
-```json
-{
-  "userId": "uuid"
-}
+    "password": "password"
+  }'
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "message": "User deleted successfully"
-}
-```
-
-##### `list-users`
-Retrieves all system users with their roles and profiles.
-
-**Endpoint**: `GET /functions/v1/list-users`
-**Authentication**: Required (admin or owner_director only)
-
-**Response**:
-```json
-{
-  "users": [
-    {
+  "code": 200,
+  "data": {
+    "user": {
       "id": "uuid",
       "email": "user@example.com",
-      "full_name": "John Doe",
-      "role": "sales",
-      "created_at": "timestamp"
-    }
-  ]
+      "firstName": "John",
+      "lastName": "Doe",
+      "role": "sales"
+    },
+    "token": "jwt_token_here"
+  },
+  "message": "Login successful"
 }
 ```
 
-##### `login-with-username`
-Custom authentication endpoint for username-based login.
-
-**Endpoint**: `POST /functions/v1/login-with-username`
-**Authentication**: Not required
-
-**Request Body**:
-```json
-{
-  "username": "john_doe",
-  "password": "securepassword"
-}
-```
-
-##### `reset-user-password`
-Resets a user's password (admin only privilege).
-
-**Endpoint**: `POST /functions/v1/reset-user-password`
-**Authentication**: Required (admin only)
-
-**Request Body**:
-```json
-{
-  "userId": "uuid",
-  "newPassword": "newSecurePassword"
-}
-```
-
-**Response**:
-```json
-{
-  "success": true,
-  "message": "Password reset successfully"
-}
-```
-
-##### `send-order-emails`
-Sends automated email notifications for order status changes.
-
-**Endpoint**: `POST /functions/v1/send-order-emails`
-**Authentication**: Required
-
-**Request Body**:
-```json
-{
-  "orderId": "uuid",
-  "emailType": "status_change",
-  "recipientEmail": "customer@example.com"
-}
-```
-
-### Advanced Query Examples
-
-#### Complex Filtering and Joins
-
-##### Get orders with full details
+##### POST /auth/register
+User registration
 ```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?select=*,customers(*),order_items(*,products(*)),export_slips(*),payments(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X POST "http://localhost:3274/api/v0/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password",
+    "firstName": "John",
+    "lastName": "Doe"
+  }'
 ```
 
-##### Get low stock products
+##### POST /auth/refresh
+Refresh JWT token
 ```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/products?current_stock=lt.min_stock_level" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-```
-
-##### Get pending export slips with order details
-```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/export_slips?status=eq.pending&select=*,orders(*,customers(*)),export_slip_items(*,products(*))" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-```
-
-##### Get revenue by date range
-```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/revenue?revenue_date=gte.2024-01-01&revenue_date=lte.2024-01-31&select=*,orders(*)" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-```
-
-#### Aggregations and Statistics
-
-##### Get order statistics
-```bash
-# Count orders by status
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?select=status,count" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-
-# Sum total amounts by month
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/rest/v1/orders?select=created_at::date,total_amount.sum()" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
-```
-
-### Real-time Subscriptions
-
-#### Subscribe to order changes
-```javascript
-const { data, error } = await supabase
-  .channel('orders')
-  .on('postgres_changes', {
-    event: '*',
-    schema: 'public',
-    table: 'orders'
-  }, payload => {
-    console.log('Order changed:', payload)
-  })
-  .subscribe()
-```
-
-#### Subscribe to inventory updates
-```javascript
-const { data, error } = await supabase
-  .channel('inventory')
-  .on('postgres_changes', {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'products',
-    filter: 'current_stock=lt.min_stock_level'
-  }, payload => {
-    console.log('Low stock alert:', payload)
-  })
-  .subscribe()
-```
-
-### File Upload API
-
-#### Upload order documents
-```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/storage/v1/object/order-documents/{file_path}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}" \
-  -H "Content-Type: application/pdf" \
-  --data-binary @document.pdf
-```
-
-#### Get file URL
-```bash
-curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/storage/v1/object/public/order-documents/{file_path}" \
-  -H "Authorization: Bearer {token}" \
-  -H "apikey: {anon_key}"
+curl -X POST "http://localhost:3274/api/v0/auth/refresh" \
+  -H "Authorization: Bearer {jwt_token}" \
+  -H "Content-Type: application/json"
 ```
 
 ### Error Handling
@@ -836,86 +720,58 @@ curl -X GET "https://elogncohkxrriqmvapqo.supabase.co/storage/v1/object/public/o
 **400 Bad Request**:
 ```json
 {
-  "code": "PGRST100",
-  "details": "JSON object requested, multiple (or no) rows returned",
-  "hint": "The result contains 0 rows",
-  "message": "No rows found"
+  "message": ["Field is required", "Invalid format"],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+**401 Unauthorized**:
+```json
+{
+  "message": "Unauthorized",
+  "statusCode": 401
 }
 ```
 
 **403 Forbidden**:
 ```json
 {
-  "code": "42501",
-  "details": "new row violates row-level security policy for table \"orders\"",
-  "hint": null,
-  "message": "permission denied for table orders"
+  "message": "Forbidden",
+  "statusCode": 403
+}
+```
+
+**404 Not Found**:
+```json
+{
+  "message": "Resource not found",
+  "statusCode": 404
 }
 ```
 
 **409 Conflict**:
 ```json
 {
-  "code": "23505",
-  "details": "Key (customer_code)=(KH000001) already exists.",
-  "hint": null,
-  "message": "duplicate key value violates unique constraint"
+  "message": "Resource already exists",
+  "statusCode": 409
+}
+```
+
+**500 Internal Server Error**:
+```json
+{
+  "message": "Internal server error",
+  "statusCode": 500
 }
 ```
 
 ### Rate Limiting and Performance
 
-- **REST API**: 100 requests per second per IP
-- **Edge Functions**: 100 requests per minute per user  
-- **Real-time**: 200 concurrent connections per project
-- **Storage**: 50MB/minute upload bandwidth
-
-### Authentication Flow
-
-#### 1. Sign In
-```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/auth/v1/token?grant_type=password" \
-  -H "apikey: {anon_key}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "password"
-  }'
-```
-
-#### 2. Refresh Token
-```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/auth/v1/token?grant_type=refresh_token" \
-  -H "apikey: {anon_key}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh_token": "refresh_token_here"
-  }'
-```
-
-#### 3. Reset Password
-```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/auth/v1/recover" \
-  -H "apikey: {anon_key}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com"
-  }'
-```
-
-**Response**:
-```json
-{
-  "message": "Check your email for the confirmation link"
-}
-```
-
-#### 4. Sign Out
-```bash
-curl -X POST "https://elogncohkxrriqmvapqo.supabase.co/auth/v1/logout" \
-  -H "Authorization: Bearer {access_token}" \
-  -H "apikey: {anon_key}"
-```
+- **API Requests**: 1000 requests per hour per user
+- **File Uploads**: 10MB maximum file size
+- **Response Time**: < 500ms for most operations
+- **Concurrent Users**: 1000+ supported
 
 ## Getting Started
 

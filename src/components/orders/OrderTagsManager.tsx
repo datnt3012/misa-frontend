@@ -1,83 +1,134 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X, Edit, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Plus, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface OrderTagsManagerProps {
   orderId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTagsUpdated: () => void;
+  onAssignedTagsChange?: (tags: OrderTag[]) => void;
+  currentTags?: OrderTag[];
+  availableTags?: OrderTag[];
 }
 
-interface OrderTag {
-  id: string;
-  name: string;
-  color: string;
-  description?: string;
-}
+type OrderTag = ApiOrderTag;
+
+const normalizeLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
+const RECONCILED_NAMES = ["đã đối soát", "reconciled"];
+const PENDING_NAMES = ["chưa đối soát", "pending reconciliation"];
+
+const isMatchingTag = (tag: OrderTag, candidates: string[]) => {
+  const normalizedTargets = candidates.map(normalizeLabel);
+  const sources = [tag.name, tag.raw_name, tag.display_name];
+  return sources.some((source) => normalizedTargets.includes(normalizeLabel(source)));
+};
+
+const isReconciledTag = (tag: OrderTag) => isMatchingTag(tag, RECONCILED_NAMES);
+const isPendingTag = (tag: OrderTag) => isMatchingTag(tag, PENDING_NAMES);
+const isReconciliationTag = (tag: OrderTag) => isReconciledTag(tag) || isPendingTag(tag);
 
 export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   orderId,
   open,
   onOpenChange,
   onTagsUpdated,
+  onAssignedTagsChange,
+  currentTags = [],
+  availableTags = [],
 }) => {
-  const [allTags, setAllTags] = useState<OrderTag[]>([]);
+  const [allTags, setAllTags] = useState<OrderTag[]>(availableTags);
   const [assignedTags, setAssignedTags] = useState<OrderTag[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNewTagForm, setShowNewTagForm] = useState(false);
   const [newTag, setNewTag] = useState({ name: '', color: '#64748b', description: '' });
   const { toast } = useToast();
-  const { user } = useAuth();
+
+  useEffect(() => {
+    if (availableTags.length) {
+      setAllTags(availableTags);
+    }
+  }, [availableTags]);
 
   useEffect(() => {
     if (open) {
+      // Always load tags when dialog opens to ensure we have the latest data
+      // This ensures that even if a tag was just created or updated, we have it
       loadTags();
-      loadAssignedTags();
     }
   }, [open, orderId]);
 
+  // Separate useEffect to handle currentTags updates - runs after allTags is loaded
+  useEffect(() => {
+    if (open && currentTags && allTags.length > 0) {
+      // Map currentTags to full tag objects from allTags to ensure we have all properties
+      const assignedTagsFromProps = currentTags
+        .map(tag => {
+          // ALWAYS prioritize finding by ID first (API returns IDs in order.tags)
+          // This is the most reliable way to match tags
+          const matchedById = allTags.find(t => t.id === tag.id);
+          if (matchedById) {
+            return matchedById;
+          }
+          
+          // If not found by ID, try to find by name/display_name/raw_name
+          // (fallback for cases where tags are passed as names)
+          const matchedByName = allTags.find(t => 
+            t.name === tag.name || 
+            t.display_name === tag.name || 
+            t.raw_name === tag.name ||
+            t.name === tag.display_name ||
+            t.display_name === tag.display_name ||
+            t.raw_name === tag.raw_name ||
+            // Also try matching using tagMatchesNames logic
+            isMatchingTag(t, [tag.name || '', tag.display_name || '', tag.raw_name || ''])
+          );
+          if (matchedByName) {
+            return matchedByName;
+          }
+          
+          // Fallback: use the tag from props, but ensure it has at least a display name
+          const displayName = tag.display_name || tag.name || tag.raw_name;
+          return {
+            id: tag.id,
+            name: displayName || tag.id,
+            display_name: displayName || tag.id,
+            raw_name: tag.raw_name || tag.name || tag.id,
+            color: tag.color || '#64748b',
+            description: tag.description,
+          } as OrderTag;
+        })
+        .filter((tag): tag is OrderTag => Boolean(tag));
+      setAssignedTags(assignedTagsFromProps);
+      onAssignedTagsChange?.(assignedTagsFromProps);
+    } else if (open && currentTags && currentTags.length === 0) {
+      // Clear assigned tags if currentTags is empty
+      setAssignedTags([]);
+      onAssignedTagsChange?.([]);
+    }
+  }, [currentTags, open, allTags]);
+
   const loadTags = async () => {
     try {
-      const { data, error } = await supabase
-        .from('order_tags')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setAllTags(data || []);
+      // Only load tags with type 'order'
+      const tags = await orderTagsApi.getAllTags({ type: 'order' });
+      setAllTags(tags);
+      // The useEffect with [currentTags, open, allTags] dependency will handle
+      // mapping currentTags to full tag objects when allTags is loaded
     } catch (error) {
-      console.error('Error loading tags:', error);
-    }
-  };
-
-  const loadAssignedTags = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('order_tag_assignments')
-        .select(`
-          order_tags (
-            id,
-            name,
-            color,
-            description
-          )
-        `)
-        .eq('order_id', orderId);
-
-      if (error) throw error;
-      setAssignedTags(data?.map((item: any) => item.order_tags) || []);
-    } catch (error) {
-      console.error('Error loading assigned tags:', error);
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể tải danh sách nhãn"),
+        variant: "destructive",
+      });
     }
   };
 
@@ -86,27 +137,24 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('order_tags')
-        .insert({
-          name: newTag.name.trim(),
-          color: newTag.color,
-          description: newTag.description.trim() || null,
-          created_by: user?.id,
-        })
-        .select()
-        .single();
+      const createdTag = await orderTagsApi.createTag({
+        name: newTag.name.trim(),
+        color: newTag.color,
+        description: newTag.description.trim() || undefined,
+        type: 'order', // Ensure new tags are created with type 'order'
+      });
 
-      if (error) throw error;
-
-      setAllTags([...allTags, data]);
+      setAllTags((prev) => {
+        const next = prev.some(tag => tag.id === createdTag.id) ? prev : [...prev, createdTag];
+        return next;
+      });
       setNewTag({ name: '', color: '#64748b', description: '' });
       setShowNewTagForm(false);
-      
       toast({
         title: "Thành công",
         description: "Đã tạo nhãn mới",
       });
+      await loadTags();
     } catch (error) {
       console.error('Error creating tag:', error);
       toast({
@@ -119,66 +167,127 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     }
   };
 
-  const assignTag = async (tagId: string) => {
+  const updateOrderTags = async (updatedList: OrderTag[], successMessage: string) => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('order_tag_assignments')
-        .insert({
-          order_id: orderId,
-          tag_id: tagId,
-          assigned_by: user?.id,
-        });
-
-      if (error) throw error;
-
-      const tag = allTags.find(t => t.id === tagId);
-      if (tag) {
-        setAssignedTags([...assignedTags, tag]);
-      }
-      
+      await orderTagsApi.updateOrderTags(orderId, updatedList.map(tag => tag.id));
+      setAssignedTags(updatedList);
+      onAssignedTagsChange?.(updatedList);
       toast({
         title: "Thành công",
-        description: "Đã gán nhãn cho đơn hàng",
+        description: successMessage,
       });
-      
       onTagsUpdated();
     } catch (error) {
-      console.error('Error assigning tag:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể gán nhãn",
+        description: getErrorMessage(error, "Không thể cập nhật nhãn"),
         variant: "destructive",
       });
+      throw error;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const assignTag = async (tagId: string) => {
+    if (assignedTags.some(tag => tag.id === tagId)) {
+      return;
+    }
+
+    const tag = allTags.find(t => t.id === tagId);
+    if (!tag) {
+      toast({
+        title: "Lỗi",
+        description: "Không tìm thấy nhãn trong danh sách",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    let updated = [...assignedTags, tag];
+
+    if (isReconciledTag(tag)) {
+      updated = updated.filter(existing => !isPendingTag(existing));
+    } else if (isPendingTag(tag)) {
+      updated = updated.filter(existing => !isReconciledTag(existing));
+    }
+
+    try {
+      await updateOrderTags(updated, "Đã gán nhãn cho đơn hàng");
+    } catch {
+      // errors already handled inside updateOrderTags
     }
   };
 
   const removeTag = async (tagId: string) => {
+    const tagToRemove = assignedTags.find(tag => tag.id === tagId);
+    if (!tagToRemove) return;
+
+    if (isReconciliationTag(tagToRemove)) {
+      const reconciliationTags = assignedTags.filter(isReconciliationTag);
+      if (reconciliationTags.length <= 1) {
+        toast({
+          title: "Không thể bỏ nhãn",
+          description: "Đơn hàng phải có ít nhất một nhãn đối soát (Đã đối soát hoặc Chưa đối soát)",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    const updated = assignedTags.filter(tag => tag.id !== tagId);
+    try {
+      await updateOrderTags(updated, "Đã bỏ nhãn khỏi đơn hàng");
+    } catch {
+      // errors already handled inside updateOrderTags
+    }
+  };
+
+  const deleteTag = async (tagId: string) => {
+    const tagToDelete = allTags.find(tag => tag.id === tagId);
+    if (!tagToDelete) return;
+
+    // Check if tag is assigned to this order
+    const isAssigned = assignedTags.some(tag => tag.id === tagId);
+    if (isAssigned) {
+      toast({
+        title: "Không thể xóa nhãn",
+        description: "Vui lòng bỏ nhãn khỏi đơn hàng trước khi xóa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if it's a default tag (should not be deleted)
+    if (tagToDelete.is_default) {
+      toast({
+        title: "Không thể xóa nhãn",
+        description: "Không thể xóa nhãn mặc định của hệ thống",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn xóa nhãn "${getTagDisplayName(tagToDelete)}"?`)) {
+      return;
+    }
+
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('order_tag_assignments')
-        .delete()
-        .eq('order_id', orderId)
-        .eq('tag_id', tagId);
-
-      if (error) throw error;
-
-      setAssignedTags(assignedTags.filter(tag => tag.id !== tagId));
-      
+      await orderTagsApi.deleteTag(tagId);
+      // Remove from allTags
+      setAllTags(prev => prev.filter(tag => tag.id !== tagId));
       toast({
         title: "Thành công",
-        description: "Đã bỏ nhãn khỏi đơn hàng",
+        description: "Đã xóa nhãn",
       });
-      
-      onTagsUpdated();
+      // Reload tags to ensure consistency
+      await loadTags();
     } catch (error) {
-      console.error('Error removing tag:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể bỏ nhãn",
+        description: getErrorMessage(error, "Không thể xóa nhãn"),
         variant: "destructive",
       });
     } finally {
@@ -186,7 +295,18 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     }
   };
 
-  const unassignedTags = allTags.filter(tag => !assignedTags.find(assigned => assigned.id === tag.id));
+  const unassignedTags = useMemo(
+    () =>
+      allTags.filter(
+        (tag) => !tag.is_deleted && !assignedTags.some(assigned => assigned.id === tag.id)
+      ),
+    [allTags, assignedTags]
+  );
+
+  // Helper function to get display name for tag
+  const getTagDisplayName = (tag: OrderTag) => {
+    return tag.display_name || tag.name || tag.raw_name || tag.id;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -207,9 +327,11 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                     style={{ backgroundColor: tag.color, color: 'white' }}
                     className="flex items-center gap-1"
                   >
-                    {tag.name}
+                    {getTagDisplayName(tag)}
                     <button
-                      onClick={() => removeTag(tag.id)}
+                      onClick={() => {
+                        removeTag(tag.id);
+                      }}
                       className="ml-1 hover:bg-black/20 rounded p-0.5"
                       disabled={loading}
                     >
@@ -231,12 +353,28 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                 <Badge
                   key={tag.id}
                   variant="outline"
-                  className="cursor-pointer hover:bg-muted"
-                  onClick={() => assignTag(tag.id)}
+                  className="cursor-pointer hover:bg-muted relative group"
+                  onClick={() => {
+                    assignTag(tag.id);
+                  }}
                   style={{ borderColor: tag.color, color: tag.color }}
                 >
                   <Plus className="w-3 h-3 mr-1" />
-                  {tag.name}
+                  {getTagDisplayName(tag)}
+                  {/* Show delete button for non-default tags */}
+                  {!tag.is_default && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent triggering assignTag
+                        deleteTag(tag.id);
+                      }}
+                      className="ml-1 hover:bg-red-500 hover:text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      disabled={loading}
+                      title="Xóa nhãn"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </Badge>
               ))}
               {unassignedTags.length === 0 && (
@@ -321,3 +459,4 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     </Dialog>
   );
 };
+

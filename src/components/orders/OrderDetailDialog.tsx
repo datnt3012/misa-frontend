@@ -4,71 +4,103 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { NumberInput } from "@/components/ui/number-input";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
+import { Trash2, Plus, Edit2, X, Check } from "lucide-react";
+// Tag management is not available in this dialog
+import { orderApi, Order, OrderItem } from "@/api/order.api";
+import { customerApi } from "@/api/customer.api";
+import { productApi } from "@/api/product.api";
+import { orderTagsApi, OrderTag } from "@/api/orderTags.api";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-utils";
+import { PaymentDialog } from '@/components/PaymentDialog';
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
 interface OrderDetailDialogProps {
   order: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOrderUpdated?: () => void;
 }
 
 export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   order,
   open,
   onOpenChange,
+  onOrderUpdated,
 }) => {
-  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [orderDetails, setOrderDetails] = useState<Order | null>(null);
+  const [customerDetails, setCustomerDetails] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
+  const [editValues, setEditValues] = useState<{[key: string]: any}>({});
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
+  const [availableTags, setAvailableTags] = useState<OrderTag[]>([]);
+  // Tags are display-only here
   const { toast } = useToast();
 
   useEffect(() => {
     if (open && order) {
       loadOrderDetails();
+      loadProducts();
+      loadTags();
     }
   }, [open, order]);
 
+  const loadProducts = async () => {
+    try {
+      const response = await productApi.getProducts({ page: 1, limit: 1000 });
+      setProducts(response.products || []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      // Only load tags with type 'order'
+      const tags = await orderTagsApi.getAllTags({ type: 'order' });
+      setAvailableTags(tags);
+    } catch (error) {
+      console.error('Error loading tags:', error);
+      // Fallback to empty array if API fails
+      setAvailableTags([]);
+    }
+  };
+
   const loadOrderDetails = async () => {
-    if (!order?.id) return;
+    if (!order?.id) {
+      return;
+    }
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (
-            name,
-            phone,
-            address,
-            customer_code
-          ),
-          order_items (
-            id,
-            product_code,
-            product_name,
-            quantity,
-            unit_price,
-            total_price
-          ),
-          order_tag_assignments (
-            order_tags (
-              id,
-              name,
-              color
-            )
-          )
-        `)
-        .eq('id', order.id)
-        .single();
-
-      if (error) throw error;
-      setOrderDetails(data);
+      const orderData = await orderApi.getOrder(order.id);
+      setOrderDetails(orderData);
+      // Always fetch fresh customer info for authoritative address
+      if (orderData.customer_id) {
+        try {
+          const customer = await customerApi.getCustomer(orderData.customer_id);
+          setCustomerDetails(customer);
+        } catch (e) {
+          console.warn('Could not load customer details', e);
+          setCustomerDetails(null);
+        }
+      } else {
+        setCustomerDetails(null);
+      }
     } catch (error) {
       console.error('Error loading order details:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tải chi tiết đơn hàng",
+        description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
         variant: "destructive",
       });
     } finally {
@@ -76,27 +108,278 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     }
   };
 
-  const formatCurrency = (amount: number) => {
+
+  const handleUpdateStatusDirect = async (newStatus: string) => {
+    if (!orderDetails) return;
+    
+    setLoading(true);
+    try {
+      await orderApi.updateOrder(orderDetails.id, {
+        status: newStatus as any
+      });
+      
+      // Refresh order details from API
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      // Notify parent component to refresh order list
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật trạng thái đơn hàng",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật trạng thái"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Removed tag update logic
+
+  const startEditing = (field: string, currentValue: any, addressInfo?: any) => {
+    setEditingFields(prev => ({ ...prev, [field]: true }));
+    setEditValues(prev => ({ 
+      ...prev, 
+      [field]: currentValue,
+      ...(addressInfo && { [`${field}_addressInfo`]: addressInfo })
+    }));
+  };
+
+  const cancelEditing = (field: string) => {
+    setEditingFields(prev => ({ ...prev, [field]: false }));
+    setEditValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[field];
+      delete newValues[`${field}_addressInfo`];
+      return newValues;
+    });
+  };
+
+  const saveField = async (field: string) => {
+    if (!orderDetails) return;
+    
+    setLoading(true);
+    try {
+      const updateData: any = {};
+      const value = editValues[field];
+      const addressInfo = editValues[`${field}_addressInfo`];
+      
+      // Translate UI snake_case to API camelCase for updates
+      // Only allow editing receiver fields if they are empty originally
+      const original = orderDetails as any;
+      if ((field === 'receiverName' && original.receiverName) ||
+          (field === 'receiverPhone' && original.receiverPhone) ||
+          (field === 'receiverAddress' && (original.receiverAddress || original.addressInfo))) {
+        setLoading(false);
+        toast({
+          title: 'Không thể cập nhật',
+          description: 'Chỉ cho phép cập nhật thông tin người nhận khi đơn chưa có dữ liệu.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // Map UI field names to BE expectations (camelCase per BE)
+      if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
+        updateData[field] = value;
+      } else if (field === 'taxCode') {
+        updateData['taxCode'] = value;
+      } else if (field === 'vatEmail') {
+        updateData['vatEmail'] = value;
+      } else if (field === 'companyName') {
+        updateData['companyName'] = value;
+      } else if (field === 'companyPhone') {
+        updateData['companyPhone'] = value;
+      } else if (field === 'companyAddress') {
+        updateData['companyAddress'] = value;
+      } else {
+        updateData[field] = value;
+      }
+      // Add addressInfo if it exists (align with BE expects snake_case *_address_info)
+      if (addressInfo) {
+        const normalizedInfo = {
+          provinceCode: addressInfo.provinceCode || undefined,
+          districtCode: addressInfo.districtCode || undefined,
+          wardCode: addressInfo.wardCode || undefined,
+        };
+        if (field === 'receiverAddress') {
+          updateData['addressInfo'] = normalizedInfo; // BE expects addressInfo for receiver
+        }
+      }
+      
+      await orderApi.updateOrder(orderDetails.id, updateData);
+      
+      // Refresh order details from API
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      setEditingFields(prev => ({ ...prev, [field]: false }));
+      setEditValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[field];
+        return newValues;
+      });
+      
+      // Notify parent component to refresh order list
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật thông tin đơn hàng",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật thông tin"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount: number | string | undefined | null) => {
+    const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount);
+      maximumFractionDigits: 0
+    }).format(numAmount);
+  };
+
+  const renderEditableAddressField = (field: string, label: string, value: any, addressInfo?: any) => {
+    const isEditing = editingFields[field];
+    const editValue = editValues[field] ?? value;
+    const editAddressInfo = editValues[`${field}_addressInfo`] ?? addressInfo;
+
+    const formatFullAddress = (addr: string, ai: any) => {
+      const wardName = ai?.ward?.name || ai?.wardName;
+      const districtName = ai?.district?.name || ai?.districtName;
+      const provinceName = ai?.province?.name || ai?.provinceName;
+      const parts: string[] = [];
+      if (addr) parts.push(addr);
+      if (wardName) parts.push(wardName);
+      if (districtName) parts.push(districtName);
+      if (provinceName) parts.push(provinceName);
+      return parts.join(', ');
+    };
+
+    return (
+      <div>
+        <label className="text-sm font-medium text-muted-foreground">{label}:</label>
+        <div className="mt-1">
+          {isEditing ? (
+            <div className="space-y-3">
+              <div>
+                <AddressFormSeparate
+                  value={{
+                    address: editValue || '',
+                    provinceCode: (editAddressInfo?.provinceCode || editAddressInfo?.province?.code || '')?.toString(),
+                    districtCode: (editAddressInfo?.districtCode || editAddressInfo?.district?.code || '')?.toString(),
+                    wardCode: (editAddressInfo?.wardCode || editAddressInfo?.ward?.code || '')?.toString(),
+                    provinceName: editAddressInfo?.provinceName || editAddressInfo?.province?.name || '',
+                    districtName: editAddressInfo?.districtName || editAddressInfo?.district?.name || '',
+                    wardName: editAddressInfo?.wardName || editAddressInfo?.ward?.name || ''
+                  }}
+                  onChange={(data) => {
+                    setEditValues(prev => ({
+                      ...prev,
+                      [field]: data.address,
+                      [`${field}_addressInfo`]: {
+                        provinceCode: data.provinceCode,
+                        districtCode: data.districtCode,
+                        wardCode: data.wardCode
+                      }
+                    }));
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                  Lưu
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                  Hủy
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>
+                {formatFullAddress(value, addressInfo) || 'Chưa có thông tin'}
+              </div>
+              <Button size="sm" variant="outline" onClick={() => startEditing(field, value, addressInfo)}>
+                Sửa
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderEditableField = (field: string, label: string, value: any, type: 'text' | 'textarea' = 'text') => {
+    const isEditing = editingFields[field];
+    const editValue = editValues[field] ?? value;
+
+    return (
+      <div>
+        <label className="text-sm font-medium text-muted-foreground">{label}:</label>
+        <div className="mt-1">
+          {isEditing ? (
+            <div className="space-y-3">
+              <div>
+                {type === 'textarea' ? (
+                  <Textarea
+                    value={editValue || ''}
+                    onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="w-full"
+                    rows={2}
+                  />
+                ) : (
+                  <Input
+                    value={editValue || ''}
+                    onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="w-full"
+                  />
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                  Lưu
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                  Hủy
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
+              <Button size="sm" variant="outline" onClick={() => startEditing(field, value)}>
+                Sửa
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; variant: any }> = {
-      'pending': { label: 'Chờ xử lý', variant: 'secondary' },
-      'confirmed': { label: 'Đã xác nhận', variant: 'default' },
-      'processing': { label: 'Đang xử lý', variant: 'default' },
-      'picked': { label: 'Đã lấy hàng', variant: 'default' },
-      'handover': { label: 'Bàn giao ĐVVC', variant: 'default' },
-      'delivered': { label: 'Đã giao hàng', variant: 'default' },
-      'completed': { label: 'Hoàn thành', variant: 'default' },
-      'cancelled': { label: 'Đã hủy', variant: 'destructive' },
-    };
-    
-    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+    const config = getOrderStatusConfig(status);
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
   };
 
   const getPaymentStatusBadge = (status: string) => {
@@ -111,10 +394,217 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
 
+  // Calculate payment status based on paid amount vs total amount
+  const calculatePaymentStatus = (paidAmount: number, totalAmount: number): string => {
+    if (paidAmount <= 0) return 'unpaid';
+    if (paidAmount >= totalAmount) return 'paid';
+    return 'partially_paid';
+  };
+
+  // Helper function to get display name for tag
+  const getTagDisplayName = (tag: OrderTag) => {
+    return tag.display_name || tag.name || tag.raw_name || tag.id;
+  };
+
+  // Convert tags from string array to OrderTag objects for display
+  const getTagsForDisplay = () => {
+    if (!orderDetails?.tags || !Array.isArray(orderDetails.tags)) return [];
+    
+    return orderDetails.tags.map(tagName => {
+      // Try to find tag by name, display_name, or raw_name
+      const tag = availableTags.find(t => 
+        t.name === tagName || 
+        t.display_name === tagName || 
+        t.raw_name === tagName
+      );
+      
+      // If tag found, return it; otherwise create a default tag object
+      return tag || { 
+        id: tagName, 
+        name: tagName, 
+        color: '#6B7280',
+        display_name: tagName,
+        raw_name: tagName
+      };
+    });
+  };
+  
+  // Only show non-reconciliation tags in this dialog
+  const getOtherTags = () => getTagsForDisplay().filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
+
+  // Product editing functions
+  const startEditingItem = (itemId: string, item: OrderItem) => {
+    setEditingItems(prev => ({
+      ...prev,
+      [itemId]: {
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_code: item.product_code,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price
+      }
+    }));
+  };
+
+  const cancelEditingItem = (itemId: string) => {
+    setEditingItems(prev => {
+      const newItems = { ...prev };
+      delete newItems[itemId];
+      return newItems;
+    });
+  };
+
+  const updateEditingItem = (itemId: string, field: keyof OrderItem, value: any) => {
+    setEditingItems(prev => {
+      const current = prev[itemId] || {};
+      const updated = { ...current, [field]: value };
+      
+      // Auto-calculate total_price when quantity or unit_price changes
+      if (field === 'quantity' || field === 'unit_price') {
+        const quantity = field === 'quantity' ? Number(value) : (updated.quantity || 0);
+        const unitPrice = field === 'unit_price' ? Number(value) : (updated.unit_price || 0);
+        updated.total_price = quantity * unitPrice;
+      }
+      
+      // Auto-fill product info when product_id changes
+      if (field === 'product_id') {
+        const product = products.find(p => p.id === value);
+        if (product) {
+          updated.product_id = product.id;
+          updated.product_name = product.name;
+          updated.product_code = product.code;
+          updated.unit_price = product.price || updated.unit_price || 0;
+          updated.total_price = (updated.quantity || 0) * (product.price || 0);
+        }
+      }
+      
+      return { ...prev, [itemId]: updated };
+    });
+  };
+
+  const saveItem = async (itemId: string) => {
+    if (!orderDetails) return;
+    
+    const editedItem = editingItems[itemId];
+    if (!editedItem) return;
+    
+    setLoading(true);
+    try {
+      await orderApi.updateOrderItem(orderDetails.id, itemId, {
+        product_id: editedItem.product_id || '',
+        product_name: editedItem.product_name || '',
+        product_code: editedItem.product_code || '',
+        quantity: editedItem.quantity || 0,
+        unit_price: editedItem.unit_price || 0
+      });
+      
+      // Refresh order details
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      // Clear editing state
+      cancelEditingItem(itemId);
+      
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật sản phẩm",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể cập nhật sản phẩm"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteItem = async (itemId: string) => {
+    if (!orderDetails) return;
+    
+    if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi đơn hàng?')) {
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      await orderApi.deleteOrderItem(orderDetails.id, itemId);
+      
+      // Refresh order details
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
+      setOrderDetails(updatedOrder);
+      
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Đã xóa sản phẩm",
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể xóa sản phẩm"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addNewItem = () => {
+    if (!orderDetails) return;
+    
+    if (products.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Không có sản phẩm nào để thêm",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoading(true);
+    const firstProduct = products[0];
+    orderApi.addOrderItem(orderDetails.id, {
+      product_id: firstProduct.id,
+      product_name: firstProduct.name,
+      product_code: firstProduct.code,
+      quantity: 1,
+      unit_price: firstProduct.price || 0
+    }).then(() => {
+      return orderApi.getOrder(orderDetails.id);
+    }).then((updatedOrder) => {
+      setOrderDetails(updatedOrder);
+      if (onOrderUpdated) {
+        onOrderUpdated();
+      }
+      toast({
+        title: "Thành công",
+        description: "Đã thêm sản phẩm",
+      });
+    }).catch((error) => {
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể thêm sản phẩm"),
+        variant: "destructive",
+      });
+    }).finally(() => {
+      setLoading(false);
+    });
+  };
+
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết đơn hàng</DialogTitle>
           </DialogHeader>
@@ -126,72 +616,54 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     );
   }
 
-  const tags = orderDetails.order_tag_assignments?.map((assignment: any) => assignment.order_tags) || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Chi tiết đơn hàng #{orderDetails.order_number}</DialogTitle>
+          <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails.order_number}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Customer Information */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Họ tên:</label>
-                <div className="text-base font-medium">{orderDetails.customer_name}</div>
-              </div>
+              {renderEditableField('customer_name', 'Họ tên', orderDetails.customer_name)}
+              {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
               
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
-                <div className="text-base">{orderDetails.customer_phone || '-'}</div>
-              </div>
+               <div>
+                 <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
+                 <div className="flex gap-2 flex-wrap mt-1">
+                   {getOtherTags().length > 0 ? (
+                     getOtherTags().map((tag: any) => (
+                       <Badge 
+                         key={tag.id} 
+                         style={{ backgroundColor: tag.color, color: 'white' }}
+                       >
+                         {getTagDisplayName(tag)}
+                       </Badge>
+                     ))
+                   ) : (
+                     <Badge variant="secondary">Không có nhãn khác</Badge>
+                   )}
+                 </div>
+               </div>
 
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
-                <div className="flex gap-2 flex-wrap mt-1">
-                  {tags.length > 0 ? (
-                    tags.map((tag: any) => (
-                      <Badge 
-                        key={tag.id} 
-                        style={{ backgroundColor: tag.color, color: 'white' }}
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))
-                  ) : (
-                    <Badge variant="destructive">Chưa đối soát</Badge>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Ghi chú:</label>
-                <div className="text-base">{orderDetails.notes || '-'}</div>
-              </div>
+              {renderEditableField('notes', 'Ghi chú', orderDetails.notes, 'textarea')}
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
-                <div className="text-base">{orderDetails.customers?.customer_code || '-'}</div>
+                <div className="text-base">{orderDetails.customer?.code || orderDetails.customer_code || 'Chưa có mã'}</div>
               </div>
 
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Email:</label>
-                <div className="text-base">{orderDetails.vat_invoice_email || '-'}</div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Ghi chú nội bộ:</label>
-                <div className="text-base">-</div>
+                <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
               </div>
             </div>
           </div>
-
-          <Separator />
 
           {/* Shipping Information */}
           <div className="space-y-4">
@@ -200,19 +672,34 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <h3 className="text-lg font-semibold">Vận chuyển</h3>
             </div>
             <div className="grid grid-cols-2 gap-6">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Tên người nhận hàng:</label>
-                <div className="text-base font-medium">{orderDetails.customer_name}</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">SĐT người nhận hàng:</label>
-                <div className="text-base">{orderDetails.customer_phone || '-'}</div>
-              </div>
+              {renderEditableField('receiverName', 'Tên người nhận hàng', (orderDetails as any).receiverName || customerDetails?.name)}
+              {renderEditableField('receiverPhone', 'SĐT người nhận hàng', (orderDetails as any).receiverPhone)}
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Địa chỉ:</label>
-              <div className="text-base text-blue-600 underline cursor-pointer">
-                {orderDetails.customer_address || orderDetails.customers?.address || '-'}
+            <div className="mt-4">
+              {renderEditableAddressField(
+                'receiverAddress',
+                'Địa chỉ giao hàng',
+                (orderDetails as any).receiverAddress || customerDetails?.address,
+                (orderDetails as any).addressInfo || (orderDetails as any).receiverAddressInfo || customerDetails?.addressInfo
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* VAT Company Information */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🧾</span>
+              <h3 className="text-lg font-semibold">Thông tin VAT</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {renderEditableField('taxCode', 'Mã số thuế', orderDetails.taxCode || (orderDetails as any).vat_tax_code)}
+              {renderEditableField('vatEmail', 'Email nhận hóa đơn VAT', orderDetails.vatEmail || (orderDetails as any).vat_invoice_email)}
+              {renderEditableField('companyName', 'Tên công ty', orderDetails.companyName || (orderDetails as any).vat_company_name)}
+              {renderEditableField('companyPhone', 'Điện thoại công ty', orderDetails.companyPhone || (orderDetails as any).vat_company_phone)}
+              <div className="lg:col-span-2">
+                {renderEditableField('companyAddress', 'Địa chỉ công ty', orderDetails.companyAddress || (orderDetails as any).vat_company_address)}
               </div>
             </div>
           </div>
@@ -221,9 +708,15 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
           {/* Products */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📦</span>
-              <h3 className="text-lg font-semibold">Sản phẩm</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📦</span>
+                <h3 className="text-lg font-semibold">Sản phẩm</h3>
+              </div>
+              <Button size="sm" onClick={addNewItem} disabled={loading}>
+                <Plus className="w-4 h-4 mr-1" />
+                Thêm sản phẩm
+              </Button>
             </div>
             
             <Table>
@@ -235,37 +728,134 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   <TableHead className="text-center">SL</TableHead>
                   <TableHead className="text-right">Giá</TableHead>
                   <TableHead className="text-right">Tổng</TableHead>
+                  <TableHead className="w-24">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderDetails.order_items?.map((item: any, index: number) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{item.product_code}</div>
-                        <div className="text-sm text-muted-foreground">{item.product_name}</div>
-                        <div className="text-xs text-blue-600">Ghi chú:</div>
-                      </div>
+                {orderDetails.items && orderDetails.items.length > 0 ? (
+                  orderDetails.items.map((item: OrderItem, index: number) => {
+                    const isEditing = !!editingItems[item.id || ''];
+                    const editedItem = editingItems[item.id || ''] || item;
+                    
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Select
+                              value={editedItem.product_id || ''}
+                              onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Chọn sản phẩm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products.map((product) => (
+                                  <SelectItem key={product.id} value={product.id}>
+                                    {product.code} - {product.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="font-medium">{item.product_code || 'N/A'}</div>
+                              <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">-</TableCell>
+                        <TableCell className="text-center">
+                          {isEditing ? (
+                            <NumberInput
+                              min={1}
+                              value={editedItem.quantity || 0}
+                              onChange={(value) => updateEditingItem(item.id || '', 'quantity', value)}
+                              className="w-20 text-center"
+                            />
+                          ) : (
+                            item.quantity
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isEditing ? (
+                            <CurrencyInput
+                              value={editedItem.unit_price || 0}
+                              onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
+                              className="w-24 text-right"
+                            />
+                          ) : (
+                            formatCurrency(item.unit_price)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => saveItem(item.id || '')}
+                                disabled={loading}
+                              >
+                                <Check className="w-4 h-4 text-green-600" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => cancelEditingItem(item.id || '')}
+                              >
+                                <X className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditingItem(item.id || '', item)}
+                                disabled={loading}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteItem(item.id || '')}
+                                disabled={loading}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      Không có sản phẩm nào trong đơn hàng
                     </TableCell>
-                    <TableCell className="text-center">-</TableCell>
-                    <TableCell className="text-center">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
 
             <div className="flex justify-end">
-              <div className="w-64 space-y-2">
-                <div className="flex justify-between">
-                  <span>Tổng</span>
-                  <span className="font-medium">{orderDetails.order_items?.reduce((sum: number, item: any) => sum + item.quantity, 0)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Tổng tiền:</span>
-                  <span>{formatCurrency(orderDetails.total_amount)}</span>
+              <div className="w-96 space-y-3">
+                {/* Summary Section */}
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
+                    <span className="font-medium">{orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + item.quantity, 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Tổng tiền:</span>
+                    <span className="text-xl">{formatCurrency(orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.total_price || 0), 0) || orderDetails.total_amount || 0)}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -276,40 +866,157 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           {/* Order Status and Info */}
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
-                {getStatusBadge(orderDetails.order_status || orderDetails.status)}
-              </div>
+               <div className="flex justify-between items-center">
+                 <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
+                <Select 
+                  value={(orderDetails as any).order_status || orderDetails.status || 'pending'}
+                   onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
+                 >
+                   <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
+                     <div className="cursor-pointer">
+                      {getStatusBadge((orderDetails as any).order_status || orderDetails.status)}
+                     </div>
+                   </SelectTrigger>
+                   <SelectContent>
+                     {ORDER_STATUSES.map((status) => (
+                       <SelectItem key={status} value={status}>
+                         {ORDER_STATUS_LABELS_VI[status]}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
-                {getPaymentStatusBadge(orderDetails.payment_status || 'unpaid')}
+                {getPaymentStatusBadge(
+                  (orderDetails as any).payment_status || 
+                  calculatePaymentStatus(
+                    orderDetails.initial_payment || orderDetails.paid_amount || 0,
+                    orderDetails.total_amount || 0
+                  )
+                )}
               </div>
               <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
+                <span>{orderDetails.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng'}</span>
+              </div>
+              {orderDetails.vat_type && orderDetails.vat_type !== 'none' && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Loại VAT:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {orderDetails.vat_type === 'total' ? 'Tính trên tổng' : 
+                     orderDetails.vat_type === 'per_line' ? 'Tính theo dòng' : 
+                     'Không có'}
+                  </Badge>
+                </div>
+              )}
+              <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Người tạo đơn:</span>
-                <span>{orderDetails.profiles?.full_name || 'Hệ thống'}</span>
+                <span>{(orderDetails as any).profiles?.full_name || 'Hệ thống'}</span>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Số đơn hàng:</span>
+                <span className="font-mono">{orderDetails.order_number || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Ngày tạo:</span>
-                <span>{new Date(orderDetails.created_at).toLocaleDateString('vi-VN')}</span>
+                <span>{orderDetails.created_at ? new Date(orderDetails.created_at).toLocaleDateString('vi-VN') : 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Tổng tiền:</span>
                 <span className="font-medium">{formatCurrency(orderDetails.total_amount)}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
-                <span className="text-green-600">{formatCurrency(orderDetails.paid_amount)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>
+                  <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
+                    Thanh toán
+                  </Button>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Còn nợ:</span>
-                <span className="text-red-600">{formatCurrency(orderDetails.debt_amount)}</span>
+              {/* Reconciliation tags are not shown in this dialog */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
+                <div className="flex items-center gap-2">
+                  {editingFields['contract_number'] ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editValues['contract_number'] ?? (orderDetails.contract_number || '')}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, contract_number: e.target.value }))}
+                        className="w-40"
+                        placeholder="Nhập số hợp đồng"
+                      />
+                      <Button size="sm" onClick={() => saveField('contract_number')} disabled={loading}>
+                        Lưu
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_number')}>
+                        Hủy
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono">{orderDetails.contract_number || 'Chưa có'}</span>
+                      <Button size="sm" variant="outline" onClick={() => startEditing('contract_number', orderDetails.contract_number || '')}>
+                        Sửa
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Số PO:</span>
+                <div className="flex items-center gap-2">
+                  {editingFields['purchase_order_number'] ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editValues['purchase_order_number'] ?? (orderDetails.purchase_order_number || '')}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, purchase_order_number: e.target.value }))}
+                        className="w-40"
+                        placeholder="Nhập số PO"
+                      />
+                      <Button size="sm" onClick={() => saveField('purchase_order_number')} disabled={loading}>
+                        Lưu
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => cancelEditing('purchase_order_number')}>
+                        Hủy
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono">{orderDetails.purchase_order_number || 'Chưa có'}</span>
+                      <Button size="sm" variant="outline" onClick={() => startEditing('purchase_order_number', orderDetails.purchase_order_number || '')}>
+                        Sửa
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
+           </div>
+         </div>
+       </DialogContent>
+
+      {/* Tags manager intentionally removed in this dialog */}
+      
+      {/* Payment Dialog */}
+      {orderDetails && (
+        <PaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          order={orderDetails}
+          onUpdate={() => {
+            // Refresh order details when payment is updated
+            loadOrderDetails();
+            if (onOrderUpdated) {
+              onOrderUpdated();
+            }
+          }}
+        />
+      )}
+     </Dialog>
+   );
+ };
+

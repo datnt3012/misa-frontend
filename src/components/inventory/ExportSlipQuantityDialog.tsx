@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { Package, AlertTriangle, Upload } from "lucide-react";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
 
@@ -125,8 +126,7 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -263,14 +263,13 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
                         {item.requested_quantity}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Input
-                          type="number"
-                          min="0"
+                        <NumberInput
+                          min={0}
                           max={item.requested_quantity}
                           value={actualQty}
-                          onChange={(e) => handleQuantityChange(
+                          onChange={(value) => handleQuantityChange(
                             item.id, 
-                            parseInt(e.target.value) || 0,
+                            value,
                             item.requested_quantity
                           )}
                           className="w-20 text-right"
@@ -343,3 +342,4 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
     </Dialog>
   );
 };
+

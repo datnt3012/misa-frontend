@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +12,13 @@ import {
   Bell,
   User,
   LogOut,
-  Users
+  Users,
+  Building2,
+  Edit
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -25,6 +28,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import UserProfileDialog from "@/components/UserProfileDialog";
+import { authApi } from "@/api/auth.api";
+import { usersApi } from "@/api/users.api";
+import { User as UserType } from "@/types/auth";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 interface LayoutProps {
@@ -33,17 +40,44 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showUserProfileDialog, setShowUserProfileDialog] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
+  const [loadingUser, setLoadingUser] = useState(false);
   const location = useLocation();
-  const { user, signOut, userRole } = useAuth();
+  const { user, signOut, userRole: userRoleFromAuth } = useAuth();
+  const { userRole: userRoleFromPermissions } = usePermissions();
   const { toast } = useToast();
+
+  // Fetch current user info from API
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      if (user) {
+        setLoadingUser(true);
+        try {
+          const userInfo = await authApi.getMe();
+          setCurrentUser(userInfo);
+        } catch (error) {
+          console.error('Error fetching current user:', error);
+          // Fallback to user from auth context
+          setCurrentUser(null);
+        } finally {
+          setLoadingUser(false);
+        }
+      }
+    };
+
+    fetchCurrentUser();
+  }, [user]);
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Quản Lý Kho", href: "/inventory", icon: Package },
+    { name: "Loại Sản Phẩm", href: "/categories", icon: Package },
     { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
     { name: "Khách Hàng", href: "/customers", icon: Users },
-    { name: "Doanh Thu", href: "/revenue", icon: TrendingUp },
-    { name: "Phiếu Xuất", href: "/export-slips", icon: Package },
+    { name: "Nhà Cung Cấp", href: "/suppliers", icon: Building2 },
+    { name: "Báo Cáo Doanh Thu", href: "/revenue", icon: TrendingUp },
+    { name: "Xuất Nhập Kho", href: "/export-import", icon: Package },
     { name: "Cài Đặt", href: "/settings", icon: Settings },
   ];
 
@@ -60,23 +94,6 @@ const Layout = ({ children }: LayoutProps) => {
       title: "Đăng xuất thành công",
       description: "Hẹn gặp lại bạn!",
     });
-  };
-
-  const getRoleDisplayName = (role: string | null) => {
-    switch (role) {
-      case 'owner_director':
-        return 'Giám đốc/Chủ sở hữu';
-      case 'chief_accountant':
-        return 'Kế toán trưởng';
-      case 'accountant':
-        return 'Kế toán';
-      case 'inventory':
-        return 'Quản kho';
-      case 'shipper':
-        return 'Giao hàng';
-      default:
-        return 'Chưa có quyền';
-    }
   };
 
   const NavLinks = () => (
@@ -105,14 +122,14 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-card px-6 pb-4 border-r">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-56 lg:flex-col">
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-card px-4 pb-4 border-r">
           <div className="flex h-16 shrink-0 items-center">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Package className="h-4 w-4" />
               </div>
-              <span className="text-xl font-bold">QuanLyKho</span>
+              <span className="text-xl font-bold">WareHub</span>
             </div>
           </div>
           <NavLinks />
@@ -130,19 +147,19 @@ const Layout = ({ children }: LayoutProps) => {
             <Menu className="h-4 w-4" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64">
+        <SheetContent side="left" className="w-56">
           <div className="flex items-center gap-2 mb-6">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Package className="h-4 w-4" />
             </div>
-            <span className="text-xl font-bold">QuanLyKho</span>
+            <span className="text-xl font-bold">WareHub</span>
           </div>
           <NavLinks />
         </SheetContent>
       </Sheet>
 
       {/* Main Content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-56">
         {/* Top Header */}
         <div className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-x-4 border-b bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
@@ -159,23 +176,55 @@ const Layout = ({ children }: LayoutProps) => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">
-                          {user?.user_metadata?.full_name || user?.email}
-                        </p>
-                        <p className="text-xs leading-none text-muted-foreground">
-                          {user?.email}
-                        </p>
-                      </div>
+                    <DropdownMenuLabel className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {(() => {
+                          // Get firstName and lastName from currentUser or user
+                          const firstName = (currentUser as any)?.firstName || (user as any)?.firstName || '';
+                          const lastName = (currentUser as any)?.lastName || (user as any)?.lastName || '';
+                          
+                          // If we have firstName or lastName, display them
+                          if (firstName || lastName) {
+                            return `${firstName} ${lastName}`.trim();
+                          }
+                          
+                          // Fallback to email or username, never show ID
+                          return currentUser?.email || user?.email || currentUser?.username || user?.username || 'Người dùng';
+                        })()}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {currentUser?.email || user?.email || currentUser?.username || user?.username || ''}
+                      </p>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1.5">
                       <Badge variant="secondary" className="text-xs">
-                        {getRoleDisplayName(userRole)}
+                        {(() => {
+                          // Priority 1: Get role name from usePermissions hook (same as PermissionGuard)
+                          if (userRoleFromPermissions?.name) {
+                            return userRoleFromPermissions.name;
+                          }
+                          
+                          // Priority 2: Get role name from currentUser or user object
+                          const roleFromUser = (currentUser as any)?.role?.name || (user as any)?.role?.name;
+                          if (roleFromUser) return roleFromUser;
+                          
+                          // Priority 3: Check if userRoleFromAuth is a name (not UUID)
+                          if (userRoleFromAuth) {
+                            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userRoleFromAuth);
+                            if (!isUUID) return userRoleFromAuth;
+                          }
+                          
+                          // Fallback
+                          return 'Chưa phân quyền';
+                        })()}
                       </Badge>
                     </div>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowUserProfileDialog(true)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      <span>Chỉnh sửa thông tin</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" />
                       <span>Đăng xuất</span>
@@ -190,6 +239,12 @@ const Layout = ({ children }: LayoutProps) => {
         {/* Page Content */}
         <main>{children}</main>
       </div>
+
+      {/* User Profile Dialog */}
+      <UserProfileDialog
+        open={showUserProfileDialog}
+        onOpenChange={setShowUserProfileDialog}
+      />
     </div>
   );
 };

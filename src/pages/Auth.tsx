@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,42 +8,78 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+
+// Yup validation schema
+const loginSchema = yup.object({
+  email: yup
+    .string()
+    .required('Vui lòng nhập tài khoản hoặc email')
+    .min(3, 'Tài khoản phải có ít nhất 3 ký tự'),
+  password: yup
+    .string()
+    .required('Vui lòng nhập mật khẩu')
+    .min(6, 'Mật khẩu phải có ít nhất 6 ký tự'),
+});
+
+type LoginFormData = yup.InferType<typeof loginSchema>;
 
 export default function Auth() {
   const { user, signIn, loading } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError: setFormError,
+  } = useForm<LoginFormData>({
+    resolver: yupResolver(loginSchema),
+  });
+
+  // Watch for user state changes and redirect
+  useEffect(() => {
+    if (user && !loading) {
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
 
   // Redirect if already logged in
   if (user && !loading) {
     return <Navigate to="/" replace />;
   }
 
-  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
-    
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    setError(null); // Clear previous error
 
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(data.email, data.password);
 
     if (error) {
-      toast({
-        title: 'Lỗi đăng nhập',
-        description: error.message === 'Invalid login credentials' 
-          ? 'Tài khoản hoặc mật khẩu không chính xác'
-          : error.message,
-        variant: 'destructive',
-      });
+      let errorMessage = 'Đăng nhập thất bại';
+
+      if (error.message === 'Invalid login credentials') {
+        errorMessage = 'Tài khoản hoặc mật khẩu không chính xác';
+      } else if (error.message === 'Failed to establish session') {
+        errorMessage = 'Không thể thiết lập phiên đăng nhập';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
     } else {
       toast({
         title: 'Đăng nhập thành công',
         description: 'Chào mừng bạn quay lại!',
       });
+      // useEffect will handle the redirect when user state updates
     }
-    
+
     setIsLoading(false);
   };
 
@@ -66,27 +102,38 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="signin-email">Tài khoản</Label>
+              <Label htmlFor="signin-email">Tài khoản hoặc Email <span className="text-red-500">*</span></Label>
               <Input
                 id="signin-email"
-                name="email"
                 type="text"
-                required
-                placeholder="Nhập tài khoản đăng nhập"
+                placeholder="Nhập tài khoản hoặc email"
+                disabled={isLoading}
+                {...register('email')}
               />
+              {errors.email && (
+                <p className="text-sm text-red-600">{errors.email.message}</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="signin-password">Mật khẩu</Label>
+              <Label htmlFor="signin-password">Mật khẩu <span className="text-red-500">*</span></Label>
               <Input
                 id="signin-password"
-                name="password"
                 type="password"
-                required
                 placeholder="••••••••"
+                disabled={isLoading}
+                {...register('password')}
               />
+              {errors.password && (
+                <p className="text-sm text-red-600">{errors.password.message}</p>
+              )}
             </div>
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                {error}
+              </div>
+            )}
             <Button
               type="submit"
               className="w-full"
@@ -96,8 +143,8 @@ export default function Auth() {
               Đăng nhập
             </Button>
             <div className="text-center">
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="text-sm text-muted-foreground hover:text-primary"
               >
                 Quên mật khẩu?

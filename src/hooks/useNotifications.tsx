@@ -1,157 +1,188 @@
-import React, { useState, useEffect, createContext, useContext } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from "react";
+import { notificationApi, type Notification } from "@/api/notification.api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
-interface Notification {
-  id: string;
-  user_id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  related_order_id?: string;
-  read_at?: string;
-  created_at: string;
+interface LoadNotificationsOptions {
+  page?: number;
+  append?: boolean;
+  silent?: boolean;
 }
 
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
+  hasMore: boolean;
+  isLoading: boolean;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  loadNotifications: () => Promise<void>;
-  createNotification: (notification: Omit<Notification, 'id' | 'created_at'>) => Promise<void>;
+  loadNotifications: (options?: LoadNotificationsOptions) => Promise<void>;
+  loadMore: () => Promise<void>;
+  createNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+const POLLING_INTERVAL = Number(import.meta.env.VITE_NOTIFICATIONS_POLL_INTERVAL || 15000);
+const NOTIFICATION_PAGE_SIZE = 5;
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const loadNotifications = async () => {
+  const mergeNotifications = useCallback((incoming: Notification[], options?: { append?: boolean }) => {
+    setNotifications(prev => {
+      if (options?.append) {
+        const existingIds = new Set(prev.map(n => n.id));
+        const combined = [...prev];
+        incoming.forEach(notification => {
+          if (!existingIds.has(notification.id)) {
+            combined.push(notification);
+          } else {
+            combined.splice(
+              combined.findIndex(n => n.id === notification.id),
+              1,
+              notification
+            );
+          }
+        });
+        return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+
+      const map = new Map<string, Notification>();
+      prev.forEach(notification => {
+        map.set(notification.id, notification);
+      });
+      incoming.forEach(notification => {
+        map.set(notification.id, notification);
+      });
+      return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    });
+  }, []);
+
+  const loadNotifications = useCallback(async (options: LoadNotificationsOptions = {}) => {
+    const { page: targetPage = 1, append = false, silent = false } = options;
+    if (!user?.id) return;
+    if (append && !hasMore) return;
+    if (!silent) setIsLoading(true);
     try {
-      console.log("Loading notifications...");
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      console.log("Notifications data:", data);
-      console.log("Notifications error:", error);
-
-      if (error) throw error;
-      setNotifications((data as Notification[]) || []);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
+      const response = await notificationApi.getNotifications({
+        limit: NOTIFICATION_PAGE_SIZE,
+        page: targetPage,
+        userId: user.id,
+      });
+      setCurrentPage(targetPage);
+      const more = response.page * response.limit < response.total;
+      setHasMore(more);
+      mergeNotifications(response.notifications, { append: targetPage > 1 || append });
+    } catch (error: any) {
+      console.error("Không thể tải thông báo:", error);
+    } finally {
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [user, hasMore, mergeNotifications]);
 
-  const markAsRead = async (id: string) => {
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isLoading) return;
+    await loadNotifications({ page: currentPage + 1, append: true });
+  }, [currentPage, hasMore, isLoading, loadNotifications]);
+
+  const markAsRead = useCallback(async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
-
+      await notificationApi.markAsRead(id);
       setNotifications(prev =>
         prev.map(notification =>
           notification.id === id
-            ? { ...notification, read_at: new Date().toISOString() }
+            ? { ...notification, isRead: true }
             : notification
         )
       );
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      toast({
+        title: "Không thể cập nhật thông báo",
+        description: "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
     }
-  };
+  }, [toast]);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
+    if (!user?.id) return;
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .is('read_at', null);
-
-      if (error) throw error;
-
+      await notificationApi.markAllAsRead({ userId: user.id });
       setNotifications(prev =>
         prev.map(notification => ({
           ...notification,
-          read_at: notification.read_at || new Date().toISOString()
+          isRead: true
         }))
       );
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-    }
-  };
-
-  const createNotification = async (notification: Omit<Notification, 'id' | 'created_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert([{
-          user_id: notification.user_id,
-          title: notification.title,
-          message: notification.message,
-          type: notification.type,
-          related_order_id: notification.related_order_id
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        setNotifications(prev => [data as Notification, ...prev]);
-      }
-      
-      // Show toast for new notification
       toast({
-        title: notification.title,
-        description: notification.message,
-        variant: notification.type === 'error' ? 'destructive' : 'default',
+        title: "Không thể cập nhật thông báo",
+        description: "Vui lòng thử lại sau.",
+        variant: "destructive",
       });
-    } catch (error) {
-      console.error('Error creating notification:', error);
     }
-  };
+  }, [toast, user]);
 
-  const unreadCount = notifications.filter(n => !n.read_at).length;
+  const createNotification = useCallback(async (notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const data = await notificationApi.createNotification({
+      userId: notification.userId,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      relatedOrderId: notification.relatedOrderId
+    });
+
+    if (data) {
+      setNotifications(prev => [data, ...prev]);
+    }
+  }, []);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
-    loadNotifications();
+    if (!user) {
+      setNotifications([]);
+      setCurrentPage(1);
+      setHasMore(true);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      return;
+    }
 
-    // Subscribe to new notifications
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications'
-        },
-        () => {
-          loadNotifications();
-        }
-      )
-      .subscribe();
+    loadNotifications();
+    pollingRef.current = setInterval(() => {
+      loadNotifications({ page: 1, silent: true });
+    }, POLLING_INTERVAL);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
     };
-  }, []);
+  }, [user, loadNotifications]);
 
   return (
     <NotificationContext.Provider value={{
       notifications,
       unreadCount,
+      hasMore,
+      isLoading,
       markAsRead,
       markAllAsRead,
       loadNotifications,
+      loadMore,
       createNotification
     }}>
       {children}

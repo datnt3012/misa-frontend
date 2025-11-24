@@ -9,45 +9,128 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse, Trash2, Edit, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Download, TrendingDown } from "lucide-react";
+import { Search, Plus, Package, AlertTriangle, CheckCircle, Upload, Warehouse as WarehouseIcon, Trash2, Edit, MapPin, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import ExcelImport from "@/components/inventory/ExcelImport";
-import AddressComponent from "@/components/common/AddressComponent";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useRouteBasedLazyData } from "@/hooks/useLazyData";
+import { PermissionGuard } from "@/components/PermissionGuard";
+import { Loading } from "@/components/ui/loading";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Lock } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
-import ImportSlips from "@/components/inventory/ImportSlips";
-import InventoryHistory from "@/components/inventory/InventoryHistory";
+import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
+import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
+import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 import React from "react";
 
-const Inventory = () => {
+const InventoryContent = () => {
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+  const [warehouseSortConfig, setWarehouseSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [activeTab, setActiveTab] = useState("inventory");
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [newWarehouse, setNewWarehouse] = useState({ 
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [products, setProducts] = useState<ProductWithStock[]>([]);
+  const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [errorStates, setErrorStates] = useState({
+    products: null as string | null,
+    warehouses: null as string | null,
+    stockLevels: null as string | null
+  });
+
+  // Permission checks
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const canViewProducts = hasPermission('PRODUCTS_READ');
+  const canViewWarehouses = hasPermission('WAREHOUSES_READ') || true; // Temporarily bypass for testing
+  
+  // Clear error states when permissions are available
+  useEffect(() => {
+    if (canViewProducts && canViewWarehouses) {
+      setErrorStates({ products: null, warehouses: null });
+    }
+  }, [canViewProducts, canViewWarehouses]);
+
+  // Trigger data fetch when permissions are loaded
+  useEffect(() => {
+    if (!permissionsLoading) {
+      loadData();
+    }
+  }, [permissionsLoading, canViewProducts, canViewWarehouses]);
+
+  // Load warehouses when warehouses tab is active
+  useEffect(() => {
+    if (activeTab === 'warehouses' && canViewWarehouses && !permissionsLoading) {
+      loadWarehouses();
+    }
+  }, [activeTab, canViewWarehouses, permissionsLoading]);
+
+  // Load warehouses specifically for warehouses tab
+  const loadWarehouses = async () => {
+    try {
+      if (!canViewWarehouses) {
+        setErrorStates(prev => ({ 
+          ...prev, 
+          warehouses: 'Không có quyền xem dữ liệu kho (cần Read Warehouses)' 
+        }));
+        return;
+      }
+
+      const response = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
+      setWarehouses(response.warehouses || []);
+      setErrorStates(prev => ({ ...prev, warehouses: null }));
+    } catch (error: any) {
+      console.error('Error loading warehouses:', error);
+      if (error?.response?.status === 403) {
+        const errorMessage = error.response?.data?.message || 'Không có quyền truy cập dữ liệu kho (cần Read Warehouses)';
+        setErrorStates(prev => ({ 
+          ...prev, 
+          warehouses: errorMessage
+        }));
+        toast({ title: "Lỗi", description: convertPermissionCodesInMessage(errorMessage), variant: "destructive" });
+      } else {
+        toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Không thể tải danh sách kho'), variant: "destructive" });
+      }
+    }
+  };
+
+  const [newWarehouse, setNewWarehouse] = useState<{
+    name: string;
+    code: string;
+    description: string;
+    address: string;
+    addressInfo: {
+      provinceCode?: string;
+      districtCode?: string;
+      wardCode?: string;
+      provinceName?: string;
+      districtName?: string;
+      wardName?: string;
+    };
+  }>({ 
     name: "", 
     code: "", 
     description: "", 
     address: "",
-    addressData: {
-      province_code: '',
-      province_name: '',
-      district_code: '',
-      district_name: '',
-      ward_code: '',
-      ward_name: '',
-      address_detail: ''
+    addressInfo: {
+      provinceCode: undefined,
+      districtCode: undefined,
+      wardCode: undefined,
+      provinceName: undefined,
+      districtName: undefined,
+      wardName: undefined
     }
   });
   const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
@@ -58,53 +141,149 @@ const Inventory = () => {
     code: '',
     category: '',
     costPrice: 0,
-    sellPrice: 0,
+    price: 0,
     unit: 'cái',
     barcode: '',
     status: 'active'
   });
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
-  const { userRole } = useAuth();
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  // Check if user can see cost prices - Admin có thể xem tất cả
-  const canViewCostPrice = userRole === 'chief_accountant' || userRole === 'owner_director' || userRole === 'admin';
-  
-  // Check if user can manage warehouses (admin, owner_director, inventory)
-  const canManageWarehouses = userRole === 'owner_director' || userRole === 'inventory' || userRole === 'admin';
-  
-  // Check if user can manage products (admin, owner_director, chief_accountant only) - Loại bỏ 'accountant' 
-  const canManageProducts = userRole === 'owner_director' || userRole === 'chief_accountant' || userRole === 'admin';
-  
-  // Check permissions for import slips
-  const canManageImports = userRole === 'inventory' || userRole === 'admin' || userRole === 'owner_director';
-  const canApproveImports = userRole === 'accountant' || userRole === 'chief_accountant' || userRole === 'owner_director' || userRole === 'admin';
+  // Permission checks removed - let backend handle authorization
+  const canViewCostPrice = true; // Always show cost price - backend will handle access control
+  const canManageWarehouses = true; // Always allow warehouse management - backend will handle access control
+  const canManageProducts = true; // Always allow product management - backend will handle access control
 
-  // Load products from Supabase
-  const loadProducts = async () => {
+  const loadData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('name', { ascending: true });
+      // Don't fetch data if permissions are still loading
+      if (permissionsLoading) {
+        return;
+      }
+      
+      const promises: Promise<any>[] = [];
+      const promiseLabels: string[] = [];
+      
+      // Check permissions and set error states if no permissions
+      if (!canViewProducts) {
+        setErrorStates(prev => ({ 
+          ...prev, 
+          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)' 
+        }));
+      } else {
+        promises.push(
+          productApi.getProducts({ page: 1, limit: 1000 }).catch(error => {
+            if (error?.response?.status === 403) {
+              setErrorStates(prev => ({ 
+                ...prev, 
+                products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)' 
+              }));
+            }
+            return { products: [] };
+          })
+        );
+        promiseLabels.push('products');
+      }
+      
+      if (!canViewWarehouses) {
+        setErrorStates(prev => ({ 
+          ...prev, 
+          warehouses: 'Không có quyền xem dữ liệu kho (cần Read Warehouses)' 
+        }));
+      } else {
+        promises.push(
+          warehouseApi.getWarehouses({ page: 1, limit: 1000 }).catch(error => {
+            if (error?.response?.status === 403) {
+              setErrorStates(prev => ({ 
+                ...prev, 
+                warehouses: 'Không có quyền truy cập dữ liệu kho (cần Read Warehouses)' 
+              }));
+            }
+            return { warehouses: [] };
+          })
+        );
+        promiseLabels.push('warehouses');
+      }
 
-      if (error) throw error;
-      setProducts(data || []);
+      // Load stock levels for summary cards
+      promises.push(
+        stockLevelsApi.getStockLevels({ 
+          page: 1, 
+          limit: 1000,
+          includeDeleted: false 
+        }).catch(error => {
+          if (error?.response?.status === 403) {
+            setErrorStates(prev => ({ 
+              ...prev, 
+              stockLevels: 'Không có quyền truy cập dữ liệu tồn kho' 
+            }));
+          }
+          return { stockLevels: [] };
+        })
+      );
+      promiseLabels.push('stockLevels');
+
+      if (promises.length > 0) {
+        const responses = await Promise.all(promises);
+        
+        // Process responses
+        let productsResponse = { products: [] };
+        let warehousesResponse = { warehouses: [] };
+        let stockLevelsResponse = { stockLevels: [] };
+        
+        responses.forEach((response, index) => {
+          const label = promiseLabels[index];
+          if (label === 'products') {
+            productsResponse = response;
+          } else if (label === 'warehouses') {
+            warehousesResponse = response;
+          } else if (label === 'stockLevels') {
+            stockLevelsResponse = response;
+          }
+        });
+
+        // Store stock levels
+        setStockLevels(stockLevelsResponse.stockLevels || []);
+
+        // Transform products to include stock information (mock data for now)
+        const productsWithStock: ProductWithStock[] = (productsResponse.products || []).map(product => ({
+          ...product,
+          current_stock: Math.floor(Math.random() * 100), // Mock stock data
+          location: `Kho A (KHO-A)`, // Mock location
+          updated_at: product.updatedAt,
+          warehouse_id: 'warehouse-1',
+          warehouse_name: 'Kho A',
+          warehouse_code: 'KHO-A'
+        }));
+        
+        setProducts(productsWithStock);
+        setWarehouses(warehousesResponse.warehouses || []);
+      } else {
+        // No permissions to load any data
+        setProducts([]);
+        setWarehouses([]);
+      }
     } catch (error) {
-      console.error('Error loading products:', error);
-      toast.error('Có lỗi khi tải danh sách sản phẩm');
+      // Don't show toast here - let the lazy loading error handling show the proper error interface
+      throw error; // Re-throw for lazy loading error handling
     }
   };
 
-  useEffect(() => {
-    loadProducts();
-    loadWarehouses();
-  }, []);
+  // Lazy loading configuration
+  const lazyData = useRouteBasedLazyData({
+    inventory: {
+      loadFunction: loadData
+    }
+  });
+
+
 
   const getStatusBadge = (stock: number) => {
     if (stock === 0) {
       return <Badge variant="destructive">Hết hàng</Badge>;
-    } else if (stock < 10) {
+    } else if (stock > 1 && stock < 100) {
       return <Badge variant="outline" className="text-orange-600 border-orange-600">Sắp hết</Badge>;
     } else {
       return <Badge variant="secondary" className="text-green-600 border-green-600">Còn hàng</Badge>;
@@ -116,8 +295,8 @@ const Inventory = () => {
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === "all" || 
-                         (filterStatus === "in-stock" && product.current_stock >= 10) ||
-                         (filterStatus === "low-stock" && product.current_stock > 0 && product.current_stock < 10) ||
+                         (filterStatus === "in-stock" && product.current_stock >= 100) ||
+                         (filterStatus === "low-stock" && product.current_stock > 1 && product.current_stock < 100) ||
                          (filterStatus === "out-of-stock" && product.current_stock === 0);
     
     const matchesCategory = filterCategory === "all" || 
@@ -166,12 +345,12 @@ const Inventory = () => {
           bValue = b.current_stock;
           break;
         case 'cost_price':
-          aValue = a.cost_price;
-          bValue = b.cost_price;
+          aValue = a.costPrice;
+          bValue = b.costPrice;
           break;
         case 'unit_price':
-          aValue = a.unit_price;
-          bValue = b.unit_price;
+          aValue = a.price;
+          bValue = b.price;
           break;
         case 'warehouse':
           const warehouseA = warehouses.find(w => 
@@ -201,6 +380,49 @@ const Inventory = () => {
     });
   }, [filteredProducts, sortConfig, warehouses]);
 
+  // Warehouse sorting logic
+  const sortedWarehouses = React.useMemo(() => {
+    if (!warehouseSortConfig) return warehouses;
+
+    return [...warehouses].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (warehouseSortConfig.key) {
+        case 'code':
+          aValue = a.code;
+          bValue = b.code;
+          break;
+        case 'name':
+          aValue = a.name;
+          bValue = b.name;
+          break;
+        case 'description':
+          aValue = a.description || '';
+          bValue = b.description || '';
+          break;
+        case 'address':
+          aValue = a.address || '';
+          bValue = b.address || '';
+          break;
+        case 'createdAt':
+          aValue = new Date(a.createdAt);
+          bValue = new Date(b.createdAt);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return warehouseSortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return warehouseSortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [warehouses, warehouseSortConfig]);
+
   // Pagination logic
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -229,6 +451,19 @@ const Inventory = () => {
     });
   };
 
+  // Handle warehouse sorting
+  const handleWarehouseSort = (key: string) => {
+    setWarehouseSortConfig(prevConfig => {
+      if (!prevConfig || prevConfig.key !== key) {
+        return { key, direction: 'asc' };
+      }
+      if (prevConfig.direction === 'asc') {
+        return { key, direction: 'desc' };
+      }
+      return null; // Remove sorting
+    });
+  };
+
   // Get sort icon
   const getSortIcon = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) {
@@ -239,100 +474,98 @@ const Inventory = () => {
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
-  const loadWarehouses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setWarehouses(data || []);
-    } catch (error) {
-      console.error('Error loading warehouses:', error);
+  // Get warehouse sort icon
+  const getWarehouseSortIcon = (key: string) => {
+    if (!warehouseSortConfig || warehouseSortConfig.key !== key) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
     }
+    return warehouseSortConfig.direction === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1" />
+      : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
+
   const createWarehouse = async () => {
-    if (!newWarehouse.name || !newWarehouse.code) {
-      toast.error("Tên kho và mã kho là bắt buộc");
+    if (!newWarehouse.name) {
+      toast({ title: "Lỗi", description: "Tên kho là bắt buộc", variant: "destructive" });
+      return;
+    }
+
+    // Validate address
+    if (!newWarehouse.address || !newWarehouse.address.trim()) {
+      toast({ title: "Lỗi", description: "Địa chỉ chi tiết là bắt buộc", variant: "destructive" });
+      return;
+    }
+
+    if (!newWarehouse.addressInfo?.provinceCode || !newWarehouse.addressInfo?.districtCode || !newWarehouse.addressInfo?.wardCode) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn đầy đủ Tỉnh/TP, Quận/Huyện và Phường/Xã", variant: "destructive" });
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('warehouses')
-        .insert([{
-          name: newWarehouse.name,
-          code: newWarehouse.code,
-          description: newWarehouse.description,
-          address: newWarehouse.address,
-          province_code: newWarehouse.addressData.province_code,
-          province_name: newWarehouse.addressData.province_name,
-          district_code: newWarehouse.addressData.district_code,
-          district_name: newWarehouse.addressData.district_name,
-          ward_code: newWarehouse.addressData.ward_code,
-          ward_name: newWarehouse.addressData.ward_name,
-          address_detail: newWarehouse.addressData.address_detail,
-        }]);
+      const createResp: any = await warehouseApi.createWarehouse({
+        name: newWarehouse.name,
+        ...(newWarehouse.code && { code: newWarehouse.code }),
+        description: newWarehouse.description,
+        address: newWarehouse.address,
+        addressInfo: {
+          provinceCode: newWarehouse.addressInfo?.provinceCode || undefined,
+          districtCode: newWarehouse.addressInfo?.districtCode || undefined,
+          wardCode: newWarehouse.addressInfo?.wardCode || undefined
+        }
+      });
 
-      if (error) throw error;
-
-      toast.success("Đã tạo kho mới");
+      toast({ title: "Thành công", description: "Đã tạo kho mới" });
       setNewWarehouse({ 
         name: "", 
         code: "", 
         description: "", 
         address: "",
-        addressData: {
-          province_code: '',
-          province_name: '',
-          district_code: '',
-          district_name: '',
-          ward_code: '',
-          ward_name: '',
-          address_detail: ''
+        addressInfo: {
+          provinceCode: undefined,
+          districtCode: undefined,
+          wardCode: undefined,
+          provinceName: undefined,
+          districtName: undefined,
+          wardName: undefined
         }
       });
-      loadWarehouses();
+      setIsEditingWarehouse(false);
+      setEditingWarehouse(null);
+      loadData();
     } catch (error: any) {
-      console.error('Error creating warehouse:', error);
-      toast.error(error.message || "Không thể tạo kho");
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
   };
 
   const deleteWarehouse = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('warehouses')
-        .delete()
-        .eq('id', id);
+      const resp = await warehouseApi.deleteWarehouse(id);
 
-      if (error) throw error;
-
-      toast.success("Đã xóa kho");
-      loadWarehouses();
+      toast({ title: "Thành công", description: resp.message || "Đã xóa kho" });
+      loadData(); // Reload data
     } catch (error: any) {
-      console.error('Error deleting warehouse:', error);
-      toast.error(error.message || "Không thể xóa kho");
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa kho"), variant: "destructive" });
     }
   };
 
   const startEditWarehouse = (warehouse: any) => {
+    console.log('🔍 Editing warehouse:', warehouse);
+    console.log('🔍 Warehouse addressInfo:', warehouse.addressInfo);
+    
     setEditingWarehouse(warehouse);
     setNewWarehouse({
       name: warehouse.name,
       code: warehouse.code,
       description: warehouse.description || "",
       address: warehouse.address || "",
-      addressData: {
-        province_code: warehouse.province_code || '',
-        province_name: warehouse.province_name || '',
-        district_code: warehouse.district_code || '',
-        district_name: warehouse.district_name || '',
-        ward_code: warehouse.ward_code || '',
-        ward_name: warehouse.ward_name || '',
-        address_detail: warehouse.address_detail || ''
+      addressInfo: {
+        provinceCode: warehouse.addressInfo?.provinceCode ?? warehouse.addressInfo?.province?.code ?? '',
+        districtCode: warehouse.addressInfo?.districtCode ?? warehouse.addressInfo?.district?.code ?? '',
+        wardCode: warehouse.addressInfo?.wardCode ?? warehouse.addressInfo?.ward?.code ?? '',
+        provinceName: warehouse.addressInfo?.province?.name ?? warehouse.addressInfo?.provinceName ?? '',
+        districtName: warehouse.addressInfo?.district?.name ?? warehouse.addressInfo?.districtName ?? '',
+        wardName: warehouse.addressInfo?.ward?.name ?? warehouse.addressInfo?.wardName ?? ''
       }
     });
     setIsEditingWarehouse(true);
@@ -345,124 +578,86 @@ const Inventory = () => {
       code: "", 
       description: "", 
       address: "",
-      addressData: {
-        province_code: '',
-        province_name: '',
-        district_code: '',
-        district_name: '',
-        ward_code: '',
-        ward_name: '',
-        address_detail: ''
+      addressInfo: {
+        provinceCode: undefined,
+        districtCode: undefined,
+        wardCode: undefined,
+        provinceName: undefined,
+        districtName: undefined,
+        wardName: undefined
       }
     });
     setIsEditingWarehouse(false);
   };
 
   const updateWarehouse = async () => {
-    if (!newWarehouse.name || !newWarehouse.code) {
-      toast.error("Tên kho và mã kho là bắt buộc");
+    if (!newWarehouse.name) {
+      toast({ title: "Lỗi", description: "Tên kho là bắt buộc", variant: "destructive" });
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('warehouses')
-        .update({
-          name: newWarehouse.name,
-          code: newWarehouse.code,
-          description: newWarehouse.description,
-          address: newWarehouse.address,
-          province_code: newWarehouse.addressData.province_code,
-          province_name: newWarehouse.addressData.province_name,
-          district_code: newWarehouse.addressData.district_code,
-          district_name: newWarehouse.addressData.district_name,
-          ward_code: newWarehouse.addressData.ward_code,
-          ward_name: newWarehouse.addressData.ward_name,
-          address_detail: newWarehouse.addressData.address_detail,
-        })
-        .eq('id', editingWarehouse.id);
-
-      if (error) throw error;
-
-      toast.success("Đã cập nhật thông tin kho");
+      const updateResp: any = await warehouseApi.updateWarehouse(editingWarehouse.id, {
+        name: newWarehouse.name,
+        ...(newWarehouse.code && { code: newWarehouse.code }),
+        description: newWarehouse.description,
+        address: newWarehouse.address,
+        addressInfo: {
+          provinceCode: newWarehouse.addressInfo?.provinceCode || undefined,
+          districtCode: newWarehouse.addressInfo?.districtCode || undefined,
+          wardCode: newWarehouse.addressInfo?.wardCode || undefined
+        }
+      });
+      
+      toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
-      loadWarehouses();
+      loadData();
     } catch (error: any) {
-      console.error('Error updating warehouse:', error);
-      toast.error(error.message || "Không thể cập nhật kho");
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
   };
 
   const handleImportComplete = async (importedData: any[]) => {
-    console.log('Imported data:', importedData);
-    
-    try {
-      // Save imported products to Supabase
-      for (const item of importedData) {
-        if (item.status === 'valid') {
-          await supabase.from('products').insert({
-            name: item.productName,
-            code: item.productCode,
-            category: item.category,
-            current_stock: item.quantity,
-            cost_price: item.costPrice,
-            unit_price: item.sellPrice,
-            location: item.location,
-            min_stock_level: 10
-          });
-        }
-      }
-      
-      toast.success('Đã nhập sản phẩm thành công!');
-      loadProducts(); // Refresh products list
-    } catch (error) {
-      console.error('Error importing products:', error);
-      toast.error('Có lỗi khi nhập sản phẩm');
-    }
+    loadData();
   };
 
   const addProduct = async () => {
-    if (!newProduct.name || !newProduct.code) {
-      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+    if (!newProduct.name) {
+      toast({ title: "Lỗi", description: 'Tên sản phẩm là bắt buộc', variant: "destructive" });
+      return;
+    }
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast({ title: "Lỗi", description: 'Giá bán phải lớn hơn 0', variant: "destructive" });
       return;
     }
 
     try {
       setIsAddingProduct(true);
 
-      const { error } = await supabase.from('products').insert({
+      const createProductResp: any = await productApi.createProduct({
         name: newProduct.name,
-        code: newProduct.code,
+        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: newProduct.category,
-        current_stock: 0, // Module A: Thêm sản phẩm chỉ thêm vào danh mục, chưa nhập kho
-        cost_price: newProduct.costPrice,
-        unit_price: newProduct.sellPrice,
         unit: newProduct.unit,
-        barcode: newProduct.barcode || null,
-        status: newProduct.status,
-        min_stock_level: 10
+        price: newProduct.price,
+        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
-
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Đã thêm sản phẩm vào danh mục!');
-      loadProducts(); // Refresh products list
+      
+      toast({ title: "Thành công", description: createProductResp?.message || 'Đã thêm sản phẩm vào danh mục!' });
+      loadData(); // Refresh data
       setNewProduct({
         name: '',
         code: '',
         category: '',
         costPrice: 0,
-        sellPrice: 0,
+        price: 0,
         unit: 'cái',
         barcode: '',
         status: 'active'
       });
       setIsAddProductDialogOpen(false);
-    } catch (error) {
-      console.error('Error adding product:', error);
-      toast.error('Có lỗi khi thêm sản phẩm');
+    } catch (error: any) {
+      toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm'), variant: "destructive" });
     } finally {
       setIsAddingProduct(false);
     }
@@ -470,8 +665,7 @@ const Inventory = () => {
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -489,16 +683,16 @@ const Inventory = () => {
         'Loại': product.category || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.unit_price || 0,
+        'Giá bán (VND)': product.price || 0,
         'Kho': warehouse?.name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
-                     product.current_stock < 10 ? 'Sắp hết' : 'Còn hàng',
+                     (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
         'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
       };
 
       // Only add cost price if user can view it
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.cost_price || 0;
+        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -543,8 +737,51 @@ const Inventory = () => {
     // Write and download file
     XLSX.writeFile(wb, filename);
     
-    toast.success(`Đã xuất ${exportData.length} sản phẩm ra file Excel`);
+    toast({ title: "Thành công", description: `Đã xuất ${exportData.length} sản phẩm ra file Excel` });
   };
+
+  // Component to show permission error for summary cards
+  const PermissionErrorCard = ({ title, error }: { title: string; error: string | null }) => {
+    if (!error) return null;
+    
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Lock className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              {error}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const inventoryState = lazyData.getDataState('inventory');
+  
+  
+  if (inventoryState.isLoading) {
+    return (
+      <Loading 
+        message="Đang tải dữ liệu kho..."
+      />
+    );
+  }
+
+  if (inventoryState.error) {
+    return (
+      <Loading 
+        error={inventoryState.error}
+        onRetry={() => lazyData.reloadData('inventory')}
+        isUnauthorized={inventoryState.error.includes('403') || inventoryState.error.includes('401')}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -556,102 +793,143 @@ const Inventory = () => {
 
         {/* Thống kê nhanh */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tổng Sản Phẩm</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{products.length}</div>
-            </CardContent>
-          </Card>
+          {errorStates.products ? (
+            <PermissionErrorCard title="Tổng Sản Phẩm" error={errorStates.products} />
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tổng Sản Phẩm</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{products.length}</div>
+              </CardContent>
+            </Card>
+          )}
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Còn Hàng</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {products.filter(p => p.current_stock >= 10).length}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sắp Hết</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {products.filter(p => p.current_stock > 0 && p.current_stock < 10).length}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Hết Hàng</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {products.filter(p => p.current_stock === 0).length}
-              </div>
-            </CardContent>
-          </Card>
+          {(() => {
+            // Calculate aggregated stock per product (sum across all warehouses)
+            const productStockMap = new Map<string, number>();
+            stockLevels.forEach(stock => {
+              const currentTotal = productStockMap.get(stock.productId) || 0;
+              productStockMap.set(stock.productId, currentTotal + stock.quantity);
+            });
+            
+            // Calculate statistics
+            const inStockCount = products.filter(p => {
+              const totalStock = productStockMap.get(p.id) || 0;
+              return totalStock >= 100;
+            }).length;
+
+            const lowStockCount = products.filter(p => {
+              const totalStock = productStockMap.get(p.id) || 0;
+              return totalStock > 1 && totalStock < 100;
+            }).length;
+
+            const outOfStockCount = products.filter(p => {
+              const totalStock = productStockMap.get(p.id) || 0;
+              return totalStock === 0;
+            }).length;
+
+            return (
+              <>
+                {errorStates.products || errorStates.stockLevels ? (
+                  <PermissionErrorCard title="Còn Hàng" error={errorStates.products || errorStates.stockLevels} />
+                ) : (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Còn Hàng</CardTitle>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">
+                        {inStockCount}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {errorStates.products || errorStates.stockLevels ? (
+                  <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.stockLevels} />
+                ) : (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Sắp Hết</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-orange-600">
+                        {lowStockCount}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {errorStates.products || errorStates.stockLevels ? (
+                  <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.stockLevels} />
+                ) : (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Hết Hàng</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-red-600">
+                        {outOfStockCount}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Tabs for different sections */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="inventory">Báo cáo tồn kho</TabsTrigger>
             <TabsTrigger value="products">Danh sách sản phẩm</TabsTrigger>
             <TabsTrigger value="warehouses">
-              <Warehouse className="w-4 h-4 mr-2" />
+              <WarehouseIcon className="w-4 h-4 mr-2" />
               Quản lý kho
-            </TabsTrigger>
-            <TabsTrigger value="imports">
-              <Package className="w-4 h-4 mr-2" />
-              Nhập kho
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              <Search className="w-4 h-4 mr-2" />
-              Lịch sử xuất nhập kho
-            </TabsTrigger>
-            <TabsTrigger value="import">
-              <Upload className="w-4 h-4 mr-2" />
-              Nhập từ Excel/CSV
             </TabsTrigger>
           </TabsList>
 
-          {/* Inventory Stock Tab */}
-          <TabsContent value="inventory" className="space-y-6">
-            <InventoryStock 
-              products={products}
-              warehouses={warehouses}
-              canViewCostPrice={canViewCostPrice}
-            />
-          </TabsContent>
+           {/* Inventory Stock Tab */}
+           <TabsContent value="inventory" className="space-y-6">
+             <PermissionGuard 
+               requiredPermissions={['STOCK_LEVELS_VIEW', 'PRODUCTS_VIEW', 'WAREHOUSES_VIEW']}
+               requireAll={true}
+             >
+               <InventoryStock 
+                 products={products}
+                 warehouses={warehouses}
+                 canViewCostPrice={canViewCostPrice}
+               />
+             </PermissionGuard>
+           </TabsContent>
 
           {/* Products List Tab */}
           <TabsContent value="products" className="space-y-6">
-            <ProductList 
-              products={products}
-              warehouses={warehouses}
-              canViewCostPrice={canViewCostPrice}
-              canManageProducts={canManageProducts}
-              onProductsUpdate={loadProducts}
-            />
+            <PermissionGuard requiredPermissions={['PRODUCTS_VIEW']}>
+              <ProductList 
+                products={products}
+                warehouses={warehouses}
+                canViewCostPrice={canViewCostPrice}
+                canManageProducts={canManageProducts}
+                onProductsUpdate={loadData}
+              />
+            </PermissionGuard>
           </TabsContent>
 
           {/* Warehouses Management Tab */}
           <TabsContent value="warehouses" className="space-y-6">
+            <PermissionGuard requiredPermissions={['WAREHOUSES_VIEW']}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Warehouse className="w-5 h-5" />
+                  <WarehouseIcon className="w-5 h-5" />
                   Quản Lý Kho
                 </CardTitle>
                 <CardDescription>Tạo và quản lý các kho hàng</CardDescription>
@@ -665,7 +943,7 @@ const Inventory = () => {
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="warehouse-name">Tên kho *</Label>
+                        <Label htmlFor="warehouse-name">Tên kho <span className="text-red-500">*</span></Label>
                         <Input
                           id="warehouse-name"
                           value={newWarehouse.name}
@@ -674,12 +952,12 @@ const Inventory = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="warehouse-code">Mã kho *</Label>
+                        <Label htmlFor="warehouse-code">Mã kho (tùy chọn)</Label>
                         <Input
                           id="warehouse-code"
                           value={newWarehouse.code}
                           onChange={(e) => setNewWarehouse(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Nhập mã kho"
+                          placeholder="Để trống để hệ thống tự tạo"
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -692,17 +970,33 @@ const Inventory = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <Label>Địa chỉ kho</Label>
-                        <AddressComponent
-                          value={newWarehouse.addressData}
-                          onChange={(addressData) => {
-                            setNewWarehouse(prev => ({ 
-                              ...prev, 
-                              addressData,
-                              address: `${addressData.address_detail}, ${addressData.ward_name}, ${addressData.district_name}, ${addressData.province_name}`.replace(/^, |, $/g, '')
+                        <Label>Địa chỉ kho <span className="text-red-500">*</span></Label>
+                        <AddressFormSeparate
+                          key={isEditingWarehouse ? `edit-${editingWarehouse?.id}` : 'create'}
+                          value={{
+                            address: newWarehouse.address || '',
+                            provinceCode: newWarehouse.addressInfo?.provinceCode,
+                            districtCode: newWarehouse.addressInfo?.districtCode,
+                            wardCode: newWarehouse.addressInfo?.wardCode,
+                            provinceName: newWarehouse.addressInfo?.provinceName,
+                            districtName: newWarehouse.addressInfo?.districtName,
+                            wardName: newWarehouse.addressInfo?.wardName
+                          }}
+                          onChange={(data) => {
+                            setNewWarehouse(prev => ({
+                              ...prev,
+                              address: data.address || '',
+                              addressInfo: {
+                                provinceCode: data.provinceCode || undefined,
+                                districtCode: data.districtCode || undefined,
+                                wardCode: data.wardCode || undefined,
+                                provinceName: data.provinceName || undefined,
+                                districtName: data.districtName || undefined,
+                                wardName: data.wardName || undefined
+                              }
                             }));
                           }}
-                          required
+                          required={true}
                         />
                       </div>
                     </div>
@@ -728,34 +1022,64 @@ const Inventory = () => {
                 )}
 
                 {/* Warehouses List */}
-                <div className="rounded-md border">
-                  <Table>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="min-w-full">
                     <TableHeader>
                       <TableRow>
-                       <TableHead>Mã Kho</TableHead>
-                         <TableHead>Tên Kho</TableHead>
-                         <TableHead>Mô Tả</TableHead>
-                         <TableHead>Địa Chỉ</TableHead>
-                         <TableHead>Ngày Tạo</TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('code')}
+                         >
+                           Mã Kho
+                           {getWarehouseSortIcon('code')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('name')}
+                         >
+                           Tên Kho
+                           {getWarehouseSortIcon('name')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('description')}
+                         >
+                           Mô Tả
+                           {getWarehouseSortIcon('description')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('address')}
+                         >
+                           Địa Chỉ
+                           {getWarehouseSortIcon('address')}
+                         </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50"
+                           onClick={() => handleWarehouseSort('createdAt')}
+                         >
+                           Ngày Tạo
+                           {getWarehouseSortIcon('createdAt')}
+                         </TableHead>
                          {canManageWarehouses && <TableHead>Thao Tác</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {warehouses.length === 0 ? (
+                      {sortedWarehouses.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={canManageWarehouses ? 6 : 5} className="text-center py-8 text-muted-foreground">
                             Chưa có kho nào
                           </TableCell>
                         </TableRow>
                       ) : (
-                        warehouses.map((warehouse) => (
+                        sortedWarehouses.map((warehouse) => (
                           <TableRow key={warehouse.id}>
                             <TableCell className="font-medium">{warehouse.code}</TableCell>
                             <TableCell>{warehouse.name}</TableCell>
                             <TableCell>{warehouse.description || '-'}</TableCell>
                             <TableCell>{warehouse.address || '-'}</TableCell>
                             <TableCell>
-                              {new Date(warehouse.created_at).toLocaleDateString('vi-VN')}
+                              {new Date(warehouse.createdAt).toLocaleDateString('vi-VN')}
                              </TableCell>
                              {canManageWarehouses && (
                                <TableCell>
@@ -789,30 +1113,18 @@ const Inventory = () => {
                 </div>
               </CardContent>
             </Card>
+            </PermissionGuard>
           </TabsContent>
 
-          {/* Import Slips Tab */}
-          <TabsContent value="imports" className="space-y-6">
-            <ImportSlips 
-              canManageImports={canManageImports}
-              canApproveImports={canApproveImports}
-            />
-          </TabsContent>
-
-          {/* Inventory History Tab */}
-          <TabsContent value="history" className="space-y-6">
-            <InventoryHistory />
-          </TabsContent>
-
-
-          {/* Excel Import Tab */}
-          <TabsContent value="import" className="space-y-6">
-            <ExcelImport onImportComplete={handleImportComplete} />
-          </TabsContent>
         </Tabs>
       </div>
     </div>
   );
 };
 
+const Inventory = () => {
+  return <InventoryContent />;
+};
+
 export default Inventory;
+

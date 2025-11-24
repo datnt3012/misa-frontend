@@ -3,9 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Key, Loader2 } from 'lucide-react';
+import { authApi } from '@/api/auth.api';
 
 const UserSettings = () => {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -15,6 +15,15 @@ const UserSettings = () => {
   const { toast } = useToast();
 
   const handlePasswordChange = async () => {
+    if (!currentPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập mật khẩu hiện tại",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Lỗi",
@@ -35,11 +44,12 @@ const UserSettings = () => {
 
     try {
       setLoading(true);
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      
+      // Change password using API
+      await authApi.changePassword({
+        oldPassword: currentPassword,
+        newPassword: newPassword
       });
-
-      if (error) throw error;
 
       toast({
         title: "Thành công",
@@ -52,7 +62,7 @@ const UserSettings = () => {
     } catch (error: any) {
       toast({
         title: "Lỗi",
-        description: error.message || "Không thể đổi mật khẩu",
+        description: error.response?.data?.message || error.message || "Không thể đổi mật khẩu",
         variant: "destructive",
       });
     } finally {
