@@ -68,3 +68,14 @@ export interface ResetUserPasswordRequest {
   user_id: string;
   new_password: string;
 }
+
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  code: number;
+  message: string;
+  data: null;
+}

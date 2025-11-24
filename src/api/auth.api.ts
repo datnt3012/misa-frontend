@@ -9,7 +9,9 @@ import type {
   User,
   CreateUserRequest,
   UpdateUserRequest,
-  ResetUserPasswordRequest
+  ResetUserPasswordRequest,
+  ChangePasswordRequest,
+  ChangePasswordResponse
 } from '@/types/auth';
 
 // Authentication API
@@ -142,6 +144,11 @@ export const authApi = {
   // Reset password
   resetPassword: async (data: ResetPasswordRequest): Promise<{ message: string }> => {
     return api.post<{ message: string }>(API_ENDPOINTS.AUTH.RESET_PASSWORD, data);
+  },
+
+  // Change password
+  changePassword: async (data: ChangePasswordRequest): Promise<ChangePasswordResponse> => {
+    return api.post<ChangePasswordResponse>(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);
   },
 
   // User management (for admin/owner)

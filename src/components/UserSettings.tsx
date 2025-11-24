@@ -15,6 +15,15 @@ const UserSettings = () => {
   const { toast } = useToast();
 
   const handlePasswordChange = async () => {
+    if (!currentPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập mật khẩu hiện tại",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Lỗi",
@@ -36,9 +45,10 @@ const UserSettings = () => {
     try {
       setLoading(true);
       
-      // Update password using API
-      await authApi.updateProfile({
-        password: newPassword
+      // Change password using API
+      await authApi.changePassword({
+        oldPassword: currentPassword,
+        newPassword: newPassword
       });
 
       toast({

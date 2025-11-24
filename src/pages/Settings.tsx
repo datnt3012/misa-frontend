@@ -17,6 +17,7 @@ import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2 
 import UserSettings from "@/components/UserSettings";
 import RolePermissionsManager from "@/components/settings/RolePermissionsManager";
 import { usersApi, User, UserRole } from "@/api/users.api";
+import { authApi } from "@/api/auth.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 // UserRole interface imported from users.api.ts
@@ -166,6 +167,15 @@ const SettingsContent = () => {
   };
 
   const handlePasswordChange = async () => {
+    if (!currentPassword) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập mật khẩu hiện tại",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Lỗi",
@@ -186,11 +196,16 @@ const SettingsContent = () => {
 
     try {
       setLoading(true);
-      // Backend API call will be implemented later
       
+      // Change password using API
+      await authApi.changePassword({
+        oldPassword: currentPassword,
+        newPassword: newPassword
+      });
+
       toast({
-        title: "Thông báo",
-        description: "Chức năng đổi mật khẩu sẽ được triển khai sau",
+        title: "Thành công",
+        description: "Đã đổi mật khẩu thành công",
       });
 
       setCurrentPassword("");
@@ -520,7 +535,7 @@ const SettingsContent = () => {
                 <div className="flex justify-end">
                   <Button 
                     onClick={handlePasswordChange}
-                    disabled={loading || !newPassword || !confirmPassword}
+                    disabled={loading || !currentPassword || !newPassword || !confirmPassword}
                     className="animate-fade-in"
                   >
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

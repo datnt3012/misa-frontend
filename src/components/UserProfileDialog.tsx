@@ -26,6 +26,7 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     address: '',
   });
   const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
@@ -55,6 +56,7 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
       });
       // Reset password fields when dialog opens
       setPasswordData({
+        currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       });
@@ -125,10 +127,10 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
   };
 
   const handleChangePassword = async () => {
-    if (!passwordData.newPassword || !passwordData.confirmPassword) {
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng nhập đầy đủ mật khẩu mới và xác nhận mật khẩu",
+        description: "Vui lòng nhập đầy đủ mật khẩu hiện tại, mật khẩu mới và xác nhận mật khẩu",
         variant: "destructive",
       });
       return;
@@ -155,9 +157,10 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     try {
       setChangingPassword(true);
 
-      // Update password using PATCH /users/{userId} with password field
-      await authApi.updateProfile({
-        password: passwordData.newPassword,
+      // Change password using API
+      await authApi.changePassword({
+        oldPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
       });
 
       toast({
@@ -167,6 +170,7 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
 
       // Clear password fields after successful change
       setPasswordData({
+        currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       });
@@ -196,6 +200,7 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     }
     // Reset password fields
     setPasswordData({
+      currentPassword: '',
       newPassword: '',
       confirmPassword: '',
     });
@@ -293,6 +298,17 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label htmlFor="current-password">Mật khẩu hiện tại</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={passwordData.currentPassword}
+                onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                placeholder="Nhập mật khẩu hiện tại"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="new-password">Mật khẩu mới</Label>
               <Input
                 id="new-password"
@@ -302,22 +318,22 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
                 placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
               />
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Xác nhận mật khẩu mới</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={passwordData.confirmPassword}
-                onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                placeholder="Nhập lại mật khẩu mới"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Xác nhận mật khẩu mới</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={passwordData.confirmPassword}
+              onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+              placeholder="Nhập lại mật khẩu mới"
+            />
           </div>
           <Button
             variant="outline"
             onClick={handleChangePassword}
-            disabled={changingPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+            disabled={changingPassword || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
             className="w-full"
           >
             {changingPassword ? (
