@@ -5,9 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { organizationApi } from "@/api/organization.api";
+import { administrativeApi, AdministrativeUnit } from "@/api/administrative.api";
 
-interface Organization {
+interface AdministrativeUnit {
   code: string;
   name: string;
   level: string;
@@ -38,9 +38,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   required = false
 }) => {
   // Store all data loaded from API
-  const [allProvinces, setAllProvinces] = useState<Organization[]>([]);
-  const [allDistricts, setAllDistricts] = useState<Organization[]>([]);
-  const [allWards, setAllWards] = useState<Organization[]>([]);
+  const [allProvinces, setAllProvinces] = useState<AdministrativeUnit[]>([]);
+  const [allDistricts, setAllDistricts] = useState<AdministrativeUnit[]>([]);
+  const [allWards, setAllWards] = useState<AdministrativeUnit[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
@@ -80,6 +80,16 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   // Track if data has been loaded to prevent multiple API calls
   const dataLoadStartedRef = useRef(false);
 
+  const levelMatches = (levelValue: any, expected: 'province' | 'district' | 'ward') => {
+    const value = String(levelValue ?? '').trim().toLowerCase();
+    const aliases: Record<'province' | 'district' | 'ward', string[]> = {
+      province: ['province', '1', 'tinh', 'thanh pho', 'thanh_pho'],
+      district: ['district', '2', 'quan', 'huyen'],
+      ward: ['ward', '3', 'phuong', 'xa']
+    };
+    return aliases[expected].includes(value);
+  };
+
   // Load all address data from API (all 3 levels at once)
   // This is called ONLY ONCE when component mounts, not when selecting options
   const loadAllAddressData = async () => {
@@ -95,16 +105,16 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       
       // Load all 3 levels in parallel - ONLY CALLED ONCE on mount
       const [provincesRes, districtsRes, wardsRes] = await Promise.all([
-        organizationApi.getOrganizations({ noPaging: true, level: '1' }),
-        organizationApi.getOrganizations({ noPaging: true, level: '2' }),
-        organizationApi.getOrganizations({ noPaging: true, level: '3' })
+        administrativeApi.getAdministrativeUnits({ noPaging: true, level: '1' }),
+        administrativeApi.getAdministrativeUnits({ noPaging: true, level: '2' }),
+        administrativeApi.getAdministrativeUnits({ noPaging: true, level: '3' })
       ]);
       
       console.log('[AddressForm] Address data loaded successfully');
 
-      const provincesList = (provincesRes.organizations || []).filter(org => String(org.level) === '1');
-      const districtsList = (districtsRes.organizations || []).filter(org => String(org.level) === '2');
-      const wardsList = (wardsRes.organizations || []).filter(org => String(org.level) === '3');
+      const provincesList = (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'));
+      const districtsList = (districtsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'district'));
+      const wardsList = (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'));
 
       setAllProvinces(provincesList);
       setAllDistricts(districtsList);

@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
-export interface AddressOrganizationRef {
+export interface AddressAdministrativeUnitRef {
   code: string;
   name: string;
   parentCode?: string | null;
@@ -24,9 +24,9 @@ export interface AddressInfo {
   updatedAt?: string;
   deletedAt?: string | null;
   // nested relations from backend
-  province?: AddressOrganizationRef | null;
-  district?: AddressOrganizationRef | null;
-  ward?: AddressOrganizationRef | null;
+  province?: AddressAdministrativeUnitRef | null;
+  district?: AddressAdministrativeUnitRef | null;
+  ward?: AddressAdministrativeUnitRef | null;
 }
 
 export interface Supplier {

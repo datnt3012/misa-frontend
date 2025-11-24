@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
-export interface AddressOrganizationRef {
+export interface AddressAdministrativeUnitRef {
   code: string;
   name: string;
   parentCode?: string | null;
@@ -24,9 +24,9 @@ export interface AddressInfo {
   updatedAt?: string;
   deletedAt?: string | null;
   // nested relations from backend
-  province?: AddressOrganizationRef | null;
-  district?: AddressOrganizationRef | null;
-  ward?: AddressOrganizationRef | null;
+  province?: AddressAdministrativeUnitRef | null;
+  district?: AddressAdministrativeUnitRef | null;
+  ward?: AddressAdministrativeUnitRef | null;
 }
 
 export interface VatInfo {
@@ -46,8 +46,8 @@ export interface Customer {
   phoneNumber?: string;
   address?: string; // Địa chỉ chi tiết
   addressInfo?: AddressInfo; // Thông tin địa chỉ (có thể bao gồm quan hệ nested)
-  organizationId?: string; // ID của tổ chức
-  organizationName?: string; // Tên tổ chức
+  administrativeUnitId?: string; // ID của đơn vị hành chính
+  administrativeUnitName?: string; // Tên đơn vị hành chính
   vatRate?: number; // VAT rate mặc định (%)
   vatInfo?: VatInfo;
   userId?: string;
@@ -254,8 +254,8 @@ const normalizeCustomer = (row: any): Customer => {
     phoneNumber: row.phoneNumber ?? row.phone ?? null,
     address: row.address ?? null,
     addressInfo: addressInfoMapper(),
-    organizationId: row.organizationId ?? row.organization_id ?? null,
-    organizationName: row.organizationName ?? row.organization_name ?? null,
+    administrativeUnitId: row.administrativeUnitId ?? row.administrative_unit_id ?? null,
+    administrativeUnitName: row.administrativeUnitName ?? row.administrative_unit_name ?? null,
     vatRate: normalizeVatRate(),
     vatInfo: normalizeVatInfo(row.vatInfo ?? row.vat_info),
     userId: row.userId ?? null,
