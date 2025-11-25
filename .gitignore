@@ -124,3 +124,7 @@ uploads/
 # Backup files
 *.bak
 *.backup
+
+# Docker Compose
+@docker-compose.yml
+docker-compose.yml
