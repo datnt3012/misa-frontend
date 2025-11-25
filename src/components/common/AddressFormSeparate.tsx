@@ -112,9 +112,26 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       
       console.log('[AddressForm] Address data loaded successfully');
 
-      const provincesList = (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'));
-      const districtsList = (districtsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'district'));
-      const wardsList = (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'));
+      // Filter and remove duplicates by code
+      const removeDuplicates = (items: AdministrativeUnit[]): AdministrativeUnit[] => {
+        const seen = new Map<string, AdministrativeUnit>();
+        items.forEach(item => {
+          if (item.code && !seen.has(item.code)) {
+            seen.set(item.code, item);
+          }
+        });
+        return Array.from(seen.values());
+      };
+
+      const provincesList = removeDuplicates(
+        (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'))
+      );
+      const districtsList = removeDuplicates(
+        (districtsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'district'))
+      );
+      const wardsList = removeDuplicates(
+        (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'))
+      );
 
       setAllProvinces(provincesList);
       setAllDistricts(districtsList);
