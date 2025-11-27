@@ -27,6 +27,8 @@ import { productApi, type Product, type ProductWithStock } from "@/api/product.a
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
+import { CategoriesContent } from "@/pages/Categories";
+import { useSearchParams } from "react-router-dom";
 
 import React from "react";
 
@@ -40,7 +42,13 @@ const InventoryContent = () => {
   const [warehouseSortConfig, setWarehouseSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [activeTab, setActiveTab] = useState("inventory");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabFromUrl = searchParams.get('tab');
+    return tabFromUrl && ['inventory', 'products', 'warehouses', 'categories'].includes(tabFromUrl) 
+      ? tabFromUrl 
+      : "inventory";
+  });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
@@ -886,10 +894,14 @@ const InventoryContent = () => {
         </div>
 
         {/* Tabs for different sections */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          setSearchParams({ tab: value });
+        }} className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="inventory">Báo cáo tồn kho</TabsTrigger>
             <TabsTrigger value="products">Danh sách sản phẩm</TabsTrigger>
+            <TabsTrigger value="categories">Loại Sản Phẩm</TabsTrigger>
             <TabsTrigger value="warehouses">
               <WarehouseIcon className="w-4 h-4 mr-2" />
               Quản lý kho
@@ -920,6 +932,13 @@ const InventoryContent = () => {
                 canManageProducts={canManageProducts}
                 onProductsUpdate={loadData}
               />
+            </PermissionGuard>
+          </TabsContent>
+
+          {/* Categories Tab */}
+          <TabsContent value="categories" className="space-y-6">
+            <PermissionGuard requiredPermissions={['CATEGORIES_VIEW']}>
+              <CategoriesContent embedded={true} />
             </PermissionGuard>
           </TabsContent>
 
