@@ -55,7 +55,11 @@ import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UnauthorizedPage } from '@/components/UnauthorizedPage';
 
-const CategoriesContent: React.FC = () => {
+interface CategoriesContentProps {
+  embedded?: boolean;
+}
+
+const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -253,8 +257,9 @@ const CategoriesContent: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
+    <div className={embedded ? "space-y-6" : "container mx-auto px-4 py-6 space-y-6"}>
       {/* Header */}
+      {!embedded && (
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Quản lý Loại sản phẩm</h1>
@@ -269,6 +274,23 @@ const CategoriesContent: React.FC = () => {
           </Button>
         )}
       </div>
+      )}
+      {embedded && (
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold">Loại Sản Phẩm</h2>
+            <p className="text-muted-foreground">
+              Quản lý các loại sản phẩm trong hệ thống
+            </p>
+          </div>
+          {canCreate && (
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Thêm loại sản phẩm
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -530,6 +552,8 @@ const CategoriesContent: React.FC = () => {
     </div>
   );
 };
+
+export { CategoriesContent };
 
 export default function Categories() {
     return (

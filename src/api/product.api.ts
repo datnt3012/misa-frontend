@@ -10,6 +10,8 @@ export interface Product {
   unit: string;
   price: number;
   costPrice: number;
+  lowStockThreshold?: number;
+  manufacturer?: string;
   barcode?: string;
   isDeleted: boolean;
   createdAt: string;
@@ -32,8 +34,11 @@ export interface CreateProductRequest {
   description?: string;
   category?: string;
   unit?: string;
-  price: number;
+  price?: number;
   costPrice?: number;
+  lowStockThreshold?: number;
+  manufacturer?: string;
+  barcode?: string;
 }
 
 export interface UpdateProductRequest {
@@ -44,6 +49,8 @@ export interface UpdateProductRequest {
   unit?: string;
   price?: number;
   costPrice?: number;
+  lowStockThreshold?: number;
+  manufacturer?: string;
   barcode?: string;
 }
 
@@ -66,6 +73,8 @@ const normalizeProduct = (row: any): Product => {
     unit: row.unit ?? 'piece',
     price: price,
     costPrice: costPrice,
+    lowStockThreshold: row.lowStockThreshold ?? row.low_stock_threshold ?? undefined,
+    manufacturer: row.manufacturer ?? undefined,
     barcode: row.barcode ?? undefined,
     isDeleted: row.isDeleted ?? false,
     createdAt: row.createdAt ?? row.created_at ?? '',

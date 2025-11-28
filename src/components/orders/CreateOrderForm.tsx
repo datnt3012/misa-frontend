@@ -436,11 +436,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         receiverName: newOrder.shipping_recipient_name || undefined,
         receiverPhone: newOrder.shipping_recipient_phone || undefined,
         receiverAddress: newOrder.shipping_address || undefined,
-        addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
-          provinceCode: newOrder.shipping_addressInfo.provinceCode,
-          districtCode: newOrder.shipping_addressInfo.districtCode,
-          wardCode: newOrder.shipping_addressInfo.wardCode
-        } : undefined,
+        addressInfo: (() => {
+          const addrInfo = newOrder.shipping_addressInfo;
+          // Send addressInfo if we have at least one valid code (not empty string)
+          const hasProvinceCode = addrInfo?.provinceCode && addrInfo.provinceCode.trim() !== "";
+          const hasDistrictCode = addrInfo?.districtCode && addrInfo.districtCode.trim() !== "";
+          const hasWardCode = addrInfo?.wardCode && addrInfo.wardCode.trim() !== "";
+          
+          // Send addressInfo if we have any valid address codes or if we have receiverAddress
+          if (hasProvinceCode || hasDistrictCode || hasWardCode || (newOrder.shipping_address && newOrder.shipping_address.trim() !== "")) {
+            return {
+              provinceCode: hasProvinceCode ? addrInfo.provinceCode : undefined,
+              districtCode: hasDistrictCode ? addrInfo.districtCode : undefined,
+              wardCode: hasWardCode ? addrInfo.wardCode : undefined
+            };
+          }
+          return undefined;
+        })(),
         
         // Payment
         paymentMethod: newOrder.initial_payment_method || "cash",
