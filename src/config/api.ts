@@ -71,6 +71,9 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/products/${id}`,
     DELETE: (id: string) => `/products/${id}`,
     IMPORT: '/products/import/excel',
+    IMPORT_ASYNC: '/products/import/excel/async',
+    IMPORT_STATUS_LIST: '/products/import/status',
+    IMPORT_STATUS: (jobId: string) => `/products/import/status/${jobId}`,
     EXPORT: '/products/export',
   },
   

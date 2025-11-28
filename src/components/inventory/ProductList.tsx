@@ -11,17 +11,19 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import React from "react";
-import { productApi, type ProductImportError } from "@/api/product.api";
+import { productApi, type ProductImportError, type ProductImportJobSnapshot, type ProductImportJobStatus } from "@/api/product.api";
 import { categoriesApi } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 interface ProductListProps {
   products: any[];
@@ -30,6 +32,14 @@ interface ProductListProps {
   canManageProducts: boolean;
   onProductsUpdate: () => void;
 }
+
+const IMPORT_STATUS_LABELS: Record<string, string> = {
+  queued: 'Đang chờ xử lý',
+  processing: 'Đang xử lý',
+  completed: 'Hoàn thành',
+  failed: 'Thất bại',
+  cancelled: 'Đã hủy',
+};
 
 const ProductList: React.FC<ProductListProps> = ({
   products,
@@ -70,7 +80,13 @@ const ProductList: React.FC<ProductListProps> = ({
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<ProductImportError[]>([]);
-  const [importSummary, setImportSummary] = useState<{ imported: number; failed: number; totalRows: number } | null>(null);
+  const [importSummary, setImportSummary] = useState<{ imported: number; failed: number; totalRows: number; processedRows?: number } | null>(null);
+  const [importJobs, setImportJobs] = useState<ProductImportJobSnapshot[]>([]);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobStatusTab, setJobStatusTab] = useState<'running' | 'history'>('running');
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const previousJobStatusesRef = React.useRef<Record<string, ProductImportJobStatus>>({});
 
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
@@ -224,6 +240,22 @@ const ProductList: React.FC<ProductListProps> = ({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
+  const runningJobs = React.useMemo(
+    () => importJobs.filter(job => job.status === 'queued' || job.status === 'processing'),
+    [importJobs]
+  );
+  const completedJobs = React.useMemo(
+    () => importJobs.filter(job => job.status === 'completed' || job.status === 'failed'),
+    [importJobs]
+  );
+  const activeImportJob = React.useMemo(() => {
+    if (activeJobId) {
+      return importJobs.find(job => job.jobId === activeJobId) ?? null;
+    }
+    return runningJobs[0] ?? null;
+  }, [activeJobId, importJobs, runningJobs]);
+  const isJobActive = runningJobs.length > 0;
+  const isImportActionDisabled = !importFile || isImporting || isJobActive;
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -234,11 +266,21 @@ const ProductList: React.FC<ProductListProps> = ({
     setCurrentPage(1);
   };
 
+  const stopImportPolling = React.useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
   const resetImportState = React.useCallback(() => {
+    stopImportPolling();
     setImportFile(null);
     setImportErrors([]);
     setImportSummary(null);
-  }, []);
+    setIsImporting(false);
+    setActiveJobId(null);
+  }, [stopImportPolling]);
 
   const handleImportDialogToggle = React.useCallback((open: boolean) => {
     setIsImportDialogOpen(open);
@@ -246,6 +288,151 @@ const ProductList: React.FC<ProductListProps> = ({
       resetImportState();
     }
   }, [resetImportState]);
+
+  React.useEffect(() => {
+    return () => {
+      stopImportPolling();
+    };
+  }, [stopImportPolling]);
+
+  const handleJobStatusNotification = React.useCallback((job: ProductImportJobSnapshot) => {
+    const status = job.status as ProductImportJobStatus;
+    if (status === 'completed') {
+      onProductsUpdate();
+      if (job.errors && job.errors.length > 0) {
+        toast({
+          title: 'Hoàn thành với cảnh báo',
+          description: job.message || `Đã import ${job.imported ?? 0}/${job.totalRows ?? 0} dòng. Có ${job.errors.length} lỗi cần xử lý.`,
+        });
+      } else {
+        toast({
+          title: 'Thành công',
+          description: job.message || `Đã import ${job.imported ?? 0} sản phẩm.`,
+        });
+      }
+    } else if (status === 'failed') {
+      toast({
+        title: 'Import thất bại',
+        description: job.message || 'Có lỗi khi xử lý file import',
+        variant: 'destructive',
+      });
+    } else if (status === 'cancelled') {
+      toast({
+        title: 'Đã hủy import',
+        description: job.message || 'Job import đã được hủy theo yêu cầu',
+      });
+    }
+  }, [onProductsUpdate, toast]);
+
+  const refreshImportJobs = React.useCallback(async (options?: { onlyActive?: boolean; showNotifications?: boolean }) => {
+    const { onlyActive = false, showNotifications = false } = options || {};
+    try {
+      const jobs = await productApi.listImportJobs({ onlyActive });
+      setImportJobs(prev => {
+        const jobMap = new Map<string, ProductImportJobSnapshot>();
+        prev.forEach(job => {
+          jobMap.set(job.jobId, job);
+        });
+
+        jobs.forEach(job => {
+          const previous = jobMap.get(job.jobId);
+          const mergedJob = { ...previous, ...job };
+          const prevStatus = previousJobStatusesRef.current[job.jobId];
+          if (showNotifications && prevStatus && prevStatus !== job.status) {
+            handleJobStatusNotification(mergedJob);
+          }
+          previousJobStatusesRef.current[job.jobId] = job.status;
+          jobMap.set(job.jobId, mergedJob);
+        });
+
+        const mergedList = Array.from(jobMap.values()).sort((a, b) => {
+          const timeA = a.startedAt ? new Date(a.startedAt).getTime() : 0;
+          const timeB = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+          return timeB - timeA;
+        });
+
+        return mergedList;
+      });
+    } catch (error: any) {
+      console.error('Error loading import jobs:', error);
+      if (!onlyActive) {
+        toast({
+          title: 'Lỗi',
+          description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Không thể tải danh sách job import'),
+          variant: 'destructive',
+        });
+      }
+    }
+  }, [handleJobStatusNotification, toast]);
+
+  React.useEffect(() => {
+    refreshImportJobs();
+  }, [refreshImportJobs]);
+
+  React.useEffect(() => {
+    if (runningJobs.length > 0) {
+      if (!pollingRef.current) {
+        refreshImportJobs({ onlyActive: true });
+        pollingRef.current = setInterval(() => {
+          refreshImportJobs({ onlyActive: true, showNotifications: true });
+        }, 2500);
+      }
+    } else {
+      stopImportPolling();
+    }
+  }, [runningJobs.length, refreshImportJobs, stopImportPolling]);
+
+  React.useEffect(() => {
+    if (activeJobId && !importJobs.some(job => job.jobId === activeJobId)) {
+      setActiveJobId(null);
+    }
+    if (!activeJobId) {
+      const nextJob = runningJobs[0] || completedJobs[0] || importJobs[0];
+      if (nextJob) {
+        setActiveJobId(nextJob.jobId);
+      }
+    }
+  }, [activeJobId, importJobs, runningJobs, completedJobs]);
+
+  React.useEffect(() => {
+    if (activeImportJob) {
+      setImportSummary({
+        imported: activeImportJob.imported ?? 0,
+        failed: activeImportJob.failed ?? 0,
+        totalRows: activeImportJob.totalRows ?? 0,
+        processedRows: activeImportJob.processedRows ?? 0,
+      });
+      setImportErrors(activeImportJob.errors ?? []);
+    } else {
+      setImportSummary(null);
+      setImportErrors([]);
+    }
+  }, [activeImportJob]);
+
+  const handleJobCardSelect = React.useCallback((jobId: string) => {
+    setActiveJobId(jobId);
+  }, []);
+
+  const handleCancelJob = React.useCallback(async (jobId: string) => {
+    try {
+      setCancellingJobId(jobId);
+      await productApi.cancelImportJob(jobId);
+      toast({
+        title: 'Đã gửi yêu cầu hủy',
+        description: 'Job import sẽ dừng trong giây lát.',
+      });
+      await refreshImportJobs({ onlyActive: true, showNotifications: true });
+    } catch (error: any) {
+      console.error('Error cancelling job:', error);
+      toast({
+        title: 'Không thể hủy job',
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Vui lòng thử lại sau'),
+        variant: 'destructive',
+      });
+    } finally {
+      setCancellingJobId(null);
+    }
+  }, [refreshImportJobs, toast]);
 
   // Handle sorting
   const handleSort = (key: string) => {
@@ -500,52 +687,35 @@ const ProductList: React.FC<ProductListProps> = ({
     }
 
     try {
+      if (isImporting) return;
       setIsImporting(true);
-      setImportErrors([]);
-      setImportSummary(null);
 
-      const response = await productApi.importProducts({ file: importFile });
-      
-      // Handle response structure: response.data contains the actual data
-      const responseData = response.data || response;
-      const imported = responseData.imported ?? 0;
-      const failed = responseData.failed ?? 0;
-      const totalRows = responseData.totalRows ?? imported + failed;
-      const errors = responseData.errors || [];
-      const message = response.message || '';
+      const jobSnapshot = await productApi.importProductsAsync({ file: importFile });
 
-      onProductsUpdate();
-
-      // If there are errors, show them in the dialog
-      if (errors.length > 0) {
-        setImportErrors(errors);
-        setImportSummary({ imported, failed, totalRows });
-        toast({
-          title: imported === 0 ? 'Không thể import' : 'Hoàn thành với cảnh báo',
-          description: message || (imported === 0
-            ? `Không import được dòng nào. Có ${errors.length} lỗi cần xử lý.`
-            : `Đã import ${imported}/${totalRows} dòng. Có ${errors.length} lỗi cần xử lý.`),
-          variant: imported === 0 ? 'destructive' : 'default',
-        });
-        // Keep dialog open to show errors
-        return;
-      } else {
-        // No errors, all successful
-        toast({
-          title: 'Thành công',
-          description: message || `Đã import ${imported} sản phẩm.`,
-        });
-        setIsImportDialogOpen(false);
-        resetImportState();
+      if (!jobSnapshot?.jobId) {
+        throw new Error('Không nhận được mã job import từ server');
       }
+
+      previousJobStatusesRef.current[jobSnapshot.jobId] = jobSnapshot.status;
+      setActiveJobId(jobSnapshot.jobId);
+      setImportJobs(prev => [jobSnapshot, ...prev.filter(job => job.jobId !== jobSnapshot.jobId)]);
+
+      toast({
+        title: 'Đang xử lý',
+        description: 'Hệ thống đang import sản phẩm. Bạn có thể theo dõi tiến trình bên dưới.',
+      });
+
+      await refreshImportJobs({ onlyActive: true });
+      setIsImporting(false);
     } catch (error: any) {
       console.error('Error importing products:', error);
-      const apiErrors: ProductImportError[] = error.response?.data?.errors || [];
+      setIsImporting(false);
+      const apiErrors: ProductImportError[] = error.response?.data?.errors || error.response?.data?.details?.errors || [];
       if (apiErrors.length > 0) {
-        const imported = error.response?.data?.imported ?? 0;
-        const failed = error.response?.data?.failed ?? apiErrors.length;
-        const totalRows = error.response?.data?.totalRows ?? imported + failed;
         setImportErrors(apiErrors);
+        const imported = error.response?.data?.imported ?? error.response?.data?.details?.imported ?? 0;
+        const failed = error.response?.data?.failed ?? error.response?.data?.details?.failed ?? apiErrors.length;
+        const totalRows = error.response?.data?.totalRows ?? error.response?.data?.details?.totalRows ?? imported + failed;
         setImportSummary({ imported, failed, totalRows });
       }
 
@@ -886,14 +1056,15 @@ const ProductList: React.FC<ProductListProps> = ({
                           id="import-file"
                           type="file"
                           accept=".xlsx,.xls"
+                          disabled={isImporting || isJobActive}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
                               setImportFile(file);
-                            setImportErrors([]);
-                            setImportSummary(null);
-                          } else {
-                            setImportFile(null);
+                              setImportErrors([]);
+                              setImportSummary(null);
+                            } else {
+                              setImportFile(null);
                             }
                           }}
                         />
@@ -903,9 +1074,21 @@ const ProductList: React.FC<ProductListProps> = ({
                           Đã chọn: {importFile.name}
                         </div>
                       )}
+                    {activeImportJob && (
+                      <div className="rounded-md border border-border/60 bg-muted/10 p-3 space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span>Trạng thái: {IMPORT_STATUS_LABELS[activeImportJob.status] ?? activeImportJob.status}</span>
+                          <span>{Math.round(activeImportJob.percent ?? 0)}%</span>
+                        </div>
+                        <Progress value={activeImportJob.percent ?? 0} />
+                        <div className="text-xs text-muted-foreground">
+                          Đã xử lý {activeImportJob.processedRows ?? 0}/{activeImportJob.totalRows || '...'} dòng · Thành công {activeImportJob.imported ?? 0} · Lỗi {activeImportJob.failed ?? 0}
+                        </div>
+                      </div>
+                    )}
                     {importSummary && (
                       <div className="rounded-md border border-muted/40 bg-muted/10 p-3 text-sm text-muted-foreground">
-                        Đã xử lý {importSummary.totalRows} dòng: thành công {importSummary.imported}, lỗi {importSummary.failed}.
+                        Đã xử lý {importSummary.processedRows ?? importSummary.totalRows} / {importSummary.totalRows || '...'} dòng: thành công {importSummary.imported}, lỗi {importSummary.failed}.
                       </div>
                     )}
                     {importErrors.length > 0 && (
@@ -927,16 +1110,18 @@ const ProductList: React.FC<ProductListProps> = ({
                     )}
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => {
-                        handleImportDialogToggle(false);
-                      }}>
-                        Hủy
+                      <Button
+                        variant="outline"
+                        onClick={() => handleImportDialogToggle(false)}
+                        disabled={isImporting}
+                      >
+                        Đóng
                       </Button>
                       <Button 
                         onClick={handleImportProducts}
-                        disabled={!importFile || isImporting}
+                        disabled={isImportActionDisabled}
                       >
-                        {isImporting ? 'Đang import...' : 'Import Sản Phẩm'}
+                        {isImporting ? 'Đang tải lên...' : isJobActive ? 'Đang xử lý...' : 'Bắt đầu Import'}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -945,6 +1130,108 @@ const ProductList: React.FC<ProductListProps> = ({
             </div>
           </div>
         </div>
+
+        {canManageProducts && (
+          <Card className="mb-6">
+            <CardHeader className="pb-2">
+              <CardTitle>Tiến Trình Import Excel</CardTitle>
+              <CardDescription>Theo dõi job đang chạy và lịch sử import gần đây</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
+                  <TabsTrigger value="history">Lịch sử ({completedJobs.length})</TabsTrigger>
+                </TabsList>
+                <TabsContent value="running" className="mt-4 space-y-3">
+                  {runningJobs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Không có job import nào đang chạy. Bạn có thể bắt đầu import bằng nút "Import Excel".
+                    </p>
+                  ) : (
+                    runningJobs.map((job) => (
+                      <div
+                        key={job.jobId}
+                        onClick={() => handleJobCardSelect(job.jobId)}
+                        className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
+                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span>Job #{job.jobId.slice(-6)}</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">{IMPORT_STATUS_LABELS[job.status] ?? job.status}</Badge>
+                            {(job.status === 'queued' || job.status === 'processing') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelJob(job.jobId);
+                                }}
+                                disabled={cancellingJobId === job.jobId}
+                              >
+                                {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <Progress value={job.percent ?? 0} />
+                        <div className="text-xs text-muted-foreground">
+                          Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                        </div>
+                        {job.errors && job.errors.length > 0 && (
+                          <div className="text-xs text-destructive space-y-1">
+                            {job.errors.slice(-2).map((error, index) => (
+                              <div key={`${job.jobId}-err-${index}`}>
+                                Dòng {error.row ?? 'N/A'}: {error.reason}
+                              </div>
+                            ))}
+                            {job.errors.length > 2 && (
+                              <div className="text-[10px] text-destructive/80">
+                                ... và {job.errors.length - 2} lỗi khác
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </TabsContent>
+                <TabsContent value="history" className="mt-4 space-y-3">
+                  {completedJobs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Chưa có lịch sử import.</p>
+                  ) : (
+                    completedJobs.slice(0, 5).map((job) => (
+                      <div
+                        key={job.jobId}
+                        onClick={() => handleJobCardSelect(job.jobId)}
+                        className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
+                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>Job #{job.jobId.slice(-6)}</span>
+                          <Badge variant={job.status === 'completed' ? 'secondary' : 'destructive'}>
+                            {IMPORT_STATUS_LABELS[job.status] ?? job.status}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                        </div>
+                        {job.errors && job.errors.length > 0 && (
+                          <div className="text-xs text-destructive">
+                            {job.errors.length} lỗi. Ví dụ: {job.errors[0]?.reason}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Edit Product Dialog */}
         {canManageProducts && (

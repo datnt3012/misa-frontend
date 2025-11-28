@@ -82,6 +82,23 @@ export interface ProductImportResponse {
   errors?: ProductImportError[];
 }
 
+export type ProductImportJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+export interface ProductImportJobSnapshot {
+  jobId: string;
+  status: ProductImportJobStatus;
+  totalRows: number;
+  processedRows: number;
+  imported: number;
+  failed: number;
+  percent: number;
+  errors: ProductImportError[];
+  startedAt?: string;
+  completedAt?: string;
+  result?: ProductImportResponse;
+  message?: string;
+}
+
 // Helper function to normalize product data from API response
 const normalizeProduct = (row: any): Product => {
   const price = parseFloat(row.price ?? '0');
@@ -103,6 +120,35 @@ const normalizeProduct = (row: any): Product => {
     createdAt: row.createdAt ?? row.created_at ?? '',
     updatedAt: row.updatedAt ?? row.updated_at ?? '',
     deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+  };
+};
+
+const normalizeImportJobResponse = (payload: any): ProductImportJobSnapshot => {
+  if (!payload) {
+    throw new Error('Empty import job payload');
+  }
+
+  const data = payload.data && typeof payload.data === 'object' && 'jobId' in payload.data
+    ? payload.data
+    : payload;
+
+  if (!data.jobId) {
+    throw new Error('Import job payload is missing jobId');
+  }
+
+  return {
+    jobId: data.jobId,
+    status: data.status ?? 'queued',
+    totalRows: data.totalRows ?? 0,
+    processedRows: data.processedRows ?? 0,
+    imported: data.imported ?? 0,
+    failed: data.failed ?? 0,
+    percent: data.percent ?? 0,
+    errors: data.errors ?? [],
+    startedAt: data.startedAt,
+    completedAt: data.completedAt,
+    result: data.result ?? payload.result,
+    message: payload.message ?? data.message,
   };
 };
 
@@ -196,6 +242,50 @@ export const productApi = {
       }
       throw error;
     }
+  },
+
+  // Import products asynchronously (background job)
+  importProductsAsync: async (data: ProductImportRequest): Promise<ProductImportJobSnapshot> => {
+    const formData = new FormData();
+    formData.append('file', data.file);
+    if (data.warehouse_id) {
+      formData.append('warehouse_id', data.warehouse_id);
+    }
+
+    const response = await api.upload<any>(
+      API_ENDPOINTS.PRODUCTS.IMPORT_ASYNC,
+      formData
+    );
+
+    return normalizeImportJobResponse(response);
+  },
+
+  // List import jobs (optionally only active ones)
+  listImportJobs: async (params?: { onlyActive?: boolean }): Promise<ProductImportJobSnapshot[]> => {
+    const query = params?.onlyActive ? '?onlyActive=true' : '';
+    const response = await api.get<any>(`${API_ENDPOINTS.PRODUCTS.IMPORT_STATUS_LIST}${query}`);
+    const payload = response?.data ?? response;
+    const jobArray = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.jobs)
+          ? payload.jobs
+          : [];
+
+    return jobArray.map(normalizeImportJobResponse);
+  },
+
+  // Request cancel for import job
+  cancelImportJob: async (jobId: string): Promise<ProductImportJobSnapshot> => {
+    const response = await api.delete<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
+    return normalizeImportJobResponse(response);
+  },
+
+  // Get import job status
+  getImportStatus: async (jobId: string): Promise<ProductImportJobSnapshot> => {
+    const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
+    return normalizeImportJobResponse(response);
   },
 
   // Export products to Excel
