@@ -26,6 +26,7 @@ import InventoryStock from "@/components/inventory/InventoryStock";
 import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
+import { dashboardApi } from "@/api/dashboard.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { CategoriesContent } from "@/pages/Categories";
 import { useSearchParams } from "react-router-dom";
@@ -52,11 +53,23 @@ const InventoryContent = () => {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
+  const [inventoryOverview, setInventoryOverview] = useState<{
+    inventoryData: any[];
+    lowStockProducts: any[];
+    productStockData: any[];
+    totalProducts: number;
+    counts: {
+      inStock: number;
+      lowStock: number;
+      outOfStock: number;
+    };
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorStates, setErrorStates] = useState({
     products: null as string | null,
     warehouses: null as string | null,
-    stockLevels: null as string | null
+    stockLevels: null as string | null,
+    inventoryOverview: null as string | null
   });
 
   // Permission checks
@@ -233,6 +246,30 @@ const InventoryContent = () => {
       );
       promiseLabels.push('stockLevels');
 
+      // Load inventory overview from dashboard API (same as dashboard uses)
+      promises.push(
+        dashboardApi.getInventoryOverview().catch(error => {
+          if (error?.response?.status === 403) {
+            setErrorStates(prev => ({ 
+              ...prev, 
+              inventoryOverview: 'Không có quyền truy cập dữ liệu tồn kho' 
+            }));
+          }
+          return {
+            inventoryData: [],
+            lowStockProducts: [],
+            productStockData: [],
+            totalProducts: 0,
+            counts: {
+              inStock: 0,
+              lowStock: 0,
+              outOfStock: 0,
+            }
+          };
+        })
+      );
+      promiseLabels.push('inventoryOverview');
+
       if (promises.length > 0) {
         const responses = await Promise.all(promises);
         
@@ -240,6 +277,12 @@ const InventoryContent = () => {
         let productsResponse = { products: [] };
         let warehousesResponse = { warehouses: [] };
         let stockLevelsResponse = { stockLevels: [] };
+        let inventoryOverviewResponse = {
+          inventoryData: [],
+          lowStockProducts: [],
+          productStockData: [],
+          totalProducts: 0
+        };
         
         responses.forEach((response, index) => {
           const label = promiseLabels[index];
@@ -249,8 +292,13 @@ const InventoryContent = () => {
             warehousesResponse = response;
           } else if (label === 'stockLevels') {
             stockLevelsResponse = response;
+          } else if (label === 'inventoryOverview') {
+            inventoryOverviewResponse = response;
           }
         });
+
+        // Store inventory overview data
+        setInventoryOverview(inventoryOverviewResponse);
 
         // Store stock levels
         setStockLevels(stockLevelsResponse.stockLevels || []);
@@ -816,33 +864,46 @@ const InventoryContent = () => {
           )}
           
           {(() => {
-            // Calculate aggregated stock per product (sum across all warehouses)
-            const productStockMap = new Map<string, number>();
-            stockLevels.forEach(stock => {
-              const currentTotal = productStockMap.get(stock.productId) || 0;
-              productStockMap.set(stock.productId, currentTotal + stock.quantity);
-            });
-            
-            // Calculate statistics
-            const inStockCount = products.filter(p => {
-              const totalStock = productStockMap.get(p.id) || 0;
-              return totalStock >= 100;
-            }).length;
+            // Read counts directly from API response (same as dashboard)
+            let inStockCount = 0;
+            let lowStockCount = 0;
+            let outOfStockCount = 0;
 
-            const lowStockCount = products.filter(p => {
-              const totalStock = productStockMap.get(p.id) || 0;
-              return totalStock > 1 && totalStock < 100;
-            }).length;
+            if (inventoryOverview && !errorStates.inventoryOverview && inventoryOverview.counts) {
+              // Use counts from API response
+              inStockCount = inventoryOverview.counts.inStock || 0;
+              lowStockCount = inventoryOverview.counts.lowStock || 0;
+              outOfStockCount = inventoryOverview.counts.outOfStock || 0;
+            } else {
+              // Fallback to client-side calculation if API data not available
+              const productStockMap = new Map<string, number>();
+              stockLevels.forEach(stock => {
+                const currentTotal = productStockMap.get(stock.productId) || 0;
+                productStockMap.set(stock.productId, currentTotal + stock.quantity);
+              });
+              
+              inStockCount = products.filter(p => {
+                const totalStock = productStockMap.get(p.id) || 0;
+                const threshold = p.lowStockThreshold ?? 100;
+                return totalStock > threshold;
+              }).length;
 
-            const outOfStockCount = products.filter(p => {
-              const totalStock = productStockMap.get(p.id) || 0;
-              return totalStock === 0;
-            }).length;
+              lowStockCount = products.filter(p => {
+                const totalStock = productStockMap.get(p.id) || 0;
+                const threshold = p.lowStockThreshold ?? 100;
+                return totalStock > 0 && totalStock <= threshold;
+              }).length;
+
+              outOfStockCount = products.filter(p => {
+                const totalStock = productStockMap.get(p.id) || 0;
+                return totalStock === 0;
+              }).length;
+            }
 
             return (
               <>
-                {errorStates.products || errorStates.stockLevels ? (
-                  <PermissionErrorCard title="Còn Hàng" error={errorStates.products || errorStates.stockLevels} />
+                {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
+                  <PermissionErrorCard title="Còn Hàng" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
                 ) : (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -857,8 +918,8 @@ const InventoryContent = () => {
                   </Card>
                 )}
                 
-                {errorStates.products || errorStates.stockLevels ? (
-                  <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.stockLevels} />
+                {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
+                  <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
                 ) : (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -873,8 +934,8 @@ const InventoryContent = () => {
                   </Card>
                 )}
                 
-                {errorStates.products || errorStates.stockLevels ? (
-                  <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.stockLevels} />
+                {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
+                  <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
                 ) : (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

@@ -191,6 +191,11 @@ export const dashboardApi = {
     lowStockProducts: LowStockProduct[];
     productStockData: ProductStockData[];
     totalProducts: number;
+    counts: {
+      inStock: number;
+      lowStock: number;
+      outOfStock: number;
+    };
   }> => {
     try {
       const response = await api.get<any>('/dashboard/inventory-overview');
@@ -203,6 +208,11 @@ export const dashboardApi = {
           lowStockProducts: data.lowStockProducts || [],
           productStockData: data.productStockData || [],
           totalProducts: data.totalProducts || 0,
+          counts: data.counts || {
+            inStock: 0,
+            lowStock: 0,
+            outOfStock: 0,
+          },
         };
       }
       
@@ -211,6 +221,11 @@ export const dashboardApi = {
         lowStockProducts: [],
         productStockData: [],
         totalProducts: 0,
+        counts: {
+          inStock: 0,
+          lowStock: 0,
+          outOfStock: 0,
+        },
       };
     } catch (error) {
       console.error('Error fetching inventory overview:', error);
@@ -219,6 +234,11 @@ export const dashboardApi = {
         lowStockProducts: [],
         productStockData: [],
         totalProducts: 0,
+        counts: {
+          inStock: 0,
+          lowStock: 0,
+          outOfStock: 0,
+        },
       };
     }
   },

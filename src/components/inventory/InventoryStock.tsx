@@ -94,10 +94,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const getStatusBadge = (stock: number) => {
+  const getStatusBadge = (stock: number, lowStockThreshold?: number) => {
+    const threshold = lowStockThreshold ?? 100;
     if (stock === 0) {
       return <Badge variant="destructive" className="whitespace-nowrap">Hết hàng</Badge>;
-    } else if (stock > 1 && stock < 100) {
+    } else if (stock > 0 && stock <= threshold) {
       return <Badge variant="outline" className="text-orange-600 border-orange-600 whitespace-nowrap">Sắp hết</Badge>;
     } else {
       return <Badge variant="secondary" className="text-green-600 border-green-600 whitespace-nowrap">Còn hàng</Badge>;
@@ -108,9 +109,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
     
+    const threshold = product.lowStockThreshold ?? 100;
     const matchesStatus = filterStatus === "all" || 
-                         (filterStatus === "in-stock" && product.current_stock >= 100) ||
-                         (filterStatus === "low-stock" && product.current_stock > 1 && product.current_stock < 100) ||
+                         (filterStatus === "in-stock" && product.current_stock > threshold) ||
+                         (filterStatus === "low-stock" && product.current_stock > 0 && product.current_stock <= threshold) ||
                          (filterStatus === "out-of-stock" && product.current_stock === 0);
     
     const matchesCategory = filterCategory === "all" || 
@@ -536,7 +538,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                       {product.warehouse_name || product.location || '-'}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {getStatusBadge(product.current_stock)}
+                      {getStatusBadge(product.current_stock, product.lowStockThreshold)}
                     </TableCell>
                     <TableCell>
                       {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
