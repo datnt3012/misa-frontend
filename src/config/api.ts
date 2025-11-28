@@ -67,9 +67,10 @@ export const API_ENDPOINTS = {
   PRODUCTS: {
     LIST: '/products',
     CREATE: '/products',
+    IMPORT_TEMPLATE: '/products/import/template',
     UPDATE: (id: string) => `/products/${id}`,
     DELETE: (id: string) => `/products/${id}`,
-    IMPORT: '/products/import',
+    IMPORT: '/products/import/excel',
     EXPORT: '/products/export',
   },
   

@@ -59,6 +59,29 @@ export interface ProductImportRequest {
   warehouse_id?: string;
 }
 
+export interface ProductImportError {
+  row?: number;
+  code?: string;
+  reason: string;
+}
+
+export interface ProductImportResponse {
+  code?: number;
+  message?: string;
+  data?: {
+    totalRows?: number;
+    imported?: number;
+    failed?: number;
+    errors?: ProductImportError[];
+  };
+  // Direct fields (for unwrapped response)
+  totalRows?: number;
+  imported?: number;
+  failed?: number;
+  success?: number;
+  errors?: ProductImportError[];
+}
+
 // Helper function to normalize product data from API response
 const normalizeProduct = (row: any): Product => {
   const price = parseFloat(row.price ?? '0');
@@ -152,21 +175,27 @@ export const productApi = {
   },
 
   // Import products from Excel
-  importProducts: async (data: ProductImportRequest): Promise<{ 
-    success: number; 
-    failed: number; 
-    errors: string[] 
-  }> => {
+  importProducts: async (data: ProductImportRequest): Promise<ProductImportResponse> => {
     const formData = new FormData();
     formData.append('file', data.file);
     if (data.warehouse_id) {
       formData.append('warehouse_id', data.warehouse_id);
     }
 
-    return api.upload<{ success: number; failed: number; errors: string[] }>(
-      API_ENDPOINTS.PRODUCTS.IMPORT,
-      formData
-    );
+    try {
+      const response = await api.upload<any>(
+        API_ENDPOINTS.PRODUCTS.IMPORT,
+        formData
+      );
+      // Normalize response - handle both wrapped { code, data, message } and direct format
+      return response;
+    } catch (error: any) {
+      if (error.response?.status === 400 && error.response?.data) {
+        // Return the error response data (which contains errors array)
+        return error.response.data as ProductImportResponse;
+      }
+      throw error;
+    }
   },
 
   // Export products to Excel
@@ -193,5 +222,31 @@ export const productApi = {
     }
 
     return response.blob();
+  },
+
+  // Download import template from backend
+  downloadImportTemplate: async (): Promise<{ blob: Blob; filename: string }> => {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0'}${API_ENDPOINTS.PRODUCTS.IMPORT_TEMPLATE}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download template');
+    }
+
+    // Extract filename from Content-Disposition header
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'product-import-template.xlsx';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '');
+      }
+    }
+
+    const blob = await response.blob();
+    return { blob, filename };
   }
 };

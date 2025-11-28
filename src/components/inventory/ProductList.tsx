@@ -15,7 +15,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import React from "react";
-import { productApi } from "@/api/product.api";
+import { productApi, type ProductImportError } from "@/api/product.api";
 import { categoriesApi } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -69,6 +69,8 @@ const ProductList: React.FC<ProductListProps> = ({
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importErrors, setImportErrors] = useState<ProductImportError[]>([]);
+  const [importSummary, setImportSummary] = useState<{ imported: number; failed: number; totalRows: number } | null>(null);
 
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
@@ -231,6 +233,19 @@ const ProductList: React.FC<ProductListProps> = ({
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
   };
+
+  const resetImportState = React.useCallback(() => {
+    setImportFile(null);
+    setImportErrors([]);
+    setImportSummary(null);
+  }, []);
+
+  const handleImportDialogToggle = React.useCallback((open: boolean) => {
+    setIsImportDialogOpen(open);
+    if (!open) {
+      resetImportState();
+    }
+  }, [resetImportState]);
 
   // Handle sorting
   const handleSort = (key: string) => {
@@ -455,47 +470,27 @@ const ProductList: React.FC<ProductListProps> = ({
     }).format(amount);
   };
 
-  const downloadProductImportTemplate = () => {
-    const headers = [
-      'Tên sản phẩm',
-      'Mã sản phẩm',
-      'Loại sản phẩm',
-      'Đơn vị tính',
-      'Ngưỡng hàng sắp hết',
-      'Hãng sản xuất',
-      'Mô tả',
-      'Barcode',
-      'Giá vốn',
-      'Giá bán'
-    ];
-    
-    const sampleData = [
-      ['iPhone 15', 'IPH15', 'Điện thoại', 'cái', 10, 'Apple', 'Điện thoại thông minh', '1234567890123', 20000000, 25000000],
-      ['Samsung Galaxy S24', 'SGS24', 'Điện thoại', 'cái', 15, 'Samsung', 'Điện thoại thông minh', '1234567890124', 18000000, 22000000]
-    ];
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
-
-    const colWidths = [
-      { wch: 25 },  // Tên sản phẩm
-      { wch: 15 },  // Mã sản phẩm
-      { wch: 20 },  // Loại sản phẩm
-      { wch: 12 },  // Đơn vị tính
-      { wch: 18 },  // Ngưỡng hàng sắp hết
-      { wch: 20 },  // Hãng sản xuất
-      { wch: 30 },  // Mô tả
-      { wch: 15 },  // Barcode
-      { wch: 12 },  // Giá vốn
-      { wch: 12 }   // Giá bán
-    ];
-
-    ws['!cols'] = colWidths;
-    XLSX.utils.book_append_sheet(wb, ws, 'Mẫu import sản phẩm');
-
-    const filename = 'Mau_import_san_pham.xlsx';
-    XLSX.writeFile(wb, filename);
-    toast({ title: 'Thành công', description: 'Đã tải file mẫu' });
+  const downloadProductImportTemplate = async () => {
+    try {
+      const { blob, filename } = await productApi.downloadImportTemplate();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename; // Use filename from backend
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast({ title: 'Thành công', description: 'Đã tải file mẫu từ server' });
+    } catch (error: any) {
+      console.error('Error downloading template:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải file mẫu';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
+    }
   };
 
   const handleImportProducts = async () => {
@@ -506,138 +501,59 @@ const ProductList: React.FC<ProductListProps> = ({
 
     try {
       setIsImporting(true);
+      setImportErrors([]);
+      setImportSummary(null);
+
+      const response = await productApi.importProducts({ file: importFile });
       
-      // Read Excel file
-      const data = await importFile.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[];
-
-      if (jsonData.length < 2) {
-        toast({ title: 'Lỗi', description: 'File Excel không có dữ liệu', variant: 'destructive' });
-        return;
-      }
-
-      const headers = jsonData[0] as string[];
-      const rows = jsonData.slice(1) as any[];
-
-      // Map headers to indices
-      const getHeaderIndex = (searchTerms: string[]): number => {
-        for (let i = 0; i < headers.length; i++) {
-          const normalizedHeader = (headers[i] || '').toString().trim().toLowerCase();
-          if (searchTerms.some(term => normalizedHeader.includes(term))) {
-            return i;
-          }
-        }
-        return -1;
-      };
-
-      const nameIndex = getHeaderIndex(['tên sản phẩm', 'tên']);
-      const codeIndex = getHeaderIndex(['mã sản phẩm', 'mã']);
-      const categoryIndex = getHeaderIndex(['loại sản phẩm', 'loại']);
-      const unitIndex = getHeaderIndex(['đơn vị tính', 'đơn vị']);
-      const thresholdIndex = getHeaderIndex(['ngưỡng hàng sắp hết', 'ngưỡng', 'sắp hết']);
-      const manufacturerIndex = getHeaderIndex(['hãng sản xuất', 'hãng']);
-      const descriptionIndex = getHeaderIndex(['mô tả']);
-      const barcodeIndex = getHeaderIndex(['barcode', 'mã vạch']);
-      const costPriceIndex = getHeaderIndex(['giá vốn', 'cost']);
-      const priceIndex = getHeaderIndex(['giá bán', 'price', 'sell']);
-
-      let successCount = 0;
-      let errorCount = 0;
-      const errors: string[] = [];
-
-      // Process each row
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-
-        try {
-          const name = nameIndex >= 0 ? String(row[nameIndex] || '').trim() : String(row[0] || '').trim();
-          if (!name) {
-            errorCount++;
-            errors.push(`Dòng ${i + 2}: Thiếu tên sản phẩm`);
-            continue;
-          }
-
-          const productData: any = { name };
-
-          if (codeIndex >= 0 && row[codeIndex]) {
-            const code = String(row[codeIndex]).trim();
-            if (code) productData.code = code;
-          }
-
-          if (categoryIndex >= 0 && row[categoryIndex]) {
-            const categoryName = String(row[categoryIndex]).trim();
-            if (categoryName) {
-              const categoryId = await ensureCategoryId(categoryName);
-              if (categoryId) productData.category = categoryId;
-            }
-          }
-
-          if (unitIndex >= 0 && row[unitIndex]) {
-            const unit = String(row[unitIndex]).trim();
-            if (unit) productData.unit = unit;
-          } else {
-            productData.unit = 'cái'; // Default
-          }
-
-          if (thresholdIndex >= 0 && row[thresholdIndex] !== undefined && row[thresholdIndex] !== null && row[thresholdIndex] !== '') {
-            const threshold = Number(row[thresholdIndex]);
-            if (!isNaN(threshold) && threshold > 0) productData.lowStockThreshold = threshold;
-          }
-
-          if (manufacturerIndex >= 0 && row[manufacturerIndex]) {
-            const manufacturer = String(row[manufacturerIndex]).trim();
-            if (manufacturer) productData.manufacturer = manufacturer;
-          }
-
-          if (descriptionIndex >= 0 && row[descriptionIndex]) {
-            const description = String(row[descriptionIndex]).trim();
-            if (description) productData.description = description;
-          }
-
-          if (barcodeIndex >= 0 && row[barcodeIndex]) {
-            const barcode = String(row[barcodeIndex]).trim();
-            if (barcode) productData.barcode = barcode;
-          }
-
-          if (costPriceIndex >= 0 && row[costPriceIndex] !== undefined && row[costPriceIndex] !== null && row[costPriceIndex] !== '') {
-            const cost = Number(row[costPriceIndex]);
-            if (!isNaN(cost) && cost > 0) productData.costPrice = cost;
-          }
-
-          if (priceIndex >= 0 && row[priceIndex] !== undefined && row[priceIndex] !== null && row[priceIndex] !== '') {
-            const price = Number(row[priceIndex]);
-            if (!isNaN(price) && price > 0) productData.price = price;
-          }
-
-          await productApi.createProduct(productData);
-          successCount++;
-        } catch (error: any) {
-          errorCount++;
-          errors.push(`Dòng ${i + 2}: ${error.response?.data?.message || error.message || 'Lỗi không xác định'}`);
-        }
-      }
-
-      toast({
-        title: 'Hoàn thành',
-        description: `Import thành công: ${successCount} sản phẩm. Lỗi: ${errorCount} sản phẩm.${errors.length > 0 ? ' Xem console để biết chi tiết.' : ''}`
-      });
-
-      if (errors.length > 0) {
-        console.error('Import errors:', errors);
-      }
+      // Handle response structure: response.data contains the actual data
+      const responseData = response.data || response;
+      const imported = responseData.imported ?? 0;
+      const failed = responseData.failed ?? 0;
+      const totalRows = responseData.totalRows ?? imported + failed;
+      const errors = responseData.errors || [];
+      const message = response.message || '';
 
       onProductsUpdate();
-      setIsImportDialogOpen(false);
-      setImportFile(null);
+
+      // If there are errors, show them in the dialog
+      if (errors.length > 0) {
+        setImportErrors(errors);
+        setImportSummary({ imported, failed, totalRows });
+        toast({
+          title: imported === 0 ? 'Không thể import' : 'Hoàn thành với cảnh báo',
+          description: message || (imported === 0
+            ? `Không import được dòng nào. Có ${errors.length} lỗi cần xử lý.`
+            : `Đã import ${imported}/${totalRows} dòng. Có ${errors.length} lỗi cần xử lý.`),
+          variant: imported === 0 ? 'destructive' : 'default',
+        });
+        // Keep dialog open to show errors
+        return;
+      } else {
+        // No errors, all successful
+        toast({
+          title: 'Thành công',
+          description: message || `Đã import ${imported} sản phẩm.`,
+        });
+        setIsImportDialogOpen(false);
+        resetImportState();
+      }
     } catch (error: any) {
       console.error('Error importing products:', error);
+      const apiErrors: ProductImportError[] = error.response?.data?.errors || [];
+      if (apiErrors.length > 0) {
+        const imported = error.response?.data?.imported ?? 0;
+        const failed = error.response?.data?.failed ?? apiErrors.length;
+        const totalRows = error.response?.data?.totalRows ?? imported + failed;
+        setImportErrors(apiErrors);
+        setImportSummary({ imported, failed, totalRows });
+      }
+
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể import sản phẩm';
       toast({
         title: 'Lỗi',
-        description: error.response?.data?.message || error.message || 'Không thể import sản phẩm',
-        variant: 'destructive'
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: 'destructive',
       });
     } finally {
       setIsImporting(false);
@@ -939,7 +855,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 Xuất Excel
               </Button>
               {canManageProducts && (
-                <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                <Dialog open={isImportDialogOpen} onOpenChange={handleImportDialogToggle}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="w-full sm:w-auto">
                       <Upload className="w-4 h-4 mr-2" />
@@ -974,6 +890,10 @@ const ProductList: React.FC<ProductListProps> = ({
                             const file = e.target.files?.[0];
                             if (file) {
                               setImportFile(file);
+                            setImportErrors([]);
+                            setImportSummary(null);
+                          } else {
+                            setImportFile(null);
                             }
                           }}
                         />
@@ -983,11 +903,32 @@ const ProductList: React.FC<ProductListProps> = ({
                           Đã chọn: {importFile.name}
                         </div>
                       )}
+                    {importSummary && (
+                      <div className="rounded-md border border-muted/40 bg-muted/10 p-3 text-sm text-muted-foreground">
+                        Đã xử lý {importSummary.totalRows} dòng: thành công {importSummary.imported}, lỗi {importSummary.failed}.
+                      </div>
+                    )}
+                    {importErrors.length > 0 && (
+                      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                        <p className="text-sm font-medium text-destructive">Chi tiết lỗi:</p>
+                        <ul className="text-sm text-destructive space-y-1 max-h-40 overflow-y-auto">
+                          {importErrors.slice(0, 5).map((error, index) => (
+                            <li key={`${error.row ?? 'unknown'}-${error.code ?? 'no-code'}-${index}`}>
+                              Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
+                            </li>
+                          ))}
+                        </ul>
+                        {importErrors.length > 5 && (
+                          <p className="text-xs text-destructive/80">
+                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra file để xem đầy đủ.
+                          </p>
+                        )}
+                      </div>
+                    )}
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => {
-                        setIsImportDialogOpen(false);
-                        setImportFile(null);
+                        handleImportDialogToggle(false);
                       }}>
                         Hủy
                       </Button>
