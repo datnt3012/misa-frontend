@@ -260,20 +260,20 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
     <div className={embedded ? "space-y-6" : "container mx-auto px-4 py-6 space-y-6"}>
       {/* Header */}
       {!embedded && (
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Quản lý Loại sản phẩm</h1>
-            <p className="text-muted-foreground">
-              Quản lý các loại sản phẩm trong hệ thống
-            </p>
-          </div>
-          {canCreate && (
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Thêm loại sản phẩm
-            </Button>
-          )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Quản lý Loại sản phẩm</h1>
+          <p className="text-muted-foreground">
+            Quản lý các loại sản phẩm trong hệ thống
+          </p>
         </div>
+        {canCreate && (
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Thêm loại sản phẩm
+          </Button>
+        )}
+      </div>
       )}
       {embedded && (
         <div className="flex items-center justify-between mb-4">

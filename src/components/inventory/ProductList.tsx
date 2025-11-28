@@ -19,6 +19,9 @@ import { productApi } from "@/api/product.api";
 import { categoriesApi } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { NumberInput } from "@/components/ui/number-input";
+import { Textarea } from "@/components/ui/textarea";
+import { Upload } from "lucide-react";
 
 interface ProductListProps {
   products: any[];
@@ -53,13 +56,19 @@ const ProductList: React.FC<ProductListProps> = ({
     costPrice: 0,
     price: 0,
     unit: 'cái',
-    barcode: ''
+    barcode: '',
+    lowStockThreshold: 0,
+    manufacturer: '',
+    description: ''
   });
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const [isEditProductDialogOpen, setIsEditProductDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
@@ -251,8 +260,9 @@ const ProductList: React.FC<ProductListProps> = ({
       toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
       return;
     }
-    if (!newProduct.price || newProduct.price <= 0) {
-      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0', variant: 'destructive' });
+    // Giá bán không còn bắt buộc
+    if (newProduct.price && newProduct.price <= 0) {
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
       return;
     }
 
@@ -261,14 +271,44 @@ const ProductList: React.FC<ProductListProps> = ({
 
       const categoryId = await ensureCategoryId(newProduct.category);
 
-      const response = await productApi.createProduct({
+      const productData: any = {
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: categoryId ?? undefined,
         unit: newProduct.unit,
-        price: newProduct.price,
-        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
-      });
+      };
+
+      // Optional price - only include if provided and > 0
+      if (newProduct.price && newProduct.price > 0) {
+        productData.price = newProduct.price;
+      }
+
+      // Optional costPrice - only include if provided
+      if (newProduct.costPrice && newProduct.costPrice > 0) {
+        productData.costPrice = newProduct.costPrice;
+      }
+
+      // lowStockThreshold - include if provided (can be 0 or positive number)
+      if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
+        productData.lowStockThreshold = newProduct.lowStockThreshold;
+      }
+
+      // manufacturer - include if provided (non-empty string)
+      if (newProduct.manufacturer && newProduct.manufacturer.trim()) {
+        productData.manufacturer = newProduct.manufacturer.trim();
+      }
+
+      // description - include if provided (non-empty string)
+      if (newProduct.description && newProduct.description.trim()) {
+        productData.description = newProduct.description.trim();
+      }
+
+      // barcode - include if provided (non-empty string)
+      if (newProduct.barcode && newProduct.barcode.trim()) {
+        productData.barcode = newProduct.barcode.trim();
+      }
+
+      const response = await productApi.createProduct(productData);
 
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
@@ -279,7 +319,10 @@ const ProductList: React.FC<ProductListProps> = ({
         costPrice: 0,
         price: 0,
         unit: 'cái',
-        barcode: ''
+        barcode: '',
+        lowStockThreshold: 0,
+        manufacturer: '',
+        description: ''
       });
       setIsAddProductDialogOpen(false);
     } catch (error: any) {
@@ -300,7 +343,10 @@ const ProductList: React.FC<ProductListProps> = ({
       costPrice: product.costPrice || 0,
       price: product.price || 0,
       unit: product.unit || 'cái',
-      barcode: product.barcode || ''
+      barcode: product.barcode || '',
+      lowStockThreshold: product.lowStockThreshold || 0,
+      manufacturer: product.manufacturer || '',
+      description: product.description || ''
     });
     setIsEditProductDialogOpen(true);
   };
@@ -310,8 +356,9 @@ const ProductList: React.FC<ProductListProps> = ({
       toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
       return;
     }
-    if (!newProduct.price || newProduct.price <= 0) {
-      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0', variant: 'destructive' });
+    // Giá bán không còn bắt buộc
+    if (newProduct.price && newProduct.price <= 0) {
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
       return;
     }
 
@@ -320,15 +367,44 @@ const ProductList: React.FC<ProductListProps> = ({
 
       const categoryId = await ensureCategoryId(newProduct.category);
 
-      const response = await productApi.updateProduct(editingProduct.id, {
+      const updateData: any = {
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: categoryId ?? undefined,
         unit: newProduct.unit,
-        price: newProduct.price,
-        ...(newProduct.costPrice && { costPrice: newProduct.costPrice }), // Include costPrice if provided
-        ...(newProduct.barcode && { barcode: newProduct.barcode }), // Include barcode if provided
-      });
+      };
+
+      // Optional price - only include if provided and > 0
+      if (newProduct.price && newProduct.price > 0) {
+        updateData.price = newProduct.price;
+      }
+
+      // Optional costPrice - only include if provided
+      if (newProduct.costPrice && newProduct.costPrice > 0) {
+        updateData.costPrice = newProduct.costPrice;
+      }
+
+      // lowStockThreshold - include if provided (can be 0 or positive number)
+      if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
+        updateData.lowStockThreshold = newProduct.lowStockThreshold;
+      }
+
+      // manufacturer - include if provided (non-empty string)
+      if (newProduct.manufacturer && newProduct.manufacturer.trim()) {
+        updateData.manufacturer = newProduct.manufacturer.trim();
+      }
+
+      // description - include if provided (non-empty string)
+      if (newProduct.description && newProduct.description.trim()) {
+        updateData.description = newProduct.description.trim();
+      }
+
+      // barcode - include if provided (non-empty string)
+      if (newProduct.barcode && newProduct.barcode.trim()) {
+        updateData.barcode = newProduct.barcode.trim();
+      }
+
+      const response = await productApi.updateProduct(editingProduct.id, updateData);
 
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
       onProductsUpdate();
@@ -340,7 +416,10 @@ const ProductList: React.FC<ProductListProps> = ({
         costPrice: 0,
         price: 0,
         unit: 'cái',
-        barcode: ''
+        barcode: '',
+        lowStockThreshold: 0,
+        manufacturer: '',
+        description: ''
       });
       setIsEditProductDialogOpen(false);
     } catch (error: any) {
@@ -376,6 +455,195 @@ const ProductList: React.FC<ProductListProps> = ({
     }).format(amount);
   };
 
+  const downloadProductImportTemplate = () => {
+    const headers = [
+      'Tên sản phẩm',
+      'Mã sản phẩm',
+      'Loại sản phẩm',
+      'Đơn vị tính',
+      'Ngưỡng hàng sắp hết',
+      'Hãng sản xuất',
+      'Mô tả',
+      'Barcode',
+      'Giá vốn',
+      'Giá bán'
+    ];
+    
+    const sampleData = [
+      ['iPhone 15', 'IPH15', 'Điện thoại', 'cái', 10, 'Apple', 'Điện thoại thông minh', '1234567890123', 20000000, 25000000],
+      ['Samsung Galaxy S24', 'SGS24', 'Điện thoại', 'cái', 15, 'Samsung', 'Điện thoại thông minh', '1234567890124', 18000000, 22000000]
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+
+    const colWidths = [
+      { wch: 25 },  // Tên sản phẩm
+      { wch: 15 },  // Mã sản phẩm
+      { wch: 20 },  // Loại sản phẩm
+      { wch: 12 },  // Đơn vị tính
+      { wch: 18 },  // Ngưỡng hàng sắp hết
+      { wch: 20 },  // Hãng sản xuất
+      { wch: 30 },  // Mô tả
+      { wch: 15 },  // Barcode
+      { wch: 12 },  // Giá vốn
+      { wch: 12 }   // Giá bán
+    ];
+
+    ws['!cols'] = colWidths;
+    XLSX.utils.book_append_sheet(wb, ws, 'Mẫu import sản phẩm');
+
+    const filename = 'Mau_import_san_pham.xlsx';
+    XLSX.writeFile(wb, filename);
+    toast({ title: 'Thành công', description: 'Đã tải file mẫu' });
+  };
+
+  const handleImportProducts = async () => {
+    if (!importFile) {
+      toast({ title: 'Lỗi', description: 'Vui lòng chọn file Excel', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      
+      // Read Excel file
+      const data = await importFile.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[];
+
+      if (jsonData.length < 2) {
+        toast({ title: 'Lỗi', description: 'File Excel không có dữ liệu', variant: 'destructive' });
+        return;
+      }
+
+      const headers = jsonData[0] as string[];
+      const rows = jsonData.slice(1) as any[];
+
+      // Map headers to indices
+      const getHeaderIndex = (searchTerms: string[]): number => {
+        for (let i = 0; i < headers.length; i++) {
+          const normalizedHeader = (headers[i] || '').toString().trim().toLowerCase();
+          if (searchTerms.some(term => normalizedHeader.includes(term))) {
+            return i;
+          }
+        }
+        return -1;
+      };
+
+      const nameIndex = getHeaderIndex(['tên sản phẩm', 'tên']);
+      const codeIndex = getHeaderIndex(['mã sản phẩm', 'mã']);
+      const categoryIndex = getHeaderIndex(['loại sản phẩm', 'loại']);
+      const unitIndex = getHeaderIndex(['đơn vị tính', 'đơn vị']);
+      const thresholdIndex = getHeaderIndex(['ngưỡng hàng sắp hết', 'ngưỡng', 'sắp hết']);
+      const manufacturerIndex = getHeaderIndex(['hãng sản xuất', 'hãng']);
+      const descriptionIndex = getHeaderIndex(['mô tả']);
+      const barcodeIndex = getHeaderIndex(['barcode', 'mã vạch']);
+      const costPriceIndex = getHeaderIndex(['giá vốn', 'cost']);
+      const priceIndex = getHeaderIndex(['giá bán', 'price', 'sell']);
+
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      // Process each row
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        try {
+          const name = nameIndex >= 0 ? String(row[nameIndex] || '').trim() : String(row[0] || '').trim();
+          if (!name) {
+            errorCount++;
+            errors.push(`Dòng ${i + 2}: Thiếu tên sản phẩm`);
+            continue;
+          }
+
+          const productData: any = { name };
+
+          if (codeIndex >= 0 && row[codeIndex]) {
+            const code = String(row[codeIndex]).trim();
+            if (code) productData.code = code;
+          }
+
+          if (categoryIndex >= 0 && row[categoryIndex]) {
+            const categoryName = String(row[categoryIndex]).trim();
+            if (categoryName) {
+              const categoryId = await ensureCategoryId(categoryName);
+              if (categoryId) productData.category = categoryId;
+            }
+          }
+
+          if (unitIndex >= 0 && row[unitIndex]) {
+            const unit = String(row[unitIndex]).trim();
+            if (unit) productData.unit = unit;
+          } else {
+            productData.unit = 'cái'; // Default
+          }
+
+          if (thresholdIndex >= 0 && row[thresholdIndex] !== undefined && row[thresholdIndex] !== null && row[thresholdIndex] !== '') {
+            const threshold = Number(row[thresholdIndex]);
+            if (!isNaN(threshold) && threshold > 0) productData.lowStockThreshold = threshold;
+          }
+
+          if (manufacturerIndex >= 0 && row[manufacturerIndex]) {
+            const manufacturer = String(row[manufacturerIndex]).trim();
+            if (manufacturer) productData.manufacturer = manufacturer;
+          }
+
+          if (descriptionIndex >= 0 && row[descriptionIndex]) {
+            const description = String(row[descriptionIndex]).trim();
+            if (description) productData.description = description;
+          }
+
+          if (barcodeIndex >= 0 && row[barcodeIndex]) {
+            const barcode = String(row[barcodeIndex]).trim();
+            if (barcode) productData.barcode = barcode;
+          }
+
+          if (costPriceIndex >= 0 && row[costPriceIndex] !== undefined && row[costPriceIndex] !== null && row[costPriceIndex] !== '') {
+            const cost = Number(row[costPriceIndex]);
+            if (!isNaN(cost) && cost > 0) productData.costPrice = cost;
+          }
+
+          if (priceIndex >= 0 && row[priceIndex] !== undefined && row[priceIndex] !== null && row[priceIndex] !== '') {
+            const price = Number(row[priceIndex]);
+            if (!isNaN(price) && price > 0) productData.price = price;
+          }
+
+          await productApi.createProduct(productData);
+          successCount++;
+        } catch (error: any) {
+          errorCount++;
+          errors.push(`Dòng ${i + 2}: ${error.response?.data?.message || error.message || 'Lỗi không xác định'}`);
+        }
+      }
+
+      toast({
+        title: 'Hoàn thành',
+        description: `Import thành công: ${successCount} sản phẩm. Lỗi: ${errorCount} sản phẩm.${errors.length > 0 ? ' Xem console để biết chi tiết.' : ''}`
+      });
+
+      if (errors.length > 0) {
+        console.error('Import errors:', errors);
+      }
+
+      onProductsUpdate();
+      setIsImportDialogOpen(false);
+      setImportFile(null);
+    } catch (error: any) {
+      console.error('Error importing products:', error);
+      toast({
+        title: 'Lỗi',
+        description: error.response?.data?.message || error.message || 'Không thể import sản phẩm',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const exportToExcel = () => {
     const exportData = sortedProducts.map((product, index) => {
       const exportItem: any = {
@@ -384,6 +652,9 @@ const ProductList: React.FC<ProductListProps> = ({
         'Tên sản phẩm': product.name,
         'Loại': getCategoryNameFromValue(product.category) || '',
         'Đơn vị': product.unit || 'cái',
+        'Hãng sản xuất': product.manufacturer || '',
+        'Barcode': product.barcode || '',
+        'Mô tả': product.description || '',
         'Giá bán (VND)': product.price || 0,
         'Cập nhật': product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : ''
       };
@@ -404,6 +675,9 @@ const ProductList: React.FC<ProductListProps> = ({
       { wch: 30 },  // Tên sản phẩm
       { wch: 15 },  // Loại
       { wch: 10 },  // Đơn vị
+      { wch: 20 },  // Hãng sản xuất
+      { wch: 15 },  // Barcode
+      { wch: 30 },  // Mô tả
     ];
 
     if (canViewCostPrice) {
@@ -488,13 +762,13 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm (tùy chọn)</Label>
+                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm <span className="text-red-500">*</span></Label>
                         <Input 
                           id="product-code" 
                           className="col-span-3"
                           value={newProduct.code}
                           onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Để trống để hệ thống tự tạo"
+                          placeholder="Nhập mã sản phẩm"
                         />
                       </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -577,6 +851,40 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="lowStockThreshold" className="text-right">Ngưỡng hàng sắp hết</Label>
+                        <NumberInput 
+                          id="lowStockThreshold" 
+                          className="col-span-3"
+                          value={newProduct.lowStockThreshold}
+                          onChange={(value) => setNewProduct(prev => ({ ...prev, lowStockThreshold: value }))}
+                          placeholder="0"
+                          min={0}
+                        />
+                        <div className="col-span-1"></div>
+                        <p className="col-span-3 text-xs text-muted-foreground">Cảnh báo khi tồn kho &lt;= giá trị này</p>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="manufacturer" className="text-right">Hãng sản xuất</Label>
+                        <Input 
+                          id="manufacturer" 
+                          className="col-span-3"
+                          value={newProduct.manufacturer}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, manufacturer: e.target.value }))}
+                          placeholder="Nhập hãng sản xuất (tùy chọn)"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="description" className="text-right">Mô tả sản phẩm</Label>
+                        <Textarea 
+                          id="description" 
+                          className="col-span-3"
+                          value={newProduct.description}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Nhập mô tả sản phẩm (tùy chọn)"
+                          rows={3}
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="barcode" className="text-right">Barcode</Label>
                         <Input 
                           id="barcode" 
@@ -599,7 +907,7 @@ const ProductList: React.FC<ProductListProps> = ({
                         </div>
                       )}
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sell-price" className="text-right">Giá bán <span className="text-red-500">*</span></Label>
+                        <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
                         <CurrencyInput 
                           id="sell-price" 
                           className="col-span-3"
@@ -630,6 +938,69 @@ const ProductList: React.FC<ProductListProps> = ({
                 <Download className="w-4 h-4 mr-2" />
                 Xuất Excel
               </Button>
+              {canManageProducts && (
+                <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full sm:w-auto">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import Excel
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                      <DialogTitle>Import Sản Phẩm Từ Excel</DialogTitle>
+                      <DialogDescription>
+                        Tải file Excel mẫu hoặc chọn file để import sản phẩm mới
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={downloadProductImportTemplate}
+                          className="flex-1"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Tải File Mẫu
+                        </Button>
+                      </div>
+                      <div>
+                        <Label htmlFor="import-file">Chọn file Excel</Label>
+                        <Input
+                          id="import-file"
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setImportFile(file);
+                            }
+                          }}
+                        />
+                      </div>
+                      {importFile && (
+                        <div className="text-sm text-muted-foreground">
+                          Đã chọn: {importFile.name}
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => {
+                        setIsImportDialogOpen(false);
+                        setImportFile(null);
+                      }}>
+                        Hủy
+                      </Button>
+                      <Button 
+                        onClick={handleImportProducts}
+                        disabled={!importFile || isImporting}
+                      >
+                        {isImporting ? 'Đang import...' : 'Import Sản Phẩm'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           </div>
         </div>
@@ -745,6 +1116,40 @@ const ProductList: React.FC<ProductListProps> = ({
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-lowStockThreshold" className="text-right">Ngưỡng hàng sắp hết</Label>
+                  <NumberInput 
+                    id="edit-lowStockThreshold" 
+                    className="col-span-3"
+                    value={newProduct.lowStockThreshold}
+                    onChange={(value) => setNewProduct(prev => ({ ...prev, lowStockThreshold: value }))}
+                    placeholder="0"
+                    min={0}
+                  />
+                  <div className="col-span-1"></div>
+                  <p className="col-span-3 text-xs text-muted-foreground">Cảnh báo khi tồn kho &lt;= giá trị này</p>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-manufacturer" className="text-right">Hãng sản xuất</Label>
+                  <Input 
+                    id="edit-manufacturer" 
+                    className="col-span-3"
+                    value={newProduct.manufacturer}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, manufacturer: e.target.value }))}
+                    placeholder="Nhập hãng sản xuất (tùy chọn)"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-description" className="text-right">Mô tả sản phẩm</Label>
+                  <Textarea 
+                    id="edit-description" 
+                    className="col-span-3"
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Nhập mô tả sản phẩm (tùy chọn)"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-barcode" className="text-right">Barcode</Label>
                   <Input 
                     id="edit-barcode" 
@@ -790,7 +1195,10 @@ const ProductList: React.FC<ProductListProps> = ({
                       costPrice: 0,
                       price: 0,
                       unit: 'cái',
-                      barcode: ''
+                      barcode: '',
+                      lowStockThreshold: 0,
+                      manufacturer: '',
+                      description: ''
                     });
                   }}
                 >
@@ -862,6 +1270,9 @@ const ProductList: React.FC<ProductListProps> = ({
                   </div>
                 </TableHead>
                 <TableHead>Đơn Vị</TableHead>
+                <TableHead>Hãng Sản Xuất</TableHead>
+                <TableHead>Barcode</TableHead>
+                <TableHead>Mô Tả</TableHead>
                 {canViewCostPrice && (
                   <TableHead 
                     className="cursor-pointer hover:bg-muted/50 select-none"
@@ -899,7 +1310,7 @@ const ProductList: React.FC<ProductListProps> = ({
             <TableBody>
               {paginatedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 8 : 7) : (canViewCostPrice ? 7 : 6)} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 11 : 10) : (canViewCostPrice ? 10 : 9)} className="text-center py-8 text-muted-foreground">
                     {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
                   </TableCell>
                 </TableRow>
@@ -910,6 +1321,13 @@ const ProductList: React.FC<ProductListProps> = ({
                     <TableCell>{product.name}</TableCell>
                     <TableCell>{getCategoryNameFromValue(product.category) || '-'}</TableCell>
                     <TableCell>{product.unit || 'cái'}</TableCell>
+                    <TableCell>{product.manufacturer || '-'}</TableCell>
+                    <TableCell>{product.barcode || '-'}</TableCell>
+                    <TableCell className="max-w-xs">
+                      <div className="truncate" title={product.description || ''}>
+                        {product.description || '-'}
+                      </div>
+                    </TableCell>
                     {canViewCostPrice && (
                       <TableCell>{formatCurrency(product.costPrice || 0)}</TableCell>
                     )}
