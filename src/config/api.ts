@@ -224,5 +224,14 @@ export const API_ENDPOINTS = {
     UPLOAD: '/documents/upload',
     DOWNLOAD: (id: string) => `/documents/${id}/download`,
     DELETE: (id: string) => `/documents/${id}`,
+  },
+  
+  // Quotations
+  QUOTATIONS: {
+    LIST: '/quotations',
+    CREATE: '/quotations',
+    UPDATE: (id: string) => `/quotations/${id}`,
+    DELETE: (id: string) => `/quotations/${id}`,
+    EXPORT_LIST: '/quotations/export'
   }
 };
