@@ -230,8 +230,8 @@ export const API_ENDPOINTS = {
   QUOTATIONS: {
     LIST: '/quotations',
     CREATE: '/quotations',
+    STATUS: (id: string) => `/quotations/${id}/status`,
     UPDATE: (id: string) => `/quotations/${id}`,
     DELETE: (id: string) => `/quotations/${id}`,
-    EXPORT_LIST: '/quotations/export'
   }
 };

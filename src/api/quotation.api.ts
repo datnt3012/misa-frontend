@@ -341,13 +341,19 @@ export const quotationApi = {
     return normalizeQuotation(dataResponse);
   },
 
+  // Update order status (requires ORDERS_UPDATE_STATUS permission)
+  updateQuotationStatus: async (id: string, status: string): Promise<Quotation> => {
+    try {
+      const response = await api.patch<Quotation>(API_ENDPOINTS.QUOTATIONS.STATUS(id), { status });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Delete quotation
   deleteQuotation: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.QUOTATIONS.DELETE(id));
-  },
-
-  exportExcel: async () => {
-    return api.get<>(API_ENDPOINTS.QUOTATIONS.EXPORT_LIST)
   },
 };
 

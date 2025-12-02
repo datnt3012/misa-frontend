@@ -12,14 +12,16 @@ import { quotationApi, Quotation } from "@/api/quotation.api";
 import { customerApi } from "@/api/customer.api";
 import { usersApi } from "@/api/users.api";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
+import { format, set } from "date-fns";
+import { ca, vi } from "date-fns/locale";
 import { getErrorMessage } from "@/lib/error-utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import CreateQuotationForm from "@/components/quotations/CreateQuotationForm";
 import CreateOrderFromQuotation from "@/components/quotations/CreateOrderFromQuotation";
+import { ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
 const QuotationsContent: React.FC = () => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -50,6 +52,7 @@ const QuotationsContent: React.FC = () => {
   
   const { toast } = useToast();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
 
   // Fetch quotations function
   const fetchQuotations = useCallback(async () => {
@@ -168,12 +171,44 @@ const QuotationsContent: React.FC = () => {
     }
   };
 
+  const handleUpdateQuotationStatus = async (quotationId: string, newStatus: string) => {
+    try {
+      if(!hasPermission('QUOTATIONS_UPDATE_STATUS')) {
+        toast({
+          title: "Lỗi",
+          description: "Bạn không có quyền cập nhật trạng thái báo giá",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await quotationApi.updateQuotationStatus(quotationId, newStatus);
+
+      // Update local state directly with newStatus
+      setQuotations(prevQuotations => 
+        prevQuotations.map(q => 
+          q.id === quotationId ? { ...q, status: newStatus } : q
+        )
+      );
+
+      toast({
+        title: "Thành công",
+        description: `Đã cập nhật trạng thái báo giá`,
+      });
+    }catch(error: any){
+      toast({
+        title: "Lỗi",
+        description: error?.response?.data?.message || error?.message || "Không thể cập nhật trạng thái",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
       'completed': { label: 'Hoàn thành', variant: 'default' },
       'pending': { label: 'Chờ xử lý', variant: 'secondary' },
       'cancelled': { label: 'Đã hủy', variant: 'destructive' },
-      'draft': { label: 'Nháp', variant: 'outline' },
     };
     const config = statusConfig[status] || { label: status, variant: 'outline' as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
@@ -196,7 +231,6 @@ const QuotationsContent: React.FC = () => {
           'completed': 'Hoàn thành',
           'pending': 'Chờ xử lý',
           'cancelled': 'Đã hủy',
-          'draft': 'Nháp',
         };
 
         // Tính tổng tiền của tất cả sản phẩm trong báo giá
@@ -315,7 +349,6 @@ const QuotationsContent: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="draft">Nháp</SelectItem>
                   <SelectItem value="pending">Chờ xử lý</SelectItem>
                   <SelectItem value="completed">Hoàn thành</SelectItem>
                   <SelectItem value="cancelled">Đã hủy</SelectItem>
@@ -488,7 +521,24 @@ const QuotationsContent: React.FC = () => {
                           {quotation.creator?.email || 'N/A'}
                         </TableCell>
                         <TableCell className="text-center">
-                          {getStatusBadge(quotation.status)}
+                          <Select
+                              value={quotation.status || 'pending'}
+                              onValueChange={(newStatus) => handleUpdateQuotationStatus(quotation.id, newStatus)}
+                              disabled={!hasPermission('QUOTATIONS_UPDATE_STATUS')}
+                            >
+                              <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
+                                <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
+                                  {getStatusBadge(quotation.status || 'pending')}
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent className="min-w-[128px] sm:min-w-[144px]">
+                                {(['pending', 'completed', 'cancelled'] as const).map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {ORDER_STATUS_LABELS_VI[status] || status}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="text-center">
                           <DropdownMenu>
