@@ -87,7 +87,6 @@ jspm_packages/
 
 # Gatsby files
 .cache/
-public
 
 # Storybook build outputs
 .out
@@ -111,9 +110,15 @@ temp/
 *.sqlite
 *.sqlite3
 
+# Ignore everything in public except fonts
+public/*
+!public/fonts/
+public/fonts/*
+!public/fonts/*.ttf
+
 # Uploads and generated files
-public/lovable-uploads/
 uploads/
+
 
 # Test files
 *.test.js
