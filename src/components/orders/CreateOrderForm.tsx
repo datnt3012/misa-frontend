@@ -74,7 +74,10 @@ interface OrderFormState {
   initial_payment: number;
   initial_payment_method: string;
   initial_payment_bank: string;
+  order_warehouse_id: string;
   items: OrderItem[];
+  expenses: Array<{ name: string; amount: number; note?: string }>;
+  paymentDeadline: string;
 }
 
 const sanitizeVatField = (value?: string | null) => {
@@ -168,7 +171,10 @@ const createInitialOrderState = (): OrderFormState => ({
   initial_payment: 0,
   initial_payment_method: "cash",
   initial_payment_bank: "",
-  items: []
+  order_warehouse_id: "",
+  items: [],
+  expenses: [],
+  paymentDeadline: "",
 });
 
 const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
@@ -229,7 +235,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         total_price: 0,
         vat_rate: 0,
         vat_amount: 0,
-        warehouse_id: warehouses.length === 1 ? warehouses[0].id : ""
+        warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : "")
       }]
     }));
   };
@@ -254,9 +260,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             items[index].product_code = product.code;
             items[index].product_name = product.name;
             items[index].unit_price = product.price;
-            
-            // Auto-fill warehouse if only one warehouse available
-            if (warehouses.length === 1 && !items[index].warehouse_id) {
+            // Gắn kho theo kho của đơn nếu có
+            if (prev.order_warehouse_id) {
+              items[index].warehouse_id = prev.order_warehouse_id;
+            } else if (!items[index].warehouse_id && warehouses.length === 1) {
               items[index].warehouse_id = warehouses[0].id;
             }
           }
@@ -266,8 +273,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         items[index].total_price = subtotal;
       }
       
-      // Fetch stock level when product or warehouse changes
-      if (field === 'product_id' || field === 'warehouse_id') {
+      // Fetch stock level when product changes (kho lấy từ kho đơn hàng)
+      if (field === 'product_id') {
         fetchStockLevel(index, items[index].product_id, items[index].warehouse_id);
       }
       
@@ -302,8 +309,32 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     }
   };
 
+  const addExpense = () => {
+    setNewOrder(prev => ({
+      ...prev,
+      expenses: [...prev.expenses, { name: "", amount: 0, note: "" }]
+    }));
+  };
+
+  const removeExpense = (index: number) => {
+    setNewOrder(prev => ({
+      ...prev,
+      expenses: prev.expenses.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateExpense = (index: number, field: "name" | "amount" | "note", value: any) => {
+    setNewOrder(prev => {
+      const expenses = [...prev.expenses];
+      expenses[index] = { ...expenses[index], [field]: value };
+      return { ...prev, expenses };
+    });
+  };
+
   const calculateTotals = () => {
-    const subtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
+    const itemsSubtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
+    const expensesTotal = newOrder.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+    const subtotal = itemsSubtotal + expensesTotal;
     const debt = subtotal - (newOrder.initial_payment || 0);
     
     return { subtotal, debt };
@@ -381,11 +412,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       return;
     }
 
-    // Validate warehouse selection for items
-    if (newOrder.items.some(item => !item.warehouse_id)) {
+    // Validate warehouse selection for order
+    if (!newOrder.order_warehouse_id) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng chọn kho cho tất cả sản phẩm",
+        description: "Vui lòng chọn kho xuất hàng cho đơn",
         variant: "destructive",
       });
       return;
@@ -461,6 +492,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         bank: newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment_bank 
           ? newOrder.initial_payment_bank 
           : undefined,
+        paymentDeadline: newOrder.paymentDeadline || undefined,
         
         // Order details
         details: newOrder.items.map(it => ({
@@ -469,6 +501,14 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           quantity: it.quantity,
           unitPrice: it.unit_price,
         })),
+        // Additional expenses
+        expenses: newOrder.expenses
+          .filter(exp => (exp.name && exp.name.trim().length > 0) || exp.amount)
+          .map(exp => ({
+            name: exp.name.trim(),
+            amount: exp.amount || 0,
+            note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
+          })),
       });
 
       // Items are included in order payload; adjust if BE requires separate calls
@@ -725,25 +765,76 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="max-w-xs">
+                <Label>
+                  Kho xuất hàng <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={newOrder.order_warehouse_id}
+                  onValueChange={(value) => {
+                    setNewOrder((prev) => {
+                      const updatedItems = prev.items.map((it) => ({
+                        ...it,
+                        warehouse_id: value,
+                      }));
+
+                      // Gọi lại API tồn kho cho từng sản phẩm với kho mới
+                      updatedItems.forEach((it, index) => {
+                        if (it.product_id) {
+                          fetchStockLevel(index, it.product_id, value);
+                        }
+                      });
+
+                      return {
+                        ...prev,
+                        order_warehouse_id: value,
+                        items: updatedItems,
+                      };
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn kho xuất hàng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name} ({warehouse.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Table className="border border-border/30 rounded-lg overflow-hidden">
                 <TableHeader>
                   <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Sản phẩm <span className="text-red-500">*</span></TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Kho <span className="text-red-500">*</span></TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số lượng <span className="text-red-500">*</span></TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Đơn giá <span className="text-red-500">*</span></TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Thành tiền</TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Sản phẩm <span className="text-red-500">*</span>
+                    </TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Số lượng <span className="text-red-500">*</span>
+                    </TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Đơn giá <span className="text-red-500">*</span>
+                    </TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Thành tiền
+                    </TableHead>
                     <TableHead className="font-semibold text-slate-700"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {newOrder.items.map((item, index) => (
-                    <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50 h-20">
+                    <TableRow
+                      key={index}
+                      className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
+                    >
                       <TableCell className="border-r border-slate-100 align-top pt-4">
-                        <Select 
-                          value={item.product_id} 
-                          onValueChange={(value) => updateItem(index, 'product_id', value)}
+                        <Select
+                          value={item.product_id}
+                          onValueChange={(value) => updateItem(index, "product_id", value)}
                         >
                           <SelectTrigger className="w-[200px]">
                             <SelectValue placeholder="Chọn sản phẩm" />
@@ -758,33 +849,22 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         </Select>
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-4">
-                        <Select 
-                          value={item.warehouse_id} 
-                          onValueChange={(value) => updateItem(index, 'warehouse_id', value)}
-                        >
-                          <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="Chọn kho" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses.map((warehouse) => (
-                              <SelectItem key={warehouse.id} value={warehouse.id}>
-                                {warehouse.name} ({warehouse.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-4">
                         <div className="space-y-1">
                           <NumberInput
                             value={item.quantity}
-                            onChange={(value) => updateItem(index, 'quantity', value)}
+                            onChange={(value) => updateItem(index, "quantity", value)}
                             min={1}
                             className="w-20"
                           />
                           {item.current_stock !== undefined && (
                             <div className="text-xs">
-                              <span className={`${item.quantity > item.current_stock ? 'text-red-600' : 'text-gray-600'}`}>
+                              <span
+                                className={`${
+                                  item.quantity > item.current_stock
+                                    ? "text-red-600"
+                                    : "text-gray-600"
+                                }`}
+                              >
                                 Tồn kho: {item.current_stock}
                               </span>
                               {item.quantity > item.current_stock && (
@@ -797,12 +877,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       <TableCell className="border-r border-slate-100 align-top pt-4">
                         <CurrencyInput
                           value={item.unit_price}
-                          onChange={(value) => updateItem(index, 'unit_price', value)}
+                          onChange={(value) => updateItem(index, "unit_price", value)}
                           className="w-32"
                         />
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-7">
-                        {item.total_price.toLocaleString('vi-VN')}
+                        {item.total_price.toLocaleString("vi-VN")}
                       </TableCell>
                       <TableCell className="align-top pt-4">
                         <Button
@@ -817,6 +897,93 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+
+          {/* Additional Expenses */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                <span>Chi phí khác</span>
+                <Button onClick={addExpense} size="sm" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm chi phí
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {newOrder.expenses.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  Chưa có chi phí nào. Nhấn <span className="font-medium">Thêm chi phí</span> để bắt đầu.
+                </div>
+              ) : (
+                <>
+                  <Table className="border border-border/30 rounded-lg overflow-hidden">
+                    <TableHeader>
+                      <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                          Tên chi phí
+                        </TableHead>
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                          Số tiền
+                        </TableHead>
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                          Ghi chú
+                        </TableHead>
+                        <TableHead className="font-semibold text-slate-700"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {newOrder.expenses.map((expense, index) => (
+                        <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                          <TableCell className="border-r border-slate-100 align-top pt-4">
+                            <Input
+                              value={expense.name}
+                              onChange={(e) => updateExpense(index, "name", e.target.value)}
+                              placeholder="Ví dụ: Phí vận chuyển"
+                            />
+                          </TableCell>
+                          <TableCell className="border-r border-slate-100 align-top pt-4">
+                            <CurrencyInput
+                              value={expense.amount}
+                              onChange={(value) => updateExpense(index, "amount", value)}
+                              className="w-32"
+                            />
+                          </TableCell>
+                          <TableCell className="border-r border-slate-100 align-top pt-4">
+                            <Input
+                              value={expense.note || ""}
+                              onChange={(e) => updateExpense(index, "note", e.target.value)}
+                              placeholder="Ghi chú (không bắt buộc)"
+                            />
+                          </TableCell>
+                          <TableCell className="align-top pt-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeExpense(index)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  <div className="mt-3 flex justify-end">
+                    <div className="text-sm font-medium">
+                      Tổng chi phí:{" "}
+                      <span className="font-semibold text-blue-600">
+                        {newOrder.expenses
+                          .reduce((sum, exp) => sum + (exp.amount || 0), 0)
+                          .toLocaleString("vi-VN")}{" "}
+                        đ
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -880,6 +1047,20 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     </Select>
                   </div>
                 )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="payment_deadline">Hạn thanh toán</Label>
+                  <Input
+                    id="payment_deadline"
+                    type="date"
+                    value={newOrder.paymentDeadline}
+                    onChange={(e) =>
+                      setNewOrder((prev) => ({ ...prev, paymentDeadline: e.target.value }))
+                    }
+                  />
+                </div>
               </div>
               
               <div>

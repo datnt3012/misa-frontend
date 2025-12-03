@@ -657,6 +657,7 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng tiền</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
@@ -810,9 +811,16 @@ const OrdersContent: React.FC = () => {
                                )}
                              </div>
                            </TableCell>
-                           
-                            {/* Payment Column */}
-                          <TableCell className="py-3 border-r border-slate-200 text-center">
+                          
+                           {/* Total Amount Column */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-semibold text-slate-900">
+                               {formatVndNoSymbol(order.total_amount)}
+                             </div>
+                           </TableCell>
+
+                           {/* Payment Column */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
@@ -822,7 +830,7 @@ const OrdersContent: React.FC = () => {
                                   {formatVndNoSymbol(order.total_amount - (order.initial_payment || order.paid_amount))}
                                 </div>
                               </div>
-                            </TableCell>
+                           </TableCell>
                          
                           {/* Quick Notes Column */}
                           <TableCell className="py-3 border-r border-slate-200">

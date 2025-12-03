@@ -929,6 +929,68 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <span className="font-medium">{formatCurrency(orderDetails.total_amount)}</span>
               </div>
               <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Hạn thanh toán:</span>
+                <div className="flex items-center gap-2">
+                  {editingFields['paymentDeadline'] ? (
+                    <>
+                      <Input
+                        type="date"
+                        value={
+                          editValues['paymentDeadline'] ??
+                          (orderDetails.paymentDeadline && /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
+                            ? orderDetails.paymentDeadline
+                            : orderDetails.paymentDeadline
+                            ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
+                            : '')
+                        }
+                        onChange={(e) =>
+                          setEditValues((prev) => ({
+                            ...prev,
+                            paymentDeadline: e.target.value,
+                          }))
+                        }
+                        className="w-40"
+                      />
+                      <Button size="sm" onClick={() => saveField('paymentDeadline')} disabled={loading}>
+                        Lưu
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => cancelEditing('paymentDeadline')}
+                      >
+                        Hủy
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        {orderDetails.paymentDeadline
+                          ? new Date(orderDetails.paymentDeadline).toLocaleDateString('vi-VN')
+                          : 'Chưa đặt'}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          startEditing(
+                            'paymentDeadline',
+                            orderDetails.paymentDeadline &&
+                            /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
+                              ? orderDetails.paymentDeadline
+                              : orderDetails.paymentDeadline
+                              ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
+                              : ''
+                          )
+                        }
+                      >
+                        Sửa
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
                 <div className="flex items-center gap-2">
                   <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>

@@ -43,6 +43,7 @@ export interface Order {
   paid_amount: number;
   debt_amount: number;
   debt_date?: string;
+  paymentDeadline?: string;
   notes?: string;
   vat_type?: string;
   vat_rate?: number;
@@ -103,6 +104,7 @@ export interface Order {
   companyAddress?: string;
   vatEmail?: string;
   companyPhone?: string;
+  expenses?: Array<{ name: string; amount: number; note?: string | null }>;
 }
 
 export interface CreateOrderRequest {
@@ -149,6 +151,7 @@ export interface CreateOrderRequest {
   initialPayment?: number;
   totalAmount: number;
   bank?: string; // Bank ID or code when payment method is bank_transfer
+  paymentDeadline?: string; // YYYY-MM-DD
   
   // Order details
   details: {
@@ -156,6 +159,12 @@ export interface CreateOrderRequest {
     warehouseId: string;
     quantity: number;
     unitPrice: number;
+  }[];
+  // Additional expenses
+  expenses?: {
+    name: string;
+    amount: number;
+    note?: string;
   }[];
   
   // Optional fields
@@ -197,6 +206,13 @@ export interface UpdateOrderRequest {
   companyAddress?: string;
   vatEmail?: string;
   companyPhone?: string;
+  // Replace full expenses array when updating
+  expenses?: {
+    name: string;
+    amount: number;
+    note?: string;
+  }[];
+  paymentDeadline?: string; // YYYY-MM-DD
 }
 
 export interface CreateOrderItemRequest {
@@ -398,6 +414,7 @@ export const orderApi = {
       })(),
       contract_number: row.contract_number ?? row.contractNumber ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
+      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
       creator_info: row.creator ? {
         id: row.creator.id,
@@ -415,6 +432,13 @@ export const orderApi = {
       companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
       vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
       companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
+      expenses: Array.isArray(row.expenses)
+        ? row.expenses.map((exp: any) => ({
+            name: String(exp.name ?? "").trim(),
+            amount: Number(exp.amount ?? 0),
+            note: exp.note ?? null,
+          }))
+        : undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
@@ -561,6 +585,7 @@ export const orderApi = {
       })(),
       contract_number: row.contract_number ?? row.contractNumber ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
+      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
       creator_info: row.creator ? {
         id: row.creator.id,
@@ -578,6 +603,13 @@ export const orderApi = {
       companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
       vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
       companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
+      expenses: Array.isArray(row.expenses)
+        ? row.expenses.map((exp: any) => ({
+            name: String(exp.name ?? "").trim(),
+            amount: Number(exp.amount ?? 0),
+            note: exp.note ?? null,
+          }))
+        : undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
@@ -665,6 +697,7 @@ export const orderApi = {
       notes: row.notes ?? row.note ?? row.description ?? '',
       contract_number: row.contract_number ?? row.contractNumber ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
+      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
       creator_info: row.creator ? {
         id: row.creator.id,
@@ -689,6 +722,13 @@ export const orderApi = {
         email: row.customer.email,
         phone: row.customer.phoneNumber ?? row.customer.phone,
       } : undefined,
+      expenses: Array.isArray(row.expenses)
+        ? row.expenses.map((exp: any) => ({
+            name: String(exp.name ?? "").trim(),
+            amount: Number(exp.amount ?? 0),
+            note: exp.note ?? null,
+          }))
+        : undefined,
     } as Order);
 
     return normalizeOrder(response);
@@ -824,6 +864,14 @@ export const orderApi = {
       receiverPhone: row.receiverPhone ?? row.receiver_phone,
       receiverAddress: row.receiverAddress ?? row.receiver_address,
       addressInfo: row.addressInfo ?? row.address_info,
+      expenses: Array.isArray(row.expenses)
+        ? row.expenses.map((exp: any) => ({
+            name: String(exp.name ?? "").trim(),
+            amount: Number(exp.amount ?? 0),
+            note: exp.note ?? null,
+          }))
+        : undefined,
+      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
     });
 
     return normalizeOrder(data);
