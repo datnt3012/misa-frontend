@@ -905,10 +905,25 @@ const OrdersContent: React.FC = () => {
                              </div>
                            </TableCell>
                           
-                           {/* Total Amount Column */}
+                          {/* Total Amount Column (products + expenses) */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                              <div className="text-sm font-semibold text-slate-900">
-                               {formatVndNoSymbol(order.total_amount)}
+                               {(() => {
+                                 // Tổng tiền sản phẩm
+                                 const itemsTotal =
+                                   order.items?.reduce(
+                                     (sum: number, item: any) => sum + (Number(item.total_price) || 0),
+                                     0
+                                   ) || 0;
+                                 // Tổng chi phí
+                                 const expensesTotal =
+                                   order.expenses?.reduce(
+                                     (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
+                                     0
+                                   ) || 0;
+                                 const grandTotal = itemsTotal + expensesTotal;
+                                 return formatVndNoSymbol(grandTotal);
+                               })()}
                              </div>
                            </TableCell>
 
@@ -935,15 +950,29 @@ const OrdersContent: React.FC = () => {
                                     return formatVndNoSymbol(paidAmount);
                                   })()}
                                 </div>
-                                {/* Số còn nợ: Tính từ total_amount - paid_amount */}
+                                {/* Số còn nợ: Tính từ Tổng giá trị (sản phẩm + chi phí) - Số đã thanh toán */}
                                 <div className="text-sm font-medium text-red-600">
                                   {(() => {
-                                    const totalAmount = order.total_amount || 0;
-                                    // Use cached total payments if available, otherwise fallback to paid_amount or initial_payment
+                                    // Tổng tiền sản phẩm
+                                    const itemsTotal =
+                                      order.items?.reduce(
+                                        (sum: number, item: any) => sum + (Number(item.total_price) || 0),
+                                        0
+                                      ) || 0;
+                                    // Tổng chi phí
+                                    const expensesTotal =
+                                      order.expenses?.reduce(
+                                        (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
+                                        0
+                                      ) || 0;
+                                    const grandTotal = itemsTotal + expensesTotal;
+
+                                    // Số đã thanh toán
                                     const paidAmount = orderPaymentsCache[order.id] !== undefined
                                       ? orderPaymentsCache[order.id]
                                       : (order.paid_amount || order.initial_payment || 0);
-                                    const debtAmount = Math.max(0, totalAmount - paidAmount);
+
+                                    const debtAmount = Math.max(0, grandTotal - paidAmount);
                                     return formatVndNoSymbol(debtAmount);
                                   })()}
                                 </div>
