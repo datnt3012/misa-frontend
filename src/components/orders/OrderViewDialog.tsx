@@ -417,6 +417,14 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                       <div className="text-base">{orderDetails.purchase_order_number}</div>
                     </div>
                   )}
+                  {(orderDetails as any).paymentDeadline && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Hạn thanh toán:</label>
+                      <div className="text-base">
+                        {new Date((orderDetails as any).paymentDeadline).toLocaleDateString('vi-VN')}
+                      </div>
+                    </div>
+                  )}
                   {orderDetails.notes && (
                     <div className="md:col-span-2">
                       <label className="text-sm font-medium text-muted-foreground">Ghi chú:</label>
@@ -612,7 +620,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                     </div>
                     {expensesTotal > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span>Chi phí khác:</span>
+                        <span>Chi phí:</span>
                         <span>{formatCurrency(expensesTotal)}</span>
                       </div>
                     )}
@@ -637,12 +645,12 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
             </Card>
 
             {/* Additional Expenses */}
-            {expenses.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Chi phí khác</CardTitle>
-                </CardHeader>
-                <CardContent>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Chi phí</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {expenses.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -665,9 +673,13 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
-            )}
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Không có chi phí nào
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Payment History */}
             <Card>

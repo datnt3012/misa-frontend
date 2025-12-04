@@ -658,6 +658,7 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng tiền</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
@@ -669,13 +670,13 @@ const OrdersContent: React.FC = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-6">
+                    <TableCell colSpan={14} className="text-center py-6">
                       Đang tải...
                     </TableCell>
                   </TableRow>
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-6">
+                    <TableCell colSpan={14} className="text-center py-6">
                       Không có đơn hàng nào
                     </TableCell>
                   </TableRow>
@@ -816,6 +817,15 @@ const OrdersContent: React.FC = () => {
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                              <div className="text-sm font-semibold text-slate-900">
                                {formatVndNoSymbol(order.total_amount)}
+                             </div>
+                           </TableCell>
+
+                           {/* Expenses Column */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-medium text-orange-600">
+                               {formatVndNoSymbol(
+                                 order.expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
+                               )}
                              </div>
                            </TableCell>
 

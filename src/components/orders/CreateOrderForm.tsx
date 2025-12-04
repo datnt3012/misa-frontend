@@ -173,7 +173,7 @@ const createInitialOrderState = (): OrderFormState => ({
   initial_payment_bank: "",
   order_warehouse_id: "",
   items: [],
-  expenses: [],
+  expenses: [{ name: "Chi phí vận chuyển", amount: 0, note: "" }],
   paymentDeadline: "",
 });
 
@@ -904,7 +904,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           <Card>
             <CardHeader>
               <CardTitle className="flex justify-between items-center">
-                <span>Chi phí khác</span>
+                <span>Chi phí</span>
                 <Button onClick={addExpense} size="sm" variant="outline">
                   <Plus className="w-4 h-4 mr-2" />
                   Thêm chi phí

@@ -43,6 +43,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [products, setProducts] = useState<any[]>([]);
   const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
   const [availableTags, setAvailableTags] = useState<OrderTag[]>([]);
+  const [editingExpenses, setEditingExpenses] = useState<Array<{ name: string; amount: number; note?: string }>>([]);
+  const [isEditingExpenses, setIsEditingExpenses] = useState(false);
   // Tags are display-only here
   const { toast } = useToast();
 
@@ -84,6 +86,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     try {
       const orderData = await orderApi.getOrder(order.id);
       setOrderDetails(orderData);
+      // Initialize editing expenses from order data
+      setEditingExpenses(orderData.expenses || []);
+      setIsEditingExpenses(false);
       // Always fetch fresh customer info for authoritative address
       if (orderData.customer_id) {
         try {
@@ -852,13 +857,221 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                     <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
                     <span className="font-medium">{orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + item.quantity, 0)}</span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tổng tiền sản phẩm:</span>
+                    <span>
+                      {formatCurrency(
+                        orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.total_price || 0), 0) || 0
+                      )}
+                    </span>
+                  </div>
+                  {(() => {
+                    const expensesTotal = (orderDetails.expenses || []).reduce(
+                      (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
+                      0
+                    );
+                    return expensesTotal > 0 ? (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Chi phí:</span>
+                        <span>{formatCurrency(expensesTotal)}</span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="flex justify-between text-lg font-bold border-t pt-2">
                     <span>Tổng tiền:</span>
-                    <span className="text-xl">{formatCurrency(orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.total_price || 0), 0) || orderDetails.total_amount || 0)}</span>
+                    <span className="text-xl">{formatCurrency(orderDetails.total_amount || 0)}</span>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Additional Expenses */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💰</span>
+                <h3 className="text-lg font-semibold">Chi phí</h3>
+              </div>
+              {!isEditingExpenses && (
+                <Button size="sm" variant="outline" onClick={() => setIsEditingExpenses(true)}>
+                  <Edit2 className="w-4 h-4 mr-1" />
+                  Sửa chi phí
+                </Button>
+              )}
+            </div>
+            {isEditingExpenses ? (
+              <div className="space-y-4">
+                <Table className="border border-border/30 rounded-lg overflow-hidden">
+                  <TableHeader>
+                    <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Tên chi phí</TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số tiền</TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Ghi chú</TableHead>
+                      <TableHead className="font-semibold text-slate-700"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {editingExpenses.map((expense, index) => (
+                      <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <TableCell className="border-r border-slate-100 align-top pt-4">
+                          <Input
+                            value={expense.name}
+                            onChange={(e) => {
+                              const updated = [...editingExpenses];
+                              updated[index] = { ...updated[index], name: e.target.value };
+                              setEditingExpenses(updated);
+                            }}
+                            placeholder="Ví dụ: Phí vận chuyển"
+                          />
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-4">
+                          <CurrencyInput
+                            value={expense.amount}
+                            onChange={(value) => {
+                              const updated = [...editingExpenses];
+                              updated[index] = { ...updated[index], amount: value };
+                              setEditingExpenses(updated);
+                            }}
+                            className="w-32"
+                          />
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-4">
+                          <Input
+                            value={expense.note || ""}
+                            onChange={(e) => {
+                              const updated = [...editingExpenses];
+                              updated[index] = { ...updated[index], note: e.target.value };
+                              setEditingExpenses(updated);
+                            }}
+                            placeholder="Ghi chú (không bắt buộc)"
+                          />
+                        </TableCell>
+                        <TableCell className="align-top pt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const updated = editingExpenses.filter((_, i) => i !== index);
+                              setEditingExpenses(updated);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="flex justify-between items-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingExpenses([...editingExpenses, { name: "", amount: 0, note: "" }]);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Thêm chi phí
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingExpenses(orderDetails.expenses || []);
+                        setIsEditingExpenses(false);
+                      }}
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!orderDetails) return;
+                        setLoading(true);
+                        try {
+                          const filteredExpenses = editingExpenses
+                            .filter(exp => (exp.name && exp.name.trim().length > 0) || exp.amount)
+                            .map(exp => ({
+                              name: exp.name.trim(),
+                              amount: exp.amount || 0,
+                              note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
+                            }));
+                          await orderApi.updateOrder(orderDetails.id, {
+                            expenses: filteredExpenses,
+                          });
+                          const updatedOrder = await orderApi.getOrder(orderDetails.id);
+                          setOrderDetails(updatedOrder);
+                          setEditingExpenses(updatedOrder.expenses || []);
+                          setIsEditingExpenses(false);
+                          if (onOrderUpdated) {
+                            onOrderUpdated();
+                          }
+                          toast({
+                            title: "Thành công",
+                            description: "Đã cập nhật chi phí",
+                          });
+                        } catch (error) {
+                          toast({
+                            title: "Lỗi",
+                            description: getErrorMessage(error, "Không thể cập nhật chi phí"),
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                      disabled={loading}
+                    >
+                      Lưu
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-sm font-medium text-right">
+                  Tổng chi phí:{" "}
+                  <span className="font-semibold text-blue-600">
+                    {editingExpenses
+                      .reduce((sum, exp) => sum + (exp.amount || 0), 0)
+                      .toLocaleString("vi-VN")}{" "}
+                    đ
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {orderDetails.expenses && orderDetails.expenses.length > 0 ? (
+                  <Table className="border border-border/30 rounded-lg overflow-hidden">
+                    <TableHeader>
+                      <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">#</TableHead>
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Tên chi phí</TableHead>
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700 text-right">Số tiền</TableHead>
+                        <TableHead className="font-semibold text-slate-700">Ghi chú</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orderDetails.expenses.map((expense: any, index: number) => (
+                        <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                          <TableCell className="border-r border-slate-100 font-medium">{index + 1}</TableCell>
+                          <TableCell className="border-r border-slate-100">{expense.name}</TableCell>
+                          <TableCell className="border-r border-slate-100 text-right">
+                            {formatCurrency(Number(expense.amount) || 0)}
+                          </TableCell>
+                          <TableCell>{expense.note || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-sm text-muted-foreground py-4">
+                    Chưa có chi phí nào
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <Separator />
