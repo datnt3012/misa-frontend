@@ -141,9 +141,28 @@ export const customerApi = {
   // Create customer
   createCustomer: async (data: CreateCustomerRequest): Promise<Customer> => {
     const res = await api.post<any>(API_ENDPOINTS.CUSTOMERS.CREATE, data);
-    const row = (res?.data ?? res) as any;
+    console.log('[customerApi.createCustomer] Raw response:', res);
+    
+    // Handle different response structures
+    let row: any;
+    if (res?.data) {
+      // If response has data property, check if it's the customer object or wrapped
+      row = res.data?.data || res.data?.customer || res.data;
+    } else {
+      row = res;
+    }
+    
+    console.log('[customerApi.createCustomer] Extracted row:', row);
+    
     // Reuse normalize from list
     const normalized = normalizeCustomer(row);
+    console.log('[customerApi.createCustomer] Normalized customer:', normalized);
+    
+    if (!normalized.id) {
+      console.error('[customerApi.createCustomer] Missing ID in normalized customer:', normalized);
+      throw new Error('Không thể lấy ID khách hàng từ phản hồi của server');
+    }
+    
     return normalized;
   },
 
@@ -245,8 +264,15 @@ const normalizeCustomer = (row: any): Customer => {
     return isNaN(numValue) ? undefined : numValue;
   };
 
+  // Extract ID - try multiple possible fields
+  const customerId = row.id ?? row.customer_id ?? row.customerId;
+  if (!customerId) {
+    console.error('[normalizeCustomer] Missing ID in row:', row);
+    throw new Error('Không thể lấy ID khách hàng từ phản hồi của server');
+  }
+
   return {
-    id: row.id,
+    id: String(customerId),
     code: row.code ?? null,
     customer_code: row.code ?? row.customer_code ?? row.customerCode ?? null,
     name: row.name ?? '',

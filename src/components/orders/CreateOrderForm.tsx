@@ -45,6 +45,7 @@ interface OrderFormState {
   customer_name: string;
   customer_code: string;
   customer_phone: string;
+  customer_email: string;
   order_type: string;
   notes: string;
   contract_number: string;
@@ -132,10 +133,13 @@ const hasCustomerVatInfo = (info?: VatInfo | null) => {
 };
 
 const createInitialOrderState = (): OrderFormState => ({
-  customer_id: "",
+  // Default to special value "__new__" so that a brand new customer
+  // will be created if the user doesn't change the dropdown
+  customer_id: "__new__",
   customer_name: "",
   customer_code: "",
   customer_phone: "",
+  customer_email: "",
   // Removed customer address fields from UI; will derive from selected customer
   order_type: "sale",
   notes: "",
@@ -220,6 +224,75 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         description: error.response?.data?.message || error.message || "Không thể tải dữ liệu",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleCreateNewCustomer = async () => {
+    // Validate required fields
+    if (!newOrder.customer_name || !newOrder.customer_name.trim()) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập tên khách hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Build customer data from order form
+      const customerData: any = {
+        name: newOrder.customer_name.trim(),
+        phoneNumber: newOrder.customer_phone?.trim() || undefined,
+        address: newOrder.shipping_address?.trim() || undefined,
+        addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
+          provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
+          districtCode: newOrder.shipping_addressInfo.districtCode || undefined,
+          wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
+        } : undefined,
+      };
+
+      // Add VAT info if available
+      const vatInfo = extractVatInfoFromOrder(newOrder);
+      if (vatInfo) {
+        customerData.vatInfo = vatInfo;
+      }
+
+      // Create customer
+      const newCustomer = await customerApi.createCustomer(customerData);
+
+      // Reload customers list
+      const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
+      setCustomers(customersRes.customers || []);
+
+      // Auto-select the newly created customer
+      const vatInfoFromNewCustomer = buildVatInfoFromCustomer(newCustomer);
+      const shippingInfoFromNewCustomer = buildShippingInfoFromCustomer(newCustomer);
+      setNewOrder(prev => ({
+        ...prev,
+        customer_id: newCustomer.id,
+        customer_name: newCustomer.name || prev.customer_name,
+        customer_code: newCustomer.customer_code || "",
+        customer_phone: newCustomer.phoneNumber || prev.customer_phone,
+        ...vatInfoFromNewCustomer,
+        ...shippingInfoFromNewCustomer,
+      }));
+      setShippingAddressVersion((v) => v + 1);
+
+      toast({
+        title: "Thành công",
+        description: `Đã tạo khách hàng mới: ${newCustomer.name}`,
+      });
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      toast({
+        title: "Lỗi",
+        description: getErrorMessage(error, "Không thể tạo khách hàng mới"),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -341,22 +414,35 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   };
 
   const handleSubmit = async () => {
-    if (!newOrder.customer_id) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng chọn khách hàng",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!newOrder.customer_id || newOrder.customer_id === "__new__") {
+      // Validate required fields for new customer
+      if (!newOrder.customer_name || !newOrder.customer_name.trim()) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng nhập tên khách hàng",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else {
+      // Validate for existing customer
+      if (!newOrder.customer_id) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng chọn khách hàng",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    if (!newOrder.customer_name) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng nhập tên khách hàng",
-        variant: "destructive",
-      });
-      return;
+      if (!newOrder.customer_name) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng nhập tên khách hàng",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     if (newOrder.items.length === 0) {
@@ -424,10 +510,92 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
     setLoading(true);
     try {
-      const { subtotal } = calculateTotals();
+      // If "Khách hàng mới" is selected, create the customer first
+      let customerId = newOrder.customer_id;
+      let selectedCustomer: Customer | undefined;
+      
+      if (newOrder.customer_id === "__new__") {
+        console.log('[CreateOrderForm] Creating new customer...', {
+          name: newOrder.customer_name,
+          phone: newOrder.customer_phone,
+          email: newOrder.customer_email,
+        });
+        
+        // Create new customer from form data
+        const customerData: any = {
+          name: newOrder.customer_name.trim(),
+          phoneNumber: newOrder.customer_phone?.trim() || undefined,
+          email: newOrder.customer_email?.trim() || undefined,
+          address: newOrder.shipping_address?.trim() || undefined,
+          addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
+            provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
+            districtCode: newOrder.shipping_addressInfo.districtCode || undefined,
+            wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
+          } : undefined,
+        };
 
-      // Get customer details for sending to backend
-      const selectedCustomer = customers.find(c => c.id === newOrder.customer_id);
+        // Add VAT info if available
+        const vatInfo = extractVatInfoFromOrder(newOrder);
+        if (vatInfo) {
+          customerData.vatInfo = vatInfo;
+        }
+
+        try {
+          // Create customer and wait for response
+          console.log('[CreateOrderForm] Calling customerApi.createCustomer...', customerData);
+          const newCustomer = await customerApi.createCustomer(customerData);
+          console.log('[CreateOrderForm] Customer created:', newCustomer);
+          
+          // Validate that customer was created successfully
+          if (!newCustomer || !newCustomer.id) {
+            console.error('[CreateOrderForm] Invalid customer response:', newCustomer);
+            throw new Error("Không thể tạo khách hàng mới. Phản hồi từ server không hợp lệ.");
+          }
+          
+          customerId = newCustomer.id;
+          selectedCustomer = newCustomer;
+          console.log('[CreateOrderForm] Customer ID assigned:', customerId);
+
+          // Reload customers list
+          const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
+          setCustomers(customersRes.customers || []);
+
+          toast({
+            title: "Thành công",
+            description: `Đã tạo khách hàng mới: ${newCustomer.name}`,
+          });
+        } catch (customerError: any) {
+          console.error('[CreateOrderForm] Error creating customer:', customerError);
+          toast({
+            title: "Lỗi",
+            description: getErrorMessage(customerError, "Không thể tạo khách hàng mới"),
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Get existing customer details
+        selectedCustomer = customers.find(c => c.id === newOrder.customer_id);
+        customerId = newOrder.customer_id;
+        console.log('[CreateOrderForm] Using existing customer:', customerId);
+      }
+
+      // Validate customerId before creating order
+      if (!customerId || customerId === "__new__" || customerId.trim() === "") {
+        console.error('[CreateOrderForm] Invalid customerId:', customerId);
+        toast({
+          title: "Lỗi",
+          description: "Không thể xác định ID khách hàng. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      
+      console.log('[CreateOrderForm] Proceeding to create order with customerId:', customerId);
+
+      const { subtotal } = calculateTotals();
       
       // Prepare customer address info if available
       const customerAddressInfo = selectedCustomer?.addressInfo ? {
@@ -442,10 +610,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       const orderVatInfo = extractVatInfoFromOrder(newOrder);
 
       // Create order via backend API
+      // customerId should be valid at this point (validated above)
       const orderData = await orderApi.createOrder({
-        customerId: newOrder.customer_id || "",
+        customerId: customerId,
         customerName: newOrder.customer_name || selectedCustomer?.name || "",
         customerPhone: newOrder.customer_phone || selectedCustomer?.phoneNumber || undefined,
+        customerEmail: newOrder.customer_email || selectedCustomer?.email || undefined,
         customerAddress: selectedCustomer?.address || undefined,
         customerAddressInfo: customerAddressInfo,
         code: newOrder.contract_number || undefined,
@@ -561,7 +731,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     }
   };
 
-  const { subtotal, total, debt } = calculateTotals();
+  const { subtotal, debt } = calculateTotals();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -586,6 +756,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   <Select 
                     value={newOrder.customer_id} 
                     onValueChange={(value) => {
+                      // Handle "Create new customer" option - just set the value, don't create yet
+                      if (value === "__new__") {
+                        setNewOrder(prev => ({
+                          ...prev,
+                          customer_id: "__new__",
+                        }));
+                        return;
+                      }
+
+                      // Handle existing customer selection
                       const customer = customers.find(c => c.id === value);
                       const vatInfo = buildVatInfoFromCustomer(customer);
                       const shippingInfo = buildShippingInfoFromCustomer(customer);
@@ -595,6 +775,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         customer_name: customer?.name || "",
                         customer_code: customer?.customer_code || "",
                         customer_phone: customer?.phoneNumber || "",
+                        customer_email: customer?.email || "",
                         ...vatInfo,
                         ...shippingInfo,
                       }));
@@ -605,6 +786,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       <SelectValue placeholder="Chọn khách hàng hoặc nhập mới" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="__new__" className="font-medium text-blue-600">
+                        + Khách hàng mới
+                      </SelectItem>
                       {customers.map((customer) => (
                         <SelectItem key={customer.id} value={customer.id}>
                           {customer.name} ({customer.customer_code})
@@ -632,6 +816,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     value={newOrder.customer_phone}
                     onChange={(e) => setNewOrder(prev => ({ ...prev, customer_phone: e.target.value }))}
                     placeholder="Nhập số điện thoại"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customer_email">Email</Label>
+                  <Input
+                    id="customer_email"
+                    type="email"
+                    value={newOrder.customer_email}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_email: e.target.value }))}
+                    placeholder="Nhập email khách hàng"
                   />
                 </div>
               </div>

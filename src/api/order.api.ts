@@ -111,6 +111,7 @@ export interface CreateOrderRequest {
   customerId: string;
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
   customerAddress?: string;
   customerAddressInfo?: {
     provinceCode?: string;
