@@ -535,15 +535,32 @@ const OrdersContent: React.FC = () => {
   };
 
   // Use summary from API if available, otherwise calculate from orders
+  // Prefer backend aggregated fields (totalAmount, totalPaidAmount, remainingDebt)
   const totals = summary ? {
     totalAmount: summary.totalAmount,
     paidAmount: summary.totalInitialPayment,
     debtAmount: summary.totalDebt,
-  } : orders.reduce((acc, order) => ({
-    totalAmount: acc.totalAmount + (order.total_amount || 0),
-    paidAmount: acc.paidAmount + (order.initial_payment || order.paid_amount || 0),
-    debtAmount: acc.debtAmount + (order.debt_amount || 0),
-  }), { totalAmount: 0, paidAmount: 0, debtAmount: 0 });
+  } : orders.reduce(
+    (acc, order: any) => {
+      const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
+      const paidAmount =
+        order.totalPaidAmount ??
+        order.paid_amount ??
+        order.initial_payment ??
+        0;
+      const debtAmount =
+        order.remainingDebt ??
+        order.debt_amount ??
+        Math.max(0, totalAmount - paidAmount);
+
+      return {
+        totalAmount: acc.totalAmount + totalAmount,
+        paidAmount: acc.paidAmount + paidAmount,
+        debtAmount: acc.debtAmount + debtAmount,
+      };
+    },
+    { totalAmount: 0, paidAmount: 0, debtAmount: 0 }
+  );
 
   return (
     <div className="min-h-screen bg-background p-2 sm:p-3 md:p-4">
@@ -749,8 +766,8 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
@@ -905,74 +922,62 @@ const OrdersContent: React.FC = () => {
                              </div>
                            </TableCell>
                           
-                          {/* Total Amount Column (products + expenses) */}
-                           <TableCell className="py-3 border-r border-slate-200 text-center">
-                             <div className="text-sm font-semibold text-slate-900">
-                               {(() => {
-                                 // Tổng tiền sản phẩm
-                                 const itemsTotal =
-                                   order.items?.reduce(
-                                     (sum: number, item: any) => sum + (Number(item.total_price) || 0),
-                                     0
-                                   ) || 0;
-                                 // Tổng chi phí
-                                 const expensesTotal =
-                                   order.expenses?.reduce(
-                                     (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
-                                     0
-                                   ) || 0;
-                                 const grandTotal = itemsTotal + expensesTotal;
-                                 return formatVndNoSymbol(grandTotal);
-                               })()}
-                             </div>
-                           </TableCell>
-
-                           {/* Expenses Column */}
+                           {/* Expenses Column - use backend totalExpenses if available */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                              <div className="text-sm font-medium text-orange-600">
                                {formatVndNoSymbol(
-                                 order.expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
+                                 (order as any).totalExpenses ??
+                                 order.totalExpenses ??
+                                 order.expenses?.reduce(
+                                   (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
+                                   0
+                                 ) ??
+                                 0
                                )}
                              </div>
                            </TableCell>
 
-                           {/* Payment Column */}
+                          {/* Total Amount Column - use backend aggregated totalAmount */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-semibold text-slate-900">
+                               {formatVndNoSymbol(
+                                 // Backend totalAmount already includes products + expenses
+                                 (order as any).totalAmount ?? order.total_amount ?? 0
+                               )}
+                             </div>
+                           </TableCell>
+
+                           {/* Payment Column - use backend totalPaidAmount / remainingDebt */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
-                                {/* Số đã thanh toán: Tính từ tổng payments (giống OrderViewDialog) */}
+                                {/* Số đã thanh toán: totalPaidAmount từ backend */}
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
                                   {(() => {
-                                    // Use cached total payments if available, otherwise fallback to paid_amount or initial_payment
-                                    const paidAmount = orderPaymentsCache[order.id] !== undefined
-                                      ? orderPaymentsCache[order.id]
-                                      : (order.paid_amount || order.initial_payment || 0);
+                                    const paidAmount =
+                                      (order as any).totalPaidAmount ??
+                                      order.totalPaidAmount ??
+                                      order.paid_amount ??
+                                      order.initial_payment ??
+                                      0;
                                     return formatVndNoSymbol(paidAmount);
                                   })()}
                                 </div>
-                                {/* Số còn nợ: Tính từ Tổng giá trị (sản phẩm + chi phí) - Số đã thanh toán */}
+                                {/* Số còn nợ: remainingDebt từ backend, fallback = totalAmount - totalPaidAmount */}
                                 <div className="text-sm font-medium text-red-600">
                                   {(() => {
-                                    // Tổng tiền sản phẩm
-                                    const itemsTotal =
-                                      order.items?.reduce(
-                                        (sum: number, item: any) => sum + (Number(item.total_price) || 0),
-                                        0
-                                      ) || 0;
-                                    // Tổng chi phí
-                                    const expensesTotal =
-                                      order.expenses?.reduce(
-                                        (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
-                                        0
-                                      ) || 0;
-                                    const grandTotal = itemsTotal + expensesTotal;
-
-                                    // Số đã thanh toán
-                                    const paidAmount = orderPaymentsCache[order.id] !== undefined
-                                      ? orderPaymentsCache[order.id]
-                                      : (order.paid_amount || order.initial_payment || 0);
-
-                                    const debtAmount = Math.max(0, grandTotal - paidAmount);
+                                    const totalAmount =
+                                      (order as any).totalAmount ?? order.totalAmount ?? order.total_amount ?? 0;
+                                    const paidAmount =
+                                      (order as any).totalPaidAmount ??
+                                      order.totalPaidAmount ??
+                                      order.paid_amount ??
+                                      order.initial_payment ??
+                                      0;
+                                    const debtAmount =
+                                      (order as any).remainingDebt ??
+                                      order.remainingDebt ??
+                                      Math.max(0, totalAmount - paidAmount);
                                     return formatVndNoSymbol(debtAmount);
                                   })()}
                                 </div>

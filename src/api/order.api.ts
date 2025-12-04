@@ -38,6 +38,11 @@ export interface Order {
   status: 'new' | 'pending' | 'picking' | 'picked' | 'delivered' | 'delivery_failed' | 'completed' | 'cancelled';
   order_type: 'sale' | 'return';
   total_amount: number;
+  // Aggregated summary fields from backend (already include expenses)
+  totalAmount?: number;
+  totalPaidAmount?: number;
+  remainingDebt?: number;
+  totalExpenses?: number;
   initial_payment?: number;
   payment_method?: string;
   paid_amount: number;
@@ -391,6 +396,10 @@ export const orderApi = {
       status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
+      totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
+      totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
+      remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
+      totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
       payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
@@ -562,6 +571,10 @@ export const orderApi = {
       status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
       total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
+      totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
+      totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
+      remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
+      totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
       initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
       payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
