@@ -196,6 +196,7 @@ export const API_ENDPOINTS = {
   PAYMENTS: {
     LIST: '/payments',
     CREATE: '/payments',
+    MULTIPLE: '/payments/multiple',
     UPDATE: (id: string) => `/payments/${id}`,
     DELETE: (id: string) => `/payments/${id}`,
   },

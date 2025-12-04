@@ -42,6 +42,30 @@ export interface UpdatePaymentRequest {
   notes?: string;
 }
 
+export interface CreateMultiplePaymentRequest {
+  orderIds: string[];
+  totalAmount: number;
+  paymentDate: string;
+  paymentMethod: 'cash' | 'bank_transfer' | 'card' | 'other';
+  bank?: string; // Required if paymentMethod is bank_transfer
+  note?: string;
+}
+
+export interface PaymentDistribution {
+  orderId: string;
+  orderCode?: string;
+  orderTotalAmount: number;
+  percentage: number;
+  allocatedAmount: number;
+}
+
+export interface CreateMultiplePaymentResponse {
+  payments: Payment[];
+  distribution: PaymentDistribution[];
+  totalAmount: number;
+  groupPaymentId: string;
+}
+
 // Normalize payment data from API response
 const normalizePayment = (row: any): Payment => ({
   id: row.id || '',
@@ -278,6 +302,51 @@ export const paymentsApi = {
       throw new Error('Invalid payment response structure');
     } catch (error: any) {
       console.error('Error updating payment:', error);
+      throw error;
+    }
+  },
+
+  // Create multiple payments (bulk payment)
+  createMultiplePayments: async (paymentData: CreateMultiplePaymentRequest): Promise<CreateMultiplePaymentResponse> => {
+    try {
+      const payload: any = {
+        orderIds: paymentData.orderIds,
+        totalAmount: paymentData.totalAmount,
+        paymentDate: paymentData.paymentDate || new Date().toISOString(),
+        paymentMethod: paymentData.paymentMethod,
+      };
+
+      // Include bank if payment method is bank_transfer
+      if (paymentData.paymentMethod === 'bank_transfer' && paymentData.bank) {
+        payload.bank = paymentData.bank;
+      }
+
+      // Include note if provided
+      if (paymentData.note) {
+        payload.note = paymentData.note;
+      }
+
+      const response = await api.post<any>(API_ENDPOINTS.PAYMENTS.MULTIPLE, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = response?.data || response;
+      const responseData = data?.data || data;
+
+      if (responseData) {
+        return {
+          payments: (responseData.payments || []).map(normalizePayment),
+          distribution: responseData.distribution || [],
+          totalAmount: responseData.totalAmount || paymentData.totalAmount,
+          groupPaymentId: responseData.groupPaymentId || '',
+        };
+      }
+
+      throw new Error('Invalid multiple payment response structure');
+    } catch (error: any) {
+      console.error('Error creating multiple payments:', error);
       throw error;
     }
   },

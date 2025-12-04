@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -61,6 +63,7 @@ const OrdersContent: React.FC = () => {
   const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -86,6 +89,7 @@ const OrdersContent: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const location = useLocation();
 
   const loadOrderTagsCatalog = useCallback(async () => {
     try {
@@ -258,6 +262,11 @@ const OrdersContent: React.FC = () => {
     }
   };
 
+  // Scroll to top when component mounts or route changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -422,6 +431,18 @@ const OrdersContent: React.FC = () => {
     setCurrentPage(1);
     fetchOrders();
   };
+
+  const handleMultiplePayments = () => {
+    if (selectedOrders.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn ít nhất một đơn hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowMultiplePaymentDialog(true);
+  }
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -600,6 +621,14 @@ const OrdersContent: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Button 
+                    onClick={() => handleMultiplePayments()}
+                    size="sm"
+                    className="bg-blue-500 text-white hover:bg-blue-400 transition-colors duration-200"
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    Thanh toán gộp
+                </Button>
+                <Button 
                   onClick={() => setShowDeleteDialog(true)}
                   variant="destructive"
                   size="sm"
@@ -657,7 +686,7 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng tiền</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
@@ -1085,6 +1114,21 @@ const OrdersContent: React.FC = () => {
         order={selectedOrder}
         onUpdate={() => {
           fetchOrders();
+        }}
+      />
+
+      {/* Multiple Payment Dialog */}
+      <MultiplePaymentDialog
+        open={showMultiplePaymentDialog}
+        onOpenChange={setShowMultiplePaymentDialog}
+        orderIds={selectedOrders}
+        orders={orders}
+        onUpdate={() => {
+          fetchOrders();
+          setSelectedOrders([]);
+        }}
+        onRemoveOrder={(orderId) => {
+          setSelectedOrders(prev => prev.filter(id => id !== orderId));
         }}
       />
 
