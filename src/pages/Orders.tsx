@@ -13,6 +13,7 @@ import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
+import { paymentsApi } from "@/api/payments.api";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -79,6 +80,10 @@ const OrdersContent: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalOrders, setTotalOrders] = useState(0);
   
+  // Cache for total payments per order
+  const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
+  const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
+  
   // Summary state from API
   const [summary, setSummary] = useState<{
     totalAmount: number;
@@ -128,6 +133,11 @@ const OrdersContent: React.FC = () => {
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
       
+      // Load payments for all orders to calculate accurate paid amounts
+      if (resp.orders && resp.orders.length > 0) {
+        loadPaymentsForOrders(resp.orders.map(o => o.id));
+      }
+      
       // Set summary from API if available
       if (resp.summary) {
         console.log('[Orders] Setting summary from API:', resp.summary);
@@ -149,6 +159,59 @@ const OrdersContent: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+
+  // Load payments for orders and cache total paid amounts
+  const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
+    if (!orderIds || orderIds.length === 0) return;
+
+    // Filter out orders we already have cached
+    const uncachedOrderIds = orderIds.filter(id => !orderPaymentsCache[id] && !loadingPayments.has(id));
+    if (uncachedOrderIds.length === 0) return;
+
+    // Mark as loading
+    setLoadingPayments(prev => {
+      const newSet = new Set(prev);
+      uncachedOrderIds.forEach(id => newSet.add(id));
+      return newSet;
+    });
+
+    try {
+      // Load payments for all orders in parallel
+      const paymentPromises = uncachedOrderIds.map(async (orderId) => {
+        try {
+          const payments = await paymentsApi.getPaymentsByOrder(orderId);
+          // Calculate total paid amount from payments (same logic as OrderViewDialog)
+          const totalPaid = payments.length > 0
+            ? payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
+            : 0;
+          return { orderId, totalPaid };
+        } catch (error) {
+          console.error(`[Orders] Error loading payments for order ${orderId}:`, error);
+          return { orderId, totalPaid: 0 };
+        }
+      });
+
+      const results = await Promise.all(paymentPromises);
+      
+      // Update cache
+      setOrderPaymentsCache(prev => {
+        const newCache = { ...prev };
+        results.forEach(({ orderId, totalPaid }) => {
+          newCache[orderId] = totalPaid;
+        });
+        return newCache;
+      });
+    } catch (error) {
+      console.error('[Orders] Error loading payments for orders:', error);
+    } finally {
+      // Remove from loading set
+      setLoadingPayments(prev => {
+        const newSet = new Set(prev);
+        uncachedOrderIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    }
+  }, [orderPaymentsCache, loadingPayments]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -861,12 +924,28 @@ const OrdersContent: React.FC = () => {
                            {/* Payment Column */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
+                                {/* Số đã thanh toán: Tính từ tổng payments (giống OrderViewDialog) */}
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
-                                  {formatVndNoSymbol(order.initial_payment || order.paid_amount)}
+                                  {(() => {
+                                    // Use cached total payments if available, otherwise fallback to paid_amount or initial_payment
+                                    const paidAmount = orderPaymentsCache[order.id] !== undefined
+                                      ? orderPaymentsCache[order.id]
+                                      : (order.paid_amount || order.initial_payment || 0);
+                                    return formatVndNoSymbol(paidAmount);
+                                  })()}
                                 </div>
-                                <div className="text-sm font-medium text-purple-600">
-                                  {formatVndNoSymbol(order.total_amount - (order.initial_payment || order.paid_amount))}
+                                {/* Số còn nợ: Tính từ total_amount - paid_amount */}
+                                <div className="text-sm font-medium text-red-600">
+                                  {(() => {
+                                    const totalAmount = order.total_amount || 0;
+                                    // Use cached total payments if available, otherwise fallback to paid_amount or initial_payment
+                                    const paidAmount = orderPaymentsCache[order.id] !== undefined
+                                      ? orderPaymentsCache[order.id]
+                                      : (order.paid_amount || order.initial_payment || 0);
+                                    const debtAmount = Math.max(0, totalAmount - paidAmount);
+                                    return formatVndNoSymbol(debtAmount);
+                                  })()}
                                 </div>
                               </div>
                            </TableCell>
@@ -1114,6 +1193,17 @@ const OrdersContent: React.FC = () => {
         order={selectedOrder}
         onUpdate={() => {
           fetchOrders();
+          // Refresh payments cache for this order
+          if (selectedOrder?.id) {
+            // Clear cache for this order so it will be reloaded
+            setOrderPaymentsCache(prev => {
+              const newCache = { ...prev };
+              delete newCache[selectedOrder.id];
+              return newCache;
+            });
+            // Reload payments for this order
+            loadPaymentsForOrders([selectedOrder.id]);
+          }
         }}
       />
 
@@ -1125,6 +1215,19 @@ const OrdersContent: React.FC = () => {
         orders={orders}
         onUpdate={() => {
           fetchOrders();
+          // Refresh payments cache for all selected orders
+          if (selectedOrders.length > 0) {
+            // Clear cache for these orders so they will be reloaded
+            setOrderPaymentsCache(prev => {
+              const newCache = { ...prev };
+              selectedOrders.forEach(orderId => {
+                delete newCache[orderId];
+              });
+              return newCache;
+            });
+            // Reload payments for these orders
+            loadPaymentsForOrders(selectedOrders);
+          }
           setSelectedOrders([]);
         }}
         onRemoveOrder={(orderId) => {
