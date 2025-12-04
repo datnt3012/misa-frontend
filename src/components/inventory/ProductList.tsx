@@ -87,6 +87,13 @@ const ProductList: React.FC<ProductListProps> = ({
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const previousJobStatusesRef = React.useRef<Record<string, ProductImportJobStatus>>({});
+  // Use ref to store onProductsUpdate to prevent infinite loop when parent re-renders
+  const onProductsUpdateRef = React.useRef(onProductsUpdate);
+  
+  // Keep ref updated when prop changes
+  React.useEffect(() => {
+    onProductsUpdateRef.current = onProductsUpdate;
+  }, [onProductsUpdate]);
 
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
@@ -298,7 +305,8 @@ const ProductList: React.FC<ProductListProps> = ({
   const handleJobStatusNotification = React.useCallback((job: ProductImportJobSnapshot) => {
     const status = job.status as ProductImportJobStatus;
     if (status === 'completed') {
-      onProductsUpdate();
+      // Use ref to avoid dependency on onProductsUpdate prop
+      onProductsUpdateRef.current();
       if (job.errors && job.errors.length > 0) {
         toast({
           title: 'Hoàn thành với cảnh báo',
@@ -322,7 +330,7 @@ const ProductList: React.FC<ProductListProps> = ({
         description: job.message || 'Job import đã được hủy theo yêu cầu',
       });
     }
-  }, [onProductsUpdate, toast]);
+  }, [toast]);
 
   const refreshImportJobs = React.useCallback(async (options?: { onlyActive?: boolean; showNotifications?: boolean }) => {
     const { onlyActive = false, showNotifications = false } = options || {};
