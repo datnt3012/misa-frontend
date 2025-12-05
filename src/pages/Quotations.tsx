@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,8 @@ const QuotationsContent: React.FC = () => {
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedQuotations, setSelectedQuotations] = useState<string[]>([]);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [exportingXLSX, setExportingXLSX] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -307,14 +309,24 @@ const QuotationsContent: React.FC = () => {
   };
 
   const exportToPDF = async (quotation: Quotation) => {
+    // Tạo AbortController mới
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       setExportingPDF(true);
-      const url = `/quotations/${quotation.id}/pdf`;
+      const url = `/quotations/${quotation.id}/export?type=pdf`;
 
-      // Sử dụng apiClient với responseType: 'blob' để nhận file PDF
+      // Sử dụng apiClient với responseType: 'blob' và signal để có thể cancel
       const response = await apiClient.get(url, {
         responseType: 'blob',
+        signal: abortController.signal,
       });
+
+      // Kiểm tra nếu request đã bị cancel
+      if (abortController.signal.aborted) {
+        return;
+      }
 
       // response.data đã là blob từ axios
       const blob = response.data;
@@ -335,6 +347,12 @@ const QuotationsContent: React.FC = () => {
         description: `Đã xuất báo giá ${quotation.code} ra file PDF`,
       });
     } catch (error: any) {
+      // Không hiển thị lỗi nếu request bị cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || abortController.signal.aborted) {
+        console.log("PDF export cancelled by user");
+        return;
+      }
+
       console.error("Error exporting quotation PDF via API:", error);
       
       // Cố gắng lấy thông báo lỗi từ response nếu có
@@ -363,7 +381,95 @@ const QuotationsContent: React.FC = () => {
       });
     } finally {
       setExportingPDF(false);
+      abortControllerRef.current = null;
     }
+  };
+
+  const exportToXLSX = async (quotation: Quotation) => {
+    // Tạo AbortController mới
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    try {
+      setExportingXLSX(true);
+      const url = `/quotations/${quotation.id}/export?type=xlsx`;
+
+      // Sử dụng apiClient với responseType: 'blob' và signal để có thể cancel
+      const response = await apiClient.get(url, {
+        responseType: 'blob',
+        signal: abortController.signal,
+      });
+
+      // Kiểm tra nếu request đã bị cancel
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      // response.data đã là blob từ axios
+      const blob = response.data;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
+      link.download = `Bao_gia_${quotation.code}_${timestamp}.xlsx`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: "Thành công",
+        description: `Đã xuất báo giá ${quotation.code} ra file Excel`,
+      });
+    } catch (error: any) {
+      // Không hiển thị lỗi nếu request bị cancel
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || abortController.signal.aborted) {
+        console.log("XLSX export cancelled by user");
+        return;
+      }
+
+      console.error("Error exporting quotation XLSX via API:", error);
+      
+      // Cố gắng lấy thông báo lỗi từ response nếu có
+      let errorMessage = "Không thể xuất file Excel";
+      if (error?.response?.data) {
+        // Nếu response là blob (có thể là XLSX lỗi), thử đọc như text
+        if (error.response.data instanceof Blob) {
+          try {
+            const text = await error.response.data.text();
+            const json = JSON.parse(text);
+            errorMessage = json.message || json.error || errorMessage;
+          } catch {
+            errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
+          }
+        } else {
+          errorMessage = error.response.data.message || error.response.data.error || errorMessage;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setExportingXLSX(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Hàm để cancel export khi đóng dialog
+  const handleCancelExport = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setExportingPDF(false);
+    setExportingXLSX(false);
   };
 
 
@@ -621,10 +727,17 @@ const QuotationsContent: React.FC = () => {
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={() => exportToPDF(quotation)}
-                                disabled={exportingPDF}
+                                disabled={exportingPDF || exportingXLSX}
                               >
                                 <FileDown className="h-4 w-4 mr-2" />
                                 {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => exportToXLSX(quotation)}
+                                disabled={exportingPDF || exportingXLSX}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                {exportingXLSX ? 'Đang xuất Excel...' : 'Xuất Excel'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setQuotationToEdit(quotation);
@@ -782,15 +895,25 @@ const QuotationsContent: React.FC = () => {
           )}
           <DialogFooter>
             {selectedQuotation && (
-              <Button 
-                variant="outline" 
-                onClick={() => exportToPDF(selectedQuotation)}
-                disabled={exportingPDF}
-                className="mr-auto"
-              >
-                <FileDown className="h-4 w-4 mr-2" />
-                {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
-              </Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={() => exportToPDF(selectedQuotation)}
+                  disabled={exportingPDF || exportingXLSX}
+                  className="mr-2"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => exportToXLSX(selectedQuotation)}
+                  disabled={exportingPDF || exportingXLSX}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {exportingXLSX ? 'Đang xuất Excel...' : 'Xuất Excel'}
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>
@@ -835,11 +958,27 @@ const QuotationsContent: React.FC = () => {
         }}
       />
 
-      {/* Loading Dialog for PDF Export */}
-      <Dialog open={exportingPDF} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md">
+      {/* Loading Dialog for Export */}
+      <Dialog open={exportingPDF || exportingXLSX} onOpenChange={(open) => {
+        if (!open) {
+          handleCancelExport();
+        }
+      }}>
+        <DialogContent 
+          className="sm:max-w-md"
+          onInteractOutside={(e) => {
+            // Prevent closing when clicking outside
+            e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            // Prevent closing when pressing ESC
+            e.preventDefault();
+          }}
+        >
           <DialogHeader>
-            <DialogTitle>Đang xuất PDF</DialogTitle>
+            <DialogTitle>
+              {exportingPDF ? 'Đang xuất PDF' : exportingXLSX ? 'Đang xuất Excel' : 'Đang xuất file'}
+            </DialogTitle>
             <DialogDescription>
               Vui lòng đợi trong giây lát...
             </DialogDescription>
@@ -848,7 +987,11 @@ const QuotationsContent: React.FC = () => {
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
               <p className="text-sm text-muted-foreground">
-                Đang tạo file PDF từ server...
+                {exportingPDF 
+                  ? 'Đang tạo file PDF từ server...' 
+                  : exportingXLSX 
+                    ? 'Đang tạo file Excel từ server...' 
+                    : 'Đang xử lý...'}
               </p>
             </div>
           </div>
