@@ -7,9 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Plus, Eye, Edit, Trash2, MoreHorizontal, FileText, Calendar, Download, FileDown } from "lucide-react";
 import * as XLSX from 'xlsx';
-// PDF generation using @react-pdf/renderer
-import { pdf } from '@react-pdf/renderer';
-import QuotationPDFDocument from '@/components/quotations/QuotationPDFDocument';
 import { useToast } from "@/hooks/use-toast";
 import { quotationApi, Quotation } from "@/api/quotation.api";
 import { customerApi } from "@/api/customer.api";
@@ -25,6 +22,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import CreateQuotationForm from "@/components/quotations/CreateQuotationForm";
 import CreateOrderFromQuotation from "@/components/quotations/CreateOrderFromQuotation";
 import { ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
+import { API_CONFIG } from "@/config/api";
+import apiClient from "@/lib/api";
 
 const QuotationsContent: React.FC = () => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -47,6 +46,7 @@ const QuotationsContent: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedQuotations, setSelectedQuotations] = useState<string[]>([]);
+  const [exportingPDF, setExportingPDF] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -54,7 +54,7 @@ const QuotationsContent: React.FC = () => {
   const [totalQuotations, setTotalQuotations] = useState(0);
   
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { hasPermission } = usePermissions();
 
   // Fetch quotations function
@@ -308,47 +308,61 @@ const QuotationsContent: React.FC = () => {
 
   const exportToPDF = async (quotation: Quotation) => {
     try {
-      // Sử dụng @react-pdf/renderer - hỗ trợ tiếng Việt tốt, text selectable
-      const totalAmount = calculateTotalAmount(quotation);
-      const statusLabels: Record<string, string> = {
-        'completed': 'Hoàn thành',
-        'pending': 'Chờ xử lý',
-        'cancelled': 'Đã hủy',
-      };
-      
-      // Tạo PDF document
-      const doc = (
-        <QuotationPDFDocument
-          quotation={quotation}
-          totalAmount={totalAmount}
-          statusLabels={statusLabels}
-        />
-      );
-      
-      // Generate PDF blob
-      const blob = await pdf(doc).toBlob();
-      
-      // Download file
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Bao_gia_${quotation.code}_${format(new Date(), 'yyyyMMdd_HHmmss')}.pdf`;
+      setExportingPDF(true);
+      const url = `/quotations/${quotation.id}/pdf`;
+
+      // Sử dụng apiClient với responseType: 'blob' để nhận file PDF
+      const response = await apiClient.get(url, {
+        responseType: 'blob',
+      });
+
+      // response.data đã là blob từ axios
+      const blob = response.data;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
+      link.download = `Bao_gia_${quotation.code}_${timestamp}.pdf`;
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
+      URL.revokeObjectURL(downloadUrl);
+
       toast({
         title: "Thành công",
         description: `Đã xuất báo giá ${quotation.code} ra file PDF`,
       });
-    } catch (error) {
-      console.error('Error exporting to PDF:', error);
+    } catch (error: any) {
+      console.error("Error exporting quotation PDF via API:", error);
+      
+      // Cố gắng lấy thông báo lỗi từ response nếu có
+      let errorMessage = "Không thể xuất file PDF";
+      if (error?.response?.data) {
+        // Nếu response là blob (có thể là PDF lỗi), thử đọc như text
+        if (error.response.data instanceof Blob) {
+          try {
+            const text = await error.response.data.text();
+            const json = JSON.parse(text);
+            errorMessage = json.message || json.error || errorMessage;
+          } catch {
+            errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
+          }
+        } else {
+          errorMessage = error.response.data.message || error.response.data.error || errorMessage;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể xuất file PDF"),
+        description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -605,9 +619,12 @@ const QuotationsContent: React.FC = () => {
                                 <Eye className="h-4 w-4 mr-2" />
                                 Xem chi tiết
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => exportToPDF(quotation)}>
+                              <DropdownMenuItem 
+                                onClick={() => exportToPDF(quotation)}
+                                disabled={exportingPDF}
+                              >
                                 <FileDown className="h-4 w-4 mr-2" />
-                                Xuất PDF
+                                {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setQuotationToEdit(quotation);
@@ -768,10 +785,11 @@ const QuotationsContent: React.FC = () => {
               <Button 
                 variant="outline" 
                 onClick={() => exportToPDF(selectedQuotation)}
+                disabled={exportingPDF}
                 className="mr-auto"
               >
                 <FileDown className="h-4 w-4 mr-2" />
-                Xuất PDF
+                {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
               </Button>
             )}
           </DialogFooter>
@@ -816,6 +834,26 @@ const QuotationsContent: React.FC = () => {
           setQuotationForOrder(null);
         }}
       />
+
+      {/* Loading Dialog for PDF Export */}
+      <Dialog open={exportingPDF} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Đang xuất PDF</DialogTitle>
+            <DialogDescription>
+              Vui lòng đợi trong giây lát...
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-6">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-sm text-muted-foreground">
+                Đang tạo file PDF từ server...
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
