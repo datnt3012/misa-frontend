@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2 } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
+import apiClient from "@/lib/api";
 
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
@@ -74,6 +75,12 @@ const OrdersContent: React.FC = () => {
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
+  
+  // Export delivery note states
+  const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
+  const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
+  const [exportingDeliveryPDF, setExportingDeliveryPDF] = useState(false);
+  const [exportingDeliveryXLSX, setExportingDeliveryXLSX] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -478,6 +485,130 @@ const OrdersContent: React.FC = () => {
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
+    }
+  };
+
+  // Export delivery note to PDF
+  const exportDeliveryNoteToPDF = async (order: any) => {
+    try {
+      setExportingDeliveryPDF(true);
+      const url = `/orders/${order.id}/export?type=pdf`;
+
+      const response = await apiClient.get(url, {
+        responseType: 'blob',
+      });
+
+      const blob = response.data;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      // Get filename from Content-Disposition header, or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `delivery_note_${order.order_number}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1]);
+        }
+      }
+
+      link.download = filename;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: "Thành công",
+        description: `Đã xuất biên bản giao hàng ${order.order_number} ra file PDF`,
+      });
+
+      setShowExportDeliveryDialog(false);
+    } catch (error: any) {
+      console.error("Error exporting delivery note PDF:", error);
+      
+      let errorMessage = "Không thể xuất file PDF";
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          errorMessage = json.message || json.error || errorMessage;
+        } catch {
+          errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
+        }
+      }
+
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setExportingDeliveryPDF(false);
+    }
+  };
+
+  // Export delivery note to XLSX
+  const exportDeliveryNoteToXLSX = async (order: any) => {
+    try {
+      setExportingDeliveryXLSX(true);
+      const url = `/orders/${order.id}/export?type=xlsx`;
+
+      const response = await apiClient.get(url, {
+        responseType: 'blob',
+      });
+
+      const blob = response.data;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      // Get filename from Content-Disposition header, or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `delivery_note_${order.order_number}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1]);
+        }
+      }
+
+      link.download = filename;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: "Thành công",
+        description: `Đã xuất biên bản giao hàng ${order.order_number} ra file Excel`,
+      });
+
+      setShowExportDeliveryDialog(false);
+    } catch (error: any) {
+      console.error("Error exporting delivery note XLSX:", error);
+      
+      let errorMessage = "Không thể xuất file Excel";
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          errorMessage = json.message || json.error || errorMessage;
+        } catch {
+          errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
+        }
+      }
+
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setExportingDeliveryXLSX(false);
     }
   };
 
@@ -1088,6 +1219,16 @@ const OrdersContent: React.FC = () => {
                                  <Tag className="w-4 h-4 mr-2" />
                                  Quản lý nhãn
                                </DropdownMenuItem>
+                               <DropdownMenuItem 
+                                 onClick={() => {
+                                   setSelectedOrderForDeliveryExport(order);
+                                   setShowExportDeliveryDialog(true);
+                                 }}
+                                 className="cursor-pointer hover:bg-muted"
+                               >
+                                 <Download className="w-4 h-4 mr-2" />
+                                 Xuất biên bản giao hàng
+                               </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleCreateExportSlip(order)}
                                   className="cursor-pointer hover:bg-muted"
@@ -1342,6 +1483,50 @@ const OrdersContent: React.FC = () => {
             </Button>
           </DialogFooter>
         </DialogContent>
+       </Dialog>
+
+       {/* Export Delivery Note Dialog */}
+       <Dialog open={showExportDeliveryDialog} onOpenChange={setShowExportDeliveryDialog}>
+         <DialogContent>
+           <DialogHeader>
+             <DialogTitle>Xuất biên bản giao hàng</DialogTitle>
+             <DialogDescription>
+               {selectedOrderForDeliveryExport ? (
+                 <>Chọn định dạng xuất cho đơn hàng <strong>{selectedOrderForDeliveryExport.order_number}</strong></>
+               ) : (
+                 'Chọn định dạng xuất'
+               )}
+             </DialogDescription>
+           </DialogHeader>
+           <div className="py-4 space-y-3">
+             <Button 
+               onClick={() => selectedOrderForDeliveryExport && exportDeliveryNoteToPDF(selectedOrderForDeliveryExport)}
+               disabled={exportingDeliveryPDF || exportingDeliveryXLSX}
+               className="w-full"
+               variant="outline"
+             >
+               <FileDown className="w-4 h-4 mr-2" />
+               {exportingDeliveryPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
+             </Button>
+             <Button 
+               onClick={() => selectedOrderForDeliveryExport && exportDeliveryNoteToXLSX(selectedOrderForDeliveryExport)}
+               disabled={exportingDeliveryPDF || exportingDeliveryXLSX}
+               className="w-full"
+               variant="outline"
+             >
+               <FileDown className="w-4 h-4 mr-2" />
+               {exportingDeliveryXLSX ? 'Đang xuất Excel...' : 'Xuất Excel'}
+             </Button>
+           </div>
+           <DialogFooter>
+             <Button 
+               variant="outline" 
+               onClick={() => setShowExportDeliveryDialog(false)}
+             >
+               Đóng
+             </Button>
+           </DialogFooter>
+         </DialogContent>
        </Dialog>
        </div>
      </div>

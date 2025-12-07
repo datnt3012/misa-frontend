@@ -48,6 +48,8 @@ const QuotationsContent: React.FC = () => {
   const [selectedQuotations, setSelectedQuotations] = useState<string[]>([]);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportingXLSX, setExportingXLSX] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [selectedQuotationForExport, setSelectedQuotationForExport] = useState<Quotation | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   
   // Pagination state
@@ -334,8 +336,17 @@ const QuotationsContent: React.FC = () => {
       const link = document.createElement("a");
       link.href = downloadUrl;
 
-      const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
-      link.download = `Bao_gia_${quotation.code}_${timestamp}.pdf`;
+      // Get filename from Content-Disposition header, or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `quotation_${quotation.code}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1]);
+        }
+      }
+
+      link.download = filename;
 
       document.body.appendChild(link);
       link.click();
@@ -411,8 +422,17 @@ const QuotationsContent: React.FC = () => {
       const link = document.createElement("a");
       link.href = downloadUrl;
 
-      const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
-      link.download = `Bao_gia_${quotation.code}_${timestamp}.xlsx`;
+      // Get filename from Content-Disposition header, or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `quotation_${quotation.code}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1]);
+        }
+      }
+
+      link.download = filename;
 
       document.body.appendChild(link);
       link.click();
@@ -726,18 +746,13 @@ const QuotationsContent: React.FC = () => {
                                 Xem chi tiết
                               </DropdownMenuItem>
                               <DropdownMenuItem 
-                                onClick={() => exportToPDF(quotation)}
-                                disabled={exportingPDF || exportingXLSX}
-                              >
-                                <FileDown className="h-4 w-4 mr-2" />
-                                {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => exportToXLSX(quotation)}
-                                disabled={exportingPDF || exportingXLSX}
+                                onClick={() => {
+                                  setSelectedQuotationForExport(quotation);
+                                  setShowExportDialog(true);
+                                }}
                               >
                                 <Download className="h-4 w-4 mr-2" />
-                                {exportingXLSX ? 'Đang xuất Excel...' : 'Xuất Excel'}
+                                Xuất báo giá
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setQuotationToEdit(quotation);
@@ -995,6 +1010,50 @@ const QuotationsContent: React.FC = () => {
               </p>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Quotation Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xuất báo giá</DialogTitle>
+            <DialogDescription>
+              {selectedQuotationForExport ? (
+                <>Chọn định dạng xuất cho báo giá <strong>{selectedQuotationForExport.code}</strong></>
+              ) : (
+                'Chọn định dạng xuất'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <Button 
+              onClick={() => selectedQuotationForExport && exportToPDF(selectedQuotationForExport)}
+              disabled={exportingPDF || exportingXLSX}
+              className="w-full"
+              variant="outline"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              {exportingPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
+            </Button>
+            <Button 
+              onClick={() => selectedQuotationForExport && exportToXLSX(selectedQuotationForExport)}
+              disabled={exportingPDF || exportingXLSX}
+              className="w-full"
+              variant="outline"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {exportingXLSX ? 'Đang xuất Excel...' : 'Xuất Excel'}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowExportDialog(false)}
+            >
+              Đóng
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
