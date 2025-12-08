@@ -14,6 +14,7 @@ export interface DashboardSummary {
   currentProfitRevenue: number;
   previousProfitRevenue: number;
   totalExpenses?: number;
+  totalInventoryValue?: number;
 }
 
 export interface RevenueDataPoint {
@@ -122,6 +123,7 @@ export const dashboardApi = {
         currentProfitRevenue: 0,
         previousProfitRevenue: 0,
         totalExpenses: 0,
+        totalInventoryValue: 0,
       };
     } catch (error) {
       console.error('Error fetching dashboard summary:', error);
@@ -389,4 +391,4 @@ export const dashboardApi = {
     }
   },
 };
-
+ 
