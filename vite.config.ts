@@ -43,4 +43,9 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     include: ["react-is"],
   },
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+  },
 }));

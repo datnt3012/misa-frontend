@@ -360,6 +360,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   }
 
   const totalAmount = orderDetails.total_amount || 0;
+  const expenses = orderDetails.expenses || [];
+  const expensesTotal = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
   // Calculate paid amount from payment history (most accurate source)
   // If payment history exists, sum all payments; otherwise fallback to orderDetails.paid_amount
   const paidAmount = paymentHistory.length > 0
@@ -413,6 +415,14 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Số PO:</label>
                       <div className="text-base">{orderDetails.purchase_order_number}</div>
+                    </div>
+                  )}
+                  {(orderDetails as any).paymentDeadline && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Hạn thanh toán:</label>
+                      <div className="text-base">
+                        {new Date((orderDetails as any).paymentDeadline).toLocaleDateString('vi-VN')}
+                      </div>
                     </div>
                   )}
                   {orderDetails.notes && (
@@ -597,8 +607,25 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
 
                 <div className="mt-4 flex justify-end">
                   <div className="w-96 space-y-2">
-                    <div className="flex justify-between text-lg font-semibold">
-                      <span>Tổng tiền:</span>
+                    <div className="flex justify-between text-sm">
+                      <span>Tổng tiền sản phẩm:</span>
+                      <span>
+                        {formatCurrency(
+                          orderDetails.items?.reduce(
+                            (sum, item) => sum + (Number(item.total_price) || 0),
+                            0
+                          ) || 0
+                        )}
+                      </span>
+                    </div>
+                    {expensesTotal > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span>Chi phí:</span>
+                        <span>{formatCurrency(expensesTotal)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-lg font-semibold pt-1">
+                      <span>Tổng tiền đơn hàng:</span>
                       <span>{formatCurrency(totalAmount)}</span>
                     </div>
                     <Separator />
@@ -614,6 +641,43 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Additional Expenses */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Chi phí</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {expenses.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8">#</TableHead>
+                        <TableHead>Tên chi phí</TableHead>
+                        <TableHead className="text-right">Số tiền</TableHead>
+                        <TableHead>Ghi chú</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expenses.map((exp, index) => (
+                        <TableRow key={`${exp.name}-${index}`}>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell>{exp.name}</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(Number(exp.amount) || 0)}
+                          </TableCell>
+                          <TableCell>{exp.note || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Không có chi phí nào
+                  </div>
+                )}
               </CardContent>
             </Card>
 

@@ -59,6 +59,46 @@ export interface ProductImportRequest {
   warehouse_id?: string;
 }
 
+export interface ProductImportError {
+  row?: number;
+  code?: string;
+  reason: string;
+}
+
+export interface ProductImportResponse {
+  code?: number;
+  message?: string;
+  data?: {
+    totalRows?: number;
+    imported?: number;
+    failed?: number;
+    errors?: ProductImportError[];
+  };
+  // Direct fields (for unwrapped response)
+  totalRows?: number;
+  imported?: number;
+  failed?: number;
+  success?: number;
+  errors?: ProductImportError[];
+}
+
+export type ProductImportJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+export interface ProductImportJobSnapshot {
+  jobId: string;
+  status: ProductImportJobStatus;
+  totalRows: number;
+  processedRows: number;
+  imported: number;
+  failed: number;
+  percent: number;
+  errors: ProductImportError[];
+  startedAt?: string;
+  completedAt?: string;
+  result?: ProductImportResponse;
+  message?: string;
+}
+
 // Helper function to normalize product data from API response
 const normalizeProduct = (row: any): Product => {
   const price = parseFloat(row.price ?? '0');
@@ -80,6 +120,35 @@ const normalizeProduct = (row: any): Product => {
     createdAt: row.createdAt ?? row.created_at ?? '',
     updatedAt: row.updatedAt ?? row.updated_at ?? '',
     deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+  };
+};
+
+const normalizeImportJobResponse = (payload: any): ProductImportJobSnapshot => {
+  if (!payload) {
+    throw new Error('Empty import job payload');
+  }
+
+  const data = payload.data && typeof payload.data === 'object' && 'jobId' in payload.data
+    ? payload.data
+    : payload;
+
+  if (!data.jobId) {
+    throw new Error('Import job payload is missing jobId');
+  }
+
+  return {
+    jobId: data.jobId,
+    status: data.status ?? 'queued',
+    totalRows: data.totalRows ?? 0,
+    processedRows: data.processedRows ?? 0,
+    imported: data.imported ?? 0,
+    failed: data.failed ?? 0,
+    percent: data.percent ?? 0,
+    errors: data.errors ?? [],
+    startedAt: data.startedAt,
+    completedAt: data.completedAt,
+    result: data.result ?? payload.result,
+    message: payload.message ?? data.message,
   };
 };
 
@@ -152,21 +221,71 @@ export const productApi = {
   },
 
   // Import products from Excel
-  importProducts: async (data: ProductImportRequest): Promise<{ 
-    success: number; 
-    failed: number; 
-    errors: string[] 
-  }> => {
+  importProducts: async (data: ProductImportRequest): Promise<ProductImportResponse> => {
     const formData = new FormData();
     formData.append('file', data.file);
     if (data.warehouse_id) {
       formData.append('warehouse_id', data.warehouse_id);
     }
 
-    return api.upload<{ success: number; failed: number; errors: string[] }>(
-      API_ENDPOINTS.PRODUCTS.IMPORT,
+    try {
+      const response = await api.upload<any>(
+        API_ENDPOINTS.PRODUCTS.IMPORT,
+        formData
+      );
+      // Normalize response - handle both wrapped { code, data, message } and direct format
+      return response;
+    } catch (error: any) {
+      if (error.response?.status === 400 && error.response?.data) {
+        // Return the error response data (which contains errors array)
+        return error.response.data as ProductImportResponse;
+      }
+      throw error;
+    }
+  },
+
+  // Import products asynchronously (background job)
+  importProductsAsync: async (data: ProductImportRequest): Promise<ProductImportJobSnapshot> => {
+    const formData = new FormData();
+    formData.append('file', data.file);
+    if (data.warehouse_id) {
+      formData.append('warehouse_id', data.warehouse_id);
+    }
+
+    const response = await api.upload<any>(
+      API_ENDPOINTS.PRODUCTS.IMPORT_ASYNC,
       formData
     );
+
+    return normalizeImportJobResponse(response);
+  },
+
+  // List import jobs (optionally only active ones)
+  listImportJobs: async (params?: { onlyActive?: boolean }): Promise<ProductImportJobSnapshot[]> => {
+    const query = params?.onlyActive ? '?onlyActive=true' : '';
+    const response = await api.get<any>(`${API_ENDPOINTS.PRODUCTS.IMPORT_STATUS_LIST}${query}`);
+    const payload = response?.data ?? response;
+    const jobArray = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.jobs)
+          ? payload.jobs
+          : [];
+
+    return jobArray.map(normalizeImportJobResponse);
+  },
+
+  // Request cancel for import job
+  cancelImportJob: async (jobId: string): Promise<ProductImportJobSnapshot> => {
+    const response = await api.delete<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
+    return normalizeImportJobResponse(response);
+  },
+
+  // Get import job status
+  getImportStatus: async (jobId: string): Promise<ProductImportJobSnapshot> => {
+    const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
+    return normalizeImportJobResponse(response);
   },
 
   // Export products to Excel
@@ -193,5 +312,31 @@ export const productApi = {
     }
 
     return response.blob();
+  },
+
+  // Download import template from backend
+  downloadImportTemplate: async (): Promise<{ blob: Blob; filename: string }> => {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0'}${API_ENDPOINTS.PRODUCTS.IMPORT_TEMPLATE}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download template');
+    }
+
+    // Extract filename from Content-Disposition header
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'product-import-template.xlsx';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '');
+      }
+    }
+
+    const blob = await response.blob();
+    return { blob, filename };
   }
 };

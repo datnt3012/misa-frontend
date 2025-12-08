@@ -67,9 +67,13 @@ export const API_ENDPOINTS = {
   PRODUCTS: {
     LIST: '/products',
     CREATE: '/products',
+    IMPORT_TEMPLATE: '/products/import/template',
     UPDATE: (id: string) => `/products/${id}`,
     DELETE: (id: string) => `/products/${id}`,
-    IMPORT: '/products/import',
+    IMPORT: '/products/import/excel',
+    IMPORT_ASYNC: '/products/import/excel/async',
+    IMPORT_STATUS_LIST: '/products/import/status',
+    IMPORT_STATUS: (jobId: string) => `/products/import/status/${jobId}`,
     EXPORT: '/products/export',
   },
   
@@ -192,6 +196,7 @@ export const API_ENDPOINTS = {
   PAYMENTS: {
     LIST: '/payments',
     CREATE: '/payments',
+    MULTIPLE: '/payments/multiple',
     UPDATE: (id: string) => `/payments/${id}`,
     DELETE: (id: string) => `/payments/${id}`,
   },
@@ -220,5 +225,14 @@ export const API_ENDPOINTS = {
     UPLOAD: '/documents/upload',
     DOWNLOAD: (id: string) => `/documents/${id}/download`,
     DELETE: (id: string) => `/documents/${id}`,
+  },
+  
+  // Quotations
+  QUOTATIONS: {
+    LIST: '/quotations',
+    CREATE: '/quotations',
+    STATUS: (id: string) => `/quotations/${id}/status`,
+    UPDATE: (id: string) => `/quotations/${id}`,
+    DELETE: (id: string) => `/quotations/${id}`,
   }
 };

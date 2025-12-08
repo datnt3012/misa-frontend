@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2 } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
+import { paymentsApi } from "@/api/payments.api";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -26,6 +29,7 @@ import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
+import apiClient from "@/lib/api";
 
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
@@ -61,6 +65,7 @@ const OrdersContent: React.FC = () => {
   const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -71,10 +76,20 @@ const OrdersContent: React.FC = () => {
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
   
+  // Export delivery note states
+  const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
+  const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
+  const [exportingDeliveryPDF, setExportingDeliveryPDF] = useState(false);
+  const [exportingDeliveryXLSX, setExportingDeliveryXLSX] = useState(false);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalOrders, setTotalOrders] = useState(0);
+  
+  // Cache for total payments per order
+  const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
+  const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
   
   // Summary state from API
   const [summary, setSummary] = useState<{
@@ -86,6 +101,7 @@ const OrdersContent: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const location = useLocation();
 
   const loadOrderTagsCatalog = useCallback(async () => {
     try {
@@ -124,6 +140,11 @@ const OrdersContent: React.FC = () => {
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
       
+      // Load payments for all orders to calculate accurate paid amounts
+      if (resp.orders && resp.orders.length > 0) {
+        loadPaymentsForOrders(resp.orders.map(o => o.id));
+      }
+      
       // Set summary from API if available
       if (resp.summary) {
         console.log('[Orders] Setting summary from API:', resp.summary);
@@ -145,6 +166,59 @@ const OrdersContent: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+
+  // Load payments for orders and cache total paid amounts
+  const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
+    if (!orderIds || orderIds.length === 0) return;
+
+    // Filter out orders we already have cached
+    const uncachedOrderIds = orderIds.filter(id => !orderPaymentsCache[id] && !loadingPayments.has(id));
+    if (uncachedOrderIds.length === 0) return;
+
+    // Mark as loading
+    setLoadingPayments(prev => {
+      const newSet = new Set(prev);
+      uncachedOrderIds.forEach(id => newSet.add(id));
+      return newSet;
+    });
+
+    try {
+      // Load payments for all orders in parallel
+      const paymentPromises = uncachedOrderIds.map(async (orderId) => {
+        try {
+          const payments = await paymentsApi.getPaymentsByOrder(orderId);
+          // Calculate total paid amount from payments (same logic as OrderViewDialog)
+          const totalPaid = payments.length > 0
+            ? payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
+            : 0;
+          return { orderId, totalPaid };
+        } catch (error) {
+          console.error(`[Orders] Error loading payments for order ${orderId}:`, error);
+          return { orderId, totalPaid: 0 };
+        }
+      });
+
+      const results = await Promise.all(paymentPromises);
+      
+      // Update cache
+      setOrderPaymentsCache(prev => {
+        const newCache = { ...prev };
+        results.forEach(({ orderId, totalPaid }) => {
+          newCache[orderId] = totalPaid;
+        });
+        return newCache;
+      });
+    } catch (error) {
+      console.error('[Orders] Error loading payments for orders:', error);
+    } finally {
+      // Remove from loading set
+      setLoadingPayments(prev => {
+        const newSet = new Set(prev);
+        uncachedOrderIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    }
+  }, [orderPaymentsCache, loadingPayments]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -257,6 +331,11 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Scroll to top when component mounts or route changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
 
   useEffect(() => {
     fetchOrders();
@@ -409,6 +488,130 @@ const OrdersContent: React.FC = () => {
     }
   };
 
+  // Export delivery note to PDF
+  const exportDeliveryNoteToPDF = async (order: any) => {
+    try {
+      setExportingDeliveryPDF(true);
+      const url = `/orders/${order.id}/export?type=pdf`;
+
+      const response = await apiClient.get(url, {
+        responseType: 'blob',
+      });
+
+      const blob = response.data;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      // Get filename from Content-Disposition header, or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `delivery_note_${order.order_number}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1]);
+        }
+      }
+
+      link.download = filename;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: "Thành công",
+        description: `Đã xuất biên bản giao hàng ${order.order_number} ra file PDF`,
+      });
+
+      setShowExportDeliveryDialog(false);
+    } catch (error: any) {
+      console.error("Error exporting delivery note PDF:", error);
+      
+      let errorMessage = "Không thể xuất file PDF";
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          errorMessage = json.message || json.error || errorMessage;
+        } catch {
+          errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
+        }
+      }
+
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setExportingDeliveryPDF(false);
+    }
+  };
+
+  // Export delivery note to XLSX
+  const exportDeliveryNoteToXLSX = async (order: any) => {
+    try {
+      setExportingDeliveryXLSX(true);
+      const url = `/orders/${order.id}/export?type=xlsx`;
+
+      const response = await apiClient.get(url, {
+        responseType: 'blob',
+      });
+
+      const blob = response.data;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+
+      // Get filename from Content-Disposition header, or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `delivery_note_${order.order_number}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1]);
+        }
+      }
+
+      link.download = filename;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: "Thành công",
+        description: `Đã xuất biên bản giao hàng ${order.order_number} ra file Excel`,
+      });
+
+      setShowExportDeliveryDialog(false);
+    } catch (error: any) {
+      console.error("Error exporting delivery note XLSX:", error);
+      
+      let errorMessage = "Không thể xuất file Excel";
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          errorMessage = json.message || json.error || errorMessage;
+        } catch {
+          errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
+        }
+      }
+
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setExportingDeliveryXLSX(false);
+    }
+  };
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -422,6 +625,18 @@ const OrdersContent: React.FC = () => {
     setCurrentPage(1);
     fetchOrders();
   };
+
+  const handleMultiplePayments = () => {
+    if (selectedOrders.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn ít nhất một đơn hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowMultiplePaymentDialog(true);
+  }
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -451,15 +666,35 @@ const OrdersContent: React.FC = () => {
   };
 
   // Use summary from API if available, otherwise calculate from orders
+  // Prefer backend aggregated fields (totalAmount, totalPaidAmount, remainingDebt)
   const totals = summary ? {
     totalAmount: summary.totalAmount,
     paidAmount: summary.totalInitialPayment,
     debtAmount: summary.totalDebt,
-  } : orders.reduce((acc, order) => ({
-    totalAmount: acc.totalAmount + (order.total_amount || 0),
-    paidAmount: acc.paidAmount + (order.initial_payment || order.paid_amount || 0),
-    debtAmount: acc.debtAmount + (order.debt_amount || 0),
-  }), { totalAmount: 0, paidAmount: 0, debtAmount: 0 });
+    totalExpenses: summary.totalExpenses || 0,
+  } : orders.reduce(
+    (acc, order: any) => {
+      const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
+      const paidAmount =
+        order.totalPaidAmount ??
+        order.paid_amount ??
+        order.initial_payment ??
+        0;
+      const debtAmount =
+        order.remainingDebt ??
+        order.debt_amount ??
+        Math.max(0, totalAmount - paidAmount);
+      const totalExpenses = order.totalExpenses ?? 0;
+
+      return {
+        totalAmount: acc.totalAmount + totalAmount,
+        paidAmount: acc.paidAmount + paidAmount,
+        debtAmount: acc.debtAmount + debtAmount,
+        totalExpenses: acc.totalExpenses + totalExpenses,
+      };
+    },
+    { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
+  );
 
   return (
     <div className="min-h-screen bg-background p-2 sm:p-3 md:p-4">
@@ -567,7 +802,7 @@ const OrdersContent: React.FC = () => {
       {/* Summary Row */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-4 gap-4 text-center">
+          <div className="grid grid-cols-5 gap-4 text-center">
             <div>
               <div className="text-2xl font-bold">{totalOrders}</div>
               <div className="text-sm text-muted-foreground">Đơn hàng</div>
@@ -584,6 +819,10 @@ const OrdersContent: React.FC = () => {
               <div className="text-2xl font-bold text-red-600">{formatCurrency(totals.debtAmount)}</div>
               <div className="text-sm text-muted-foreground">Còn nợ</div>
             </div>
+            <div>
+              <div className="text-2xl font-bold text-orange-600">{formatCurrency(totals.totalExpenses)}</div>
+              <div className="text-sm text-muted-foreground">Tổng chi phí</div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -599,6 +838,14 @@ const OrdersContent: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <Button 
+                    onClick={() => handleMultiplePayments()}
+                    size="sm"
+                    className="bg-blue-500 text-white hover:bg-blue-400 transition-colors duration-200"
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    Thanh toán gộp
+                </Button>
                 <Button 
                   onClick={() => setShowDeleteDialog(true)}
                   variant="destructive"
@@ -657,6 +904,8 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
@@ -668,13 +917,13 @@ const OrdersContent: React.FC = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-6">
+                    <TableCell colSpan={14} className="text-center py-6">
                       Đang tải...
                     </TableCell>
                   </TableRow>
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-6">
+                    <TableCell colSpan={14} className="text-center py-6">
                       Không có đơn hàng nào
                     </TableCell>
                   </TableRow>
@@ -810,19 +1059,68 @@ const OrdersContent: React.FC = () => {
                                )}
                              </div>
                            </TableCell>
-                           
-                            {/* Payment Column */}
-                          <TableCell className="py-3 border-r border-slate-200 text-center">
+                          
+                           {/* Expenses Column - use backend totalExpenses if available */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-medium text-orange-600">
+                               {formatVndNoSymbol(
+                                 (order as any).totalExpenses ??
+                                 order.totalExpenses ??
+                                 order.expenses?.reduce(
+                                   (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
+                                   0
+                                 ) ??
+                                 0
+                               )}
+                             </div>
+                           </TableCell>
+
+                          {/* Total Amount Column - use backend aggregated totalAmount */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-semibold text-slate-900">
+                               {formatVndNoSymbol(
+                                 // Backend totalAmount already includes products + expenses
+                                 (order as any).totalAmount ?? order.total_amount ?? 0
+                               )}
+                             </div>
+                           </TableCell>
+
+                           {/* Payment Column - use backend totalPaidAmount / remainingDebt */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
+                                {/* Số đã thanh toán: totalPaidAmount từ backend */}
                                 <div className="text-sm font-medium text-slate-900 flex items-center gap-1 justify-center">
                                   <Banknote className="w-3 h-3" />
-                                  {formatVndNoSymbol(order.initial_payment || order.paid_amount)}
+                                  {(() => {
+                                    const paidAmount =
+                                      (order as any).totalPaidAmount ??
+                                      order.totalPaidAmount ??
+                                      order.paid_amount ??
+                                      order.initial_payment ??
+                                      0;
+                                    return formatVndNoSymbol(paidAmount);
+                                  })()}
                                 </div>
-                                <div className="text-sm font-medium text-purple-600">
-                                  {formatVndNoSymbol(order.total_amount - (order.initial_payment || order.paid_amount))}
+                                {/* Số còn nợ: remainingDebt từ backend, fallback = totalAmount - totalPaidAmount */}
+                                <div className="text-sm font-medium text-red-600">
+                                  {(() => {
+                                    const totalAmount =
+                                      (order as any).totalAmount ?? order.totalAmount ?? order.total_amount ?? 0;
+                                    const paidAmount =
+                                      (order as any).totalPaidAmount ??
+                                      order.totalPaidAmount ??
+                                      order.paid_amount ??
+                                      order.initial_payment ??
+                                      0;
+                                    const debtAmount =
+                                      (order as any).remainingDebt ??
+                                      order.remainingDebt ??
+                                      Math.max(0, totalAmount - paidAmount);
+                                    return formatVndNoSymbol(debtAmount);
+                                  })()}
                                 </div>
                               </div>
-                            </TableCell>
+                           </TableCell>
                          
                           {/* Quick Notes Column */}
                           <TableCell className="py-3 border-r border-slate-200">
@@ -927,6 +1225,16 @@ const OrdersContent: React.FC = () => {
                                >
                                  <Tag className="w-4 h-4 mr-2" />
                                  Quản lý nhãn
+                               </DropdownMenuItem>
+                               <DropdownMenuItem 
+                                 onClick={() => {
+                                   setSelectedOrderForDeliveryExport(order);
+                                   setShowExportDeliveryDialog(true);
+                                 }}
+                                 className="cursor-pointer hover:bg-muted"
+                               >
+                                 <Download className="w-4 h-4 mr-2" />
+                                 Xuất biên bản giao hàng
                                </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleCreateExportSlip(order)}
@@ -1067,6 +1375,45 @@ const OrdersContent: React.FC = () => {
         order={selectedOrder}
         onUpdate={() => {
           fetchOrders();
+          // Refresh payments cache for this order
+          if (selectedOrder?.id) {
+            // Clear cache for this order so it will be reloaded
+            setOrderPaymentsCache(prev => {
+              const newCache = { ...prev };
+              delete newCache[selectedOrder.id];
+              return newCache;
+            });
+            // Reload payments for this order
+            loadPaymentsForOrders([selectedOrder.id]);
+          }
+        }}
+      />
+
+      {/* Multiple Payment Dialog */}
+      <MultiplePaymentDialog
+        open={showMultiplePaymentDialog}
+        onOpenChange={setShowMultiplePaymentDialog}
+        orderIds={selectedOrders}
+        orders={orders}
+        onUpdate={() => {
+          fetchOrders();
+          // Refresh payments cache for all selected orders
+          if (selectedOrders.length > 0) {
+            // Clear cache for these orders so they will be reloaded
+            setOrderPaymentsCache(prev => {
+              const newCache = { ...prev };
+              selectedOrders.forEach(orderId => {
+                delete newCache[orderId];
+              });
+              return newCache;
+            });
+            // Reload payments for these orders
+            loadPaymentsForOrders(selectedOrders);
+          }
+          setSelectedOrders([]);
+        }}
+        onRemoveOrder={(orderId) => {
+          setSelectedOrders(prev => prev.filter(id => id !== orderId));
         }}
       />
 
@@ -1143,6 +1490,50 @@ const OrdersContent: React.FC = () => {
             </Button>
           </DialogFooter>
         </DialogContent>
+       </Dialog>
+
+       {/* Export Delivery Note Dialog */}
+       <Dialog open={showExportDeliveryDialog} onOpenChange={setShowExportDeliveryDialog}>
+         <DialogContent>
+           <DialogHeader>
+             <DialogTitle>Xuất biên bản giao hàng</DialogTitle>
+             <DialogDescription>
+               {selectedOrderForDeliveryExport ? (
+                 <>Chọn định dạng xuất cho đơn hàng <strong>{selectedOrderForDeliveryExport.order_number}</strong></>
+               ) : (
+                 'Chọn định dạng xuất'
+               )}
+             </DialogDescription>
+           </DialogHeader>
+           <div className="py-4 space-y-3">
+             <Button 
+               onClick={() => selectedOrderForDeliveryExport && exportDeliveryNoteToPDF(selectedOrderForDeliveryExport)}
+               disabled={exportingDeliveryPDF || exportingDeliveryXLSX}
+               className="w-full"
+               variant="outline"
+             >
+               <FileDown className="w-4 h-4 mr-2" />
+               {exportingDeliveryPDF ? 'Đang xuất PDF...' : 'Xuất PDF'}
+             </Button>
+             <Button 
+               onClick={() => selectedOrderForDeliveryExport && exportDeliveryNoteToXLSX(selectedOrderForDeliveryExport)}
+               disabled={exportingDeliveryPDF || exportingDeliveryXLSX}
+               className="w-full"
+               variant="outline"
+             >
+               <FileDown className="w-4 h-4 mr-2" />
+               {exportingDeliveryXLSX ? 'Đang xuất Excel...' : 'Xuất Excel'}
+             </Button>
+           </div>
+           <DialogFooter>
+             <Button 
+               variant="outline" 
+               onClick={() => setShowExportDeliveryDialog(false)}
+             >
+               Đóng
+             </Button>
+           </DialogFooter>
+         </DialogContent>
        </Dialog>
        </div>
      </div>
