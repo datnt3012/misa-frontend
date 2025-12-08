@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Line, Legend } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, TrendingUp, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Package, TrendingUp, ShoppingCart, AlertTriangle, Wallet } from "lucide-react";
 import { useState, useEffect } from "react";
 import { dashboardApi } from "@/api/dashboard.api";
 import { useAuth } from "@/hooks/useAuth";
@@ -91,6 +91,7 @@ const DashboardContent = () => {
     previousProfit: 0,
     currentProfitRevenue: 0,
     previousProfitRevenue: 0,
+    totalExpenses: 0,
   });
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [inventoryData, setInventoryData] = useState<any[]>([]);
@@ -430,6 +431,30 @@ const DashboardContent = () => {
               })()}
             </CardContent>
           </Card>
+
+          {/* Tổng Chi Phí */}
+          {errorStates.orders || loadingStates.orders ? (
+            <PermissionErrorCard 
+              title="Tổng Chi Phí" 
+              error={errorStates.orders} 
+              loading={loadingStates.orders} 
+            />
+          ) : (
+            <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tổng Chi Phí</CardTitle>
+                <Wallet className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {formatCurrency(dashboardData.totalExpenses || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Tổng chi phí tất cả hóa đơn
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Tổng Đơn Hàng */}
           {errorStates.orders || loadingStates.orders ? (

@@ -671,6 +671,7 @@ const OrdersContent: React.FC = () => {
     totalAmount: summary.totalAmount,
     paidAmount: summary.totalInitialPayment,
     debtAmount: summary.totalDebt,
+    totalExpenses: summary.totalExpenses || 0,
   } : orders.reduce(
     (acc, order: any) => {
       const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
@@ -683,14 +684,16 @@ const OrdersContent: React.FC = () => {
         order.remainingDebt ??
         order.debt_amount ??
         Math.max(0, totalAmount - paidAmount);
+      const totalExpenses = order.totalExpenses ?? 0;
 
       return {
         totalAmount: acc.totalAmount + totalAmount,
         paidAmount: acc.paidAmount + paidAmount,
         debtAmount: acc.debtAmount + debtAmount,
+        totalExpenses: acc.totalExpenses + totalExpenses,
       };
     },
-    { totalAmount: 0, paidAmount: 0, debtAmount: 0 }
+    { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
   );
 
   return (
@@ -799,7 +802,7 @@ const OrdersContent: React.FC = () => {
       {/* Summary Row */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-4 gap-4 text-center">
+          <div className="grid grid-cols-5 gap-4 text-center">
             <div>
               <div className="text-2xl font-bold">{totalOrders}</div>
               <div className="text-sm text-muted-foreground">Đơn hàng</div>
@@ -815,6 +818,10 @@ const OrdersContent: React.FC = () => {
             <div>
               <div className="text-2xl font-bold text-red-600">{formatCurrency(totals.debtAmount)}</div>
               <div className="text-sm text-muted-foreground">Còn nợ</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-orange-600">{formatCurrency(totals.totalExpenses)}</div>
+              <div className="text-sm text-muted-foreground">Tổng chi phí</div>
             </div>
           </div>
         </CardContent>
