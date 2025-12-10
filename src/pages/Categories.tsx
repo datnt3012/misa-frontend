@@ -360,8 +360,8 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[200px] text-left">Tên loại sản phẩm</TableHead>
-                    <TableHead className="min-w-[250px] text-left">Mô tả</TableHead>
+                    <TableHead className="w-[200px] text-center">Tên loại sản phẩm</TableHead>
+                    <TableHead className="min-w-[250px] text-center">Mô tả</TableHead>
                     <TableHead className="w-[140px] text-center">Trạng thái</TableHead>
                     <TableHead className="w-[120px] text-center">Ngày tạo</TableHead>
                     {(canUpdate || canDelete) && (

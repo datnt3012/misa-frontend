@@ -607,7 +607,7 @@ const QuotationsContent: React.FC = () => {
                   </TableHead>
                   <TableHead className="text-center">ID</TableHead>
                   <TableHead className="text-center">Khách hàng</TableHead>
-                  <TableHead className="text-left">Sản phẩm</TableHead>
+                  <TableHead className="text-center">Sản phẩm</TableHead>
                   <TableHead className="text-center">Giá</TableHead>
                   <TableHead className="text-center">Số lượng</TableHead>
                   <TableHead className="text-center">Thành tiền</TableHead>

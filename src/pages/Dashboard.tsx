@@ -841,9 +841,9 @@ const DashboardContent = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-left p-2">Sản phẩm</th>
-                          <th className="text-right p-2">Tồn kho</th>
-                          <th className="text-right p-2">Tồn tối thiểu</th>
+                          <th className="text-center p-2">Sản phẩm</th>
+                          <th className="text-center p-2">Tồn kho</th>
+                          <th className="text-center p-2">Tồn tối thiểu</th>
                           <th className="text-center p-2">Trạng thái</th>
                         </tr>
                       </thead>
