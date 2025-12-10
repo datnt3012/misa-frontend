@@ -24,6 +24,7 @@ import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
 import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
+import { categoriesApi, type Category } from "@/api/categories.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
 import { dashboardApi } from "@/api/dashboard.api";
@@ -52,6 +53,7 @@ const InventoryContent = () => {
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<ProductWithStock[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
   const [inventoryOverview, setInventoryOverview] = useState<{
     inventoryData: any[];
@@ -80,7 +82,7 @@ const InventoryContent = () => {
   // Clear error states when permissions are available
   useEffect(() => {
     if (canViewProducts && canViewWarehouses) {
-      setErrorStates({ products: null, warehouses: null });
+      setErrorStates(prev => ({ ...prev, products: null, warehouses: null }));
     }
   }, [canViewProducts, canViewWarehouses]);
 
@@ -246,6 +248,15 @@ const InventoryContent = () => {
       );
       promiseLabels.push('stockLevels');
 
+      // Load categories for mapping category IDs -> names
+      promises.push(
+        categoriesApi.getCategories({ page: 1, limit: 1000 }).catch(error => {
+          console.error('Error loading categories:', error);
+          return { categories: [] };
+        })
+      );
+      promiseLabels.push('categories');
+
       // Load inventory overview from dashboard API (same as dashboard uses)
       promises.push(
         dashboardApi.getInventoryOverview().catch(error => {
@@ -277,11 +288,17 @@ const InventoryContent = () => {
         let productsResponse = { products: [] };
         let warehousesResponse = { warehouses: [] };
         let stockLevelsResponse = { stockLevels: [] };
+        let categoriesResponse = { categories: [] as Category[] };
         let inventoryOverviewResponse = {
           inventoryData: [],
           lowStockProducts: [],
           productStockData: [],
-          totalProducts: 0
+          totalProducts: 0,
+          counts: {
+            inStock: 0,
+            lowStock: 0,
+            outOfStock: 0,
+          }
         };
         
         responses.forEach((response, index) => {
@@ -292,6 +309,8 @@ const InventoryContent = () => {
             warehousesResponse = response;
           } else if (label === 'stockLevels') {
             stockLevelsResponse = response;
+          } else if (label === 'categories') {
+            categoriesResponse = response;
           } else if (label === 'inventoryOverview') {
             inventoryOverviewResponse = response;
           }
@@ -302,6 +321,9 @@ const InventoryContent = () => {
 
         // Store stock levels
         setStockLevels(stockLevelsResponse.stockLevels || []);
+
+        // Store categories (active and inactive)
+        setCategories(categoriesResponse.categories || []);
 
         // Transform products to include stock information (mock data for now)
         const productsWithStock: ProductWithStock[] = (productsResponse.products || []).map(product => ({
@@ -320,6 +342,7 @@ const InventoryContent = () => {
         // No permissions to load any data
         setProducts([]);
         setWarehouses([]);
+        setCategories([]);
       }
     } catch (error) {
       // Don't show toast here - let the lazy loading error handling show the proper error interface
@@ -978,6 +1001,7 @@ const InventoryContent = () => {
                <InventoryStock 
                  products={products}
                  warehouses={warehouses}
+                 categories={categories}
                  canViewCostPrice={canViewCostPrice}
                />
              </PermissionGuard>
