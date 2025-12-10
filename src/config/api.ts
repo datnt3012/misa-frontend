@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',
     CHANGE_PASSWORD: '/auth/change-password',
+    VERIFY_TEMPORARY_PASSWORD: '/auth/verify-temporary-password',
   },
   
   // Dashboard

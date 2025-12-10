@@ -261,8 +261,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    // TODO: Implement reset password API call
-    return { error: { message: 'Reset password not implemented yet' } };
+    try {
+      const response = await authApi.forgotPassword({ email });
+      return { error: null, ...response };
+    } catch (error: any) {
+      let errorMessage = 'Có lỗi xảy ra khi gửi email khôi phục';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return { error: { message: errorMessage } };
+    }
   };
 
   const refreshUser = async () => {
