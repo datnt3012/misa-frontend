@@ -41,6 +41,7 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [showUserProfileDialog, setShowUserProfileDialog] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -72,13 +73,13 @@ const Layout = ({ children }: LayoutProps) => {
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Quản Lý Kho", href: "/inventory", icon: Package },
-    { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
     { name: "Báo Giá", href: "/quotations", icon: FileText },
+    { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
+    { name: "Quản Lý Kho", href: "/inventory", icon: Package },
+    { name: "Xuất Nhập Kho", href: "/export-import", icon: Package },
     { name: "Khách Hàng", href: "/customers", icon: Users },
     { name: "Nhà Cung Cấp", href: "/suppliers", icon: Building2 },
     { name: "Báo Cáo Doanh Thu", href: "/revenue", icon: TrendingUp },
-    { name: "Xuất Nhập Kho", href: "/export-import", icon: Package },
     { name: "Cài Đặt", href: "/settings", icon: Settings },
   ];
 
@@ -105,15 +106,20 @@ const Layout = ({ children }: LayoutProps) => {
           <Link
             key={item.name}
             to={item.href}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex items-center whitespace-nowrap ${
+              isSidebarCollapsed ? "justify-center" : "gap-3"} rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               isActive(item.href)
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             onClick={() => setSidebarOpen(false)}
           >
-            <Icon className="h-4 w-4" />
-            {item.name}
+            <Icon className="h-5 w-5" />
+            {!isSidebarCollapsed && (
+            <span className="transition-opacity duration-300">
+              {item.name}
+            </span>
+          )}
           </Link>
         );
       })}
@@ -123,14 +129,24 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-56 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-card px-4 pb-4 border-r">
-          <div className="flex h-16 shrink-0 items-center">
+      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col border-r bg-card transition-all duration-300 ${
+        isSidebarCollapsed ? 'lg:w-20' : 'lg:w-56'}`}
+        onMouseEnter={() => setIsSidebarCollapsed(false)}
+        onMouseLeave={() => setIsSidebarCollapsed(true)}
+      >
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto px-4 pb-4">
+          <div className="flex h-16 shrink-0 items-center justify-center lg:justify-start">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Package className="h-4 w-4" />
               </div>
-              <span className="text-xl font-bold">WareHub</span>
+              <span
+                className={`text-xl font-bold transition-all duration-300 ${
+                  isSidebarCollapsed ? "opacity-0 invisible" : "opacity-100 visible"
+                }`}
+              >
+                WareHub
+              </span>
             </div>
           </div>
           <NavLinks />
@@ -160,7 +176,9 @@ const Layout = ({ children }: LayoutProps) => {
       </Sheet>
 
       {/* Main Content */}
-      <div className="lg:pl-56">
+      <div className={`transition-all duration-300 ${
+        isSidebarCollapsed ? "lg:pl-20" : "lg:pl-56"
+      }`}>
         {/* Top Header */}
         <div className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-x-4 border-b bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">

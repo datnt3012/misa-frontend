@@ -279,7 +279,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         'Loại': product.categoryName || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.price || 0,
+        'Giá bán': product.price || 0,
         'Kho': product.warehouse_name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
                      (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
@@ -287,7 +287,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       };
 
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
+        exportItem['Giá vốn'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -465,7 +465,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   </div>
                 </TableHead>
                 <TableHead 
-                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  className="cursor-pointer hover:bg-muted/50 select-none text-center"
                   onClick={() => handleSort('category')}
                 >
                   <div className="flex items-center">
@@ -477,7 +477,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   className="cursor-pointer hover:bg-muted/50 select-none text-center"
                   onClick={() => handleSort('current_stock')}
                 >
-                  <div className="flex items-center justify-center">
+                  <div className="flex items-center">
                     Tồn Kho
                     {getSortIcon('current_stock')}
                   </div>
@@ -488,7 +488,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     onClick={() => handleSort('cost_price')}
                   >
                     <div className="flex items-center">
-                      Giá Vốn (VNĐ)
+                      Giá Vốn
                       {getSortIcon('cost_price')}
                     </div>
                   </TableHead>
@@ -498,7 +498,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   onClick={() => handleSort('unit_price')}
                 >
                   <div className="flex items-center">
-                    Giá Bán (VNĐ)
+                    Giá Bán
                     {getSortIcon('unit_price')}
                   </div>
                 </TableHead>
@@ -535,17 +535,17 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   <TableRow key={`${product.id}-${product.warehouse_id || 'no-warehouse'}`}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.categoryName || '-'}</TableCell>
+                    <TableCell className="text-center">{product.categoryName || '-'}</TableCell>
                     <TableCell className="text-center">
                       <span className={`font-medium ${
                         product.current_stock === 0 ? 'text-red-600' : 
                         product.current_stock < 10 ? 'text-orange-600' : 'text-green-600'
                       }`}>
-                        {product.current_stock}
+                        {formatCurrency(product.current_stock)}
                       </span>
                     </TableCell>
                     {canViewCostPrice && (
-                      <TableCell>
+                      <TableCell className="text-center">
                         <div className="relative group">
                           <span className="cursor-help">
                             {formatCurrencyShort(product.costPrice || 0)}
@@ -556,7 +556,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         </div>
                       </TableCell>
                     )}
-                    <TableCell>
+                    <TableCell className="text-center">
                       <div className="relative group">
                         <span className="cursor-help">
                           {formatCurrencyShort(product.price || 0)}
@@ -566,13 +566,13 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center whitespace-nowrap">
                       {product.warehouse_name || product.location || '-'}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell className=" text-center whitespace-nowrap">
                       {getStatusBadge(product.current_stock, product.lowStockThreshold)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                   </TableRow>

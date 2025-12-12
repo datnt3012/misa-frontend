@@ -202,7 +202,7 @@ export interface UpdateOrderRequest {
   paid_amount?: number;
   debt_amount?: number;
   debt_date?: string;
-  notes?: string;
+  note?: string;
   contract_number?: string;
   purchase_order_number?: string;
   tags?: string[];
@@ -259,6 +259,7 @@ export const orderApi = {
       totalAmount: number;
       totalInitialPayment: number;
       totalDebt: number;
+      totalExpenses: number;
     };
   }> => {
     const queryParams = new URLSearchParams();
@@ -475,6 +476,7 @@ export const orderApi = {
           totalAmount: Number(data.summary.totalAmount || 0),
           totalInitialPayment: Number(data.summary.totalInitialPayment || 0),
           totalDebt: Number(data.summary.totalDebt || 0),
+          totalExpenses: Number(data.summary.totalExpenses || 0),
         } : undefined,
       };
     }
@@ -487,6 +489,7 @@ export const orderApi = {
         totalAmount: Number(data.summary.totalAmount || 0),
         totalInitialPayment: Number(data.summary.totalInitialPayment || 0),
         totalDebt: Number(data.summary.totalDebt || 0),
+        totalExpenses: Number(data.summary.totalExpenses || 0),
       } : undefined,
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? orders.length ?? 0),

@@ -762,7 +762,7 @@ const InventoryContent = () => {
         'Loại': product.category || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.price || 0,
+        'Giá bán': product.price || 0,
         'Kho': warehouse?.name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
                      (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
@@ -771,7 +771,7 @@ const InventoryContent = () => {
 
       // Only add cost price if user can view it
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
+        exportItem['Giá vốn'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -863,8 +863,8 @@ const InventoryContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
+      <div className="mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Tồn Kho</h1>
           <p className="text-muted-foreground">Theo dõi và quản lý hàng tồn kho</p>

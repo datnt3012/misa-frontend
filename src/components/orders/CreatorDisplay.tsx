@@ -48,7 +48,7 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
 
     return (
       <div className="text-sm">
-        <div className="font-medium text-slate-900">{displayName}</div>
+        <div className="font-medium text-slate-900 text-center">{displayName}</div>
       </div>
     );
   }
@@ -56,7 +56,7 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
   if (loading) {
     return (
       <div className="text-sm text-muted-foreground">
-        <span className="animate-pulse">Đang tải...</span>
+        <span className="animate-pulse text-center">Đang tải...</span>
       </div>
     );
   }

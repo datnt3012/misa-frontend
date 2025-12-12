@@ -96,6 +96,7 @@ const OrdersContent: React.FC = () => {
     totalAmount: number;
     totalInitialPayment: number;
     totalDebt: number;
+    totalExpenses: number;
   } | null>(null);
   
   const { toast } = useToast();
@@ -438,7 +439,7 @@ const OrdersContent: React.FC = () => {
   // Handle quick note update
   const handleQuickNote = async (orderId: string, note: string) => {
     try {
-      await orderApi.updateOrder(orderId, { notes: note });
+      await orderApi.updateOrder(orderId, { note: note });
       
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -697,11 +698,11 @@ const OrdersContent: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background p-2 sm:p-3 md:p-4">
+    <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
       <div className="w-full mx-auto space-y-3 sm:space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">📋 DANH SÁCH ĐƠN HÀNG</h1>
+          <h1 className="text-3xl font-bold text-foreground">Danh Sách Đơn Hàng</h1>
         </div>
         <Button 
           onClick={() => setShowCreateDialog(true)}
@@ -946,7 +947,7 @@ const OrdersContent: React.FC = () => {
                         </TableCell>
                          {/* ID Column */}
                          <TableCell className="py-3 border-r border-slate-200">
-                           <div className="space-y-2">
+                           <div className="space-y-2 whitespace-nowrap text-center">
                              <div className="font-mono text-sm font-medium text-blue-600">
                                {order.order_number}
                              </div>
@@ -987,8 +988,8 @@ const OrdersContent: React.FC = () => {
                          </TableCell>
                          
                          {/* Customer Column */}
-                         <TableCell className="py-3 border-r border-slate-200">
-                           <div className="space-y-1">
+                         <TableCell className="py-3 border-r border-slate-200 text-center w-48 sm:w-60 max-w-sm">
+                           <div className="space-y-1 whitespace-nowrap">
                              <div className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                                {maskPhoneNumber(order.customer_phone || "")}
                              </div>
@@ -996,12 +997,7 @@ const OrdersContent: React.FC = () => {
                              <div className="text-sm text-muted-foreground">
                                {formatAddress(order.customer_address)}
                              </div>
-                             {order.notes && (
-                               <div className="text-xs text-blue-600 italic">
-                                 Ghi chú: {order.notes}
-                               </div>
-                             )}
-                             <div className="flex flex-wrap gap-1 mt-1">
+                             <div className="flex flex-wrap gap-1 mt-1 text-center justify-center">
                                {otherTags.map((tag: any, index: number) => tag && (
                                  <Badge 
                                    key={index}
@@ -1029,8 +1025,6 @@ const OrdersContent: React.FC = () => {
                               )}
                             </div>
                           </TableCell>
-                          
-                          {/* Remove SL column - now included in products */}
                            
                            {/* Price Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
@@ -1123,20 +1117,18 @@ const OrdersContent: React.FC = () => {
                            </TableCell>
                          
                           {/* Quick Notes Column */}
-                          <TableCell className="py-3 border-r border-slate-200">
-                            <div className="max-w-xs">
-                              <Input
-                                defaultValue={order.notes || ""}
-                                placeholder="Thêm ghi chú..."
-                                className="text-sm border-none p-1 h-auto bg-transparent hover:bg-muted/50 focus:bg-background focus:border-border"
-                                onBlur={(e) => handleQuickNote(order.id, e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.currentTarget.blur();
-                                  }
-                                }}
-                              />
-                            </div>
+                          <TableCell className="relative p-3 border-r border-slate-200 w-64 sm:w-40">
+                            <textarea
+                              defaultValue={order.notes || ""}
+                              placeholder="Thêm ghi chú..."
+                              className="absolute inset-0 w-full h-full border-none bg-transparent text-sm p-2 py-7 leading-[1.5] hover:bg-muted/50 focus:bg-background focus:border-border whitespace-normal break-words resize-none"
+                              onBlur={(e) => handleQuickNote(order.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                            />
                           </TableCell>
                           
                            {/* Creator Column */}

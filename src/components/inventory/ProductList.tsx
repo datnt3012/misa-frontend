@@ -310,24 +310,24 @@ const ProductList: React.FC<ProductListProps> = ({
       if (job.errors && job.errors.length > 0) {
         toast({
           title: 'Hoàn thành với cảnh báo',
-          description: job.message || `Đã import ${job.imported ?? 0}/${job.totalRows ?? 0} dòng. Có ${job.errors.length} lỗi cần xử lý.`,
+          description: job.message || `Đã nhập ${job.imported ?? 0}/${job.totalRows ?? 0} dòng. Có ${job.errors.length} lỗi cần xử lý.`,
         });
       } else {
         toast({
           title: 'Thành công',
-          description: job.message || `Đã import ${job.imported ?? 0} sản phẩm.`,
+          description: job.message || `Đã nhập ${job.imported ?? 0} sản phẩm.`,
         });
       }
     } else if (status === 'failed') {
       toast({
-        title: 'Import thất bại',
-        description: job.message || 'Có lỗi khi xử lý file import',
+        title: 'Nhập thất bại',
+        description: job.message || 'Có lỗi khi xử lý file nhập',
         variant: 'destructive',
       });
     } else if (status === 'cancelled') {
       toast({
-        title: 'Đã hủy import',
-        description: job.message || 'Job import đã được hủy theo yêu cầu',
+        title: 'Đã hủy nhập',
+        description: job.message || 'Tiến trình nhập đã được hủy theo yêu cầu',
       });
     }
   }, [toast]);
@@ -366,7 +366,7 @@ const ProductList: React.FC<ProductListProps> = ({
       if (!onlyActive) {
         toast({
           title: 'Lỗi',
-          description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Không thể tải danh sách job import'),
+          description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Không thể tải danh sách tiến trình nhập'),
           variant: 'destructive',
         });
       }
@@ -427,13 +427,13 @@ const ProductList: React.FC<ProductListProps> = ({
       await productApi.cancelImportJob(jobId);
       toast({
         title: 'Đã gửi yêu cầu hủy',
-        description: 'Job import sẽ dừng trong giây lát.',
+        description: 'Tiến trình nhập sẽ dừng trong giây lát.',
       });
       await refreshImportJobs({ onlyActive: true, showNotifications: true });
     } catch (error: any) {
       console.error('Error cancelling job:', error);
       toast({
-        title: 'Không thể hủy job',
+        title: 'Không thể hủy tiến trình',
         description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Vui lòng thử lại sau'),
         variant: 'destructive',
       });
@@ -680,10 +680,10 @@ const ProductList: React.FC<ProductListProps> = ({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      toast({ title: 'Thành công', description: 'Đã tải file mẫu từ server' });
+      toast({ title: 'Thành công', description: 'Đã tải mẫu từ hệ thống' });
     } catch (error: any) {
       console.error('Error downloading template:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải file mẫu';
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải mẫu';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
@@ -701,7 +701,7 @@ const ProductList: React.FC<ProductListProps> = ({
       const jobSnapshot = await productApi.importProductsAsync({ file: importFile });
 
       if (!jobSnapshot?.jobId) {
-        throw new Error('Không nhận được mã job import từ server');
+        throw new Error('Không nhận được mã tiến trình nhập từ hệ thống');
       }
 
       previousJobStatusesRef.current[jobSnapshot.jobId] = jobSnapshot.status;
@@ -710,7 +710,7 @@ const ProductList: React.FC<ProductListProps> = ({
 
       toast({
         title: 'Đang xử lý',
-        description: 'Hệ thống đang import sản phẩm. Bạn có thể theo dõi tiến trình bên dưới.',
+        description: 'Hệ thống đang nhập sản phẩm. Bạn có thể theo dõi tiến trình bên dưới.',
       });
 
       await refreshImportJobs({ onlyActive: true });
@@ -727,7 +727,7 @@ const ProductList: React.FC<ProductListProps> = ({
         setImportSummary({ imported, failed, totalRows });
       }
 
-      const errorMessage = error.response?.data?.message || error.message || 'Không thể import sản phẩm';
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể nhập sản phẩm';
       toast({
         title: 'Lỗi',
         description: convertPermissionCodesInMessage(errorMessage),
@@ -749,12 +749,12 @@ const ProductList: React.FC<ProductListProps> = ({
         'Hãng sản xuất': product.manufacturer || '',
         'Barcode': product.barcode || '',
         'Mô tả': product.description || '',
-        'Giá bán (VND)': product.price || 0,
+        'Giá bán': product.price || 0,
         'Cập nhật': product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : ''
       };
 
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
+        exportItem['Giá vốn'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -792,7 +792,7 @@ const ProductList: React.FC<ProductListProps> = ({
     const filename = `Danh_sach_san_pham_${dateStr}_${timeStr}.xlsx`;
 
     XLSX.writeFile(wb, filename);
-    toast({ title: 'Thành công', description: `Đã xuất ${exportData.length} sản phẩm ra file Excel` });
+    toast({ title: 'Thành công', description: `Đã xuất ${exportData.length} sản phẩm ra Excel` });
   };
 
   return (
@@ -1037,14 +1037,14 @@ const ProductList: React.FC<ProductListProps> = ({
                   <DialogTrigger asChild>
                     <Button variant="outline" className="w-full sm:w-auto">
                       <Upload className="w-4 h-4 mr-2" />
-                      Import Excel
+                      Nhập từ Excel
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
-                      <DialogTitle>Import Sản Phẩm Từ Excel</DialogTitle>
+                      <DialogTitle>Nhập Sản Phẩm Từ Excel</DialogTitle>
                       <DialogDescription>
-                        Tải file Excel mẫu hoặc chọn file để import sản phẩm mới
+                        Tải file Excel mẫu hoặc chọn file để nhập sản phẩm
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -1142,8 +1142,7 @@ const ProductList: React.FC<ProductListProps> = ({
         {canManageProducts && (
           <Card className="mb-6">
             <CardHeader className="pb-2">
-              <CardTitle>Tiến Trình Import Excel</CardTitle>
-              <CardDescription>Theo dõi job đang chạy và lịch sử import gần đây</CardDescription>
+              <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
@@ -1154,7 +1153,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 <TabsContent value="running" className="mt-4 space-y-3">
                   {runningJobs.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      Không có job import nào đang chạy. Bạn có thể bắt đầu import bằng nút "Import Excel".
+                      Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
                     </p>
                   ) : (
                     runningJobs.map((job) => (
@@ -1208,7 +1207,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 </TabsContent>
                 <TabsContent value="history" className="mt-4 space-y-3">
                   {completedJobs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Chưa có lịch sử import.</p>
+                    <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
                   ) : (
                     completedJobs.slice(0, 5).map((job) => (
                       <div
@@ -1508,7 +1507,6 @@ const ProductList: React.FC<ProductListProps> = ({
                 <TableHead>Đơn Vị</TableHead>
                 <TableHead>Hãng Sản Xuất</TableHead>
                 <TableHead>Barcode</TableHead>
-                <TableHead>Mô Tả</TableHead>
                 {canViewCostPrice && (
                   <TableHead 
                     className="cursor-pointer hover:bg-muted/50 select-none"
@@ -1529,6 +1527,7 @@ const ProductList: React.FC<ProductListProps> = ({
                     {getSortIcon('unit_price')}
                   </div>
                 </TableHead>
+                <TableHead>Mô Tả</TableHead>
                 <TableHead 
                   className="cursor-pointer hover:bg-muted/50 select-none"
                   onClick={() => handleSort('updated_at')}
@@ -1555,25 +1554,25 @@ const ProductList: React.FC<ProductListProps> = ({
                   <TableRow key={product.id}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{getCategoryNameFromValue(product.category) || '-'}</TableCell>
-                    <TableCell>{product.unit || 'cái'}</TableCell>
-                    <TableCell>{product.manufacturer || '-'}</TableCell>
-                    <TableCell>{product.barcode || '-'}</TableCell>
-                    <TableCell className="max-w-xs">
-                      <div className="truncate" title={product.description || ''}>
-                        {product.description || '-'}
-                      </div>
-                    </TableCell>
+                    <TableCell className="text-center">{getCategoryNameFromValue(product.category) || '-'}</TableCell>
+                    <TableCell className="text-center">{product.unit || 'cái'}</TableCell>
+                    <TableCell className="text-center">{product.manufacturer || '-'}</TableCell>
+                    <TableCell className="text-center">{product.barcode || '-'}</TableCell>
                     {canViewCostPrice && (
-                      <TableCell>{formatCurrency(product.costPrice || 0)}</TableCell>
+                      <TableCell  className="text-center">{formatCurrency(product.costPrice || 0)}</TableCell>
                     )}
-                    <TableCell>
+                    <TableCell className="text-center">
                       {(() => {
                         const price = product.price || 0;
                         return formatCurrency(price);
                       })()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="flex max-w-xs justify-center">
+                      <div className="truncate whitespace-normal break-words" title={product.description || ''}>
+                        {product.description || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
                       {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                     {canManageProducts && (

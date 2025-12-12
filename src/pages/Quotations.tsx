@@ -494,11 +494,10 @@ const QuotationsContent: React.FC = () => {
 
 
   return (
-    <div className="space-y-4 p-2 sm:p-3 md:p-4">
+    <div className="space-y-4 p-6 sm:p-6 md:p-7">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <FileText className="h-6 w-6" />
-          <h1 className="text-2xl font-bold">DANH SÁCH BÁO GIÁ</h1>
+          <h1 className="text-3xl font-bold text-foreground">Danh Sách Báo Giá</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportToExcel}>
