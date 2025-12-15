@@ -414,19 +414,20 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   // Convert tags from string array to OrderTag objects for display
   const getTagsForDisplay = () => {
     if (!orderDetails?.tags || !Array.isArray(orderDetails.tags)) return [];
-    
+
     return orderDetails.tags.map(tagName => {
-      // Try to find tag by name, display_name, or raw_name
-      const tag = availableTags.find(t => 
-        t.name === tagName || 
-        t.display_name === tagName || 
+      // Try to find tag by id, name, display_name, or raw_name
+      const tag = availableTags.find(t =>
+        t.id === tagName ||
+        t.name === tagName ||
+        t.display_name === tagName ||
         t.raw_name === tagName
       );
-      
+
       // If tag found, return it; otherwise create a default tag object
-      return tag || { 
-        id: tagName, 
-        name: tagName, 
+      return tag || {
+        id: tagName,
+        name: tagName,
         color: '#6B7280',
         display_name: tagName,
         raw_name: tagName
@@ -434,8 +435,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     });
   };
   
-  // Only show non-reconciliation tags in this dialog
-  const getOtherTags = () => getTagsForDisplay().filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
+  // Show all tags in this dialog, with reconciliation tags first
+  const getOtherTags = () => {
+    const allTags = getTagsForDisplay();
+    const reconciliationTags = allTags.filter((t: any) => t.name === 'Đã đối soát' || t.name === 'Chưa đối soát');
+    const otherTags = allTags.filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
+    return [...reconciliationTags, ...otherTags];
+  };
 
   // Product editing functions
   const startEditingItem = (itemId: string, item: OrderItem) => {
@@ -631,43 +637,39 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
         <div className="space-y-6">
           {/* Customer Information */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              {renderEditableField('customer_name', 'Họ tên', orderDetails.customer_name)}
-              {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
-              
-               <div>
-                 <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
-                 <div className="flex gap-2 flex-wrap mt-1">
-                   {getOtherTags().length > 0 ? (
-                     getOtherTags().map((tag: any) => (
-                       <Badge 
-                         key={tag.id} 
-                         style={{ backgroundColor: tag.color, color: 'white' }}
-                       >
-                         {getTagDisplayName(tag)}
-                       </Badge>
-                     ))
-                   ) : (
-                     <Badge variant="secondary">Không có nhãn khác</Badge>
-                   )}
-                 </div>
-               </div>
+          <div className="space-y-4">
+            {renderEditableField('customer_name', 'Họ tên', customerDetails?.name || orderDetails.customer_name)}
+            {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
 
-              {renderEditableField('notes', 'Ghi chú', orderDetails.notes, 'textarea')}
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
+              <div className="text-base">{orderDetails.customer?.code || orderDetails.customer_code || 'Chưa có mã'}</div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
-                <div className="text-base">{orderDetails.customer?.code || orderDetails.customer_code || 'Chưa có mã'}</div>
-              </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Email:</label>
+              <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
+            </div>
 
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Email:</label>
-                <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
+              <div className="flex gap-2 flex-wrap mt-1">
+                {getOtherTags().length > 0 ? (
+                  getOtherTags().map((tag: any) => (
+                    <Badge
+                      key={tag.id}
+                      style={{ backgroundColor: tag.color, color: 'white' }}
+                    >
+                      {getTagDisplayName(tag)}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge variant="secondary">Không có nhãn khác</Badge>
+                )}
               </div>
             </div>
+
+            {renderEditableField('notes', 'Ghi chú', orderDetails.notes, 'textarea')}
           </div>
 
           {/* Shipping Information */}
@@ -685,7 +687,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 'receiverAddress',
                 'Địa chỉ giao hàng',
                 (orderDetails as any).receiverAddress || customerDetails?.address,
-                (orderDetails as any).addressInfo || (orderDetails as any).receiverAddressInfo || customerDetails?.addressInfo
+                (orderDetails as any).addressInfo || (orderDetails as any).receiverAddressInfo
               )}
             </div>
           </div>
