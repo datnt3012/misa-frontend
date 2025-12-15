@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import ProductList from "@/components/inventory/ProductList";
 import InventoryStock from "@/components/inventory/InventoryStock";
-import { productApi, type Product, type ProductWithStock } from "@/api/product.api";
+import { productApi, type Product, type ProductWithStock, type ProductImportError, type ProductImportJobSnapshot, type ProductImportJobStatus } from "@/api/product.api";
 import { categoriesApi, type Category } from "@/api/categories.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
@@ -31,7 +31,6 @@ import { dashboardApi } from "@/api/dashboard.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { CategoriesContent } from "@/pages/Categories";
 import { useSearchParams } from "react-router-dom";
-
 import React from "react";
 
 const InventoryContent = () => {
@@ -74,11 +73,27 @@ const InventoryContent = () => {
     inventoryOverview: null as string | null
   });
 
+  // Import job state and polling logic (moved from ProductList to persist across tab switches)
+  const [importJobs, setImportJobs] = useState<ProductImportJobSnapshot[]>([]);
+  const [jobHistoryPagination, setJobHistoryPagination] = useState<{
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  } | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const previousJobStatusesRef = React.useRef<Record<string, ProductImportJobStatus>>({});
+  const [isPollingActive, setIsPollingActive] = useState(false);
+
   // Permission checks
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   const canViewProducts = hasPermission('PRODUCTS_READ');
   const canViewWarehouses = hasPermission('WAREHOUSES_READ') || true; // Temporarily bypass for testing
-  
+
+  // Toast hook - must be declared before functions that use it
+  const { toast } = useToast();
+
   // Clear error states when permissions are available
   useEffect(() => {
     if (canViewProducts && canViewWarehouses) {
@@ -99,6 +114,246 @@ const InventoryContent = () => {
       loadWarehouses();
     }
   }, [activeTab, canViewWarehouses, permissionsLoading]);
+
+  // Import job polling functions (moved from ProductList)
+  const stopImportPolling = React.useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  const handleJobStatusNotification = React.useCallback(async (job: ProductImportJobSnapshot) => {
+    const status = job.status as ProductImportJobStatus;
+    if (status === 'completed') {
+      // Refresh product list after successful import
+      try {
+        await loadData();
+        console.log('[Import Complete] Product list refreshed after successful import');
+      } catch (error) {
+        console.error('Error refreshing products after import:', error);
+      }
+
+      if (job.errors && job.errors.length > 0) {
+        toast({
+          title: 'Hoàn thành với cảnh báo',
+          description: job.message || `Đã nhập ${job.imported ?? 0}/${job.totalRows ?? 0} dòng. Có ${job.errors.length} lỗi cần xử lý.`,
+        });
+      } else {
+        toast({
+          title: 'Thành công',
+          description: job.message || `Đã nhập ${job.imported ?? 0} sản phẩm.`,
+        });
+      }
+    } else if (status === 'failed') {
+      toast({
+        title: 'Nhập thất bại',
+        description: job.message || 'Có lỗi khi xử lý file nhập',
+        variant: 'destructive',
+      });
+    } else if (status === 'cancelled') {
+      toast({
+        title: 'Đã hủy nhập',
+        description: job.message || 'Tiến trình nhập đã được hủy theo yêu cầu',
+      });
+    }
+  }, [toast]);
+
+  const refreshImportJobs = React.useCallback(async (options?: {
+    onlyActive?: boolean;
+    showNotifications?: boolean;
+    page?: number;
+    limit?: number;
+  }) => {
+    const { onlyActive = false, showNotifications = false, page, limit } = options || {};
+    try {
+      const response = await productApi.listImportJobs({
+        onlyActive,
+        sortBy: 'createdAt',
+        sortOrder: 'DESC',
+        page,
+        limit
+      });
+
+      // If we're fetching active jobs and get empty result, it means all jobs are completed
+      // Stop polling and fetch all jobs to update history
+      if (onlyActive && response.jobs.length === 0 && isPollingActive) {
+        console.log('[Polling Debug] No active jobs found, stopping polling and updating history');
+        setIsPollingActive(false);
+        // Fetch all jobs to update history
+        const allJobsResponse = await productApi.listImportJobs({
+          onlyActive: false,
+          sortBy: 'createdAt',
+          sortOrder: 'DESC'
+        });
+        setImportJobs(prev => {
+          const jobMap = new Map<string, ProductImportJobSnapshot>();
+          prev.forEach(job => {
+            jobMap.set(job.jobId, job);
+          });
+
+          allJobsResponse.jobs.forEach(job => {
+            const previous = jobMap.get(job.jobId);
+            const mergedJob = { ...previous, ...job };
+
+            // For completed, failed, or cancelled jobs, ensure percent is 100%
+            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
+                (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
+              mergedJob.percent = 100;
+            }
+
+            // Ensure percent never exceeds 100
+            if (mergedJob.percent && mergedJob.percent > 100) {
+              mergedJob.percent = 100;
+            }
+
+            const prevStatus = previousJobStatusesRef.current[job.jobId];
+            if (showNotifications && prevStatus && prevStatus !== job.status) {
+              handleJobStatusNotification(mergedJob);
+            }
+            previousJobStatusesRef.current[job.jobId] = job.status;
+            jobMap.set(job.jobId, mergedJob);
+          });
+
+          const mergedList = Array.from(jobMap.values());
+          return mergedList;
+        });
+        return;
+      }
+
+      setImportJobs(prev => {
+        // For history calls (onlyActive = false), replace all jobs with new results
+        // For polling calls (onlyActive = true), merge with existing jobs
+        const isHistoryCall = options?.onlyActive === false;
+
+        if (isHistoryCall) {
+          // Replace jobs for history pagination
+          console.log('[Import Jobs] Replacing jobs for history call, new jobs:', response.jobs.length);
+          setJobHistoryPagination({
+            total: response.total,
+            page: response.page,
+            limit: response.limit,
+            totalPages: Math.ceil(response.total / response.limit)
+          });
+          return response.jobs.map(job => {
+            // Ensure percent is 100% for completed/failed/cancelled jobs
+            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
+                (job.percent === undefined || job.percent === null || job.percent < 100)) {
+              job.percent = 100;
+            }
+            // Ensure percent never exceeds 100
+            if (job.percent && job.percent > 100) {
+              job.percent = 100;
+            }
+            return job;
+          });
+        } else {
+          // Merge jobs for polling updates
+          const jobMap = new Map<string, ProductImportJobSnapshot>();
+          prev.forEach(job => {
+            jobMap.set(job.jobId, job);
+          });
+
+          response.jobs.forEach(job => {
+            const previous = jobMap.get(job.jobId);
+            const mergedJob = { ...previous, ...job };
+
+            // For completed, failed, or cancelled jobs, ensure percent is 100%
+            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
+                (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
+              mergedJob.percent = 100;
+            }
+
+            // Ensure percent never exceeds 100
+            if (mergedJob.percent && mergedJob.percent > 100) {
+              mergedJob.percent = 100;
+            }
+
+            const prevStatus = previousJobStatusesRef.current[job.jobId];
+            if (showNotifications && prevStatus && prevStatus !== job.status) {
+              handleJobStatusNotification(mergedJob);
+            }
+            previousJobStatusesRef.current[job.jobId] = job.status;
+            jobMap.set(job.jobId, mergedJob);
+          });
+
+          const mergedList = Array.from(jobMap.values());
+          console.log('[Import Jobs] Merged jobs for polling, total jobs:', mergedList.length);
+          return mergedList;
+        }
+      });
+    } catch (error: any) {
+      console.error('Error loading import jobs:', error);
+      if (!onlyActive) {
+        toast({
+          title: 'Lỗi',
+          description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Không thể tải danh sách tiến trình nhập'),
+          variant: 'destructive',
+        });
+      }
+    }
+  }, [handleJobStatusNotification, toast, isPollingActive]);
+
+  // Initialize import jobs on component mount
+  React.useEffect(() => {
+    refreshImportJobs();
+  }, [refreshImportJobs]);
+
+  // Check for active jobs and update polling state
+  React.useEffect(() => {
+    // Only consider jobs that are truly active (not completed, failed, cancelled, or cancel requested)
+    // Also continue polling if job is processing but hasn't processed all rows yet
+    const activeJobs = importJobs.filter(job => {
+      const isActiveStatus = job.status === 'queued' || job.status === 'processing';
+      const isNotTerminal = job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled';
+      const isNotCancelled = !job.cancelRequested;
+
+      // Continue polling if job is still processing and hasn't completed all rows
+      const isIncomplete = job.status === 'processing' &&
+                          job.totalRows &&
+                          job.processedRows !== undefined &&
+                          job.processedRows < job.totalRows;
+
+      return (isActiveStatus && isNotTerminal && isNotCancelled) || isIncomplete;
+    });
+
+    const shouldPoll = activeJobs.length > 0;
+
+    console.log('[Polling Debug] Total jobs:', importJobs.length, 'Active jobs:', activeJobs.length, 'Should poll:', shouldPoll);
+
+    if (shouldPoll !== isPollingActive) {
+      setIsPollingActive(shouldPoll);
+    }
+  }, [importJobs, isPollingActive]);
+
+  // Separate effect for starting/stopping polling
+  React.useEffect(() => {
+    if (isPollingActive) {
+      if (!pollingRef.current) {
+        console.log('[Polling Debug] Starting polling');
+        // Fetch active jobs initially
+        refreshImportJobs({ onlyActive: true });
+        pollingRef.current = setInterval(() => {
+          console.log('[Polling Debug] Polling for active jobs');
+          refreshImportJobs({ onlyActive: true, showNotifications: true });
+        }, 3000);
+      }
+    } else {
+      if (pollingRef.current) {
+        console.log('[Polling Debug] Stopping polling');
+        // When stopping polling, fetch all jobs once to ensure history is updated
+        refreshImportJobs({ onlyActive: false });
+        stopImportPolling();
+      }
+    }
+  }, [isPollingActive, refreshImportJobs, stopImportPolling]);
+
+  // Cleanup polling on unmount
+  React.useEffect(() => {
+    return () => {
+      stopImportPolling();
+    };
+  }, [stopImportPolling]);
 
   // Load warehouses specifically for warehouses tab
   const loadWarehouses = async () => {
@@ -172,7 +427,6 @@ const InventoryContent = () => {
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const { user } = useAuth();
-  const { toast } = useToast();
 
   // Permission checks removed - let backend handle authorization
   const canViewCostPrice = true; // Always show cost price - backend will handle access control
@@ -1010,12 +1264,18 @@ const InventoryContent = () => {
           {/* Products List Tab */}
           <TabsContent value="products" className="space-y-6">
             <PermissionGuard requiredPermissions={['PRODUCTS_VIEW']}>
-              <ProductList 
+              <ProductList
                 products={products}
                 warehouses={warehouses}
                 canViewCostPrice={canViewCostPrice}
                 canManageProducts={canManageProducts}
                 onProductsUpdate={loadData}
+                importJobs={importJobs}
+                activeJobId={activeJobId}
+                onActiveJobIdChange={setActiveJobId}
+                onImportJobsChange={setImportJobs}
+                onRefreshImportJobs={refreshImportJobs}
+                jobHistoryPagination={jobHistoryPagination}
               />
             </PermissionGuard>
           </TabsContent>
