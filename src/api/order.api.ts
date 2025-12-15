@@ -1028,31 +1028,149 @@ export const orderApi = {
     }
   },
 
-  // Get banks list
+  // Get banks list (for payment selection)
   getBanks: async (): Promise<Array<{ id: string; name: string; code?: string }>> => {
     try {
-      const response = await api.get<any>(API_ENDPOINTS.ORDERS.BANKS);
+      const response = await api.get<any>(API_ENDPOINTS.BANKS.LIST);
       const data = response?.data || response;
-      
+
       // Handle different response structures
+      let banks = [];
       if (Array.isArray(data)) {
-        return data.map((bank: any) => ({
-          id: bank.id || bank.code || bank.name,
-          name: bank.name || bank.code || bank.id,
-          code: bank.code,
-        }));
+        banks = data;
       } else if (data?.rows && Array.isArray(data.rows)) {
-        return data.rows.map((bank: any) => ({
-          id: bank.id || bank.code || bank.name,
-          name: bank.name || bank.code || bank.id,
-          code: bank.code,
-        }));
+        banks = data.rows;
+      } else if (data?.data && Array.isArray(data.data)) {
+        banks = data.data;
       }
-      
-      return [];
+
+      return banks.map((bank: any) => ({
+        id: bank.id,
+        name: bank.bankName,
+        code: bank.accountNumber,
+      }));
     } catch (error) {
       console.error('[orderApi] Error loading banks:', error);
+      // Return empty array instead of throwing to prevent UI crashes
       return [];
     }
+  },
+
+  // Get all bank accounts (for management)
+  getAllBanks: async (params?: { includeDeleted?: boolean }): Promise<{
+    banks: Array<{
+      id: string;
+      accountNumber: string;
+      bankName: string;
+      createdAt: string;
+      updatedAt: string;
+      deletedAt?: string;
+    }>;
+    total: number;
+  }> => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
+
+      const url = queryParams.toString()
+        ? `${API_ENDPOINTS.BANKS.LIST}?${queryParams.toString()}`
+        : API_ENDPOINTS.BANKS.LIST;
+
+      const response = await api.get<any>(url);
+      const data = response?.data || response;
+
+      if (Array.isArray(data)) {
+        return {
+          banks: data.map((bank: any) => ({
+            id: bank.id,
+            accountNumber: bank.accountNumber,
+            bankName: bank.bankName,
+            createdAt: bank.createdAt,
+            updatedAt: bank.updatedAt,
+            deletedAt: bank.deletedAt,
+          })),
+          total: data.length,
+        };
+      } else if (data?.rows && Array.isArray(data.rows)) {
+        return {
+          banks: data.rows.map((bank: any) => ({
+            id: bank.id,
+            accountNumber: bank.accountNumber,
+            bankName: bank.bankName,
+            createdAt: bank.createdAt,
+            updatedAt: bank.updatedAt,
+            deletedAt: bank.deletedAt,
+          })),
+          total: data.count || data.rows.length,
+        };
+      }
+
+      return { banks: [], total: 0 };
+    } catch (error) {
+      console.error('[orderApi] Error loading all banks:', error);
+      return { banks: [], total: 0 };
+    }
+  },
+
+  // Create bank account
+  createBank: async (data: { accountNumber: string; bankName: string }): Promise<{
+    id: string;
+    accountNumber: string;
+    bankName: string;
+    createdAt: string;
+    updatedAt: string;
+  }> => {
+    const response = await api.post<any>(API_ENDPOINTS.BANKS.CREATE, data);
+    const bankData = response?.data || response;
+    return {
+      id: bankData.id,
+      accountNumber: bankData.accountNumber,
+      bankName: bankData.bankName,
+      createdAt: bankData.createdAt,
+      updatedAt: bankData.updatedAt,
+    };
+  },
+
+  // Update bank account
+  updateBank: async (id: string, data: { accountNumber?: string; bankName?: string }): Promise<{
+    id: string;
+    accountNumber: string;
+    bankName: string;
+    createdAt: string;
+    updatedAt: string;
+  }> => {
+    const response = await api.patch<any>(API_ENDPOINTS.BANKS.UPDATE(id), data);
+    const bankData = response?.data || response;
+    return {
+      id: bankData.id,
+      accountNumber: bankData.accountNumber,
+      bankName: bankData.bankName,
+      createdAt: bankData.createdAt,
+      updatedAt: bankData.updatedAt,
+    };
+  },
+
+  // Delete bank account (soft delete)
+  deleteBank: async (id: string): Promise<{ message: string }> => {
+    return api.delete<{ message: string }>(API_ENDPOINTS.BANKS.DELETE(id));
+  },
+
+  // Restore bank account
+  restoreBank: async (id: string): Promise<{
+    id: string;
+    accountNumber: string;
+    bankName: string;
+    createdAt: string;
+    updatedAt: string;
+  }> => {
+    const response = await api.post<any>(API_ENDPOINTS.BANKS.RESTORE(id));
+    const bankData = response?.data || response;
+    return {
+      id: bankData.id,
+      accountNumber: bankData.accountNumber,
+      bankName: bankData.bankName,
+      createdAt: bankData.createdAt,
+      updatedAt: bankData.updatedAt,
+    };
   },
 };

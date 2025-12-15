@@ -235,5 +235,15 @@ export const API_ENDPOINTS = {
     STATUS: (id: string) => `/quotations/${id}/status`,
     UPDATE: (id: string) => `/quotations/${id}`,
     DELETE: (id: string) => `/quotations/${id}`,
+  },
+
+  // Banks
+  BANKS: {
+    LIST: '/banks/banks',
+    OPTIONS: '/banks/banks-options',
+    CREATE: '/banks',
+    UPDATE: (id: string) => `/banks/${id}`,
+    DELETE: (id: string) => `/banks/${id}`,
+    RESTORE: (id: string) => `/banks/${id}/restore`,
   }
 };
