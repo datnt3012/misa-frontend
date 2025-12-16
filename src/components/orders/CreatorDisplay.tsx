@@ -47,7 +47,7 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
     }
 
     return (
-      <div className="text-sm">
+      <div className="text-sm whitespace-nowrap">
         <div className="font-medium text-slate-900 text-center">{displayName}</div>
       </div>
     );
@@ -102,7 +102,7 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
   }
 
   return (
-    <div className="text-sm">
+    <div className="text-sm whitespace-nowrap">
       <div className="font-medium text-slate-900">{displayName}</div>
     </div>
   );

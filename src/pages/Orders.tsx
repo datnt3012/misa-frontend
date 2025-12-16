@@ -52,12 +52,13 @@ const getTagDisplayName = (tag: ApiOrderTag) => {
 const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState<string | undefined>();
+  const [endDate, setEndDate] = useState<string | undefined>();
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -129,7 +130,7 @@ const OrdersContent: React.FC = () => {
       const params: any = { page: currentPage, limit: itemsPerPage };
       if (statusFilter !== 'all') params.status = statusFilter;
       if (categoryFilter !== 'all') params.categories = categoryFilter;
-      if (searchTerm) params.search = searchTerm;
+      if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
@@ -192,7 +193,7 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, toast]);
 
 
   // Load payments for orders and cache total paid amounts
@@ -247,6 +248,14 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -368,7 +377,7 @@ const OrdersContent: React.FC = () => {
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage]); // Fetch when pagination changes
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, fetchOrders]); // Fetch when pagination or filters change
 
   useEffect(() => {
     loadOrderTagsCatalog();
@@ -650,9 +659,14 @@ const OrdersContent: React.FC = () => {
     }
   };
   
-  const handleApplyFilters = () => {
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setCreatorFilter("all");
     setCurrentPage(1);
-    fetchOrders();
   };
 
   const handleMultiplePayments = () => {
@@ -791,16 +805,18 @@ const OrdersContent: React.FC = () => {
               <Input
                 type="date"
                 className="w-40"
-                onChange={(e) => setStartDate(e.target.value)}
+                value={startDate || ""}
+                onChange={(e) => setStartDate(e.target.value || undefined)}
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Đến ngày:</label>
               <Input
                 type="date"
                 className="w-40"
-                onChange={(e) => setEndDate(e.target.value)}
+                value={endDate || ""}
+                onChange={(e) => setEndDate(e.target.value || undefined)}
               />
             </div>
 
@@ -819,12 +835,13 @@ const OrdersContent: React.FC = () => {
               </SelectContent>
             </Select>
             
-            {/* Apply Filters Button */}
-            <Button 
-              onClick={handleApplyFilters}
+            {/* Reset Filters Button */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
               className="ml-auto"
             >
-              Áp dụng
+              Đặt lại
             </Button>
           </div>
         </CardContent>

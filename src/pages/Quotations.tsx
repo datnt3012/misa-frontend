@@ -24,16 +24,18 @@ import CreateOrderFromQuotation from "@/components/quotations/CreateOrderFromQuo
 import { ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import { API_CONFIG } from "@/config/api";
 import apiClient from "@/lib/api";
+import CreatorDisplay from "@/components/orders/CreatorDisplay";
 
 const QuotationsContent: React.FC = () => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState<string | undefined>();
+  const [endDate, setEndDate] = useState<string | undefined>();
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -66,7 +68,7 @@ const QuotationsContent: React.FC = () => {
     try {
       setLoading(true);
       const params: any = { page: currentPage, limit: itemsPerPage };
-      if (searchTerm) params.code = searchTerm;
+      if (debouncedSearchTerm) params.code = debouncedSearchTerm;
       if (statusFilter !== 'all') params.status = statusFilter;
       if (typeFilter !== 'all') params.type = typeFilter;
       if (creatorFilter !== 'all') params.createdBy = creatorFilter;
@@ -86,7 +88,25 @@ const QuotationsContent: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, itemsPerPage, statusFilter, typeFilter, creatorFilter, searchTerm, startDate, endDate, toast]);
+  }, [currentPage, itemsPerPage, statusFilter, typeFilter, creatorFilter, debouncedSearchTerm, startDate, endDate, toast]);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    setCreatorFilter("all");
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setCurrentPage(1);
+  };
 
   // Fetch customers and creators for filters
   useEffect(() => {
@@ -107,7 +127,7 @@ const QuotationsContent: React.FC = () => {
 
   useEffect(() => {
     fetchQuotations();
-  }, [fetchQuotations]);
+  }, [currentPage, itemsPerPage, statusFilter, typeFilter, creatorFilter, debouncedSearchTerm, startDate, endDate, fetchQuotations]);
 
   const handleDeleteQuotation = async () => {
     if (!quotationToDelete) return;
@@ -259,7 +279,19 @@ const QuotationsContent: React.FC = () => {
           'Thành tiền': detail.price * detail.quantity || 0,
           'Tổng tiền': detailIndex === 0 ? totalAmountForQuotation : '', // Only show total amount on the main product row
           'Ghi chú': detailIndex === 0 ? quotation.note || '' : '',
-          'Người tạo': detailIndex === 0 ? quotation.creator?.email || '' : '',
+          'Người tạo': detailIndex === 0 ? (() => {
+            const creator = quotation.creator;
+            if (!creator) return '';
+            const firstName = creator.firstName?.trim();
+            const lastName = creator.lastName?.trim();
+            const email = creator.email?.trim();
+
+            if (firstName || lastName) {
+              return `${firstName || ''} ${lastName || ''}`.trim();
+            }
+            if (email) return email;
+            return '';
+          })() : '',
           'Trạng thái': detailIndex === 0 ? (statusLabels[quotation.status] || quotation.status) : '',
         }));
       });
@@ -566,8 +598,8 @@ const QuotationsContent: React.FC = () => {
                 <Calendar className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  value={startDate || ""}
+                  onChange={(e) => setStartDate(e.target.value || undefined)}
                   className="pl-8"
                 />
               </div>
@@ -578,15 +610,15 @@ const QuotationsContent: React.FC = () => {
                 <Calendar className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  value={endDate || ""}
+                  onChange={(e) => setEndDate(e.target.value || undefined)}
                   className="pl-8"
                 />
               </div>
             </div>
           </div>
           <div className="mt-4">
-            <Button onClick={fetchQuotations}>Áp dụng</Button>
+            <Button onClick={handleResetFilters} variant="outline">Đặt lại</Button>
           </div>
         </CardContent>
       </Card>
@@ -707,7 +739,7 @@ const QuotationsContent: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          {quotation.creator?.email || 'N/A'}
+                          <CreatorDisplay createdBy={quotation.creator?.id} creatorInfo={quotation.creator} />
                         </TableCell>
                         <TableCell className="text-center">
                           <Select
@@ -873,7 +905,7 @@ const QuotationsContent: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium">Người tạo</label>
-                  <div className="text-sm">{selectedQuotation.creator?.email || 'N/A'}</div>
+                  <div className="text-sm"><CreatorDisplay createdBy={selectedQuotation.creator?.id} creatorInfo={selectedQuotation.creator} /></div>
                 </div>
                 <div className="col-span-2">
                   <label className="text-sm font-medium">Ghi chú</label>
