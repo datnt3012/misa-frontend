@@ -974,7 +974,6 @@ function RevenueContent() {
                 </SelectContent>
               </Select>
             </div>
-
             {/* Filter Actions */}
               <div className="flex gap-2 pt-4">
                 <Button onClick={handleFilter} className="flex-1">
@@ -982,7 +981,7 @@ function RevenueContent() {
                   Lọc
                 </Button>
                 <Button variant="outline" onClick={resetFilter}>
-                  Reset
+                  Đặt lại
                 </Button>
               </div>
             </div>

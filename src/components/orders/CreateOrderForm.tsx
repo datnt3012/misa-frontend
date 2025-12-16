@@ -20,6 +20,7 @@ import { orderApi } from "@/api/order.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
+import BankSelector from "./BankSelector";
 
 interface CreateOrderFormProps {
   open: boolean;
@@ -1220,25 +1221,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 {newOrder.initial_payment_method === "bank_transfer" && (
                   <div>
                     <Label htmlFor="initial_payment_bank">Ngân hàng <span className="text-red-500">*</span></Label>
-                    <Select 
-                      value={newOrder.initial_payment_bank} 
+                    <BankSelector
+                      value={newOrder.initial_payment_bank}
                       onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_bank: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn ngân hàng" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {banks.length > 0 ? (
-                          banks.map((bank) => (
-                            <SelectItem key={bank.id} value={bank.id}>
-                              {bank.name}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="" disabled>Đang tải danh sách ngân hàng...</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Chọn ngân hàng"
+                    />
                   </div>
                 )}
               </div>

@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',
     CHANGE_PASSWORD: '/auth/change-password',
+    VERIFY_TEMPORARY_PASSWORD: '/auth/verify-temporary-password',
   },
   
   // Dashboard
@@ -234,5 +235,15 @@ export const API_ENDPOINTS = {
     STATUS: (id: string) => `/quotations/${id}/status`,
     UPDATE: (id: string) => `/quotations/${id}`,
     DELETE: (id: string) => `/quotations/${id}`,
+  },
+
+  // Banks
+  BANKS: {
+    LIST: '/banks/banks',
+    OPTIONS: '/banks/banks-options',
+    CREATE: '/banks',
+    UPDATE: (id: string) => `/banks/${id}`,
+    DELETE: (id: string) => `/banks/${id}`,
+    RESTORE: (id: string) => `/banks/${id}/restore`,
   }
 };

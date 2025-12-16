@@ -146,6 +146,15 @@ export const authApi = {
     return api.post<{ message: string }>(API_ENDPOINTS.AUTH.RESET_PASSWORD, data);
   },
 
+  // Reset password with temporary password (from forgot password flow)
+  resetPasswordWithTemporary: async (data: {
+    emailOrUsername: string;
+    temporaryPassword: string;
+    newPassword: string;
+  }): Promise<{ message: string }> => {
+    return api.post<{ message: string }>('/auth/reset-password', data);
+  },
+
   // Change password
   changePassword: async (data: ChangePasswordRequest): Promise<ChangePasswordResponse> => {
     return api.post<ChangePasswordResponse>(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);

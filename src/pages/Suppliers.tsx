@@ -254,11 +254,11 @@ const SuppliersContent: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
+      <div className="mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Quản lý Nhà cung cấp</h1>
+          <h1 className="text-3xl font-bold text-foreground">Quản lý Nhà cung cấp</h1>
           <p className="text-muted-foreground">
             Quản lý thông tin các nhà cung cấp trong hệ thống
           </p>

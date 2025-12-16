@@ -123,32 +123,31 @@ const normalizeProduct = (row: any): Product => {
   };
 };
 
-const normalizeImportJobResponse = (payload: any): ProductImportJobSnapshot => {
-  if (!payload) {
+const normalizeImportJobResponse = (job: any): ProductImportJobSnapshot => {
+  if (!job) {
     throw new Error('Empty import job payload');
   }
 
-  const data = payload.data && typeof payload.data === 'object' && 'jobId' in payload.data
-    ? payload.data
-    : payload;
-
-  if (!data.jobId) {
-    throw new Error('Import job payload is missing jobId');
+  // Handle different possible field names for job ID
+  const jobId = job.jobId || job.id || job.job_id;
+  if (!jobId) {
+    console.error('Import job payload missing ID field:', job);
+    throw new Error('Import job payload is missing jobId (checked jobId, id, job_id)');
   }
 
   return {
-    jobId: data.jobId,
-    status: data.status ?? 'queued',
-    totalRows: data.totalRows ?? 0,
-    processedRows: data.processedRows ?? 0,
-    imported: data.imported ?? 0,
-    failed: data.failed ?? 0,
-    percent: data.percent ?? 0,
-    errors: data.errors ?? [],
-    startedAt: data.startedAt,
-    completedAt: data.completedAt,
-    result: data.result ?? payload.result,
-    message: payload.message ?? data.message,
+    jobId: jobId,
+    status: job.status ?? 'queued',
+    totalRows: job.totalRows ?? job.total_rows ?? 0,
+    processedRows: job.processedRows ?? job.processed_rows ?? 0,
+    imported: job.imported ?? 0,
+    failed: job.failed ?? 0,
+    percent: job.percent ?? 0,
+    errors: job.errors ?? [],
+    startedAt: job.startedAt ?? job.createdAt ?? job.created_at,
+    completedAt: job.completedAt ?? job.updatedAt ?? job.updated_at,
+    result: job.result,
+    message: job.message,
   };
 };
 
@@ -261,10 +260,76 @@ export const productApi = {
   },
 
   // List import jobs (optionally only active ones)
-  listImportJobs: async (params?: { onlyActive?: boolean }): Promise<ProductImportJobSnapshot[]> => {
-    const query = params?.onlyActive ? '?onlyActive=true' : '';
-    const response = await api.get<any>(`${API_ENDPOINTS.PRODUCTS.IMPORT_STATUS_LIST}${query}`);
+  listImportJobs: async (params?: {
+    onlyActive?: boolean;
+    sortBy?: string;
+    sortOrder?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ jobs: ProductImportJobSnapshot[]; total: number; page: number; limit: number }> => {
+    const queryParams = new URLSearchParams();
+    if (params?.onlyActive === true) {
+      queryParams.append('onlyActive', 'true');
+    }
+    // When onlyActive is false or undefined, don't add the parameter to get all jobs
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const url = `${API_ENDPOINTS.PRODUCTS.IMPORT_STATUS_LIST}${query}`;
+    console.log('[API] Calling listImportJobs with URL:', url);
+    const response = await api.get<any>(url);
     const payload = response?.data ?? response;
+    console.log('[API] Raw response payload:', payload);
+
+    // Handle paginated response with data.rows structure
+    if (payload && typeof payload === 'object' && payload.data && Array.isArray(payload.data.rows)) {
+      console.log('[API] Using data.rows structure, found', payload.data.rows.length, 'jobs');
+      try {
+        const jobs = (payload.data.rows || []).map(normalizeImportJobResponse);
+        return {
+          jobs,
+          total: payload.data.pagination?.total || payload.data.rows.length,
+          page: payload.data.pagination?.page || params?.page || 1,
+          limit: payload.data.pagination?.limit || params?.limit || 10
+        };
+      } catch (error) {
+        console.error('Error normalizing import jobs:', error);
+        throw error;
+      }
+    }
+
+    // Handle direct rows structure (API returns rows directly at root)
+    if (payload && typeof payload === 'object' && Array.isArray(payload.rows)) {
+      console.log('[API] Using direct rows structure, found', payload.rows.length, 'jobs');
+      try {
+        const jobs = (payload.rows || []).map(normalizeImportJobResponse);
+        return {
+          jobs,
+          total: payload.pagination?.total || payload.rows.length,
+          page: payload.pagination?.page || params?.page || 1,
+          limit: payload.pagination?.limit || params?.limit || 10
+        };
+      } catch (error) {
+        console.error('Error normalizing import jobs:', error);
+        throw error;
+      }
+    }
+
+    // Handle paginated response
+    if (payload && typeof payload === 'object' && 'jobs' in payload) {
+      console.log('[API] Using jobs structure, found', payload.jobs?.length || 0, 'jobs');
+      return {
+        jobs: (payload.jobs || []).map(normalizeImportJobResponse),
+        total: payload.total || 0,
+        page: payload.page || params?.page || 1,
+        limit: payload.limit || params?.limit || 10
+      };
+    }
+
+    // Handle non-paginated response (backward compatibility)
     const jobArray = Array.isArray(payload)
       ? payload
       : Array.isArray(payload?.data)
@@ -273,7 +338,13 @@ export const productApi = {
           ? payload.jobs
           : [];
 
-    return jobArray.map(normalizeImportJobResponse);
+    console.log('[API] Using backward compatibility, found', jobArray.length, 'jobs');
+    return {
+      jobs: jobArray.map(normalizeImportJobResponse),
+      total: jobArray.length,
+      page: params?.page || 1,
+      limit: params?.limit || jobArray.length
+    };
   },
 
   // Request cancel for import job

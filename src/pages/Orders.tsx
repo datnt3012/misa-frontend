@@ -52,12 +52,13 @@ const getTagDisplayName = (tag: ApiOrderTag) => {
 const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState<string | undefined>();
+  const [endDate, setEndDate] = useState<string | undefined>();
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -90,12 +91,16 @@ const OrdersContent: React.FC = () => {
   // Cache for total payments per order
   const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
   const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
+
+  // Bulk payment preview state - moved to MultiplePaymentDialog
   
   // Summary state from API
   const [summary, setSummary] = useState<{
     totalAmount: number;
     totalInitialPayment: number;
+    totalPaidAmount?: number;
     totalDebt: number;
+    totalExpenses: number;
   } | null>(null);
   
   const { toast } = useToast();
@@ -125,7 +130,7 @@ const OrdersContent: React.FC = () => {
       const params: any = { page: currentPage, limit: itemsPerPage };
       if (statusFilter !== 'all') params.status = statusFilter;
       if (categoryFilter !== 'all') params.categories = categoryFilter;
-      if (searchTerm) params.search = searchTerm;
+      if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
@@ -148,11 +153,34 @@ const OrdersContent: React.FC = () => {
       // Set summary from API if available
       if (resp.summary) {
         console.log('[Orders] Setting summary from API:', resp.summary);
-        setSummary(resp.summary);
+        setSummary({
+          totalAmount: resp.summary.totalAmount,
+          totalInitialPayment: resp.summary.totalInitialPayment,
+          totalPaidAmount: resp.summary.totalPaidAmount,
+          totalDebt: resp.summary.totalDebt,
+          totalExpenses: resp.summary.totalExpenses,
+        });
       } else {
         console.log('[Orders] No summary from API, using fallback calculation');
         // Fallback: calculate from orders if summary not available
-        setSummary(null);
+        const fallbackSummary = resp.orders.reduce(
+          (acc, order: any) => {
+            const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
+            const paidAmount = order.totalPaidAmount ?? order.total_paid_amount ?? order.paid_amount ?? order.initial_payment ?? 0;
+            const debtAmount = order.remainingDebt ?? order.remaining_debt ?? order.debt_amount ?? Math.max(0, totalAmount - paidAmount);
+            const totalExpenses = order.totalExpenses ?? 0;
+
+            return {
+              totalAmount: acc.totalAmount + totalAmount,
+              totalInitialPayment: acc.totalInitialPayment + (order.initial_payment ?? 0),
+              totalPaidAmount: acc.totalPaidAmount + paidAmount,
+              totalDebt: acc.totalDebt + debtAmount,
+              totalExpenses: acc.totalExpenses + totalExpenses,
+            };
+          },
+          { totalAmount: 0, totalInitialPayment: 0, totalPaidAmount: 0, totalDebt: 0, totalExpenses: 0 }
+        );
+        setSummary(fallbackSummary);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -165,7 +193,8 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, toast]);
+
 
   // Load payments for orders and cache total paid amounts
   const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
@@ -219,6 +248,14 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -340,11 +377,12 @@ const OrdersContent: React.FC = () => {
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage]); // Fetch when pagination changes
+  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, fetchOrders]); // Fetch when pagination or filters change
 
   useEffect(() => {
     loadOrderTagsCatalog();
   }, [loadOrderTagsCatalog]);
+
 
   // Removed automatic refresh - only reload on user actions
 
@@ -438,7 +476,7 @@ const OrdersContent: React.FC = () => {
   // Handle quick note update
   const handleQuickNote = async (orderId: string, note: string) => {
     try {
-      await orderApi.updateOrder(orderId, { notes: note });
+      await orderApi.updateOrder(orderId, { note: note });
       
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -621,9 +659,14 @@ const OrdersContent: React.FC = () => {
     }
   };
   
-  const handleApplyFilters = () => {
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setCreatorFilter("all");
     setCurrentPage(1);
-    fetchOrders();
   };
 
   const handleMultiplePayments = () => {
@@ -669,7 +712,7 @@ const OrdersContent: React.FC = () => {
   // Prefer backend aggregated fields (totalAmount, totalPaidAmount, remainingDebt)
   const totals = summary ? {
     totalAmount: summary.totalAmount,
-    paidAmount: summary.totalInitialPayment,
+    paidAmount: summary.totalPaidAmount || summary.totalInitialPayment, // Use totalPaidAmount if available
     debtAmount: summary.totalDebt,
     totalExpenses: summary.totalExpenses || 0,
   } : orders.reduce(
@@ -677,11 +720,13 @@ const OrdersContent: React.FC = () => {
       const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
       const paidAmount =
         order.totalPaidAmount ??
+        order.total_paid_amount ??
         order.paid_amount ??
         order.initial_payment ??
         0;
       const debtAmount =
         order.remainingDebt ??
+        order.remaining_debt ??
         order.debt_amount ??
         Math.max(0, totalAmount - paidAmount);
       const totalExpenses = order.totalExpenses ?? 0;
@@ -697,11 +742,11 @@ const OrdersContent: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background p-2 sm:p-3 md:p-4">
+    <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
       <div className="w-full mx-auto space-y-3 sm:space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">📋 DANH SÁCH ĐƠN HÀNG</h1>
+          <h1 className="text-3xl font-bold text-foreground">Danh Sách Đơn Hàng</h1>
         </div>
         <Button 
           onClick={() => setShowCreateDialog(true)}
@@ -732,11 +777,11 @@ const OrdersContent: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="pending">Chờ xử lý</SelectItem>
-                <SelectItem value="processing">Đang xử lý</SelectItem>
-                <SelectItem value="delivered">Đã giao</SelectItem>
-                <SelectItem value="completed">Hoàn thành</SelectItem>
-                <SelectItem value="cancelled">Đã hủy</SelectItem>
+                {ORDER_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {ORDER_STATUS_LABELS_VI[status]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -760,16 +805,18 @@ const OrdersContent: React.FC = () => {
               <Input
                 type="date"
                 className="w-40"
-                onChange={(e) => setStartDate(e.target.value)}
+                value={startDate || ""}
+                onChange={(e) => setStartDate(e.target.value || undefined)}
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Đến ngày:</label>
               <Input
                 type="date"
                 className="w-40"
-                onChange={(e) => setEndDate(e.target.value)}
+                value={endDate || ""}
+                onChange={(e) => setEndDate(e.target.value || undefined)}
               />
             </div>
 
@@ -788,12 +835,13 @@ const OrdersContent: React.FC = () => {
               </SelectContent>
             </Select>
             
-            {/* Apply Filters Button */}
-            <Button 
-              onClick={handleApplyFilters}
+            {/* Reset Filters Button */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
               className="ml-auto"
             >
-              Áp dụng
+              Đặt lại
             </Button>
           </div>
         </CardContent>
@@ -838,7 +886,7 @@ const OrdersContent: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Button 
+                <Button
                     onClick={() => handleMultiplePayments()}
                     size="sm"
                     className="bg-blue-500 text-white hover:bg-blue-400 transition-colors duration-200"
@@ -846,7 +894,7 @@ const OrdersContent: React.FC = () => {
                     <Package className="w-4 h-4 mr-2" />
                     Thanh toán gộp
                 </Button>
-                <Button 
+                <Button
                   onClick={() => setShowDeleteDialog(true)}
                   variant="destructive"
                   size="sm"
@@ -855,7 +903,7 @@ const OrdersContent: React.FC = () => {
                   <Package className="w-4 h-4 mr-2" />
                   Xóa
                 </Button>
-                <Button 
+                <Button
                   onClick={() => setSelectedOrders([])}
                   variant="outline"
                   size="sm"
@@ -906,7 +954,7 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
+                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ngày hoàn thành</TableHead>
@@ -946,7 +994,7 @@ const OrdersContent: React.FC = () => {
                         </TableCell>
                          {/* ID Column */}
                          <TableCell className="py-3 border-r border-slate-200">
-                           <div className="space-y-2">
+                           <div className="space-y-2 whitespace-nowrap text-center">
                              <div className="font-mono text-sm font-medium text-blue-600">
                                {order.order_number}
                              </div>
@@ -987,8 +1035,8 @@ const OrdersContent: React.FC = () => {
                          </TableCell>
                          
                          {/* Customer Column */}
-                         <TableCell className="py-3 border-r border-slate-200">
-                           <div className="space-y-1">
+                         <TableCell className="py-3 border-r border-slate-200 text-center w-48 sm:w-60 max-w-sm">
+                           <div className="space-y-1 whitespace-nowrap">
                              <div className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                                {maskPhoneNumber(order.customer_phone || "")}
                              </div>
@@ -996,12 +1044,7 @@ const OrdersContent: React.FC = () => {
                              <div className="text-sm text-muted-foreground">
                                {formatAddress(order.customer_address)}
                              </div>
-                             {order.notes && (
-                               <div className="text-xs text-blue-600 italic">
-                                 Ghi chú: {order.notes}
-                               </div>
-                             )}
-                             <div className="flex flex-wrap gap-1 mt-1">
+                             <div className="flex flex-wrap gap-1 mt-1 text-center justify-center">
                                {otherTags.map((tag: any, index: number) => tag && (
                                  <Badge 
                                    key={index}
@@ -1029,8 +1072,6 @@ const OrdersContent: React.FC = () => {
                               )}
                             </div>
                           </TableCell>
-                          
-                          {/* Remove SL column - now included in products */}
                            
                            {/* Price Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
@@ -1123,20 +1164,18 @@ const OrdersContent: React.FC = () => {
                            </TableCell>
                          
                           {/* Quick Notes Column */}
-                          <TableCell className="py-3 border-r border-slate-200">
-                            <div className="max-w-xs">
-                              <Input
-                                defaultValue={order.notes || ""}
-                                placeholder="Thêm ghi chú..."
-                                className="text-sm border-none p-1 h-auto bg-transparent hover:bg-muted/50 focus:bg-background focus:border-border"
-                                onBlur={(e) => handleQuickNote(order.id, e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.currentTarget.blur();
-                                  }
-                                }}
-                              />
-                            </div>
+                          <TableCell className="relative p-3 border-r border-slate-200 w-64 sm:w-40">
+                            <textarea
+                              defaultValue={order.notes || ""}
+                              placeholder="Thêm ghi chú..."
+                              className="absolute inset-0 w-full h-full border-none bg-transparent text-sm p-2 py-7 leading-[1.5] hover:bg-muted/50 focus:bg-background focus:border-border whitespace-normal break-words resize-none"
+                              onBlur={(e) => handleQuickNote(order.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                            />
                           </TableCell>
                           
                            {/* Creator Column */}

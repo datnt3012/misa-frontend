@@ -18,6 +18,7 @@ import { orderApi } from "@/api/order.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { API_CONFIG } from "@/config/api";
 import { DollarSign, Clock, Upload, X, FileText, Image, Eye } from "lucide-react";
+import BankSelector from "@/components/orders/BankSelector";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -32,7 +33,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   order,
   onUpdate
 }) => {
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentAmount, setPaymentAmount] = useState<number | undefined>(undefined);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [bankAccount, setBankAccount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
@@ -52,8 +53,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const { user } = useAuth();
 
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-  const paidAmount = Number(order?.initial_payment || order?.paid_amount) || 0;
-  const debtAmount = Math.max(0, totalAmount - paidAmount);
+  // Use totalPaidAmount from order API response (includes all payments)
+  const paidAmount = Number(order?.totalPaidAmount || order?.total_paid_amount || order?.paid_amount || order?.initial_payment) || 0;
+  // Use remainingDebt from order API response
+  const debtAmount = Number(order?.remainingDebt || order?.remaining_debt || order?.debt_amount) || Math.max(0, totalAmount - paidAmount);
 
   useEffect(() => {
     if (open && order?.id) {
@@ -120,7 +123,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   };
 
   const handleAddPayment = async () => {
-    if (!paymentAmount || paymentAmount === 0) {
+    if (paymentAmount === undefined || paymentAmount === 0) {
       toast({
         title: "Thông báo",
         description: "Vui lòng nhập số tiền thanh toán",
@@ -179,14 +182,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         }
       }
       
-      // Step 3: Update order's initialPayment (for backward compatibility)
+      // Step 3: Update order's paid_amount
       try {
         const { orderApi } = await import('@/api/order.api');
-        const currentInitialPayment = order.initial_payment || 0;
-        const newInitialPayment = currentInitialPayment + amount;
-        
+        const currentPaidAmount = order.paid_amount || 0;
+        const newPaidAmount = currentPaidAmount + amount;
+
         await orderApi.updateOrder(order.id, {
-          initialPayment: newInitialPayment
+          paid_amount: newPaidAmount
         });
       } catch (orderUpdateError: any) {
         console.warn('[PaymentDialog] Could not update order initialPayment:', orderUpdateError);
@@ -208,7 +211,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       }, 500);
       
       // Reset form
-      setPaymentAmount('');
+      setPaymentAmount(undefined);
       setPaymentNotes('');
       setPaymentMethod('cash');
       setBankAccount('');
@@ -554,12 +557,15 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   const getBankName = (bankIdOrName: string | undefined): string => {
     if (!bankIdOrName) return '';
-    // First try to find by ID
+    // First try to find by code (account number)
+    const bankByCode = banks.find(b => b.code === bankIdOrName);
+    if (bankByCode) return `${bankByCode.code} - ${bankByCode.name}`;
+    // Then try to find by ID
     const bankById = banks.find(b => b.id === bankIdOrName);
-    if (bankById) return bankById.name;
+    if (bankById) return `${bankById.code} - ${bankById.name}`;
     // Then try to find by name (in case API returns name directly)
     const bankByName = banks.find(b => b.name === bankIdOrName);
-    if (bankByName) return bankByName.name;
+    if (bankByName) return `${bankByName.code} - ${bankByName.name}`;
     // If not found in banks list, return the value as-is (might be name from API)
     return bankIdOrName;
   };
@@ -595,12 +601,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 <span>Đã thanh toán:</span>
                 <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Còn nợ:</span>
-                <span className={`font-medium ${debtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                  {formatCurrency(debtAmount)}
-                </span>
-              </div>
+              {debtAmount !== 0 && (
+                <div className="flex justify-between">
+                  <span>Còn nợ:</span>
+                  <span className={`font-medium ${debtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                    {formatCurrency(debtAmount)}
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -646,22 +654,11 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             {paymentMethod === 'bank_transfer' && (
               <div>
                 <Label htmlFor="bank-account">Tài khoản ngân hàng <span className="text-red-500">*</span></Label>
-                <Select value={bankAccount} onValueChange={setBankAccount}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn tài khoản ngân hàng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {banks.length > 0 ? (
-                      banks.map((bank) => (
-                        <SelectItem key={bank.id} value={bank.id}>
-                          {bank.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>Đang tải danh sách ngân hàng...</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <BankSelector
+                  value={bankAccount}
+                  onValueChange={setBankAccount}
+                  placeholder="Chọn tài khoản ngân hàng"
+                />
               </div>
             )}
             <div>
@@ -712,9 +709,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                             <FileText className="w-4 h-4" />
                           )}
                           <span className="text-sm">{file.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            ({(file.size / 1024 / 1024).toFixed(1)} MB)
-                          </span>
                         </div>
                         <Button
                           type="button"
@@ -734,7 +728,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </div>
 
             {/* New Payment Summary */}
-            {paymentAmount && paymentAmount !== 0 && (
+            {paymentAmount !== undefined && paymentAmount !== 0 && (
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
                   <h5 className="font-medium mb-2">Sau khi thanh toán:</h5>
@@ -743,12 +737,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                       <span>Đã thanh toán:</span>
                       <span className="font-medium text-green-600">{formatCurrency(newPaidAmount)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Còn nợ:</span>
-                      <span className={`font-medium ${newDebtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                        {formatCurrency(newDebtAmount)}
-                      </span>
-                    </div>
+                    {newDebtAmount !== 0 && (
+                      <div className="flex justify-between">
+                        <span>Còn nợ:</span>
+                        <span className={`font-medium ${newDebtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                          {formatCurrency(newDebtAmount)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -815,7 +811,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                                 {getPaymentMethodText(payment.payment_method)}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                               {payment.payment_method === 'bank_transfer' && payment.bank ? (
                                 <span>{getBankName(payment.bank)}</span>
                               ) : (

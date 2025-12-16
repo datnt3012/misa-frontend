@@ -326,8 +326,8 @@ const DashboardContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
+      <div className="mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Dashboard Quản Lý</h1>
@@ -841,9 +841,9 @@ const DashboardContent = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-left p-2">Sản phẩm</th>
-                          <th className="text-right p-2">Tồn kho</th>
-                          <th className="text-right p-2">Tồn tối thiểu</th>
+                          <th className="text-center p-2">Sản phẩm</th>
+                          <th className="text-center p-2">Tồn kho</th>
+                          <th className="text-center p-2">Tồn tối thiểu</th>
                           <th className="text-center p-2">Trạng thái</th>
                         </tr>
                       </thead>

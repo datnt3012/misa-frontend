@@ -12,17 +12,22 @@ import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import { stockLevelsApi, StockLevel } from "@/api/stockLevels.api";
 import { ProductWithStock } from "@/api/product.api";
+import { Category } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 
 interface InventoryStockProps {
-  products: any[];
+  products: ProductWithStock[];
   warehouses: any[];
+  categories: Category[];
   canViewCostPrice: boolean;
 }
+
+type ProductWithStockExtended = ProductWithStock & { categoryName?: string };
 
 const InventoryStock: React.FC<InventoryStockProps> = ({
   products,
   warehouses,
+  categories,
   canViewCostPrice
 }) => {
   const { toast } = useToast();
@@ -58,8 +63,23 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     loadStockLevels();
   }, []);
 
+  const findCategoryByValue = (value?: string | null) => {
+    if (!value) return undefined;
+    const trimmed = value.toString().trim();
+    if (!trimmed) return undefined;
+    return categories.find(
+      (cat) => cat.id === trimmed || cat.name.toLowerCase() === trimmed.toLowerCase()
+    );
+  };
+
+  const getCategoryId = (value?: string | null) => findCategoryByValue(value)?.id || (value ?? '') as string;
+  const getCategoryName = (value?: string | null) => findCategoryByValue(value)?.name || (value ?? '') as string;
+
   // Create products with stock information - one row per warehouse
-  const productsWithStock: ProductWithStock[] = products.flatMap(product => {
+  const productsWithStock: ProductWithStockExtended[] = products.flatMap(product => {
+    const categoryId = getCategoryId(product.category);
+    const categoryName = getCategoryName(product.category);
+
     // Find stock levels for this product
     const productStockLevels = stockLevels.filter(stock => stock.productId === product.id);
     
@@ -67,6 +87,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     if (productStockLevels.length === 0) {
       return [{
         ...product,
+        category: categoryId,
+        categoryName,
         current_stock: 0,
         location: 'Chưa có tồn kho',
         updated_at: product.updatedAt,
@@ -79,6 +101,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     // Create one row for each warehouse
     return productStockLevels.map(stock => ({
       ...product,
+      category: categoryId,
+      categoryName,
       current_stock: stock.quantity,
       location: stock.warehouse ? `${stock.warehouse.name} (${stock.warehouse.code})` : 'Không xác định',
       updated_at: stock.updatedAt,
@@ -116,7 +140,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                          (filterStatus === "out-of-stock" && product.current_stock === 0);
     
     const matchesCategory = filterCategory === "all" || 
-                           (product.category && product.category.toLowerCase().includes(filterCategory.toLowerCase()));
+                           (product.category && product.category === filterCategory);
 
     const matchesWarehouse = filterWarehouse === "all" || product.warehouse_id === filterWarehouse;
     
@@ -124,7 +148,15 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   });
 
   // Get unique categories and warehouses for filters
-  const uniqueCategories = [...new Set(productsWithStock.map(p => p.category).filter(Boolean))].sort();
+  const uniqueCategories = Array.from(new Map(
+    productsWithStock
+      .map(p => {
+        const id = p.category;
+        const name = p.categoryName || p.category || '';
+        return id ? [id, { id, name }] : null;
+      })
+      .filter(Boolean) as [string, { id: string; name: string }][]
+  ).values()).sort((a, b) => a.name.localeCompare(b.name));
   const usedWarehouses = warehouses.filter(w => 
     productsWithStock.some(p => p.warehouse_id === w.id)
   );
@@ -147,8 +179,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           bValue = b.name;
           break;
         case 'category':
-          aValue = a.category || '';
-          bValue = b.category || '';
+          aValue = a.categoryName || '';
+          bValue = b.categoryName || '';
           break;
         case 'current_stock':
           aValue = a.current_stock;
@@ -244,10 +276,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         'STT': index + 1,
         'Mã sản phẩm': product.code,
         'Tên sản phẩm': product.name,
-        'Loại': product.category || '',
+        'Loại': product.categoryName || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
-        'Giá bán (VND)': product.price || 0,
+        'Giá bán': product.price || 0,
         'Kho': product.warehouse_name || product.location || '',
         'Trạng thái': product.current_stock === 0 ? 'Hết hàng' : 
                      (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
@@ -255,7 +287,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       };
 
       if (canViewCostPrice) {
-        exportItem['Giá vốn (VND)'] = product.costPrice || 0;
+        exportItem['Giá vốn'] = product.costPrice || 0;
       }
 
       return exportItem;
@@ -356,8 +388,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               <SelectContent>
                 <SelectItem value="all">Tất cả loại</SelectItem>
                 {uniqueCategories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -433,7 +465,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   </div>
                 </TableHead>
                 <TableHead 
-                  className="cursor-pointer hover:bg-muted/50 select-none"
+                  className="cursor-pointer hover:bg-muted/50 select-none text-center"
                   onClick={() => handleSort('category')}
                 >
                   <div className="flex items-center">
@@ -445,7 +477,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   className="cursor-pointer hover:bg-muted/50 select-none text-center"
                   onClick={() => handleSort('current_stock')}
                 >
-                  <div className="flex items-center justify-center">
+                  <div className="flex items-center">
                     Tồn Kho
                     {getSortIcon('current_stock')}
                   </div>
@@ -456,7 +488,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     onClick={() => handleSort('cost_price')}
                   >
                     <div className="flex items-center">
-                      Giá Vốn (VNĐ)
+                      Giá Vốn
                       {getSortIcon('cost_price')}
                     </div>
                   </TableHead>
@@ -466,7 +498,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   onClick={() => handleSort('unit_price')}
                 >
                   <div className="flex items-center">
-                    Giá Bán (VNĐ)
+                    Giá Bán
                     {getSortIcon('unit_price')}
                   </div>
                 </TableHead>
@@ -503,17 +535,17 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                   <TableRow key={`${product.id}-${product.warehouse_id || 'no-warehouse'}`}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.category || '-'}</TableCell>
+                    <TableCell className="text-center">{product.categoryName || '-'}</TableCell>
                     <TableCell className="text-center">
                       <span className={`font-medium ${
                         product.current_stock === 0 ? 'text-red-600' : 
                         product.current_stock < 10 ? 'text-orange-600' : 'text-green-600'
                       }`}>
-                        {product.current_stock}
+                        {formatCurrency(product.current_stock)}
                       </span>
                     </TableCell>
                     {canViewCostPrice && (
-                      <TableCell>
+                      <TableCell className="text-center">
                         <div className="relative group">
                           <span className="cursor-help">
                             {formatCurrencyShort(product.costPrice || 0)}
@@ -524,7 +556,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         </div>
                       </TableCell>
                     )}
-                    <TableCell>
+                    <TableCell className="text-center">
                       <div className="relative group">
                         <span className="cursor-help">
                           {formatCurrencyShort(product.price || 0)}
@@ -534,13 +566,13 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center whitespace-nowrap">
                       {product.warehouse_name || product.location || '-'}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell className=" text-center whitespace-nowrap">
                       {getStatusBadge(product.current_stock, product.lowStockThreshold)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                   </TableRow>

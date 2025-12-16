@@ -526,8 +526,8 @@ const CustomersContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
+      <div className="mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Khách Hàng</h1>
           <p className="text-muted-foreground">Danh sách và thông tin chi tiết khách hàng</p>
@@ -1183,7 +1183,7 @@ const CustomersContent = () => {
                                 {Number(order.total_amount).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number((order as any).initial_payment ?? order.paid_amount).toLocaleString('vi-VN')}
+                                {Number(order.paid_amount ?? (order as any).initial_payment).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className={Number(order.debt_amount) > 0 ? 'text-red-600' : 'text-green-600'}>
