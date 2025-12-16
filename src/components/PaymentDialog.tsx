@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,10 +53,26 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const { user } = useAuth();
 
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-  // Use totalPaidAmount from order API response (includes all payments)
-  const paidAmount = Number(order?.totalPaidAmount || order?.total_paid_amount || order?.paid_amount || order?.initial_payment) || 0;
-  // Use remainingDebt from order API response
-  const debtAmount = Number(order?.remainingDebt || order?.remaining_debt || order?.debt_amount) || Math.max(0, totalAmount - paidAmount);
+
+  // Calculate paid amount from payment history if available, otherwise from order
+  const paidAmount = useMemo(() => {
+    if (paymentHistory.length > 0) {
+      // Calculate from payment history
+      return paymentHistory.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    }
+    // Fallback to order data
+    return Number(order?.totalPaidAmount || order?.total_paid_amount || order?.paid_amount || order?.initial_payment) || 0;
+  }, [paymentHistory, order]);
+
+  // Calculate debt amount
+  const debtAmount = useMemo(() => {
+    if (paymentHistory.length > 0) {
+      // Calculate from payment history
+      return Math.max(0, totalAmount - paidAmount);
+    }
+    // Fallback to order data
+    return Number(order?.remainingDebt || order?.remaining_debt || order?.debt_amount) || Math.max(0, totalAmount - paidAmount);
+  }, [paymentHistory, totalAmount, paidAmount, order]);
 
   useEffect(() => {
     if (open && order?.id) {
