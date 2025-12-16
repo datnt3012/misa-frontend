@@ -33,7 +33,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   order,
   onUpdate
 }) => {
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentAmount, setPaymentAmount] = useState<number | undefined>(undefined);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [bankAccount, setBankAccount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
@@ -53,8 +53,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const { user } = useAuth();
 
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-  const paidAmount = Number(order?.initial_payment || order?.paid_amount) || 0;
-  const debtAmount = Math.max(0, totalAmount - paidAmount);
+  // Use totalPaidAmount from order API response (includes all payments)
+  const paidAmount = Number(order?.totalPaidAmount || order?.total_paid_amount || order?.paid_amount || order?.initial_payment) || 0;
+  // Use remainingDebt from order API response
+  const debtAmount = Number(order?.remainingDebt || order?.remaining_debt || order?.debt_amount) || Math.max(0, totalAmount - paidAmount);
 
   useEffect(() => {
     if (open && order?.id) {
@@ -121,7 +123,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   };
 
   const handleAddPayment = async () => {
-    if (!paymentAmount || paymentAmount === 0) {
+    if (paymentAmount === undefined || paymentAmount === 0) {
       toast({
         title: "Thông báo",
         description: "Vui lòng nhập số tiền thanh toán",
@@ -180,14 +182,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         }
       }
       
-      // Step 3: Update order's initialPayment (for backward compatibility)
+      // Step 3: Update order's paid_amount
       try {
         const { orderApi } = await import('@/api/order.api');
-        const currentInitialPayment = order.initial_payment || 0;
-        const newInitialPayment = currentInitialPayment + amount;
-        
+        const currentPaidAmount = order.paid_amount || 0;
+        const newPaidAmount = currentPaidAmount + amount;
+
         await orderApi.updateOrder(order.id, {
-          initialPayment: newInitialPayment
+          paid_amount: newPaidAmount
         });
       } catch (orderUpdateError: any) {
         console.warn('[PaymentDialog] Could not update order initialPayment:', orderUpdateError);
@@ -209,7 +211,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       }, 500);
       
       // Reset form
-      setPaymentAmount(0);
+      setPaymentAmount(undefined);
       setPaymentNotes('');
       setPaymentMethod('cash');
       setBankAccount('');
@@ -599,12 +601,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 <span>Đã thanh toán:</span>
                 <span className="font-medium text-green-600">{formatCurrency(paidAmount)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Còn nợ:</span>
-                <span className={`font-medium ${debtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                  {formatCurrency(debtAmount)}
-                </span>
-              </div>
+              {debtAmount !== 0 && (
+                <div className="flex justify-between">
+                  <span>Còn nợ:</span>
+                  <span className={`font-medium ${debtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                    {formatCurrency(debtAmount)}
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -705,9 +709,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                             <FileText className="w-4 h-4" />
                           )}
                           <span className="text-sm">{file.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            ({(file.size / 1024 / 1024).toFixed(1)} MB)
-                          </span>
                         </div>
                         <Button
                           type="button"
@@ -727,7 +728,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </div>
 
             {/* New Payment Summary */}
-            {paymentAmount && paymentAmount !== 0 && (
+            {paymentAmount !== undefined && paymentAmount !== 0 && (
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
                   <h5 className="font-medium mb-2">Sau khi thanh toán:</h5>
@@ -736,12 +737,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                       <span>Đã thanh toán:</span>
                       <span className="font-medium text-green-600">{formatCurrency(newPaidAmount)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Còn nợ:</span>
-                      <span className={`font-medium ${newDebtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                        {formatCurrency(newDebtAmount)}
-                      </span>
-                    </div>
+                    {newDebtAmount !== 0 && (
+                      <div className="flex justify-between">
+                        <span>Còn nợ:</span>
+                        <span className={`font-medium ${newDebtAmount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                          {formatCurrency(newDebtAmount)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

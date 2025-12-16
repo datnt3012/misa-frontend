@@ -1173,4 +1173,35 @@ export const orderApi = {
       updatedAt: bankData.updatedAt,
     };
   },
+
+  // Preview bulk payment distribution
+  previewBulkPayment: async (data: {
+    orderIds: string[];
+    totalAmount: number;
+  }): Promise<{
+    orders: Array<{
+      orderId: string;
+      orderCode: string;
+      totalAmount: number;
+      totalPaid: number;
+      willPay: number;
+      remainingDebt: number;
+      percentage: number;
+    }>;
+    totalBulkAmount: number;
+    totalRemainingDebt: number;
+  }> => {
+    const response = await api.post<any>(`${API_ENDPOINTS.ORDERS.LIST}/bulk-payment-preview`, data);
+    const responseData = response?.data || response;
+
+    if (responseData) {
+      return {
+        orders: responseData.orders || [],
+        totalBulkAmount: responseData.totalBulkAmount || data.totalAmount,
+        totalRemainingDebt: responseData.totalRemainingDebt || 0,
+      };
+    }
+
+    throw new Error('Invalid bulk payment preview response structure');
+  },
 };

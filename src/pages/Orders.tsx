@@ -90,11 +90,14 @@ const OrdersContent: React.FC = () => {
   // Cache for total payments per order
   const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
   const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
+
+  // Bulk payment preview state - moved to MultiplePaymentDialog
   
   // Summary state from API
   const [summary, setSummary] = useState<{
     totalAmount: number;
     totalInitialPayment: number;
+    totalPaidAmount?: number;
     totalDebt: number;
     totalExpenses: number;
   } | null>(null);
@@ -149,11 +152,34 @@ const OrdersContent: React.FC = () => {
       // Set summary from API if available
       if (resp.summary) {
         console.log('[Orders] Setting summary from API:', resp.summary);
-        setSummary(resp.summary);
+        setSummary({
+          totalAmount: resp.summary.totalAmount,
+          totalInitialPayment: resp.summary.totalInitialPayment,
+          totalPaidAmount: resp.summary.totalPaidAmount,
+          totalDebt: resp.summary.totalDebt,
+          totalExpenses: resp.summary.totalExpenses,
+        });
       } else {
         console.log('[Orders] No summary from API, using fallback calculation');
         // Fallback: calculate from orders if summary not available
-        setSummary(null);
+        const fallbackSummary = resp.orders.reduce(
+          (acc, order: any) => {
+            const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
+            const paidAmount = order.totalPaidAmount ?? order.total_paid_amount ?? order.paid_amount ?? order.initial_payment ?? 0;
+            const debtAmount = order.remainingDebt ?? order.remaining_debt ?? order.debt_amount ?? Math.max(0, totalAmount - paidAmount);
+            const totalExpenses = order.totalExpenses ?? 0;
+
+            return {
+              totalAmount: acc.totalAmount + totalAmount,
+              totalInitialPayment: acc.totalInitialPayment + (order.initial_payment ?? 0),
+              totalPaidAmount: acc.totalPaidAmount + paidAmount,
+              totalDebt: acc.totalDebt + debtAmount,
+              totalExpenses: acc.totalExpenses + totalExpenses,
+            };
+          },
+          { totalAmount: 0, totalInitialPayment: 0, totalPaidAmount: 0, totalDebt: 0, totalExpenses: 0 }
+        );
+        setSummary(fallbackSummary);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -167,6 +193,7 @@ const OrdersContent: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage, statusFilter, categoryFilter, searchTerm, startDate, endDate, creatorFilter, toast]);
+
 
   // Load payments for orders and cache total paid amounts
   const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
@@ -346,6 +373,7 @@ const OrdersContent: React.FC = () => {
   useEffect(() => {
     loadOrderTagsCatalog();
   }, [loadOrderTagsCatalog]);
+
 
   // Removed automatic refresh - only reload on user actions
 
@@ -670,7 +698,7 @@ const OrdersContent: React.FC = () => {
   // Prefer backend aggregated fields (totalAmount, totalPaidAmount, remainingDebt)
   const totals = summary ? {
     totalAmount: summary.totalAmount,
-    paidAmount: summary.totalInitialPayment,
+    paidAmount: summary.totalPaidAmount || summary.totalInitialPayment, // Use totalPaidAmount if available
     debtAmount: summary.totalDebt,
     totalExpenses: summary.totalExpenses || 0,
   } : orders.reduce(
@@ -678,11 +706,13 @@ const OrdersContent: React.FC = () => {
       const totalAmount = order.totalAmount ?? order.total_amount ?? 0;
       const paidAmount =
         order.totalPaidAmount ??
+        order.total_paid_amount ??
         order.paid_amount ??
         order.initial_payment ??
         0;
       const debtAmount =
         order.remainingDebt ??
+        order.remaining_debt ??
         order.debt_amount ??
         Math.max(0, totalAmount - paidAmount);
       const totalExpenses = order.totalExpenses ?? 0;
@@ -839,7 +869,7 @@ const OrdersContent: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Button 
+                <Button
                     onClick={() => handleMultiplePayments()}
                     size="sm"
                     className="bg-blue-500 text-white hover:bg-blue-400 transition-colors duration-200"
@@ -847,7 +877,7 @@ const OrdersContent: React.FC = () => {
                     <Package className="w-4 h-4 mr-2" />
                     Thanh toán gộp
                 </Button>
-                <Button 
+                <Button
                   onClick={() => setShowDeleteDialog(true)}
                   variant="destructive"
                   size="sm"
@@ -856,7 +886,7 @@ const OrdersContent: React.FC = () => {
                   <Package className="w-4 h-4 mr-2" />
                   Xóa
                 </Button>
-                <Button 
+                <Button
                   onClick={() => setSelectedOrders([])}
                   variant="outline"
                   size="sm"
@@ -907,7 +937,7 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
+                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ngày hoàn thành</TableHead>

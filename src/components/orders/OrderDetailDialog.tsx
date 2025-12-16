@@ -1106,7 +1106,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 {getPaymentStatusBadge(
                   (orderDetails as any).payment_status || 
                   calculatePaymentStatus(
-                    orderDetails.initial_payment || orderDetails.paid_amount || 0,
+                    orderDetails.paid_amount || orderDetails.initial_payment || 0,
                     orderDetails.total_amount || 0
                   )
                 )}
@@ -1208,7 +1208,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-green-600">{formatCurrency(orderDetails.initial_payment || orderDetails.paid_amount)}</span>
+                  <span className="text-green-600">{formatCurrency(orderDetails.paid_amount || orderDetails.initial_payment)}</span>
                   <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
                     Thanh toán
                   </Button>

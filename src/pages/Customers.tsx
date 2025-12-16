@@ -1183,7 +1183,7 @@ const CustomersContent = () => {
                                 {Number(order.total_amount).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number((order as any).initial_payment ?? order.paid_amount).toLocaleString('vi-VN')}
+                                {Number(order.paid_amount ?? (order as any).initial_payment).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className={Number(order.debt_amount) > 0 ? 'text-red-600' : 'text-green-600'}>

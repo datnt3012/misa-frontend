@@ -36,7 +36,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
   const { user } = useAuth();
 
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-  const paidAmount = Number(order?.initial_payment || order?.paid_amount) || 0;
+  const paidAmount = Number(order?.paid_amount || order?.initial_payment) || 0;
   const debtAmount = Math.max(0, totalAmount - paidAmount);
 
   const handleUpdate = async () => {

@@ -49,6 +49,7 @@ export interface CreateMultiplePaymentRequest {
   paymentMethod: 'cash' | 'bank_transfer' | 'card' | 'other';
   bank?: string; // Required if paymentMethod is bank_transfer
   note?: string;
+  files?: File[]; // Files to upload for the payments
 }
 
 export interface PaymentDistribution {
@@ -309,39 +310,79 @@ export const paymentsApi = {
   // Create multiple payments (bulk payment)
   createMultiplePayments: async (paymentData: CreateMultiplePaymentRequest): Promise<CreateMultiplePaymentResponse> => {
     try {
-      const payload: any = {
-        orderIds: paymentData.orderIds,
-        totalAmount: paymentData.totalAmount,
-        paymentDate: paymentData.paymentDate || new Date().toISOString(),
-        paymentMethod: paymentData.paymentMethod,
-      };
+      // If files are provided, use FormData for multipart upload
+      if (paymentData.files && paymentData.files.length > 0) {
+        const formData = new FormData();
 
-      // Include bank if payment method is bank_transfer
-      if (paymentData.paymentMethod === 'bank_transfer' && paymentData.bank) {
-        payload.bank = paymentData.bank;
-      }
-
-      // Include note if provided
-      if (paymentData.note) {
-        payload.note = paymentData.note;
-      }
-
-      const response = await api.post<any>(API_ENDPOINTS.PAYMENTS.MULTIPLE, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = response?.data || response;
-      const responseData = data?.data || data;
-
-      if (responseData) {
-        return {
-          payments: (responseData.payments || []).map(normalizePayment),
-          distribution: responseData.distribution || [],
-          totalAmount: responseData.totalAmount || paymentData.totalAmount,
-          groupPaymentId: responseData.groupPaymentId || '',
+        // Add JSON data as string
+        const jsonPayload = {
+          orderIds: paymentData.orderIds,
+          totalAmount: paymentData.totalAmount,
+          paymentDate: paymentData.paymentDate || new Date().toISOString(),
+          paymentMethod: paymentData.paymentMethod,
+          bank: paymentData.paymentMethod === 'bank_transfer' && paymentData.bank ? paymentData.bank : undefined,
+          note: paymentData.note || undefined,
         };
+        formData.append('data', JSON.stringify(jsonPayload));
+
+        // Add files
+        paymentData.files.forEach((file, index) => {
+          formData.append(`files`, file);
+        });
+
+        const response = await api.post<any>(API_ENDPOINTS.PAYMENTS.MULTIPLE, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        const data = response?.data || response;
+        const responseData = data?.data || data;
+
+        if (responseData) {
+          return {
+            payments: (responseData.payments || []).map(normalizePayment),
+            distribution: responseData.distribution || [],
+            totalAmount: responseData.totalAmount || paymentData.totalAmount,
+            groupPaymentId: responseData.groupPaymentId || '',
+          };
+        }
+      } else {
+        // No files, use JSON request
+        const payload: any = {
+          orderIds: paymentData.orderIds,
+          totalAmount: paymentData.totalAmount,
+          paymentDate: paymentData.paymentDate || new Date().toISOString(),
+          paymentMethod: paymentData.paymentMethod,
+        };
+
+        // Include bank if payment method is bank_transfer
+        if (paymentData.paymentMethod === 'bank_transfer' && paymentData.bank) {
+          payload.bank = paymentData.bank;
+        }
+
+        // Include note if provided
+        if (paymentData.note) {
+          payload.note = paymentData.note;
+        }
+
+        const response = await api.post<any>(API_ENDPOINTS.PAYMENTS.MULTIPLE, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = response?.data || response;
+        const responseData = data?.data || data;
+
+        if (responseData) {
+          return {
+            payments: (responseData.payments || []).map(normalizePayment),
+            distribution: responseData.distribution || [],
+            totalAmount: responseData.totalAmount || paymentData.totalAmount,
+            groupPaymentId: responseData.groupPaymentId || '',
+          };
+        }
       }
 
       throw new Error('Invalid multiple payment response structure');
