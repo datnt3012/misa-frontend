@@ -87,9 +87,12 @@ const ProductList: React.FC<ProductListProps> = ({
     barcode: '',
     lowStockThreshold: 0,
     manufacturer: '',
-    description: ''
+    description: '',
+    isForeignCurrency: false,
+    exchangeRate: 1
   });
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [dialogKey, setDialogKey] = useState(0); // Force dialog re-render
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
@@ -137,6 +140,7 @@ const ProductList: React.FC<ProductListProps> = ({
     }
   }, [jobStatusTab, jobHistorySort, jobHistoryPage, jobHistoryItemsPerPage, onRefreshImportJobs]);
 
+
   // Refresh product list when import jobs complete successfully
   React.useEffect(() => {
     const completedJobsWithSuccess = importJobs.filter(job =>
@@ -177,6 +181,28 @@ const ProductList: React.FC<ProductListProps> = ({
     },
     [findCategoryByValue]
   );
+
+  // Update form data when editing product changes
+  React.useEffect(() => {
+    if (editingProduct) {
+
+      setNewProduct({
+        name: editingProduct.name,
+        code: editingProduct.code,
+        category: findCategoryByValue(editingProduct.category)?.id || editingProduct.category || '',
+        costPrice: editingProduct.originalCostPrice || 0,
+        price: editingProduct.price || 0,
+        unit: editingProduct.unit || 'cái',
+        barcode: editingProduct.barcode || '',
+        lowStockThreshold: editingProduct.lowStockThreshold || 0,
+        manufacturer: editingProduct.manufacturer || '',
+        description: editingProduct.description || '',
+        isForeignCurrency: Boolean(editingProduct.isForeignCurrency),
+        exchangeRate: editingProduct.exchangeRate || 1
+      });
+      setDialogKey(prev => prev + 1);
+    }
+  }, [editingProduct, findCategoryByValue]);
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -225,6 +251,26 @@ const ProductList: React.FC<ProductListProps> = ({
       }
     }
   }, [editCategoryComboOpen]);
+
+  // Reset form when add dialog opens
+  React.useEffect(() => {
+    if (isAddProductDialogOpen) {
+      setNewProduct({
+        name: '',
+        code: '',
+        category: '',
+        costPrice: 0,
+        price: 0,
+        unit: 'cái',
+        barcode: '',
+        lowStockThreshold: 0,
+        manufacturer: '',
+        description: '',
+        isForeignCurrency: false,
+        exchangeRate: 1
+      });
+    }
+  }, [isAddProductDialogOpen]);
 
   const ensureCategoryId = React.useCallback(async (categoryValue?: string | null) => {
     if (!categoryValue) return null;
@@ -453,6 +499,12 @@ const ProductList: React.FC<ProductListProps> = ({
         productData.costPrice = newProduct.costPrice;
       }
 
+      // Optional foreign currency fields
+      if (newProduct.isForeignCurrency) {
+        productData.isForeignCurrency = newProduct.isForeignCurrency;
+        productData.exchangeRate = newProduct.exchangeRate;
+      }
+
       // lowStockThreshold - include if provided (can be 0 or positive number)
       if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
         productData.lowStockThreshold = newProduct.lowStockThreshold;
@@ -477,6 +529,7 @@ const ProductList: React.FC<ProductListProps> = ({
 
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
+      // Clear form while keeping dialog open
       setNewProduct({
         name: '',
         code: '',
@@ -487,9 +540,10 @@ const ProductList: React.FC<ProductListProps> = ({
         barcode: '',
         lowStockThreshold: 0,
         manufacturer: '',
-        description: ''
+        description: '',
+        isForeignCurrency: false,
+        exchangeRate: 1
       });
-      setIsAddProductDialogOpen(false);
     } catch (error: any) {
       console.error('Error adding product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
@@ -499,21 +553,20 @@ const ProductList: React.FC<ProductListProps> = ({
     }
   };
 
-  const startEditProduct = (product: any) => {
-    setEditingProduct(product);
-    setNewProduct({
-      name: product.name,
-      code: product.code,
-      category: findCategoryByValue(product.category)?.id || product.category || '',
-      costPrice: product.costPrice || 0,
-      price: product.price || 0,
-      unit: product.unit || 'cái',
-      barcode: product.barcode || '',
-      lowStockThreshold: product.lowStockThreshold || 0,
-      manufacturer: product.manufacturer || '',
-      description: product.description || ''
-    });
-    setIsEditProductDialogOpen(true);
+  const startEditProduct = async (product: any) => {
+    try {
+      // Fetch full product details from API to ensure we have all fields including foreign currency data
+      const fullProductDetails = await productApi.getProduct(product.id);
+      setEditingProduct(fullProductDetails);
+      setIsEditProductDialogOpen(true);
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      toast({
+        title: 'Lỗi',
+        description: 'Không thể tải thông tin sản phẩm',
+        variant: 'destructive'
+      });
+    }
   };
 
   const updateProduct = async () => {
@@ -547,6 +600,12 @@ const ProductList: React.FC<ProductListProps> = ({
       // Optional costPrice - only include if provided
       if (newProduct.costPrice && newProduct.costPrice > 0) {
         updateData.costPrice = newProduct.costPrice;
+      }
+
+      // Optional foreign currency fields
+      if (newProduct.isForeignCurrency) {
+        updateData.isForeignCurrency = newProduct.isForeignCurrency;
+        updateData.exchangeRate = newProduct.exchangeRate;
       }
 
       // lowStockThreshold - include if provided (can be 0 or positive number)
@@ -584,7 +643,9 @@ const ProductList: React.FC<ProductListProps> = ({
         barcode: '',
         lowStockThreshold: 0,
         manufacturer: '',
-        description: ''
+        description: '',
+        isForeignCurrency: false,
+        exchangeRate: 1
       });
       setIsEditProductDialogOpen(false);
     } catch (error: any) {
@@ -962,16 +1023,48 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                       {canViewCostPrice && (
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
-                          <CurrencyInput 
-                            id="cost-price" 
-                            className="col-span-3"
-                            value={newProduct.costPrice}
-                            onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
-                            placeholder="0"
-                          />
-                        </div>
+                        <>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
+                            <CurrencyInput
+                              id="cost-price"
+                              className="col-span-3"
+                              value={newProduct.costPrice}
+                              onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <div></div>
+                            <div className="col-span-3 flex items-center gap-4">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  key="add-foreign-currency"
+                                  type="checkbox"
+                                  id="is-foreign-currency"
+                                  checked={Boolean(newProduct.isForeignCurrency)}
+                                  onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
+                                  className="h-4 w-4"
+                                />
+                                <Label htmlFor="is-foreign-currency" className="text-sm">ngoại tệ</Label>
+                              </div>
+                              {newProduct.isForeignCurrency && (
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor="exchange-rate" className="text-sm">Tỷ giá:</Label>
+                                  <NumberInput
+                                    id="exchange-rate"
+                                    value={newProduct.exchangeRate}
+                                    onChange={(value) => setNewProduct(prev => ({ ...prev, exchangeRate: value }))}
+                                    placeholder="1"
+                                    min={0.01}
+                                    step={0.01}
+                                    className="w-24"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
                       )}
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
@@ -1344,7 +1437,7 @@ const ProductList: React.FC<ProductListProps> = ({
 
         {/* Edit Product Dialog */}
         {canManageProducts && (
-          <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
+          <Dialog key={dialogKey} open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Chỉnh Sửa Sản Phẩm</DialogTitle>
@@ -1497,16 +1590,48 @@ const ProductList: React.FC<ProductListProps> = ({
                   />
                 </div>
                 {canViewCostPrice && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
-                    <CurrencyInput 
-                      id="edit-cost-price" 
-                      className="col-span-3"
-                      value={newProduct.costPrice}
-                      onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
-                      placeholder="0"
-                    />
-                  </div>
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
+                      <CurrencyInput
+                        id="edit-cost-price"
+                        className="col-span-3"
+                        value={newProduct.costPrice}
+                        onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <div></div>
+                      <div className="col-span-3 flex items-center gap-4">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            key={`edit-foreign-currency-${editingProduct?.id || 'new'}`}
+                            type="checkbox"
+                            id="edit-is-foreign-currency"
+                            checked={Boolean(newProduct.isForeignCurrency)}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
+                            className="h-4 w-4"
+                          />
+                          <Label htmlFor="edit-is-foreign-currency" className="text-sm">ngoại tệ</Label>
+                        </div>
+                        {newProduct.isForeignCurrency && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="edit-exchange-rate" className="text-sm">Tỷ giá:</Label>
+                            <NumberInput
+                              id="edit-exchange-rate"
+                              value={newProduct.exchangeRate}
+                              onChange={(value) => setNewProduct(prev => ({ ...prev, exchangeRate: value }))}
+                              placeholder="1"
+                              min={0.01}
+                              step={0.01}
+                              className="w-24"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-sell-price" className="text-right">Giá bán</Label>
@@ -1535,7 +1660,9 @@ const ProductList: React.FC<ProductListProps> = ({
                       barcode: '',
                       lowStockThreshold: 0,
                       manufacturer: '',
-                      description: ''
+                      description: '',
+                      isForeignCurrency: false,
+                      exchangeRate: 1
                     });
                   }}
                 >

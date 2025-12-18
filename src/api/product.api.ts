@@ -2,21 +2,24 @@ import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
 export interface Product {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-  category?: string;
-  unit: string;
-  price: number;
-  costPrice: number;
-  lowStockThreshold?: number;
-  manufacturer?: string;
-  barcode?: string;
-  isDeleted: boolean;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string;
+   id: string;
+   code: string;
+   name: string;
+   description?: string;
+   category?: string;
+   unit: string;
+   price: number;
+   costPrice: number;
+   lowStockThreshold?: number;
+   manufacturer?: string;
+   barcode?: string;
+   isDeleted: boolean;
+   createdAt: string;
+   updatedAt: string;
+   deletedAt?: string;
+   isForeignCurrency?: boolean;
+   exchangeRate?: number;
+   originalCostPrice?: number;
 }
 
 export interface ProductWithStock extends Product {
@@ -29,29 +32,33 @@ export interface ProductWithStock extends Product {
 }
 
 export interface CreateProductRequest {
-  code?: string;
-  name: string;
-  description?: string;
-  category?: string;
-  unit?: string;
-  price?: number;
-  costPrice?: number;
-  lowStockThreshold?: number;
-  manufacturer?: string;
-  barcode?: string;
+   code?: string;
+   name: string;
+   description?: string;
+   category?: string;
+   unit?: string;
+   price?: number;
+   costPrice?: number;
+   lowStockThreshold?: number;
+   manufacturer?: string;
+   barcode?: string;
+   isForeignCurrency?: boolean;
+   exchangeRate?: number;
 }
 
 export interface UpdateProductRequest {
-  code?: string;
-  name?: string;
-  description?: string;
-  category?: string;
-  unit?: string;
-  price?: number;
-  costPrice?: number;
-  lowStockThreshold?: number;
-  manufacturer?: string;
-  barcode?: string;
+   code?: string;
+   name?: string;
+   description?: string;
+   category?: string;
+   unit?: string;
+   price?: number;
+   costPrice?: number;
+   lowStockThreshold?: number;
+   manufacturer?: string;
+   barcode?: string;
+   isForeignCurrency?: boolean;
+   exchangeRate?: number;
 }
 
 export interface ProductImportRequest {
@@ -101,26 +108,29 @@ export interface ProductImportJobSnapshot {
 
 // Helper function to normalize product data from API response
 const normalizeProduct = (row: any): Product => {
-  const price = parseFloat(row.price ?? '0');
-  const costPrice = parseFloat(row.costPrice ?? row.cost_price ?? '0');
-  
-  return {
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    description: row.description ?? undefined,
-    category: row.category ?? undefined,
-    unit: row.unit ?? 'piece',
-    price: price,
-    costPrice: costPrice,
-    lowStockThreshold: row.lowStockThreshold ?? row.low_stock_threshold ?? undefined,
-    manufacturer: row.manufacturer ?? undefined,
-    barcode: row.barcode ?? undefined,
-    isDeleted: row.isDeleted ?? false,
-    createdAt: row.createdAt ?? row.created_at ?? '',
-    updatedAt: row.updatedAt ?? row.updated_at ?? '',
-    deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
-  };
+   const price = parseFloat(row.price ?? '0');
+   const costPrice = parseFloat(row.costPrice ?? row.cost_price ?? '0');
+
+   return {
+     id: row.id,
+     code: row.code,
+     name: row.name,
+     description: row.description ?? undefined,
+     category: row.category ?? undefined,
+     unit: row.unit ?? 'piece',
+     price: price,
+     costPrice: costPrice,
+     lowStockThreshold: row.lowStockThreshold ?? row.low_stock_threshold ?? undefined,
+     manufacturer: row.manufacturer ?? undefined,
+     barcode: row.barcode ?? undefined,
+     isDeleted: row.isDeleted ?? false,
+     createdAt: row.createdAt ?? row.created_at ?? '',
+     updatedAt: row.updatedAt ?? row.updated_at ?? '',
+     deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+     isForeignCurrency: row.isForeignCurrency ?? false,
+     exchangeRate: row.exchangeRate ? parseFloat(row.exchangeRate) : undefined,
+     originalCostPrice: row.originalCostPrice ? parseFloat(row.originalCostPrice) : undefined,
+   };
 };
 
 const normalizeImportJobResponse = (job: any): ProductImportJobSnapshot => {
