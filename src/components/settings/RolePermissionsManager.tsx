@@ -619,7 +619,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                             .map((permission) => {
                               const frontendKey = convertBackendToFrontend(permission);
                               return (
-                                <div key={permission.id} className="flex items-center space-x-2">
+                                <div key={permission.id} className="flex items-center justify-center space-x-2 text-center">
                                   <Checkbox
                                     id={`new-${permission.id}`}
                                     checked={newRole.permissions.includes(frontendKey)}
@@ -662,10 +662,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
             <TableHeader>
               <TableRow>
                 <TableHead>Tên vai trò</TableHead>
-                <TableHead>Mã vai trò</TableHead>
-                <TableHead>Mô tả</TableHead>
-                <TableHead>Số quyền</TableHead>
-                <TableHead>Thao tác</TableHead>
+                <TableHead className="text-center">Mã vai trò</TableHead>
+                <TableHead className="text-center">Mô tả</TableHead>
+                <TableHead className="text-center">Số quyền</TableHead>
+                <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -674,19 +674,19 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                   <TableCell className="font-medium">
                     {getRoleDisplayName(role.name)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Badge variant="outline">
                       {role.code || 'N/A'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{role.description || '-'}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">{role.description || '-'}</TableCell>
+                  <TableCell className="text-center">
                     <Badge variant="secondary">
                       {role.permissions?.length || 0} quyền
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
+                  <TableCell className="text-center">
+                    <div className="flex gap-2 justify-center">
                       <Button
                         variant="outline"
                         size="sm"
@@ -817,7 +817,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                           .map((permission) => {
                             const frontendKey = convertBackendToFrontend(permission);
                             return (
-                              <div key={permission.id} className="flex items-center space-x-2">
+                              <div key={permission.id} className="flex items-center justify-center space-x-2 text-center">
                                 <Checkbox
                                   id={`edit-${permission.id}`}
                                   checked={editRole.permissions.includes(frontendKey)}
@@ -831,8 +831,8 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                           })}
                       </div>
                     </CardContent>
-                    </Card>
-                  ))}
+                  </Card>
+                ))}
               </div>
             </div>
           </div>
@@ -937,7 +937,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                               return a.name.localeCompare(b.name);
                             })
                             .map((permission) => (
-                              <div key={permission.id} className="flex items-center space-x-2">
+                              <div key={permission.id} className="flex items-center justify-center space-x-2 text-center">
                                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                                 <span className="text-sm">{permission.name}</span>
                               </div>

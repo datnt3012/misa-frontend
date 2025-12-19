@@ -835,14 +835,14 @@ const SettingsContent = () => {
                         ) : (
                           users.map((userItem) => (
                             <TableRow key={userItem.id}>
-                                 <TableCell>
+                                 <TableCell className="text-center">
                                    <div>
                                      <p className="font-medium">{userItem.firstName} {userItem.lastName}</p>
                                      <p className="text-sm text-muted-foreground">{userItem.email || userItem.username}</p>
                                      <p className="text-xs text-muted-foreground">ID: {userItem.id.slice(0, 8)}...</p>
                                    </div>
                                  </TableCell>
-                                <TableCell>
+                                <TableCell className="text-center">
                                   {editingRole === userItem.id ? (
                                      <div className="flex items-center gap-2">
                                         <Select 
@@ -891,7 +891,7 @@ const SettingsContent = () => {
                                        </Button>
                                      </div>
                                  ) : (
-                                   <div className="flex items-center gap-2">
+                                   <div className="flex items-center justify-center gap-2">
                                       <Badge variant="outline" className="text-xs">
                                         {userItem.role?.name || 'Chưa phân quyền'}
                                       </Badge>
@@ -906,10 +906,10 @@ const SettingsContent = () => {
                                    </div>
                                  )}
                                </TableCell>
-                              <TableCell>
+                              <TableCell className="text-center">
                                 {formatDateTime(userItem.createdAt)}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="text-center">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -950,4 +950,4 @@ const Settings = () => {
     </PermissionGuard>
   );
 };
-export default Settings;
+export default Settings;
