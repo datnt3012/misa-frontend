@@ -1046,7 +1046,7 @@ const ProductList: React.FC<ProductListProps> = ({
                                   onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
                                   className="h-4 w-4"
                                 />
-                                <Label htmlFor="is-foreign-currency" className="text-sm">ngoại tệ</Label>
+                                <Label htmlFor="is-foreign-currency" className="text-sm">Ngoại tệ</Label>
                               </div>
                               {newProduct.isForeignCurrency && (
                                 <div className="flex items-center gap-2">
@@ -1613,7 +1613,7 @@ const ProductList: React.FC<ProductListProps> = ({
                             onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
                             className="h-4 w-4"
                           />
-                          <Label htmlFor="edit-is-foreign-currency" className="text-sm">ngoại tệ</Label>
+                          <Label htmlFor="edit-is-foreign-currency" className="text-sm">Ngoại tệ</Label>
                         </div>
                         {newProduct.isForeignCurrency && (
                           <div className="flex items-center gap-2">

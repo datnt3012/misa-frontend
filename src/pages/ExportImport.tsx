@@ -53,12 +53,10 @@ const ExportImportContent = () => {
 
           {/* Import Management Tab */}
           <TabsContent value="imports" className="space-y-6">
-            <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
-              <ImportSlips 
-                canManageImports={canManageImports}
-                canApproveImports={canApproveImports}
-              />
-            </PermissionGuard>
+            <ImportSlips
+              canManageImports={canManageImports}
+              canApproveImports={canApproveImports}
+            />
           </TabsContent>
 
           {/* History Tab */}
