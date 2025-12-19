@@ -619,7 +619,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                             .map((permission) => {
                               const frontendKey = convertBackendToFrontend(permission);
                               return (
-                                <div key={permission.id} className="flex items-center justify-center space-x-2 text-center">
+                                <div key={permission.id} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`new-${permission.id}`}
                                     checked={newRole.permissions.includes(frontendKey)}
@@ -817,7 +817,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                           .map((permission) => {
                             const frontendKey = convertBackendToFrontend(permission);
                             return (
-                              <div key={permission.id} className="flex items-center justify-center space-x-2 text-center">
+                              <div key={permission.id} className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`edit-${permission.id}`}
                                   checked={editRole.permissions.includes(frontendKey)}
@@ -937,7 +937,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                               return a.name.localeCompare(b.name);
                             })
                             .map((permission) => (
-                              <div key={permission.id} className="flex items-center justify-center space-x-2 text-center">
+                              <div key={permission.id} className="flex items-center space-x-2">
                                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                                 <span className="text-sm">{permission.name}</span>
                               </div>
