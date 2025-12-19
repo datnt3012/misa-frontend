@@ -662,10 +662,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
             <TableHeader>
               <TableRow>
                 <TableHead>Tên vai trò</TableHead>
-                <TableHead>Mã vai trò</TableHead>
-                <TableHead>Mô tả</TableHead>
-                <TableHead>Số quyền</TableHead>
-                <TableHead>Thao tác</TableHead>
+                <TableHead className="text-center">Mã vai trò</TableHead>
+                <TableHead className="text-center">Mô tả</TableHead>
+                <TableHead className="text-center">Số quyền</TableHead>
+                <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -674,19 +674,19 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                   <TableCell className="font-medium">
                     {getRoleDisplayName(role.name)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Badge variant="outline">
                       {role.code || 'N/A'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{role.description || '-'}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">{role.description || '-'}</TableCell>
+                  <TableCell className="text-center">
                     <Badge variant="secondary">
                       {role.permissions?.length || 0} quyền
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
+                  <TableCell className="text-center">
+                    <div className="flex gap-2 justify-center">
                       <Button
                         variant="outline"
                         size="sm"
@@ -831,8 +831,8 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                           })}
                       </div>
                     </CardContent>
-                    </Card>
-                  ))}
+                  </Card>
+                ))}
               </div>
             </div>
           </div>
