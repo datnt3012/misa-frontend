@@ -15,13 +15,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
 import { Badge } from "@/components/ui/badge";
-
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('vi-VN', {
     maximumFractionDigits: 0
   }).format(value);
 };
-
 // Component to display permission error messages
 const PermissionErrorCard = ({ title, error, loading }: { title: string; error: string | null; loading: boolean }) => {
   if (loading) {
@@ -39,7 +37,6 @@ const PermissionErrorCard = ({ title, error, loading }: { title: string; error: 
       </Card>
     );
   }
-
   if (error) {
     return (
       <Card>
@@ -58,15 +55,11 @@ const PermissionErrorCard = ({ title, error, loading }: { title: string; error: 
       </Card>
     );
   }
-
   return null;
 };
-
 const DashboardContent = () => {
   const { user } = useAuth();
   const { hasPermission, loading: permissionsLoading } = usePermissions();
-  
-  
   // Permission checks for different data sections
   const canViewOrders = hasPermission('ORDERS_READ');
   const canViewProducts = hasPermission('PRODUCTS_READ');
@@ -76,8 +69,6 @@ const DashboardContent = () => {
   const canSeeTotalRevenue = canViewRevenue && (
     (user as any)?.roleId === 'admin' || (user as any)?.roleId === 'owner_director' || (user as any)?.roleId === 'chief_accountant'
   );
-  
-  
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
     totalDebt: 0,
@@ -112,7 +103,6 @@ const DashboardContent = () => {
   // Order detail dialog state
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [orderDetailDialogOpen, setOrderDetailDialogOpen] = useState<boolean>(false);
-  
   // Track loading and error states for different sections
   const [loadingStates, setLoadingStates] = useState({
     orders: false,
@@ -126,28 +116,22 @@ const DashboardContent = () => {
     inventory: null as string | null,
     revenue: null as string | null
   });
-  
   // Track if data has been loaded
   const [dataLoaded, setDataLoaded] = useState(false);
-  
-  
   // Clear error states when permissions are available
   useEffect(() => {
     if (canViewOrders && canViewProducts && canViewInventory && canViewRevenue) {
       setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
     }
   }, [canViewOrders, canViewProducts, canViewInventory, canViewRevenue]);
-
   const fetchDashboardData = async () => {
     try {
       // Don't fetch data if permissions are still loading
       if (permissionsLoading) {
         return;
       }
-      
       setLoadingStates({ orders: true, products: true, inventory: true, revenue: true });
       setErrorStates({ orders: null, products: null, inventory: null, revenue: null });
-      
       // Fetch all dashboard data from backend APIs
       const [summary, revenueSeries, orderStatusData, inventoryOverview, topProductsData, topCustomersData, regionRevenueData, categoryProfitData, recentOrdersData, recentActivitiesData] = await Promise.all([
         dashboardApi.getSummary({ revenuePeriod, profitPeriod }),
@@ -161,26 +145,12 @@ const DashboardContent = () => {
         dashboardApi.getRecentOrders(10),
         dashboardApi.getRecentActivities(8),
       ]);
-
       // Debug: Log API responses
-      console.log('Dashboard API Responses:', {
-        summary,
-        revenueSeries,
-        orderStatusData,
-        inventoryOverview,
-        topProductsData,
-        topCustomersData,
-        regionRevenueData,
-        categoryProfitData,
-        recentActivitiesData,
-      });
-
       // Set summary data - merge with previous state to ensure all properties exist
       setDashboardData(prev => ({
         ...prev,
         ...summary,
       }));
-      
       // Set revenue data - need to add colors
       // Ensure revenueSeries is an array before mapping
       const revenueWithColors = (revenueSeries || []).map((item, idx) => ({
@@ -188,7 +158,6 @@ const DashboardContent = () => {
         month: format(new Date(item.year, item.monthNumber, 1), 'MMM-yyyy', { locale: vi }),
       }));
       setRevenueData(revenueWithColors);
-      
       // Set order status data - need to format to array
       // Ensure orderStatusData is an object before processing
       const orderStatusArray = Object.entries(orderStatusData || {}).map(([key, value]) => {
@@ -199,7 +168,6 @@ const DashboardContent = () => {
         };
       });
       setOrderStatus(orderStatusArray);
-      
       // Set inventory data
       // Ensure inventoryOverview exists before accessing properties
       if (inventoryOverview) {
@@ -211,16 +179,12 @@ const DashboardContent = () => {
         setLowStockProducts([]);
         setProductStockData([]);
         }
-      
       // Set top products
       setTopProducts(topProductsData || []);
-      
       // Set top customers
       setTopCustomers(topCustomersData || []);
-
       // Set region revenue
       setRegionRevenue(regionRevenueData || []);
-      
       // Set category profit - need to add colors
       // Ensure categoryProfitData is an array before mapping
       const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
@@ -230,13 +194,10 @@ const DashboardContent = () => {
         fill: palette[idx % palette.length],
       }));
       setCategoryProfit(catArray);
-        
       // Set recent orders
       setRecentOrders(recentOrdersData || []);
-      
       // Set recent activities
       setRecentActivities(recentActivitiesData || []);
-      
       // Calculate new customers count from summary revenue period
       const today = new Date();
       const pStart = revenuePeriod === 'month' 
@@ -245,19 +206,15 @@ const DashboardContent = () => {
       const pEnd = revenuePeriod === 'month'
         ? new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999)
         : new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
-      
       // Note: New customers count is not available from backend, setting to 0
       setNewCustomers(0);
-
       // Set all loading states to false
       setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
       setDataLoaded(true); // Mark data as loaded
-
     } catch (error: any) {
       // Set all loading states to false and show error
       setLoadingStates({ orders: false, products: false, inventory: false, revenue: false });
       let errorMessage = 'Lỗi tải dữ liệu dashboard';
-      
       if (error?.response?.status === 403) {
         errorMessage = 'Không có quyền truy cập dashboard';
       } else if (error?.response?.status === 401) {
@@ -265,19 +222,16 @@ const DashboardContent = () => {
       } else if (error?.message) {
         errorMessage = error.message;
       }
-      
       setErrorStates({ 
         orders: errorMessage, 
         products: errorMessage, 
         inventory: errorMessage,
         revenue: errorMessage
       });
-      
       // Mark data as loaded even on error to prevent infinite loading
       setDataLoaded(true);
     }
   };
-
   // Trigger data fetch when permissions are loaded or period changes
   useEffect(() => {
     if (!permissionsLoading) {
@@ -285,7 +239,6 @@ const DashboardContent = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permissionsLoading, revenuePeriod, profitPeriod]);
-
   const getGrowthPercentage = () => {
     if (!dashboardData) return 0;
     const delta = (dashboardData.currentMonthRevenue || 0) - (dashboardData.previousMonthRevenue || 0);
@@ -293,7 +246,6 @@ const DashboardContent = () => {
     if ((dashboardData.previousMonthRevenue || 0) === 0) return 0;
     return Math.round((delta / (dashboardData.previousMonthRevenue || 1)) * 100);
   };
-
   // Show loading if permissions are still loading
   if (permissionsLoading) {
     return (
@@ -302,12 +254,10 @@ const DashboardContent = () => {
       />
     );
   }
-
   // Show loading if data is being fetched for the first time
   // Only show loading when loading AND data hasn't been loaded yet
   // This prevents NaN errors and allows rendering when data is loaded
   const isInitialLoading = !dataLoaded && (loadingStates.revenue || loadingStates.orders || loadingStates.products || loadingStates.inventory);
-  
   if (isInitialLoading) {
     return (
       <Loading 
@@ -315,7 +265,6 @@ const DashboardContent = () => {
       />
     );
   }
-
   // Safeguard: ensure dashboardData exists before rendering
   if (!dashboardData) {
     return (
@@ -324,7 +273,6 @@ const DashboardContent = () => {
       />
     );
   }
-
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
@@ -334,8 +282,6 @@ const DashboardContent = () => {
             <p className="text-muted-foreground">Tổng quan hoạt động kinh doanh</p>
           </div>
         </div>
-
-
         {/* Thống kê tổng quan */}
         {/* Hàng 1: Tối đa 4 card, tự động co giãn */}
         <div className="flex flex-col md:flex-row md:flex-wrap gap-4">
@@ -364,7 +310,6 @@ const DashboardContent = () => {
               </Card>
             )
           )}
-
           {/* Tổng doanh thu - visible to all who can view revenue section */}
           <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -397,7 +342,6 @@ const DashboardContent = () => {
               </p>
             </CardContent>
           </Card>
-
           {/* Lợi nhuận trong tháng */}
           <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -431,7 +375,6 @@ const DashboardContent = () => {
               })()}
             </CardContent>
           </Card>
-
           {/* Tổng Chi Phí */}
           {errorStates.orders || loadingStates.orders ? (
             <PermissionErrorCard 
@@ -455,7 +398,6 @@ const DashboardContent = () => {
               </CardContent>
             </Card>
           )}
-
           {/* Tổng Đơn Hàng */}
           {errorStates.orders || loadingStates.orders ? (
             <PermissionErrorCard 
@@ -476,7 +418,6 @@ const DashboardContent = () => {
             </Card>
           )}
         </div>
-
         {/* Hàng 2: Các card còn lại - tự động co giãn */}
         <div className="flex flex-col md:flex-row md:flex-wrap gap-4">
           {/* Sản Phẩm Tồn Kho */}
@@ -498,7 +439,6 @@ const DashboardContent = () => {
               </CardContent>
             </Card>
           )}
-
           {/* Giá Trị Tồn Kho */}
           {errorStates.inventory || loadingStates.inventory ? (
             <PermissionErrorCard 
@@ -543,7 +483,6 @@ const DashboardContent = () => {
               </CardContent>
             </Card>
           )}
-
           {/* Đơn chờ xử lý */}
           <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -554,7 +493,6 @@ const DashboardContent = () => {
               <p className="text-xs text-muted-foreground">Cần xử lý trong ngày</p>
             </CardContent>
           </Card>
-
           {/* Khách hàng mới */}
           <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -566,7 +504,6 @@ const DashboardContent = () => {
             </CardContent>
           </Card>
         </div>
-
         {/* Biểu đồ và thống kê chi tiết */}
         <Tabs defaultValue="revenue" className="space-y-4">
           <TabsList>
@@ -574,7 +511,6 @@ const DashboardContent = () => {
             <TabsTrigger value="inventory">Tồn Kho</TabsTrigger>
             <TabsTrigger value="orders">Đơn Hàng</TabsTrigger>
           </TabsList>
-
           <TabsContent value="revenue" className="space-y-4">
             {errorStates.revenue || loadingStates.revenue ? (
               <Card>
@@ -637,7 +573,6 @@ const DashboardContent = () => {
                 </CardContent>
               </Card>
             )}
-
             {/* Doanh thu theo khu vực & danh mục */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
@@ -664,7 +599,6 @@ const DashboardContent = () => {
                   )}
                 </CardContent>
               </Card>
-
               <Card>
                 <CardHeader>
                   <CardTitle>Lợi nhuận theo danh mục</CardTitle>
@@ -763,7 +697,6 @@ const DashboardContent = () => {
               </Card>
             </div>
           </TabsContent>
-
           <TabsContent value="inventory" className="space-y-4">
             {/* Detailed Product Stock Chart */}
             <Card>
@@ -821,7 +754,6 @@ const DashboardContent = () => {
                 )}
               </CardContent>
             </Card>
-
             {/* Product Stock Table */}
             <Card>
               <CardHeader>
@@ -879,7 +811,6 @@ const DashboardContent = () => {
                 )}
               </CardContent>
             </Card>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
@@ -932,7 +863,6 @@ const DashboardContent = () => {
                   )}
                 </CardContent>
               </Card>
-
               <Card>
                 <CardHeader>
                   <CardTitle>Sản Phẩm Cần Chú Ý</CardTitle>
@@ -973,7 +903,6 @@ const DashboardContent = () => {
               </Card>
             </div>
           </TabsContent>
-
           <TabsContent value="orders" className="space-y-4">
             <Card>
               <CardHeader>
@@ -1032,7 +961,6 @@ const DashboardContent = () => {
                 )}
               </CardContent>
             </Card>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
@@ -1059,7 +987,6 @@ const DashboardContent = () => {
                   )}
                 </CardContent>
               </Card>
-
               <Card>
                 <CardHeader>
                   <CardTitle>Top khách hàng</CardTitle>
@@ -1086,7 +1013,6 @@ const DashboardContent = () => {
             </CardContent>
           </Card>
         </div>
-
         {/* Đơn hàng gần đây */}
         <Card>
           <CardHeader>
@@ -1144,7 +1070,6 @@ const DashboardContent = () => {
             </Card>
           </TabsContent>
         </Tabs>
-
         {/* Hoạt động gần đây */}
         <Card>
           <CardHeader>
@@ -1174,7 +1099,6 @@ const DashboardContent = () => {
             )}
           </CardContent>
         </Card>
-
         {/* Order View Dialog (Read-only) */}
         {selectedOrder && (
           <OrderViewDialog
@@ -1193,7 +1117,6 @@ const DashboardContent = () => {
     </div>
   );
 };
-
 const Dashboard = () => {
   return (
     <PermissionGuard 
@@ -1203,5 +1126,4 @@ const Dashboard = () => {
     </PermissionGuard>
   );
 };
-
 export default Dashboard;

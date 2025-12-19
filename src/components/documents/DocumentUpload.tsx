@@ -8,7 +8,6 @@ import { Upload, FileText, X, Download } from "lucide-react";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-
 interface DocumentUploadProps {
   orderId?: string;
   existingDocuments?: any[];
@@ -17,7 +16,6 @@ interface DocumentUploadProps {
   label?: string;
   documentType?: string;
 }
-
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   orderId,
   existingDocuments = [],
@@ -31,11 +29,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user?.id) return;
-
     // Validate file type
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
@@ -46,7 +42,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       });
       return;
     }
-
     // Validate file size (max 25MB)
     if (file.size > 25 * 1024 * 1024) {
       toast({
@@ -56,13 +51,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       });
       return;
     }
-
     setUploading(true);
     try {
       // TODO: Implement document upload via API when backend supports it
       // For now, create a mock document to avoid Supabase errors
-      console.log('Document upload not implemented - using API fallback');
-      
       const mockDocument = {
         id: Date.now().toString(),
         file_name: file.name,
@@ -73,21 +65,17 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         uploaded_by: user.id,
         document_type: documentType
       };
-
       setDocuments([...documents, mockDocument]);
       onDocumentUploaded?.(mockDocument);
-
       toast({
         title: "Thành công",
         description: "Đã tải lên tài liệu thành công (chế độ demo)",
       });
-
       // Reset input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     } catch (error: any) {
-      console.error('Error uploading document:', error);
       toast({
         title: "Lỗi",
         description: error.message || "Không thể tải lên tài liệu",
@@ -97,16 +85,12 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       setUploading(false);
     }
   };
-
   const handleDeleteDocument = async (document: any) => {
     try {
       // TODO: Implement document deletion via API when backend supports it
       // For now, just remove from local state to avoid Supabase errors
-      console.log('Document deletion not implemented - using API fallback');
-      
       setDocuments(documents.filter(d => d.id !== document.id));
       onDocumentDeleted?.(document.id);
-
       toast({
         title: "Thành công",
         description: "Đã xóa tài liệu (chế độ demo)",
@@ -119,7 +103,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       });
     }
   };
-
   const downloadDocument = (document: any) => {
     const link = document.createElement('a');
     link.href = document.file_url;
@@ -129,7 +112,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     link.click();
     document.body.removeChild(link);
   };
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -137,7 +119,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-
   const getFileIcon = (mimeType: string) => {
     if (mimeType === 'application/pdf') {
       return <FileText className="w-4 h-4 text-red-500" />;
@@ -147,7 +128,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
     return <FileText className="w-4 h-4 text-gray-500" />;
   };
-
   return (
     <div className="space-y-4">
       <div>
@@ -175,7 +155,6 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           Tối đa 5MB. Hỗ trợ PDF, JPG, PNG
         </p>
       </div>
-
       {documents.length > 0 && (
         <div className="space-y-2">
           <Label>Tài liệu đã tải lên</Label>
@@ -226,4 +205,3 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     </div>
   );
 };
-

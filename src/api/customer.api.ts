@@ -1,6 +1,5 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
 export interface AddressAdministrativeUnitRef {
   code: string;
   name: string;
@@ -8,7 +7,6 @@ export interface AddressAdministrativeUnitRef {
   level?: string;
   type?: string | null;
 }
-
 export interface AddressInfo {
   id?: string;
   entityType?: string;
@@ -28,7 +26,6 @@ export interface AddressInfo {
   district?: AddressAdministrativeUnitRef | null;
   ward?: AddressAdministrativeUnitRef | null;
 }
-
 export interface VatInfo {
   taxCode?: string;
   companyName?: string;
@@ -36,7 +33,6 @@ export interface VatInfo {
   vatEmail?: string;
   companyPhone?: string;
 }
-
 export interface Customer {
   id: string;
   code?: string;
@@ -57,7 +53,6 @@ export interface Customer {
   deletedAt?: string;
   user?: any;
 }
-
 export interface CreateCustomerRequest {
   name: string;
   email?: string;
@@ -74,7 +69,6 @@ export interface CreateCustomerRequest {
     longitude?: number;
   };
 }
-
 export interface UpdateCustomerRequest {
   name?: string;
   email?: string;
@@ -91,7 +85,6 @@ export interface UpdateCustomerRequest {
     longitude?: number;
   };
 }
-
 export const customerApi = {
   // Get all customers
   getCustomers: async (params?: {
@@ -103,16 +96,12 @@ export const customerApi = {
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search);
-
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.CUSTOMERS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.CUSTOMERS.LIST;
-
     const response = await api.get<any>(url);
     const data = response?.data || response;
-
     const normalize = (row: any): Customer => normalizeCustomer(row);
-
     if (data && Array.isArray(data.rows)) {
       return {
         customers: data.rows.map(normalize),
@@ -121,7 +110,6 @@ export const customerApi = {
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
       };
     }
-
     return {
       customers: (response?.customers || []).map(normalize),
       total: Number(response?.total ?? 0),
@@ -129,7 +117,6 @@ export const customerApi = {
       limit: Number(response?.limit ?? params?.limit ?? 0),
     };
   },
-
   // Get customer by ID (normalized)
   getCustomer: async (id: string): Promise<Customer> => {
     const res = await api.get<any>(`${API_ENDPOINTS.CUSTOMERS.LIST}/${id}`);
@@ -137,12 +124,9 @@ export const customerApi = {
     const normalized = normalizeCustomer(row);
     return normalized;
   },
-
   // Create customer
   createCustomer: async (data: CreateCustomerRequest): Promise<Customer> => {
     const res = await api.post<any>(API_ENDPOINTS.CUSTOMERS.CREATE, data);
-    console.log('[customerApi.createCustomer] Raw response:', res);
-    
     // Handle different response structures
     let row: any;
     if (res?.data) {
@@ -151,32 +135,22 @@ export const customerApi = {
     } else {
       row = res;
     }
-    
-    console.log('[customerApi.createCustomer] Extracted row:', row);
-    
     // Reuse normalize from list
     const normalized = normalizeCustomer(row);
-    console.log('[customerApi.createCustomer] Normalized customer:', normalized);
-    
     if (!normalized.id) {
-      console.error('[customerApi.createCustomer] Missing ID in normalized customer:', normalized);
       throw new Error('Không thể lấy ID khách hàng từ phản hồi của server');
     }
-    
     return normalized;
   },
-
   // Update customer
   updateCustomer: async (id: string, data: UpdateCustomerRequest): Promise<Customer> => {
     return api.patch<Customer>(API_ENDPOINTS.CUSTOMERS.UPDATE(id), data);
   },
-
   // Delete customer
   deleteCustomer: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.CUSTOMERS.DELETE(id));
   }
 };
-
 const normalizeVatInfo = (info: any): VatInfo | undefined => {
   if (!info) return undefined;
   const clean = (value: any) => {
@@ -184,7 +158,6 @@ const normalizeVatInfo = (info: any): VatInfo | undefined => {
     const str = typeof value === 'string' ? value.trim() : String(value);
     return str.length ? str : undefined;
   };
-
   const normalized: VatInfo = {
     taxCode: clean(info.taxCode ?? info.tax_code),
     companyName: clean(info.companyName ?? info.company_name),
@@ -192,11 +165,9 @@ const normalizeVatInfo = (info: any): VatInfo | undefined => {
     vatEmail: clean(info.vatEmail ?? info.vat_email),
     companyPhone: clean(info.companyPhone ?? info.company_phone),
   };
-
   const hasValue = Object.values(normalized).some(Boolean);
   return hasValue ? normalized : undefined;
 };
-
 const normalizeCustomer = (row: any): Customer => {
   const addressInfoMapper = () => {
     const ai = row?.addressInfo ?? row?.address_info;
@@ -253,7 +224,6 @@ const normalizeCustomer = (row: any): Customer => {
         : undefined,
     } as any;
   };
-
   const normalizeVatRate = () => {
     const vatRateValue = row?.vatRate ?? row?.vat_rate;
     if (vatRateValue === undefined || vatRateValue === null || vatRateValue === '') {
@@ -263,14 +233,11 @@ const normalizeCustomer = (row: any): Customer => {
       typeof vatRateValue === 'string' ? parseFloat(vatRateValue) : Number(vatRateValue);
     return isNaN(numValue) ? undefined : numValue;
   };
-
   // Extract ID - try multiple possible fields
   const customerId = row.id ?? row.customer_id ?? row.customerId;
   if (!customerId) {
-    console.error('[normalizeCustomer] Missing ID in row:', row);
     throw new Error('Không thể lấy ID khách hàng từ phản hồi của server');
   }
-
   return {
     id: String(customerId),
     code: row.code ?? null,

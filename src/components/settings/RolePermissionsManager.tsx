@@ -13,7 +13,6 @@ import { Separator } from '@/components/ui/separator';
 import { Shield, Plus, Edit, Trash2, Save, X, Users, Settings, Package, ShoppingCart, TrendingUp, Building2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usersApi, UserRole, Permission } from '@/api/users.api';
-
 // Icon mapping for different modules
 const getResourceIcon = (module: string) => {
   const iconMap: Record<string, any> = {
@@ -22,7 +21,6 @@ const getResourceIcon = (module: string) => {
     'Orders': ShoppingCart,
     'Customers': Users,
     'Suppliers': Building2,
-    
     // Product & Inventory Management
     'Products': Package,
     'Categories': Package,
@@ -32,11 +30,9 @@ const getResourceIcon = (module: string) => {
     'Warehouses': Building2,
     'Warehouse': Building2,
     'Warehouse Receipts': Package,
-    
     // Reports & Analytics
     'Reports': TrendingUp,
     'Revenue': TrendingUp,
-    
     // System Administration
     'Users': Users,
     'Roles': Shield,
@@ -48,7 +44,6 @@ const getResourceIcon = (module: string) => {
   };
   return iconMap[module] || Shield;
 };
-
 const getModuleDisplayName = (module: string) => {
   const displayNameMap: Record<string, string> = {
     // Core Business Modules
@@ -56,7 +51,6 @@ const getModuleDisplayName = (module: string) => {
     'Orders': 'Đơn hàng',
     'Customers': 'Khách hàng',
     'Suppliers': 'Nhà cung cấp',
-
     // Product & Inventory Management
     'Products': 'Sản phẩm',
     'Categories': 'Loại sản phẩm',
@@ -67,11 +61,9 @@ const getModuleDisplayName = (module: string) => {
     'Warehouse': 'Kho hàng',
     'Warehouse Receipts': 'Phiếu nhập kho',
     'Export Slips': 'Phiếu xuất kho',
-
     // Reports & Analytics
     'Reports': 'Báo cáo',
     'Revenue': 'Doanh thu',
-
     // System Administration
     'Users': 'Người dùng',
     'Roles': 'Vai trò',
@@ -79,14 +71,11 @@ const getModuleDisplayName = (module: string) => {
     'Settings': 'Cài đặt',
     'Other': 'Khác',
   };
-
   return displayNameMap[module] || module;
 };
-
 interface RolePermissionsManagerProps {
   onRoleUpdate?: () => void;
 }
-
 const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleUpdate }) => {
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -98,17 +87,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
   const [roleToDelete, setRoleToDelete] = useState<UserRole | null>(null);
   const [selectedRoleForDetails, setSelectedRoleForDetails] = useState<UserRole | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  
   // Form states
   const [newRole, setNewRole] = useState({ name: '', description: '', permissions: [] as string[] });
   const [editRole, setEditRole] = useState({ name: '', description: '', permissions: [] as string[] });
-  
   const { toast } = useToast();
-
   useEffect(() => {
     loadData();
   }, []);
-
   const loadData = async () => {
     try {
       setLoading(true);
@@ -117,7 +102,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         usersApi.getPermissions()
       ]);
       setRoles(rolesData);
-      
       // Filter out notification permissions - only keep permissions that don't start with NOTIFY_ or NOTIFICATIONS_
       const filteredPermissions = (permissionsData || []).filter(
         (p: Permission) => {
@@ -126,28 +110,21 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         }
       );
       setPermissions(filteredPermissions);
-      
       // Debug: Log permissions to check if ORDERS_UPDATE_STATUS exists
       if (process.env.NODE_ENV === 'development') {
         const ordersPermissions = filteredPermissions.filter((p: Permission) => p.code?.startsWith('ORDERS_'));
-        console.log('🔍 Orders permissions from backend:', ordersPermissions.map((p: Permission) => p.code));
         const updateStatusPermission = filteredPermissions.find((p: Permission) => p.code === 'ORDERS_UPDATE_STATUS');
-        console.log('🔍 ORDERS_UPDATE_STATUS permission:', updateStatusPermission ? 'Found' : 'Not found');
       }
-      
       // Update global permission name cache with filtered permissions (excluding notifications)
       // This ensures error messages can display translated permission names
       if (filteredPermissions && Array.isArray(filteredPermissions) && filteredPermissions.length > 0) {
         try {
           const { updatePermissionNameCacheFromRole } = await import('@/utils/permissionNames');
           updatePermissionNameCacheFromRole(filteredPermissions);
-          console.log('✅ Updated global permission name cache from RolePermissionsManager');
         } catch (e) {
-          console.warn('Could not update permission name cache:', e);
         }
       }
     } catch (error) {
-      console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải dữ liệu",
@@ -157,14 +134,12 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       setLoading(false);
     }
   };
-
   const loadRoles = async () => {
     try {
       setLoading(true);
       const rolesData = await usersApi.getUserRoles();
       setRoles(rolesData);
     } catch (error) {
-      console.error('Error loading roles:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách vai trò",
@@ -174,7 +149,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       setLoading(false);
     }
   };
-
   const handleCreateRole = async () => {
     if (!newRole.name.trim()) {
       toast({
@@ -184,7 +158,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       });
       return;
     }
-
     if (newRole.permissions.length === 0) {
       toast({
         title: "Cảnh báo",
@@ -193,16 +166,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       });
       return;
     }
-
     try {
       setLoading(true);
       const createdRole = await usersApi.createRole(newRole);
-      
       // Assign permissions to the created role
       if (newRole.permissions.length > 0) {
         await usersApi.assignPermissionsToRole(createdRole.id, newRole.permissions);
       }
-      
       toast({
         title: "Thành công",
         description: `Đã tạo vai trò "${newRole.name}" với ${newRole.permissions.length} quyền`,
@@ -212,7 +182,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       loadRoles();
       onRoleUpdate?.();
     } catch (error: any) {
-      console.error('Error creating role:', error);
       const errorMessage = error?.response?.data?.message || error?.message || "Không thể tạo vai trò";
       toast({
         title: "Lỗi",
@@ -223,7 +192,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       setLoading(false);
     }
   };
-
   const handleUpdateRole = async () => {
     if (!selectedRole || !editRole.name.trim()) {
       toast({
@@ -233,7 +201,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       });
       return;
     }
-
     if (editRole.permissions.length === 0) {
       toast({
         title: "Cảnh báo",
@@ -242,16 +209,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       });
       return;
     }
-
     try {
       setLoading(true);
       await usersApi.updateRole(selectedRole.id, editRole);
-      
       // Update permissions for the role
       if (editRole.permissions.length > 0) {
         await usersApi.assignPermissionsToRole(selectedRole.id, editRole.permissions);
       }
-      
       toast({
         title: "Thành công",
         description: `Đã cập nhật vai trò "${editRole.name}" với ${editRole.permissions.length} quyền`,
@@ -261,7 +225,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       loadRoles();
       onRoleUpdate?.();
     } catch (error: any) {
-      console.error('Error updating role:', error);
       const errorMessage = error?.response?.data?.message || error?.message || "Không thể cập nhật vai trò";
       toast({
         title: "Lỗi",
@@ -272,10 +235,8 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       setLoading(false);
     }
   };
-
   const handleDeleteRole = async () => {
     if (!roleToDelete) return;
-
     try {
       setLoading(true);
       await usersApi.deleteRole(roleToDelete.id);
@@ -288,7 +249,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       loadRoles();
       onRoleUpdate?.();
     } catch (error: any) {
-      console.error('Error deleting role:', error);
       const errorMessage = error?.response?.data?.message || error?.message || "Không thể xóa vai trò";
       toast({
         title: "Lỗi",
@@ -299,7 +259,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       setLoading(false);
     }
   };
-
   const openEditDialog = (role: UserRole) => {
     setSelectedRole(role);
     setEditRole({
@@ -309,12 +268,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     });
     setIsEditDialogOpen(true);
   };
-
   const openDeleteDialog = (role: UserRole) => {
     setRoleToDelete(role);
     setIsDeleteDialogOpen(true);
   };
-
   const togglePermission = (permissionKey: string, isEdit: boolean = false) => {
     if (isEdit) {
       setEditRole(prev => ({
@@ -332,7 +289,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       }));
     }
   };
-
   const selectAllPermissions = (category: string, isEdit: boolean = false) => {
     const categoryPermissions = getPermissionCategories()[category]?.map(p => convertBackendToFrontend(p)) || [];
     if (isEdit) {
@@ -347,7 +303,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       }));
     }
   };
-
   const deselectAllPermissions = (category: string, isEdit: boolean = false) => {
     const categoryPermissions = getPermissionCategories()[category]?.map(p => convertBackendToFrontend(p)) || [];
     if (isEdit) {
@@ -362,7 +317,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       }));
     }
   };
-
   const getRoleDisplayName = (roleName: string) => {
     switch (roleName) {
       case 'owner_director':
@@ -379,20 +333,16 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         return roleName;
     }
   };
-
   // Group permissions by module extracted from code (MODULE_ACTION format)
   const getPermissionCategories = () => {
     const categories: Record<string, Permission[]> = {};
-    
     permissions.forEach(permission => {
       if (!permission.isDeleted && permission.isActive) {
         // Extract module from permission code (MODULE_ACTION format)
         let module = extractModuleFromCode(permission.code);
-        
         // Normalize module name one more time to ensure grouping
         // This handles cases where extractModuleFromCode might return variants
         module = normalizeModuleName(module);
-        
         // Skip hidden permissions
         if (module === 'HIDDEN') {
           return;
@@ -411,38 +361,28 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         categories[module].push(permission);
       }
     });
-    
     // Sort categories with warehouse-related groups together
     const sortedCategories: Record<string, Permission[]> = {};
     const categoryKeys = Object.keys(categories);
-    
     // Define warehouse-related groups in order
     const warehouseGroups = ['Warehouses', 'Warehouse Receipts', 'Export Slips'];
-    
     // Separate warehouse groups from other groups
     const warehouseKeys = categoryKeys.filter(key => warehouseGroups.includes(key));
     const otherKeys = categoryKeys.filter(key => !warehouseGroups.includes(key));
-    
     // Sort warehouse keys according to defined order
     const sortedWarehouseKeys = warehouseGroups.filter(key => warehouseKeys.includes(key));
-    
     // Sort other keys alphabetically
     const sortedOtherKeys = otherKeys.sort();
-    
     // Combine: warehouse groups first, then others
     const finalOrder = [...sortedWarehouseKeys, ...sortedOtherKeys];
-    
     finalOrder.forEach(key => {
       sortedCategories[key] = categories[key];
     });
-    
     return sortedCategories;
   };
-
   // Extract module from permission code (MODULE_ACTION format)
   const extractModuleFromCode = (code: string): string => {
     const codeUpper = code.toUpperCase();
-    
     // Handle special cases with multiple parts - check these FIRST before general splitting
     // Must check longer prefixes first to avoid matching shorter ones
     if (codeUpper.startsWith('WAREHOUSE_RECEIPTS_')) {
@@ -454,7 +394,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     if (codeUpper.startsWith('STOCK_LEVELS_') || codeUpper.startsWith('STOCK_LEVEL_')) {
       return formatModuleName('STOCK_LEVELS');
     }
-    
     // Handle ORDERS permissions (including ORDERS_UPDATE_STATUS)
     // Split by underscore and take the first part as module
     const parts = code.split('_');
@@ -462,13 +401,11 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       // For codes like ORDERS_UPDATE_STATUS, take the first part (ORDERS)
       // For codes like ORDERS_UPDATE, also take the first part (ORDERS)
       const module = parts[0].toUpperCase();
-      
       // Special handling: Group related permissions together
       // EXPORT_* (not EXPORT_SLIPS_*) → Export Slips
       if (module === 'EXPORT') {
         return formatModuleName('EXPORT_SLIPS');
       }
-      
       // WAREHOUSE_* (not WAREHOUSE_RECEIPTS_*) → Warehouse Receipts
       // But WAREHOUSES_* (plural) should stay as Warehouses
       if (module === 'WAREHOUSE') {
@@ -477,16 +414,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           return formatModuleName('WAREHOUSE_RECEIPTS');
         }
       }
-      
       // STOCK_* (not STOCK_LEVELS_*) → Stock Levels
       if (module === 'STOCK') {
         return formatModuleName('STOCK_LEVELS');
       }
-      
       // Convert to human-readable format
       return formatModuleName(parts[0]);
     }
-    
     // If no underscore, try to extract from resource field as fallback
     const permission = permissions.find(p => p.code === code);
     if (permission?.resource) {
@@ -498,36 +432,28 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       // Then format normally
       return formatModuleName(permission.resource);
     }
-    
     // If still no module found, put in "Other" category
     return 'Other';
   };
-
   // Normalize module name to ensure variants are grouped together
   const normalizeModuleName = (module: string): string => {
     if (!module) return module;
-    
     // Normalize: remove spaces, dashes, underscores, convert to uppercase for comparison
     const normalized = module.toUpperCase().replace(/[\s\-_]/g, '');
-    
     // STOCK related → Stock Levels
     if (normalized === 'STOCK' || normalized.startsWith('STOCKLEVEL') || normalized.startsWith('STOCKLEVELS')) {
       return 'Stock Levels';
     }
-    
     // EXPORT related → Export Slips
     if (normalized === 'EXPORT' || normalized.startsWith('EXPORTSLIP') || normalized.startsWith('EXPORTSLIPS')) {
       return 'Export Slips';
     }
-    
     // WAREHOUSE (but not WAREHOUSES) → Warehouse Receipts
     if (normalized === 'WAREHOUSE' || (normalized.startsWith('WAREHOUSE') && !normalized.startsWith('WAREHOUSES'))) {
       return 'Warehouse Receipts';
     }
-    
     return module;
   };
-
   // Format module name to be more human-readable in English
   const formatModuleName = (module: string): string => {
     // First normalize to group variants
@@ -535,16 +461,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     if (normalized !== module) {
       return normalized;
     }
-    
     const moduleUpper = module.toUpperCase().replace(/[\s\-_]/g, '');
-    
     const moduleMap: Record<string, string> = {
       // Core Business Modules
       'DASHBOARD': 'Dashboard',
       'ORDERS': 'Orders',
       'CUSTOMERS': 'Customers',
       'SUPPLIERS': 'Suppliers',
-      
       // Product & Inventory Management
       'PRODUCTS': 'Products',
       'CATEGORIES': 'Categories',
@@ -556,11 +479,9 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'WAREHOUSERECEIPTS': 'Warehouse Receipts',
       'EXPORTSLIPS': 'Export Slips',
       'EXPORTSLIP': 'Export Slips',
-      
       // Reports & Analytics
       'REPORTS': 'Reports',
       'REVENUE': 'Revenue',
-      
       // System Administration
       'USERS': 'Users',
       'ROLES': 'Roles',
@@ -568,33 +489,27 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       'ADMINISTRATIVE': 'Administrative Units',
       'SETTINGS': 'Settings',
     };
-    
     const mapped = moduleMap[moduleUpper];
     if (mapped) {
       return mapped;
     }
-    
     // Fallback: try normalize again in case it wasn't caught
     const normalizedAgain = normalizeModuleName(module);
     if (normalizedAgain !== module) {
       return normalizedAgain;
     }
-    
     return module.charAt(0).toUpperCase() + module.slice(1).toLowerCase();
   };
-
   // Convert backend permission to frontend format
   const convertBackendToFrontend = (permission: Permission): string => {
     // Keep EXPORT_SLIPS_VIEW as is (no mapping needed)
     return permission.code;
   };
-
   // Convert frontend permission to backend format
   const convertFrontendToBackend = (frontendPermission: string): string => {
     // Keep all permissions as is (no mapping needed)
     return frontendPermission;
   };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -617,7 +532,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                 Tạo vai trò mới và cấu hình quyền truy cập
               </DialogDescription>
             </DialogHeader>
-            
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -648,9 +562,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                   />
                 </div>
               </div>
-
               <Separator />
-
               <div>
                 <Label className="text-base font-medium">Quyền truy cập</Label>
                 <div className="space-y-4 mt-4">
@@ -696,14 +608,11 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                                 if (code.includes('_EXPORT')) return 8;
                                 return 9;
                               };
-                              
                               const orderA = getPermissionOrder(a.code);
                               const orderB = getPermissionOrder(b.code);
-                              
                               if (orderA !== orderB) {
                                 return orderA - orderB;
                               }
-                              
                               // If same order, sort by name
                               return a.name.localeCompare(b.name);
                             })
@@ -729,7 +638,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                 </div>
               </div>
             </div>
-
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 Hủy
@@ -741,9 +649,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           </DialogContent>
         </Dialog>
       </div>
-
-
-
       {/* Roles List */}
       <Card>
         <CardHeader>
@@ -818,7 +723,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           </Table>
         </CardContent>
       </Card>
-
       {/* Edit Role Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -828,7 +732,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
               Cập nhật thông tin và quyền truy cập cho vai trò
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -857,9 +760,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                 />
               </div>
             </div>
-
             <Separator />
-
             <div>
               <Label className="text-base font-medium">Quyền truy cập</Label>
               <div className="space-y-4 mt-4">
@@ -905,14 +806,11 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                               if (code.includes('_EXPORT')) return 8;
                               return 9;
                             };
-                            
                             const orderA = getPermissionOrder(a.code);
                             const orderB = getPermissionOrder(b.code);
-                            
                             if (orderA !== orderB) {
                               return orderA - orderB;
                             }
-                            
                             // If same order, sort by name
                             return a.name.localeCompare(b.name);
                           })
@@ -938,7 +836,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
               </div>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Hủy
@@ -949,7 +846,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Delete Role Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
@@ -978,7 +874,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Role Details Dialog */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -988,7 +883,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
               {selectedRoleForDetails?.description}
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -1000,9 +894,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                 <p className="text-sm text-muted-foreground">{selectedRoleForDetails?.permissions?.length || 0} quyền</p>
               </div>
             </div>
-
             <Separator />
-
             <div>
               <Label className="text-base font-medium">Danh sách quyền</Label>
               <div className="space-y-4 mt-4">
@@ -1011,9 +903,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                   const roleCategoryPermissions = categoryPermissions.filter(p => 
                     rolePermissions.includes(convertBackendToFrontend(p))
                   );
-                  
                   if (roleCategoryPermissions.length === 0) return null;
-                  
                   return (
                     <Card key={category}>
                       <CardHeader className="pb-3">
@@ -1038,14 +928,11 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
                                 if (code.includes('_EXPORT')) return 8;
                                 return 9;
                               };
-                              
                               const orderA = getPermissionOrder(a.code);
                               const orderB = getPermissionOrder(b.code);
-                              
                               if (orderA !== orderB) {
                                 return orderA - orderB;
                               }
-                              
                               // If same order, sort by name
                               return a.name.localeCompare(b.name);
                             })
@@ -1063,7 +950,6 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
               </div>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>
               Đóng
@@ -1074,5 +960,4 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     </div>
   );
 };
-
 export default RolePermissionsManager;

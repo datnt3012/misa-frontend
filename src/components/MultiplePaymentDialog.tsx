@@ -16,7 +16,6 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { DollarSign, Package, X, Upload, FileText } from "lucide-react";
 import BankSelector from "@/components/orders/BankSelector";
 import { format } from "date-fns";
-
 interface MultiplePaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,7 +24,6 @@ interface MultiplePaymentDialogProps {
   onUpdate: () => void;
   onRemoveOrder?: (orderId: string) => void; // Callback to remove order from selection
 }
-
 export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
   open,
   onOpenChange,
@@ -60,19 +58,16 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
   } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const { toast } = useToast();
-
   // Load selected orders details
   useEffect(() => {
     if (open && orderIds.length > 0) {
       const selected = orders.filter(order => orderIds.includes(order.id));
       setSelectedOrders(selected);
-      
       // Calculate total amount of selected orders
       const total = selected.reduce((sum, order) => {
         return sum + (Number(order.total_amount) || 0);
       }, 0);
       setTotalAmount(total);
-      
       // Calculate total debt of selected orders
        const debt = selected.reduce((sum, order) => {
          const orderTotal = Number(order.total_amount) || 0;
@@ -81,14 +76,12 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
          return sum + orderDebt;
        }, 0);
       setTotalDebt(debt);
-      
       // Don't set initial payment amount - let user input it
     } else if (open && orderIds.length === 0) {
       // If no orders selected, close dialog
       onOpenChange(false);
     }
   }, [open, orderIds, orders, onOpenChange]);
-
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
@@ -101,7 +94,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       setPaymentPreview(null);
     }
   }, [open]);
-
   // Load preview when payment amount changes
   useEffect(() => {
     if (open && selectedOrders.length > 0 && paymentAmount > 0) {
@@ -110,13 +102,11 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       setPaymentPreview(null);
     }
   }, [open, selectedOrders, paymentAmount]);
-
   const loadPaymentPreview = async () => {
     if (selectedOrders.length === 0 || paymentAmount <= 0) {
       setPaymentPreview(null);
       return;
     }
-
     setLoadingPreview(true);
     try {
       const preview = await orderApi.previewBulkPayment({
@@ -125,30 +115,24 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       });
       setPaymentPreview(preview);
     } catch (error) {
-      console.error('[MultiplePaymentDialog] Error loading payment preview:', error);
       setPaymentPreview(null);
     } finally {
       setLoadingPreview(false);
     }
   };
-
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const handleRemoveOrder = (orderId: string) => {
     const updatedOrders = selectedOrders.filter(order => order.id !== orderId);
     setSelectedOrders(updatedOrders);
-    
     // Recalculate total amount
     const total = updatedOrders.reduce((sum, order) => {
       return sum + (Number(order.total_amount) || 0);
     }, 0);
     setTotalAmount(total);
-    
     // Recalculate total debt
      const debt = updatedOrders.reduce((sum, order) => {
        const orderTotal = Number(order.total_amount) || 0;
@@ -157,14 +141,11 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
        return sum + orderDebt;
      }, 0);
     setTotalDebt(debt);
-    
     // Don't auto-adjust payment amount - let user control it
-    
     // Call parent callback to update selected orders
     if (onRemoveOrder) {
       onRemoveOrder(orderId);
     }
-    
     // If no orders left, show warning
     if (updatedOrders.length === 0) {
       toast({
@@ -174,10 +155,8 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       });
     }
   };
-
   const handleSubmit = async () => {
     const currentOrderIds = selectedOrders.map(order => order.id);
-    
     if (currentOrderIds.length === 0) {
       toast({
         title: "Lỗi",
@@ -186,7 +165,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       });
       return;
     }
-
     if (!paymentAmount || paymentAmount <= 0) {
       toast({
         title: "Lỗi",
@@ -195,9 +173,7 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       });
       return;
     }
-
     // Allow payment amount to exceed total debt - no warning needed
-
     // Validate bank selection for bank transfer
     if (paymentMethod === 'bank_transfer' && !bankAccount) {
       toast({
@@ -207,7 +183,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       });
       return;
     }
-
     setLoading(true);
     try {
       const result = await paymentsApi.createMultiplePayments({
@@ -219,20 +194,16 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
         note: paymentNotes || undefined,
         files: paymentFiles.length > 0 ? paymentFiles : undefined,
       });
-
       setPaymentResult(result);
-      
       toast({
         title: "Thành công",
         description: `Đã tạo thanh toán gộp cho ${currentOrderIds.length} đơn hàng`,
       });
-
       // Call onUpdate after a short delay to allow backend to process
       setTimeout(() => {
         onUpdate();
       }, 500);
     } catch (error: any) {
-      console.error('[MultiplePaymentDialog] Error creating multiple payments:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tạo thanh toán gộp"),
@@ -242,7 +213,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       setLoading(false);
     }
   };
-
   const getPaymentMethodText = (method: string) => {
     const methods: Record<string, string> = {
       cash: 'Tiền mặt',
@@ -252,8 +222,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
     };
     return methods[method] || method;
   };
-
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -263,13 +231,11 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
             Thanh toán cho {selectedOrders.length} đơn hàng đã chọn
           </DialogDescription>
         </DialogHeader>
-
         {!paymentResult ? (
           <div className="space-y-6">
             {/* Payment Form */}
             <div className="space-y-4">
               <h4 className="font-medium">Thông tin thanh toán</h4>
-              
               <div>
                 <Label htmlFor="payment-amount">Số tiền thanh toán <span className="text-red-500">*</span></Label>
                 <CurrencyInput
@@ -282,7 +248,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                   Tổng nợ của các đơn đã chọn: {formatCurrency(totalDebt)}
                 </p>
               </div>
-
               <div>
                 <Label htmlFor="payment-method">Phương thức thanh toán <span className="text-red-500">*</span></Label>
                 <Select 
@@ -305,7 +270,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                   </SelectContent>
                 </Select>
               </div>
-
               {/* Bank Account Selection for Bank Transfer */}
               {paymentMethod === 'bank_transfer' && (
                 <div>
@@ -317,7 +281,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                   />
                 </div>
               )}
-
               <div>
                 <Label htmlFor="payment-notes">Ghi chú</Label>
                 <Textarea
@@ -328,7 +291,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                   rows={3}
                 />
               </div>
-
               {/* File Upload Section */}
               <div>
                 <Label>Thêm file đính kèm</Label>
@@ -385,7 +347,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                 </div>
               </div>
             </div>
-
             {/* Selected Orders Table - Always show */}
             <Card>
               <CardHeader className="pb-3">
@@ -445,7 +406,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                 </div>
               </CardContent>
             </Card>
-
             {/* Payment Preview Table - Show below when payment amount is entered */}
             {paymentAmount > 0 && (
               <>
@@ -480,7 +440,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                             {selectedOrders.map((selectedOrder) => {
                               const previewOrder = paymentPreview.orders.find(p => p.orderId === selectedOrder.id);
                               if (!previewOrder) return null;
-
                               return (
                                 <TableRow key={previewOrder.orderId}>
                                   <TableCell className="font-medium">{previewOrder.orderCode}</TableCell>
@@ -523,7 +482,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                 </div>
               </CardContent>
             </Card>
-
             {/* Distribution Details */}
             <Card>
               <CardHeader className="pb-3">
@@ -564,7 +522,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                 </div>
               </CardContent>
             </Card>
-
             {/* Payment Details */}
             <Card>
               <CardHeader className="pb-3">
@@ -599,7 +556,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
             </Card>
           </div>
         )}
-
         <DialogFooter>
           {!paymentResult ? (
             <>
@@ -622,5 +578,4 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
-
+};

@@ -1,24 +1,25 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
 export interface Product {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-  category?: string;
-  unit: string;
-  price: number;
-  costPrice: number;
-  lowStockThreshold?: number;
-  manufacturer?: string;
-  barcode?: string;
-  isDeleted: boolean;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string;
+   id: string;
+   code: string;
+   name: string;
+   description?: string;
+   category?: string;
+   unit: string;
+   price: number;
+   costPrice: number;
+   lowStockThreshold?: number;
+   manufacturer?: string;
+   barcode?: string;
+   isDeleted: boolean;
+   createdAt: string;
+   updatedAt: string;
+   deletedAt?: string;
+   isForeignCurrency?: boolean;
+   exchangeRate?: number;
+   originalCostPrice?: number;
 }
-
 export interface ProductWithStock extends Product {
   current_stock: number;
   location?: string;
@@ -27,44 +28,43 @@ export interface ProductWithStock extends Product {
   warehouse_name?: string;
   warehouse_code?: string;
 }
-
 export interface CreateProductRequest {
-  code?: string;
-  name: string;
-  description?: string;
-  category?: string;
-  unit?: string;
-  price?: number;
-  costPrice?: number;
-  lowStockThreshold?: number;
-  manufacturer?: string;
-  barcode?: string;
+   code?: string;
+   name: string;
+   description?: string;
+   category?: string;
+   unit?: string;
+   price?: number;
+   costPrice?: number;
+   lowStockThreshold?: number;
+   manufacturer?: string;
+   barcode?: string;
+   isForeignCurrency?: boolean;
+   exchangeRate?: number;
 }
-
 export interface UpdateProductRequest {
-  code?: string;
-  name?: string;
-  description?: string;
-  category?: string;
-  unit?: string;
-  price?: number;
-  costPrice?: number;
-  lowStockThreshold?: number;
-  manufacturer?: string;
-  barcode?: string;
+   code?: string;
+   name?: string;
+   description?: string;
+   category?: string;
+   unit?: string;
+   price?: number;
+   costPrice?: number;
+   lowStockThreshold?: number;
+   manufacturer?: string;
+   barcode?: string;
+   isForeignCurrency?: boolean;
+   exchangeRate?: number;
 }
-
 export interface ProductImportRequest {
   file: File;
   warehouse_id?: string;
 }
-
 export interface ProductImportError {
   row?: number;
   code?: string;
   reason: string;
 }
-
 export interface ProductImportResponse {
   code?: number;
   message?: string;
@@ -81,9 +81,7 @@ export interface ProductImportResponse {
   success?: number;
   errors?: ProductImportError[];
 }
-
 export type ProductImportJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
-
 export interface ProductImportJobSnapshot {
   jobId: string;
   status: ProductImportJobStatus;
@@ -98,43 +96,40 @@ export interface ProductImportJobSnapshot {
   result?: ProductImportResponse;
   message?: string;
 }
-
 // Helper function to normalize product data from API response
 const normalizeProduct = (row: any): Product => {
-  const price = parseFloat(row.price ?? '0');
-  const costPrice = parseFloat(row.costPrice ?? row.cost_price ?? '0');
-  
-  return {
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    description: row.description ?? undefined,
-    category: row.category ?? undefined,
-    unit: row.unit ?? 'piece',
-    price: price,
-    costPrice: costPrice,
-    lowStockThreshold: row.lowStockThreshold ?? row.low_stock_threshold ?? undefined,
-    manufacturer: row.manufacturer ?? undefined,
-    barcode: row.barcode ?? undefined,
-    isDeleted: row.isDeleted ?? false,
-    createdAt: row.createdAt ?? row.created_at ?? '',
-    updatedAt: row.updatedAt ?? row.updated_at ?? '',
-    deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
-  };
+   const price = parseFloat(row.price ?? '0');
+   const costPrice = parseFloat(row.costPrice ?? row.cost_price ?? '0');
+   return {
+     id: row.id,
+     code: row.code,
+     name: row.name,
+     description: row.description ?? undefined,
+     category: row.category ?? undefined,
+     unit: row.unit ?? 'piece',
+     price: price,
+     costPrice: costPrice,
+     lowStockThreshold: row.lowStockThreshold ?? row.low_stock_threshold ?? undefined,
+     manufacturer: row.manufacturer ?? undefined,
+     barcode: row.barcode ?? undefined,
+     isDeleted: row.isDeleted ?? false,
+     createdAt: row.createdAt ?? row.created_at ?? '',
+     updatedAt: row.updatedAt ?? row.updated_at ?? '',
+     deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+     isForeignCurrency: row.isForeignCurrency ?? false,
+     exchangeRate: row.exchangeRate ? parseFloat(row.exchangeRate) : undefined,
+     originalCostPrice: row.originalCostPrice ? parseFloat(row.originalCostPrice) : undefined,
+   };
 };
-
 const normalizeImportJobResponse = (job: any): ProductImportJobSnapshot => {
   if (!job) {
     throw new Error('Empty import job payload');
   }
-
   // Handle different possible field names for job ID
   const jobId = job.jobId || job.id || job.job_id;
   if (!jobId) {
-    console.error('Import job payload missing ID field:', job);
     throw new Error('Import job payload is missing jobId (checked jobId, id, job_id)');
   }
-
   return {
     jobId: jobId,
     status: job.status ?? 'queued',
@@ -150,7 +145,6 @@ const normalizeImportJobResponse = (job: any): ProductImportJobSnapshot => {
     message: job.message,
   };
 };
-
 export const productApi = {
   // Get all products
   getProducts: async (params?: {
@@ -166,15 +160,12 @@ export const productApi = {
     if (params?.search) queryParams.append('search', params.search);
     if (params?.category) queryParams.append('category', params.category);
     if (params?.warehouse_id) queryParams.append('warehouse_id', params.warehouse_id);
-
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.PRODUCTS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.PRODUCTS.LIST;
-
     // Backend returns { code, message, data: { count, rows, page, limit, totalPage } }
     const response = await api.get<any>(url);
     const data = response?.data || response; // support both shapes
-
     if (data && Array.isArray(data.rows)) {
       return {
         products: data.rows.map(normalizeProduct),
@@ -183,7 +174,6 @@ export const productApi = {
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
       };
     }
-
     // Fallback if API already returns expected shape
     return {
       products: (response?.products || []).map(normalizeProduct),
@@ -192,33 +182,28 @@ export const productApi = {
       limit: Number(response?.limit ?? params?.limit ?? 0),
     };
   },
-
   // Get product by ID
   getProduct: async (id: string): Promise<Product> => {
     const response = await api.get<any>(`${API_ENDPOINTS.PRODUCTS.LIST}/${id}`);
     const data = response?.data || response;
     return normalizeProduct(data);
   },
-
   // Create product
   createProduct: async (data: CreateProductRequest): Promise<Product> => {
     const response = await api.post<any>(API_ENDPOINTS.PRODUCTS.CREATE, data);
     const responseData = response?.data || response;
     return normalizeProduct(responseData);
   },
-
   // Update product
   updateProduct: async (id: string, data: UpdateProductRequest): Promise<Product> => {
     const response = await api.patch<any>(API_ENDPOINTS.PRODUCTS.UPDATE(id), data);
     const responseData = response?.data || response;
     return normalizeProduct(responseData);
   },
-
   // Delete product
   deleteProduct: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.PRODUCTS.DELETE(id));
   },
-
   // Import products from Excel
   importProducts: async (data: ProductImportRequest): Promise<ProductImportResponse> => {
     const formData = new FormData();
@@ -226,7 +211,6 @@ export const productApi = {
     if (data.warehouse_id) {
       formData.append('warehouse_id', data.warehouse_id);
     }
-
     try {
       const response = await api.upload<any>(
         API_ENDPOINTS.PRODUCTS.IMPORT,
@@ -242,7 +226,6 @@ export const productApi = {
       throw error;
     }
   },
-
   // Import products asynchronously (background job)
   importProductsAsync: async (data: ProductImportRequest): Promise<ProductImportJobSnapshot> => {
     const formData = new FormData();
@@ -250,15 +233,12 @@ export const productApi = {
     if (data.warehouse_id) {
       formData.append('warehouse_id', data.warehouse_id);
     }
-
     const response = await api.upload<any>(
       API_ENDPOINTS.PRODUCTS.IMPORT_ASYNC,
       formData
     );
-
     return normalizeImportJobResponse(response);
   },
-
   // List import jobs (optionally only active ones)
   listImportJobs: async (params?: {
     onlyActive?: boolean;
@@ -276,17 +256,12 @@ export const productApi = {
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     const url = `${API_ENDPOINTS.PRODUCTS.IMPORT_STATUS_LIST}${query}`;
-    console.log('[API] Calling listImportJobs with URL:', url);
     const response = await api.get<any>(url);
     const payload = response?.data ?? response;
-    console.log('[API] Raw response payload:', payload);
-
     // Handle paginated response with data.rows structure
     if (payload && typeof payload === 'object' && payload.data && Array.isArray(payload.data.rows)) {
-      console.log('[API] Using data.rows structure, found', payload.data.rows.length, 'jobs');
       try {
         const jobs = (payload.data.rows || []).map(normalizeImportJobResponse);
         return {
@@ -296,14 +271,11 @@ export const productApi = {
           limit: payload.data.pagination?.limit || params?.limit || 10
         };
       } catch (error) {
-        console.error('Error normalizing import jobs:', error);
         throw error;
       }
     }
-
     // Handle direct rows structure (API returns rows directly at root)
     if (payload && typeof payload === 'object' && Array.isArray(payload.rows)) {
-      console.log('[API] Using direct rows structure, found', payload.rows.length, 'jobs');
       try {
         const jobs = (payload.rows || []).map(normalizeImportJobResponse);
         return {
@@ -313,14 +285,11 @@ export const productApi = {
           limit: payload.pagination?.limit || params?.limit || 10
         };
       } catch (error) {
-        console.error('Error normalizing import jobs:', error);
         throw error;
       }
     }
-
     // Handle paginated response
     if (payload && typeof payload === 'object' && 'jobs' in payload) {
-      console.log('[API] Using jobs structure, found', payload.jobs?.length || 0, 'jobs');
       return {
         jobs: (payload.jobs || []).map(normalizeImportJobResponse),
         total: payload.total || 0,
@@ -328,7 +297,6 @@ export const productApi = {
         limit: payload.limit || params?.limit || 10
       };
     }
-
     // Handle non-paginated response (backward compatibility)
     const jobArray = Array.isArray(payload)
       ? payload
@@ -337,8 +305,6 @@ export const productApi = {
         : Array.isArray(payload?.jobs)
           ? payload.jobs
           : [];
-
-    console.log('[API] Using backward compatibility, found', jobArray.length, 'jobs');
     return {
       jobs: jobArray.map(normalizeImportJobResponse),
       total: jobArray.length,
@@ -346,19 +312,16 @@ export const productApi = {
       limit: params?.limit || jobArray.length
     };
   },
-
   // Request cancel for import job
   cancelImportJob: async (jobId: string): Promise<ProductImportJobSnapshot> => {
     const response = await api.delete<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
     return normalizeImportJobResponse(response);
   },
-
   // Get import job status
   getImportStatus: async (jobId: string): Promise<ProductImportJobSnapshot> => {
     const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
     return normalizeImportJobResponse(response);
   },
-
   // Export products to Excel
   exportProducts: async (params?: {
     warehouse_id?: string;
@@ -367,24 +330,19 @@ export const productApi = {
     const queryParams = new URLSearchParams();
     if (params?.warehouse_id) queryParams.append('warehouse_id', params.warehouse_id);
     if (params?.category) queryParams.append('category', params.category);
-
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.PRODUCTS.EXPORT}?${queryParams.toString()}`
       : API_ENDPOINTS.PRODUCTS.EXPORT;
-
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0'}${url}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
       },
     });
-
     if (!response.ok) {
       throw new Error('Export failed');
     }
-
     return response.blob();
   },
-
   // Download import template from backend
   downloadImportTemplate: async (): Promise<{ blob: Blob; filename: string }> => {
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0'}${API_ENDPOINTS.PRODUCTS.IMPORT_TEMPLATE}`, {
@@ -392,11 +350,9 @@ export const productApi = {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
       },
     });
-
     if (!response.ok) {
       throw new Error('Failed to download template');
     }
-
     // Extract filename from Content-Disposition header
     const contentDisposition = response.headers.get('Content-Disposition');
     let filename = 'product-import-template.xlsx';
@@ -406,8 +362,7 @@ export const productApi = {
         filename = filenameMatch[1].replace(/['"]/g, '');
       }
     }
-
     const blob = await response.blob();
     return { blob, filename };
   }
-};
+};

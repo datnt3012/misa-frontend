@@ -13,14 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { DollarSign, AlertTriangle } from "lucide-react";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
-
 interface PaymentStatusDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: any;
   onUpdate: () => void;
 }
-
 export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
   open,
   onOpenChange,
@@ -34,11 +32,9 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
   const [statusNotes, setStatusNotes] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
-
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
   const paidAmount = Number(order?.paid_amount || order?.initial_payment) || 0;
   const debtAmount = Math.max(0, totalAmount - paidAmount);
-
   const handleUpdate = async () => {
     if (!paymentAmount || paymentAmount === 0 && newStatus === order?.status) {
       toast({
@@ -48,7 +44,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
       });
       return;
     }
-
     try {
       // Validate completion rules
       if (newStatus === 'completed') {
@@ -62,7 +57,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
           return;
         }
       }
-
       // Add payment if amount is provided
       if (paymentAmount && paymentAmount !== 0) {
         const amount = paymentAmount;
@@ -76,20 +70,16 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             notes: paymentNotes,
             created_by: user?.id
           });
-
         if (paymentError) throw paymentError;
       }
-
       // Update order status if changed
       if (newStatus !== order.status) {
         const { error: statusError } = await supabase
           .from('orders')
           .update({ status: newStatus })
           .eq('id', order.id);
-
         if (statusError) throw statusError;
       }
-
       // Add status history entry when there's meaningful changes
       if (statusNotes || paymentAmount || newStatus !== order.status) {
         const currentPaidAmount = paymentAmount || 0;
@@ -104,10 +94,8 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             notes: statusNotes || (currentPaidAmount > 0 ? `Thanh toán ${formatCurrency(currentPaidAmount)} qua ${paymentMethod}` : ''),
             changed_by: user?.id
           });
-
         if (historyError) throw historyError;
       }
-
       // Send email notifications
       try {
         await supabase.functions.invoke('send-order-emails', {
@@ -122,10 +110,8 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
           }
         });
       } catch (emailError) {
-        console.error('Error sending email notifications:', emailError);
         // Don't fail the main operation if email fails
       }
-
       const paymentAmt = paymentAmount || 0;
       toast({
         title: "Thành công",
@@ -135,17 +121,14 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
               : `Đã cập nhật đơn hàng và điều chỉnh doanh thu ${formatCurrency(paymentAmt)}`)
           : "Đã cập nhật đơn hàng",
       });
-
       onUpdate();
       onOpenChange(false);
-      
       // Reset form
       setPaymentAmount('');
       setPaymentNotes('');
       setStatusNotes('');
       setNewStatus(order?.status || '');
     } catch (error: any) {
-      console.error('Error updating order:', error);
       toast({
         title: "Lỗi", 
         description: error.message || "Không thể cập nhật đơn hàng",
@@ -153,16 +136,13 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
       });
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const newPaidAmount = paidAmount + (paymentAmount || 0);
   const newDebtAmount = totalAmount - newPaidAmount;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
@@ -172,7 +152,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             Đơn hàng {order?.order_number}
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-6">
           {/* Current Payment Info */}
           <Card>
@@ -199,7 +178,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
               </div>
             </CardContent>
           </Card>
-
           {/* Add Payment */}
           <div className="space-y-4">
             <h4 className="font-medium">Thêm thanh toán</h4>
@@ -237,7 +215,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
                 placeholder="Ghi chú về khoản thanh toán này..."
               />
             </div>
-
             {/* New Payment Summary */}
             {paymentAmount && paymentAmount !== 0 && (
               <Card className="bg-blue-50">
@@ -259,9 +236,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
               </Card>
             )}
           </div>
-
           <Separator />
-
           {/* Update Status */}
           <div className="space-y-4">
             <h4 className="font-medium">Cập nhật trạng thái</h4>
@@ -279,7 +254,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
                 </SelectContent>
               </Select>
             </div>
-
             {/* Completion Warning */}
             {newStatus === 'completed' && newDebtAmount > 0 && (
               <Card className="border-red-200 bg-red-50">
@@ -293,7 +267,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
                 </CardContent>
               </Card>
             )}
-
             <div>
               <Label htmlFor="status-notes">Ghi chú thay đổi</Label>
               <Textarea
@@ -303,9 +276,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
                 placeholder="Ghi chú về việc thay đổi trạng thái..."
               />
             </div>
-
             <Separator />
-
             {/* Document Upload */}
             <div className="space-y-4">
               <h4 className="font-medium">Tài liệu đính kèm</h4>
@@ -318,7 +289,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
             </div>
           </div>
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
@@ -330,5 +300,4 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
-
+};

@@ -6,14 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { administrativeApi, AdministrativeUnit } from "@/api/administrative.api";
-
 interface AdministrativeUnit {
   code: string;
   name: string;
   level: string;
   parentCode?: string;
 }
-
 interface AddressData {
   address: string;
   provinceCode?: string;
@@ -23,14 +21,12 @@ interface AddressData {
   districtName?: string;
   wardName?: string;
 }
-
 interface AddressFormSeparateProps {
   value?: Partial<AddressData>;
   onChange: (data: AddressData) => void;
   disabled?: boolean;
   required?: boolean;
 }
-
 export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   value = {},
   onChange,
@@ -43,7 +39,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const [allWards, setAllWards] = useState<AdministrativeUnit[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
-
   const [selectedProvince, setSelectedProvince] = useState(value.provinceCode || '');
   const [selectedDistrict, setSelectedDistrict] = useState(value.districtCode || '');
   const [selectedWard, setSelectedWard] = useState(value.wardCode || '');
@@ -51,7 +46,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const [selectedDistrictName, setSelectedDistrictName] = useState(value.districtName || '');
   const [selectedWardName, setSelectedWardName] = useState(value.wardName || '');
   const [addressDetail, setAddressDetail] = useState(value.address || '');
-
   // Filtered lists based on selection (computed after state declarations)
   // These are filtered from already-loaded data - NO API CALLS when selecting options
   const provinces = allProvinces;
@@ -61,25 +55,19 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   const wards = selectedDistrict
     ? allWards.filter(w => w.parentCode === selectedDistrict)
     : [];
-
   // Autocomplete popover states
   const [openProvince, setOpenProvince] = useState(false);
   const [openDistrict, setOpenDistrict] = useState(false);
   const [openWard, setOpenWard] = useState(false);
-  
   // Track if component has been initialized to avoid re-hydration
   const initializedRef = useRef(false);
-
   // Accent-insensitive search helper (remove diacritics)
   const normalizeText = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-
   const hydratingRef = useRef(false);
   // Track if we're updating from user selection (internal) vs prop change (external)
   const isInternalUpdateRef = useRef(false);
-  
   // Track if data has been loaded to prevent multiple API calls
   const dataLoadStartedRef = useRef(false);
-
   const levelMatches = (levelValue: any, expected: 'province' | 'district' | 'ward') => {
     const value = String(levelValue ?? '').trim().toLowerCase();
     const aliases: Record<'province' | 'district' | 'ward', string[]> = {
@@ -89,7 +77,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     };
     return aliases[expected].includes(value);
   };
-
   // Load all address data from API (all 3 levels at once)
   // This is called ONLY ONCE when component mounts, not when selecting options
   const loadAllAddressData = async () => {
@@ -98,20 +85,14 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       return;
     }
     dataLoadStartedRef.current = true;
-    
     try {
       setLoading(true);
-      console.log('[AddressForm] Loading all address data - ONE TIME ONLY');
-      
       // Load all 3 levels in parallel - ONLY CALLED ONCE on mount
       const [provincesRes, districtsRes, wardsRes] = await Promise.all([
         administrativeApi.getAdministrativeUnits({ noPaging: true, level: '1' }),
         administrativeApi.getAdministrativeUnits({ noPaging: true, level: '2' }),
         administrativeApi.getAdministrativeUnits({ noPaging: true, level: '3' })
       ]);
-      
-      console.log('[AddressForm] Address data loaded successfully');
-
       // Filter and remove duplicates by code
       const removeDuplicates = (items: AdministrativeUnit[]): AdministrativeUnit[] => {
         const seen = new Map<string, AdministrativeUnit>();
@@ -122,7 +103,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
         });
         return Array.from(seen.values());
       };
-
       const provincesList = removeDuplicates(
         (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'))
       );
@@ -132,12 +112,10 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       const wardsList = removeDuplicates(
         (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'))
       );
-
       setAllProvinces(provincesList);
       setAllDistricts(districtsList);
       setAllWards(wardsList);
       setDataLoaded(true);
-
       // Update names if we have selections but no names
       if (selectedProvince && !selectedProvinceName) {
         const found = provincesList.find(p => p.code === selectedProvince);
@@ -152,7 +130,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
         if (found) setSelectedWardName(found.name);
       }
     } catch (error: any) {
-      console.error('Error loading address data:', error);
       setAllProvinces([]);
       setAllDistricts([]);
       setAllWards([]);
@@ -160,67 +137,54 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       setLoading(false);
     }
   };
-
   // Load all data once on mount
   useEffect(() => {
     loadAllAddressData();
   }, []);
-
   // Update names when selections change (data is already loaded)
   useEffect(() => {
     if (!dataLoaded) return;
-    
     if (selectedProvince && !selectedProvinceName) {
       const found = allProvinces.find(p => p.code === selectedProvince);
       if (found) setSelectedProvinceName(found.name);
     }
   }, [selectedProvince, selectedProvinceName, allProvinces, dataLoaded]);
-
   useEffect(() => {
     if (!dataLoaded) return;
-    
     if (selectedDistrict && !selectedDistrictName) {
       const found = allDistricts.find(d => d.code === selectedDistrict);
       if (found) setSelectedDistrictName(found.name);
     }
-    
     // Clear ward when district changes
     if (!selectedDistrict) {
       setSelectedWard('');
       setSelectedWardName('');
     }
   }, [selectedDistrict, selectedDistrictName, allDistricts, dataLoaded]);
-
   useEffect(() => {
     if (!dataLoaded) return;
-    
     if (selectedWard && !selectedWardName) {
       const found = allWards.find(w => w.code === selectedWard);
       if (found) setSelectedWardName(found.name);
     }
   }, [selectedWard, selectedWardName, allWards, dataLoaded]);
-
   // Track if address change is from user typing
   const isAddressTypingRef = useRef(false);
-
   // Update address detail when value.address changes (e.g., when customer is selected)
   useEffect(() => {
     // Skip if user is currently typing in the textarea
     if (isAddressTypingRef.current) {
       return;
     }
-    
     // Skip if this is an internal update from other fields (province/district/ward selection)
     if (isInternalUpdateRef.current) {
       return;
     }
-    
     // Update addressDetail when value.address is provided from parent and it's different
     if (value?.address !== undefined && value.address !== addressDetail) {
       setAddressDetail(value.address || '');
     }
   }, [value?.address, addressDetail]);
-
   // Hydrate selections when opening edit with existing values
   useEffect(() => {
     // Skip hydration if this is an internal update (user selection)
@@ -228,10 +192,8 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       isInternalUpdateRef.current = false; // Reset flag
       return;
     }
-    
     // Wait for data to be loaded
     if (!dataLoaded) return;
-    
     if (!value) return;
     if (!value.provinceCode) {
       // If value has no provinceCode, clear everything only if we have selections
@@ -246,12 +208,10 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       }
       return;
     }
-    
     // Only hydrate if values are actually different and we haven't initialized yet
     const codesMatch = value.provinceCode === selectedProvince && 
                        (value.districtCode || '') === (selectedDistrict || '') && 
                        (value.wardCode || '') === (selectedWard || '');
-    
     if (codesMatch && initializedRef.current) {
       // Just update names if they're missing, but codes match
       if (value.provinceName && !selectedProvinceName) {
@@ -274,7 +234,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       }
       return;
     }
-    
     // Check if values actually changed
     const provinceChanged = value.provinceCode !== selectedProvince;
     // District changed if: value has districtCode and it's different from selected, OR value has districtCode but we don't have one
@@ -283,37 +242,30 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     // Ward changed if: value has wardCode and it's different from selected, OR value has wardCode but we don't have one
     const wardChanged = (value.wardCode && value.wardCode !== selectedWard) || 
                        (value.wardCode && !selectedWard);
-    
     // If any code changed, this is an external update (e.g., from customer selection)
     const hasAnyChange = provinceChanged || districtChanged || wardChanged;
-    
     // CRITICAL: If we have selectedDistrict but value.districtCode is undefined,
     // NEVER clear! This prevents losing user selections
     // BUT: Allow if province changed (which would invalidate district anyway)
     if (initializedRef.current && selectedDistrict && !value.districtCode && !provinceChanged) {
       return; // Don't hydrate - preserve user selection
     }
-    
     // If codes match, don't hydrate
     if (initializedRef.current && !hasAnyChange) {
       return;
     }
-    
     // Hydrate with new values
     initializedRef.current = true;
     hydratingRef.current = true;
-    
     // Set province
     setSelectedProvince(value.provinceCode);
     const province = allProvinces.find(p => p.code === value.provinceCode);
     setSelectedProvinceName(value.provinceName || province?.name || '');
-    
     // Set district if provided
     if (value.districtCode) {
       setSelectedDistrict(value.districtCode);
       const district = allDistricts.find(d => d.code === value.districtCode);
       setSelectedDistrictName(value.districtName || district?.name || '');
-      
       // Set ward if provided
       if (value.wardCode) {
         setSelectedWard(value.wardCode);
@@ -333,30 +285,23 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       }
       // Otherwise keep current selection
     }
-    
     hydratingRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.provinceCode, value.districtCode, value.wardCode, dataLoaded, allProvinces, allDistricts, allWards]);
-
   // Track previous values to avoid unnecessary onChange calls
   const prevValuesRef = useRef<{ province?: string; district?: string; ward?: string; address?: string }>({});
-
   // Notify parent when address changes
   useEffect(() => {
     // Skip onChange during hydration to avoid loops
     if (hydratingRef.current) return;
-    
     // Wait for data to be loaded
     if (!dataLoaded) return;
-    
     // Mark as internal update so hydration effect doesn't reset
     isInternalUpdateRef.current = true;
-    
     // Get names from state or from loaded data
     const provinceName = selectedProvinceName || allProvinces.find(p => p.code === selectedProvince)?.name || '';
     const districtName = selectedDistrictName || allDistricts.find(d => d.code === selectedDistrict)?.name || '';
     const wardName = selectedWardName || allWards.find(w => w.code === selectedWard)?.name || '';
-
     // Check if values actually changed to avoid unnecessary onChange calls
     const currentValues = {
       province: selectedProvince || undefined,
@@ -364,21 +309,17 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       ward: selectedWard || undefined,
       address: addressDetail
     };
-
     const prevValues = prevValuesRef.current;
     const valuesChanged = 
       currentValues.province !== prevValues.province ||
       currentValues.district !== prevValues.district ||
       currentValues.ward !== prevValues.ward ||
       currentValues.address !== prevValues.address;
-
     if (!valuesChanged) {
       return; // No actual change, skip onChange
     }
-
     // Update previous values
     prevValuesRef.current = { ...currentValues };
-
     // CRITICAL: Always preserve districtCode when we have selectedDistrict
     // This ensures districtCode is never lost when selecting wards
     const addressData: AddressData = {
@@ -390,11 +331,9 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       districtName: districtName || undefined,
       wardName: wardName || undefined
     };
-
     onChange(addressData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProvince, selectedDistrict, selectedWard, selectedProvinceName, selectedDistrictName, selectedWardName, addressDetail, dataLoaded, allProvinces, allDistricts, allWards]);
-
   return (
     <div className="space-y-3">
       {/* Address Selection Row */}
@@ -427,7 +366,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
             </PopoverContent>
           </Popover>
         </div>
-
         {/* District Autocomplete */}
         <div className="space-y-1">
           <Label className="text-xs">Quận/Huyện {required}</Label>
@@ -456,7 +394,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
             </PopoverContent>
           </Popover>
         </div>
-
         {/* Ward Autocomplete */}
         <div className="space-y-1">
           <Label className="text-xs">Phường/Xã {required}</Label>
@@ -486,7 +423,6 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
           </Popover>
         </div>
       </div>
-
       {/* Address Detail - Full Width */}
       <div className="space-y-1">
         <Label htmlFor="address-detail" className="text-xs">
@@ -509,14 +445,11 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
           rows={2}
         />
       </div>
-
       {/* Address Options removed per requirement */}
-
       {loading && (
         <p className="text-xs text-muted-foreground">Đang tải danh sách địa chỉ...</p>
       )}
     </div>
   );
 };
-
 export default AddressFormSeparate;

@@ -1,41 +1,72 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download } from 'lucide-react';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { NumberInput } from '@/components/ui/number-input';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
 import { orderApi } from '@/api/order.api';
+import { customerApi, type Customer } from '@/api/customer.api';
+import { productApi } from '@/api/product.api';
+import { warehouseApi } from '@/api/warehouse.api';
+import { stockLevelsApi } from '@/api/stockLevels.api';
 import { useToast } from '@/hooks/use-toast';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
-
-
+import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
+import BankSelector from './BankSelector';
 function ExportSlipsContent() {
+  const navigate = useNavigate();
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [addressCache, setAddressCache] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  // Export slip form state
+  const [exportSlipForm, setExportSlipForm] = useState({
+    order_id: '',
+    customer_id: '',
+    customer_name: '',
+    customer_phone: '',
+    customer_email: '',
+    notes: '', // This will be required
+    warehouse_id: '',
+    items: [] as Array<{
+      product_id: string;
+      product_code: string;
+      product_name: string;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+      current_stock?: number;
+    }>,
+    expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
+  });
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-
   const canDirectExport = hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
-
   // Get available status options based on current status and role
   const getAvailableStatusOptions = (currentStatus: string) => {
     const options = [];
-    
-    console.log('Getting status options for:', currentStatus);
-    
     // Only show options that make sense for the current status
     if (currentStatus === 'pending') {
       options.push({ 
@@ -65,24 +96,24 @@ function ExportSlipsContent() {
       });
     }
     // No options for 'exported' or 'cancelled' status - they are final
-    
-    console.log('Available options:', options);
     return options;
   };
-
   useEffect(() => {
     fetchExportSlips();
+    loadOrders();
   }, [displayLimit]);
-
+  // Load data when create dialog opens
+  useEffect(() => {
+    if (showCreateDialog) {
+      loadOrders();
+    }
+  }, [showCreateDialog]);
   const fetchExportSlips = async () => {
     try {
       const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
-      
-      
       // If order data is missing, we'll need to fetch it separately
       const slips = await Promise.all((resp.slips || []).map(async (s) => {
         let orderData = s.order;
-        
         // If order data is missing but we have order_id, try to fetch it
         if (!orderData && s.order_id) {
           try {
@@ -97,10 +128,8 @@ function ExportSlipsContent() {
               order_items: orderResponse.order_items
             };
           } catch (error) {
-            console.error('Error fetching order data:', error);
           }
         }
-        
         return {
           id: s.id || '',
           code: s.code || '',
@@ -124,34 +153,21 @@ function ExportSlipsContent() {
           export_slip_items: s.export_slip_items || [],
         };
       }));
-      
       setExportSlips(slips);
-      
       // Update address cache for slips that now have addressInfo
       const newCache: Record<string, string> = {};
       for (const slip of slips) {
-        console.log(`Slip ${slip.id}:`, {
-          hasAddress: !!slip.order?.customer_address,
-          hasAddressInfo: !!slip.order?.customer_addressInfo,
-          addressInfo: slip.order?.customer_addressInfo
-        });
-        
         if (slip.order?.customer_address && slip.order?.customer_addressInfo) {
           const fullAddress = formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo);
           newCache[slip.id] = fullAddress;
-          console.log(`Cached full address for ${slip.id}:`, fullAddress);
         } else if (slip.order?.customer_address) {
           // Even without addressInfo, cache the basic address
           newCache[slip.id] = slip.order.customer_address;
-          console.log(`Cached basic address for ${slip.id}:`, slip.order.customer_address);
         }
       }
-      console.log('Final address cache:', newCache);
       setAddressCache(newCache);
-      
       // No toast notification for empty export slips list
     } catch (error: any) {
-      console.error('Error fetching export slips:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho. Vui lòng kiểm tra kết nối backend.",
@@ -159,13 +175,10 @@ function ExportSlipsContent() {
       });
     }
   };
-
-
   // Handle status updates based on role permissions
   const handleStatusUpdate = async (slipId: string, newStatus: string, notes: string = '') => {
     try {
       let response;
-      
       switch (newStatus) {
         case 'picked':
           response = await exportSlipsApi.markAsPicked(slipId, notes);
@@ -176,15 +189,12 @@ function ExportSlipsContent() {
         default:
           throw new Error('Trạng thái không hợp lệ');
       }
-
       toast({
         title: "Thành công",
         description: response.message || `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
       });
-
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error updating status:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
@@ -192,20 +202,16 @@ function ExportSlipsContent() {
       });
     }
   };
-
   // Direct export (Admin/Giám đốc only)
   const handleDirectExport = async (slipId: string, notes: string = '') => {
     try {
       const response = await exportSlipsApi.directExport(slipId, notes);
-
       toast({
         title: "Thành công",
         description: response.message || "Đã xuất kho trực tiếp",
       });
-
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error direct exporting:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xuất kho trực tiếp",
@@ -213,12 +219,10 @@ function ExportSlipsContent() {
       });
     }
   };
-
   // Handle status update with selected status
   const handleStatusUpdateWithSelection = async (slipId: string, newStatus: string, notes: string = '') => {
     try {
       let response;
-      
       switch (newStatus) {
         case 'picked':
           response = await exportSlipsApi.markAsPicked(slipId, notes);
@@ -232,21 +236,17 @@ function ExportSlipsContent() {
         default:
           throw new Error('Trạng thái không hợp lệ');
       }
-
       const statusLabels: Record<string, string> = {
         'picked': 'Đã lấy hàng',
         'exported': 'Đã xuất kho',
         'cancelled': 'Hủy lấy hàng'
       };
-
       toast({
         title: "Thành công",
         description: response.message || `Đã cập nhật trạng thái thành ${statusLabels[newStatus] || newStatus}`,
       });
-
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error updating status:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
@@ -254,7 +254,6 @@ function ExportSlipsContent() {
       });
     }
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -269,13 +268,11 @@ function ExportSlipsContent() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const formatFullAddress = (address: string, addressInfo?: any) => {
     const wardName = addressInfo?.ward?.name || addressInfo?.wardName;
     const districtName = addressInfo?.district?.name || addressInfo?.districtName;
@@ -287,13 +284,11 @@ function ExportSlipsContent() {
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
   };
-
   // Enhanced address formatting with fallback to order API
   const formatAddressWithFallback = async (slip: ExportSlip) => {
     if (slip.order?.customer_addressInfo) {
       return formatFullAddress(slip.order.customer_address || '', slip.order.customer_addressInfo);
     }
-    
     // If no addressInfo in export slip, try to get from order API
     if (slip.order_id) {
       try {
@@ -302,15 +297,223 @@ function ExportSlipsContent() {
           return formatFullAddress(slip.order?.customer_address || '', orderDetails.customer_addressInfo);
         }
       } catch (error) {
-        console.warn('Could not fetch order details for address:', error);
       }
     }
-    
     return slip.order?.customer_address || '';
   };
-
   // Permission checks removed - let backend handle authorization
-
+  const loadOrders = async () => {
+    try {
+      const [ordersResp, customersResp, productsResp, warehousesResp, banksResp] = await Promise.all([
+        orderApi.getOrders({
+          page: 1,
+          limit: 100,
+          // Remove status filter to show all orders for now
+        }),
+        customerApi.getCustomers({ page: 1, limit: 1000 }),
+        productApi.getProducts({ page: 1, limit: 1000 }),
+        warehouseApi.getWarehouses({ page: 1, limit: 1000 }),
+        orderApi.getBanks()
+      ]);
+      setOrders(ordersResp.orders || []);
+      setCustomers(customersResp.customers || []);
+      setProducts(productsResp.products || []);
+      setWarehouses(warehousesResp.warehouses || []);
+      setBanks(banksResp || []);
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải dữ liệu",
+        variant: "destructive",
+      });
+    }
+  };
+  // Form management functions
+  const addItem = () => {
+    setExportSlipForm(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        product_id: '',
+        product_code: '',
+        product_name: '',
+        quantity: 1,
+        unit_price: 0,
+        total_price: 0
+      }]
+    }));
+  };
+  const removeItem = (index: number) => {
+    setExportSlipForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+  const updateItem = (index: number, field: string, value: any) => {
+    setExportSlipForm(prev => {
+      const items = [...prev.items];
+      items[index] = { ...items[index], [field]: value };
+      // Auto-calculate when product, quantity, or unit_price changes
+      if (field === 'product_id' || field === 'quantity' || field === 'unit_price') {
+        if (field === 'product_id') {
+          const product = products.find(p => p.id === value);
+          if (product) {
+            items[index].product_code = product.code;
+            items[index].product_name = product.name;
+            items[index].unit_price = product.price;
+          }
+        }
+        const subtotal = items[index].quantity * items[index].unit_price;
+        items[index].total_price = subtotal;
+      }
+      // Fetch stock level when product changes
+      if (field === 'product_id') {
+        fetchStockLevel(index, items[index].product_id, prev.warehouse_id);
+      }
+      return { ...prev, items };
+    });
+  };
+  const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
+    if (!productId || !warehouseId) return;
+    try {
+      const stockLevels = await stockLevelsApi.getStockLevels({
+        productId,
+        warehouseId,
+        limit: 1
+      });
+      const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
+      setExportSlipForm(prev => {
+        const items = [...prev.items];
+        items[index].current_stock = currentStock;
+        return { ...prev, items };
+      });
+    } catch (error) {
+      setExportSlipForm(prev => {
+        const items = [...prev.items];
+        items[index].current_stock = 0;
+        return { ...prev, items };
+      });
+    }
+  };
+  const addExpense = () => {
+    setExportSlipForm(prev => ({
+      ...prev,
+      expenses: [...prev.expenses, { name: '', amount: 0, note: '' }]
+    }));
+  };
+  const removeExpense = (index: number) => {
+    setExportSlipForm(prev => ({
+      ...prev,
+      expenses: prev.expenses.filter((_, i) => i !== index)
+    }));
+  };
+  const updateExpense = (index: number, field: 'name' | 'amount' | 'note', value: any) => {
+    setExportSlipForm(prev => {
+      const expenses = [...prev.expenses];
+      expenses[index] = { ...expenses[index], [field]: value };
+      return { ...prev, expenses };
+    });
+  };
+  // Get available products for a specific row (excluding already selected products)
+  const getAvailableProductsForRow = (currentIndex: number) => {
+    const selectedProductIds = exportSlipForm.items
+      .map((item, index) => index !== currentIndex ? item.product_id : null)
+      .filter(id => id); // Remove nulls and current row
+    return products.filter(product => !selectedProductIds.includes(product.id));
+  };
+  const calculateTotals = () => {
+    const itemsSubtotal = exportSlipForm.items.reduce((sum, item) => sum + item.total_price, 0);
+    const expensesTotal = exportSlipForm.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+    const subtotal = itemsSubtotal + expensesTotal;
+    return { subtotal };
+  };
+  const createExportSlip = async () => {
+    // Validate required notes field
+    if (!exportSlipForm.notes || !exportSlipForm.notes.trim()) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập mô tả cho phiếu xuất kho",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Validate items
+    if (exportSlipForm.items.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng thêm ít nhất một sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Validate all items have required fields
+    const invalidItems = exportSlipForm.items.filter(item =>
+      !item.product_id || !item.product_name || !item.product_code ||
+      !item.quantity || !item.unit_price
+    );
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng điền đầy đủ thông tin sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Validate warehouse selection
+    if (!exportSlipForm.warehouse_id) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn kho xuất hàng",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLoading(true);
+    try {
+      // Generate a unique code for the export slip
+      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const code = `EXP${timestamp}${random}`;
+      // Prepare items
+      const items = exportSlipForm.items.map(item => ({
+        product_id: item.product_id,
+        requested_quantity: item.quantity,
+        unit_price: item.unit_price
+      }));
+      const response = await exportSlipsApi.createSlip({
+        order_id: exportSlipForm.order_id || undefined, // Optional order ID
+        warehouse_id: exportSlipForm.warehouse_id,
+        supplier_id: '', // Not needed for export slips
+        code: code,
+        notes: exportSlipForm.notes,
+        items: items
+      });
+      toast({
+        title: "Thành công",
+        description: `Đã tạo phiếu xuất kho ${response.code || code} thành công`,
+      });
+      setShowCreateDialog(false);
+      setExportSlipForm({
+        order_id: '',
+        customer_id: '',
+        customer_name: '',
+        customer_phone: '',
+        customer_email: '',
+        notes: '',
+        warehouse_id: '',
+        items: [],
+        expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
+      });
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -319,7 +522,6 @@ function ExportSlipsContent() {
       setSortDirection('asc');
     }
   };
-
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
       return <ChevronsUpDown className="w-4 h-4 text-gray-400" />;
@@ -328,7 +530,6 @@ function ExportSlipsContent() {
       ? <ChevronUp className="w-4 h-4 text-gray-600" />
       : <ChevronDown className="w-4 h-4 text-gray-600" />;
   };
-
   const exportToExcel = () => {
     // Prepare data for export
     const exportData = filteredAndSortedSlips.map((slip, index) => {
@@ -345,7 +546,6 @@ function ExportSlipsContent() {
           'Thành tiền': (exportItem?.actual_quantity || 0) * item.unit_price,
         };
       }) || [];
-
       return {
         'STT': index + 1,
         'Số phiếu': slip.code,
@@ -362,11 +562,9 @@ function ExportSlipsContent() {
         'Chi tiết sản phẩm': productDetails.map(p => `${p['Tên sản phẩm']} (${p['SL Yêu cầu']})`).join('; '),
       };
     });
-
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportData);
-
     // Set column widths
     const colWidths = [
       { wch: 5 },   // STT
@@ -381,24 +579,19 @@ function ExportSlipsContent() {
       { wch: 60 },  // Chi tiết sản phẩm
     ];
     ws['!cols'] = colWidths;
-
     XLSX.utils.book_append_sheet(wb, ws, 'Danh sách phiếu xuất kho');
-
     // Generate filename with timestamp
     const now = new Date();
     const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
     const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
     const filename = `Danh_sach_phieu_xuat_kho_${dateStr}_${timeStr}.xlsx`;
-
     // Write file
     XLSX.writeFile(wb, filename);
-
     toast({
       title: "Thành công",
       description: `Đã xuất ${exportData.length} phiếu xuất kho ra file Excel`,
     });
   };
-
   // Filter and sort export slips
   const filteredAndSortedSlips = exportSlips
     .filter(slip => {
@@ -412,7 +605,6 @@ function ExportSlipsContent() {
     })
     .sort((a, b) => {
       let aValue: any, bValue: any;
-      
       switch (sortField) {
         case 'slip_number':
           aValue = a.code;
@@ -440,17 +632,14 @@ function ExportSlipsContent() {
           bValue = new Date(b.created_at);
           break;
       }
-      
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = bValue.toLowerCase();
       }
-      
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -459,7 +648,6 @@ function ExportSlipsContent() {
           Danh sách và duyệt phiếu xuất kho hàng hóa
         </p>
       </div>
-
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -473,6 +661,429 @@ function ExportSlipsContent() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Tạo phiếu xuất
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Tạo phiếu xuất kho mới</DialogTitle>
+                    <DialogDescription>
+                      Nhập thông tin chi tiết cho phiếu xuất kho mới
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-6">
+                    {/* Order Selection (Optional) */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex justify-between items-center">
+                          <span>Đơn hàng (không bắt buộc)</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowCreateDialog(false);
+                              navigate('/orders');
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Tạo đơn hàng
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <Label htmlFor="order-select">Chọn đơn hàng</Label>
+                            {exportSlipForm.order_id && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  setExportSlipForm(prev => ({
+                                    ...prev,
+                                    order_id: '',
+                                    customer_id: '',
+                                    customer_name: '',
+                                    customer_phone: '',
+                                    customer_email: '',
+                                  }));
+                                }}
+                                className="h-6 px-2 text-xs"
+                              >
+                                Xóa lựa chọn
+                              </Button>
+                            )}
+                          </div>
+                          <Select
+                            value={exportSlipForm.order_id}
+                            onValueChange={(value) => {
+                              // Auto-fill customer information from selected order
+                              const selectedOrder = orders.find(order => order.id === value);
+                              if (selectedOrder) {
+                                setExportSlipForm(prev => ({
+                                  ...prev,
+                                  order_id: value,
+                                  customer_id: selectedOrder.customer_id || selectedOrder.customer?.id || '',
+                                  customer_name: selectedOrder.customer_name || selectedOrder.customer?.name || '',
+                                  customer_phone: selectedOrder.customer_phone || selectedOrder.customer?.phone || selectedOrder.customer?.phoneNumber || '',
+                                  customer_email: selectedOrder.customer_email || selectedOrder.customer?.email || '',
+                                }));
+                              } else {
+                                setExportSlipForm(prev => ({ ...prev, order_id: value }));
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn đơn hàng (tùy chọn)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {orders.map((order) => (
+                                <SelectItem key={order.id} value={order.id}>
+                                  {order.order_number} - {order.customer_name || 'Không xác định'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="customer_id">Khách hàng</Label>
+                            <Select
+                              value={exportSlipForm.customer_id}
+                              onValueChange={(value) => {
+                                const customer = customers.find(c => c.id === value);
+                                setExportSlipForm(prev => ({
+                                  ...prev,
+                                  customer_id: value,
+                                  customer_name: customer?.name || "",
+                                  customer_phone: customer?.phoneNumber || "",
+                                  customer_email: customer?.email || "",
+                                }));
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Chọn khách hàng" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {customers.map((customer) => (
+                                  <SelectItem key={customer.id} value={customer.id}>
+                                    {customer.name} ({customer.customer_code})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="customer_name">Tên khách hàng</Label>
+                            <Input
+                              id="customer_name"
+                              value={exportSlipForm.customer_name}
+                              onChange={(e) => setExportSlipForm(prev => ({ ...prev, customer_name: e.target.value }))}
+                              placeholder="Nhập tên khách hàng"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="customer_phone">Số điện thoại</Label>
+                            <Input
+                              id="customer_phone"
+                              value={exportSlipForm.customer_phone}
+                              onChange={(e) => setExportSlipForm(prev => ({ ...prev, customer_phone: e.target.value }))}
+                              placeholder="Nhập số điện thoại"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="customer_email">Email</Label>
+                            <Input
+                              id="customer_email"
+                              type="email"
+                              value={exportSlipForm.customer_email}
+                              onChange={(e) => setExportSlipForm(prev => ({ ...prev, customer_email: e.target.value }))}
+                              placeholder="Nhập email khách hàng"
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    {/* Products */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex justify-between items-center">
+                          <span>Sản phẩm</span>
+                          <Button onClick={addItem} size="sm">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Thêm sản phẩm
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="max-w-xs">
+                          <Label>
+                            Kho xuất hàng <span className="text-red-500">*</span>
+                          </Label>
+                          <Select
+                            value={exportSlipForm.warehouse_id}
+                            onValueChange={(value) => {
+                              setExportSlipForm((prev) => {
+                                const updatedItems = prev.items.map((it) => ({
+                                  ...it,
+                                }));
+                                // Update stock levels for all items with new warehouse
+                                updatedItems.forEach((it, index) => {
+                                  if (it.product_id) {
+                                    fetchStockLevel(index, it.product_id, value);
+                                  }
+                                });
+                                return {
+                                  ...prev,
+                                  warehouse_id: value,
+                                  items: updatedItems,
+                                };
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn kho xuất hàng" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouses.map((warehouse) => (
+                                <SelectItem key={warehouse.id} value={warehouse.id}>
+                                  {warehouse.name} ({warehouse.code})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Table className="border border-border/30 rounded-lg overflow-hidden">
+                          <TableHeader>
+                            <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                Sản phẩm <span className="text-red-500">*</span>
+                              </TableHead>
+                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                Số lượng <span className="text-red-500">*</span>
+                              </TableHead>
+                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                Đơn giá <span className="text-red-500">*</span>
+                              </TableHead>
+                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                Thành tiền
+                              </TableHead>
+                              <TableHead className="font-semibold text-slate-700"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {exportSlipForm.items.map((item, index) => (
+                              <TableRow
+                                key={index}
+                                className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
+                              >
+                                <TableCell className="border-r border-slate-100 align-top pt-4">
+                                  <Select
+                                    value={item.product_id}
+                                    onValueChange={(value) => updateItem(index, "product_id", value)}
+                                  >
+                                    <SelectTrigger className="w-[200px]">
+                                      <SelectValue placeholder="Chọn sản phẩm" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {getAvailableProductsForRow(index).map((product) => (
+                                        <SelectItem key={product.id} value={product.id}>
+                                          {product.name} ({product.code})
+                                        </SelectItem>
+                                      ))}
+                                      {getAvailableProductsForRow(index).length === 0 && (
+                                        <SelectItem value="" disabled>
+                                          Không còn sản phẩm nào để chọn
+                                        </SelectItem>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell className="border-r border-slate-100 align-top pt-4">
+                                  <div className="space-y-1">
+                                    <NumberInput
+                                      value={item.quantity}
+                                      onChange={(value) => updateItem(index, "quantity", value)}
+                                      min={1}
+                                      className="w-20"
+                                    />
+                                    {item.current_stock !== undefined && (
+                                      <div className="text-xs">
+                                        <span
+                                          className={`${
+                                            item.quantity > item.current_stock
+                                              ? "text-red-600"
+                                              : "text-gray-600"
+                                          }`}
+                                        >
+                                          Tồn kho: {item.current_stock}
+                                        </span>
+                                        {item.quantity > item.current_stock && (
+                                          <span className="text-red-500 ml-1">⚠️</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="border-r border-slate-100 align-top pt-4">
+                                  <CurrencyInput
+                                    value={item.unit_price}
+                                    onChange={(value) => updateItem(index, "unit_price", value)}
+                                    className="w-32"
+                                  />
+                                </TableCell>
+                                <TableCell className="border-r border-slate-100 align-top pt-7">
+                                  {item.total_price.toLocaleString("vi-VN")}
+                                </TableCell>
+                                <TableCell className="align-top pt-4">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeItem(index)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                          </Table>
+                      </CardContent>
+                    </Card>
+                    {/* Additional Expenses */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex justify-between items-center">
+                          <span>Chi phí</span>
+                          <Button onClick={addExpense} size="sm" variant="outline">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Thêm chi phí
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {exportSlipForm.expenses.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">
+                            Chưa có chi phí nào. Nhấn <span className="font-medium">Thêm chi phí</span> để bắt đầu.
+                          </div>
+                        ) : (
+                          <>
+                            <Table className="border border-border/30 rounded-lg overflow-hidden">
+                              <TableHeader>
+                                <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                                  <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                    Tên chi phí
+                                  </TableHead>
+                                  <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                    Số tiền
+                                  </TableHead>
+                                  <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                    Ghi chú
+                                  </TableHead>
+                                  <TableHead className="font-semibold text-slate-700"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {exportSlipForm.expenses.map((expense, index) => (
+                                  <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                                    <TableCell className="border-r border-slate-100 align-top pt-4">
+                                      <Input
+                                        value={expense.name}
+                                        onChange={(e) => updateExpense(index, "name", e.target.value)}
+                                        placeholder="Ví dụ: Phí vận chuyển"
+                                      />
+                                    </TableCell>
+                                    <TableCell className="border-r border-slate-100 align-top pt-4">
+                                      <CurrencyInput
+                                        value={expense.amount}
+                                        onChange={(value) => updateExpense(index, "amount", value)}
+                                        className="w-32"
+                                      />
+                                    </TableCell>
+                                    <TableCell className="border-r border-slate-100 align-top pt-4">
+                                      <Input
+                                        value={expense.note || ""}
+                                        onChange={(e) => updateExpense(index, "note", e.target.value)}
+                                        placeholder="Ghi chú (không bắt buộc)"
+                                      />
+                                    </TableCell>
+                                    <TableCell className="align-top pt-4">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => removeExpense(index)}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                            <div className="mt-3 flex justify-end">
+                              <div className="text-sm font-medium">
+                                Tổng chi phí:{" "}
+                                <span className="font-semibold text-blue-600">
+                                  {exportSlipForm.expenses
+                                    .reduce((sum, exp) => sum + (exp.amount || 0), 0)
+                                    .toLocaleString("vi-VN")}{" "}
+                                  đ
+                                </span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                    {/* Notes (Required) */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Mô tả phiếu xuất <span className="text-red-500">*</span></CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Textarea
+                          value={exportSlipForm.notes}
+                          onChange={(e) => setExportSlipForm(prev => ({ ...prev, notes: e.target.value }))}
+                          placeholder="Nhập mô tả chi tiết cho phiếu xuất kho"
+                          rows={3}
+                        />
+                      </CardContent>
+                    </Card>
+                    {/* Summary */}
+                    {(() => {
+                      const { subtotal } = calculateTotals();
+                      return (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Tổng kết</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="flex justify-between text-lg font-bold">
+                              <span>Tổng tiền:</span>
+                              <span>{subtotal.toLocaleString('vi-VN')} đ</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                      Hủy
+                    </Button>
+                    <Button onClick={createExportSlip} disabled={loading}>
+                      {loading ? "Đang tạo..." : "Tạo phiếu xuất"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <Button
                 variant="outline"
                 onClick={() => exportToExcel()}
@@ -513,11 +1124,12 @@ function ExportSlipsContent() {
               />
             </div>
           </div>
-          <Table>
+          <div className="overflow-x-auto w-full">
+            <Table className="min-w-[1200px] w-full">
             <TableHeader>
               <TableRow>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
+                <TableHead
+                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                   onClick={() => handleSort('slip_number')}
                 >
                   <div className="flex items-center gap-1">
@@ -525,8 +1137,8 @@ function ExportSlipsContent() {
                     {getSortIcon('slip_number')}
                   </div>
                 </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
+                <TableHead
+                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                   onClick={() => handleSort('order_number')}
                 >
                   <div className="flex items-center gap-1">
@@ -534,8 +1146,8 @@ function ExportSlipsContent() {
                     {getSortIcon('order_number')}
                   </div>
                 </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
+                <TableHead
+                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[180px]"
                   onClick={() => handleSort('customer_name')}
                 >
                   <div className="flex items-center gap-1">
@@ -543,8 +1155,8 @@ function ExportSlipsContent() {
                     {getSortIcon('customer_name')}
                   </div>
                 </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
+                <TableHead
+                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[130px]"
                   onClick={() => handleSort('total_amount')}
                 >
                   <div className="flex items-center gap-1">
@@ -552,8 +1164,8 @@ function ExportSlipsContent() {
                     {getSortIcon('total_amount')}
                   </div>
                 </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
+                <TableHead
+                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                   onClick={() => handleSort('status')}
                 >
                   <div className="flex items-center gap-1">
@@ -561,8 +1173,8 @@ function ExportSlipsContent() {
                     {getSortIcon('status')}
                   </div>
                 </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
+                <TableHead
+                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                   onClick={() => handleSort('created_at')}
                 >
                   <div className="flex items-center gap-1">
@@ -570,29 +1182,44 @@ function ExportSlipsContent() {
                     {getSortIcon('created_at')}
                   </div>
                 </TableHead>
-                <TableHead>Thao tác</TableHead>
+                <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
+                <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredAndSortedSlips.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     {searchTerm ? 'Không tìm thấy phiếu xuất kho nào' : 'Chưa có phiếu xuất kho nào'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredAndSortedSlips.map((slip) => (
                 <TableRow key={slip.id}>
-                  <TableCell className="font-medium">{slip.code}</TableCell>
-                  <TableCell>{slip.order?.order_number}</TableCell>
-                  <TableCell>{slip.order?.customer_name}</TableCell>
-                  <TableCell>{formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}</TableCell>
-                  <TableCell>{getStatusBadge(slip.status)}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-center min-w-[120px]">{slip.code}</TableCell>
+                  <TableCell className="text-center min-w-[120px]">{slip.order?.order_number}</TableCell>
+                  <TableCell className="text-center min-w-[180px]">{slip.order?.customer_name}</TableCell>
+                  <TableCell className="text-center min-w-[130px] font-semibold">
+                    <div className="relative group">
+                      <span className="cursor-help">
+                        {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                      </span>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                        {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center min-w-[120px]">{getStatusBadge(slip.status)}</TableCell>
+                  <TableCell className="text-center min-w-[150px] text-muted-foreground text-sm">
                     {new Date(slip.created_at).toLocaleString('vi-VN')}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
+                  <TableCell className="text-center min-w-[200px]">
+                    <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
+                      {slip.notes || '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center min-w-[180px]">
+                    <div className="flex space-x-2 justify-center">
                       <Dialog>
                         <DialogTrigger asChild>
                           <Button variant="outline" size="sm">
@@ -656,50 +1283,66 @@ function ExportSlipsContent() {
                                 </p>
                               </div>
                             </div>
-
                             {/* Product List */}
-                            {slip.order?.order_items && slip.order.order_items.length > 0 && (
+                            {((slip.order?.order_items && slip.order.order_items.length > 0) || (slip.export_slip_items && slip.export_slip_items.length > 0)) && (
                               <div>
-                                <Label className="font-medium block mb-3">Danh sách sản phẩm cần xuất:</Label>
+                                <Label className="font-medium block mb-3">
+                                  {slip.order?.order_items && slip.order.order_items.length > 0
+                                    ? "Danh sách sản phẩm cần xuất:"
+                                    : "Danh sách sản phẩm đã xuất:"}
+                                </Label>
                                 <div className="border rounded-md overflow-hidden">
                                   <Table>
                                     <TableHeader>
                                       <TableRow>
-                                        <TableHead>Tên sản phẩm</TableHead>
-                                        <TableHead>Mã SP</TableHead>
-                                        <TableHead className="text-right">Số lượng</TableHead>
-                                        <TableHead className="text-right">Đơn giá</TableHead>
-                                        <TableHead className="text-right">Thành tiền</TableHead>
+                                        <TableHead className="text-center">Tên sản phẩm</TableHead>
+                                        <TableHead className="text-center">Mã SP</TableHead>
+                                        <TableHead className="text-center">Số lượng</TableHead>
+                                        <TableHead className="text-center">Đơn giá</TableHead>
+                                        <TableHead className="text-center">Thành tiền</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {slip.order.order_items.map((orderItem, index) => {
-                                        // Find corresponding export slip item
-                                        const exportItem = slip.export_slip_items?.find(
-                                          item => item.product_code === orderItem.product_code
-                                        );
-                                        
-                                        const requestedQuantity = orderItem.quantity;
-                                        const actualQuantity = exportItem?.actual_quantity || 0;
-                                        
-                                        return (
+                                      {slip.order?.order_items && slip.order.order_items.length > 0 ? (
+                                        // Show order items with export quantities
+                                        slip.order.order_items.map((orderItem, index) => {
+                                          // Find corresponding export slip item
+                                          const exportItem = slip.export_slip_items?.find(
+                                            item => item.product_code === orderItem.product_code
+                                          );
+                                          const requestedQuantity = orderItem.quantity;
+                                          const actualQuantity = exportItem?.actual_quantity || 0;
+                                          return (
+                                            <TableRow key={index}>
+                                              <TableCell className="text-center font-medium">{orderItem.product_name}</TableCell>
+                                              <TableCell className="text-center">{orderItem.product_code}</TableCell>
+                                              <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
+                                              <TableCell className="text-center">{formatCurrency(orderItem.unit_price)}</TableCell>
+                                              <TableCell className="text-center font-medium">
+                                                {formatCurrency(actualQuantity * orderItem.unit_price)}
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })
+                                      ) : (
+                                        // Show export slip items directly (no order)
+                                        slip.export_slip_items?.map((exportItem, index) => (
                                           <TableRow key={index}>
-                                            <TableCell className="font-medium">{orderItem.product_name}</TableCell>
-                                            <TableCell>{orderItem.product_code}</TableCell>
-                                            <TableCell className="text-right font-medium text-blue-600">{requestedQuantity}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(orderItem.unit_price)}</TableCell>
-                                            <TableCell className="text-right font-medium">
-                                              {formatCurrency(actualQuantity * orderItem.unit_price)}
+                                            <TableCell className="text-center font-medium">{exportItem.product_name}</TableCell>
+                                            <TableCell className="text-center">{exportItem.product_code}</TableCell>
+                                            <TableCell className="text-center font-medium text-blue-600">{exportItem.actual_quantity}</TableCell>
+                                            <TableCell className="text-center">{formatCurrency(exportItem.unit_price)}</TableCell>
+                                            <TableCell className="text-center font-medium">
+                                              {formatCurrency(exportItem.actual_quantity * exportItem.unit_price)}
                                             </TableCell>
                                           </TableRow>
-                                        );
-                                      })}
+                                        ))
+                                      )}
                                     </TableBody>
                                   </Table>
                                 </div>
                               </div>
                             )}
-
                             {/* Notes */}
                             {slip.notes && (
                               <div>
@@ -717,7 +1360,6 @@ function ExportSlipsContent() {
                                 </div>
                               </div>
                             )}
-
                             {/* Documents - Temporarily disabled */}
                             <div>
                               <Label className="font-medium block mb-3">Tài liệu đính kèm:</Label>
@@ -728,13 +1370,11 @@ function ExportSlipsContent() {
                           </div>
                         </DialogContent>
                       </Dialog>
-                      
                       {/* Status Update Dropdown - Only show when status can be updated */}
                       {getAvailableStatusOptions(slip.status).length > 0 && (
                         <Select
                           value=""
                           onValueChange={(newStatus) => {
-                            console.log('Status changed for slip:', slip.code, 'to:', newStatus);
                             handleStatusUpdateWithSelection(slip.id, newStatus, '');
                           }}
                         >
@@ -785,15 +1425,13 @@ function ExportSlipsContent() {
               ))
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </CardContent>
       </Card>
-
-
     </div>
   );
 }
-
 export default function ExportSlips() {
   return (
     <PermissionGuard 
@@ -804,4 +1442,3 @@ export default function ExportSlips() {
     </PermissionGuard>
   );
 }
-

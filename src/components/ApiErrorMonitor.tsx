@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, AlertTriangle, RefreshCw, X } from 'lucide-react';
-
 interface ApiError {
   timestamp: string;
   url: string;
@@ -13,22 +12,17 @@ interface ApiError {
   statusText: string;
   error: string;
 }
-
 export const ApiErrorMonitor: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [errors, setErrors] = useState<ApiError[]>([]);
   const [isMonitoring, setIsMonitoring] = useState(false);
-
   // Monitor console for API errors
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-
     const originalWarn = console.warn;
     const originalError = console.error;
-
     console.warn = (...args) => {
       originalWarn(...args);
-      
       // Check if it's an API fallback message
       const message = args[0];
       if (typeof message === 'string' && message.includes('API call failed, using fallback')) {
@@ -42,15 +36,12 @@ export const ApiErrorMonitor: React.FC = () => {
             statusText: errorInfo.statusText || 'Unknown',
             error: errorInfo.error || 'Unknown error'
           };
-          
           setErrors(prev => [newError, ...prev.slice(0, 9)]); // Keep last 10 errors
         }
       }
     };
-
     console.error = (...args) => {
       originalError(...args);
-      
       // Check for network errors and connection refused errors
       const message = args[0];
       if (typeof message === 'string' && (message.includes('Network Error') || message.includes('ECONNREFUSED'))) {
@@ -62,37 +53,29 @@ export const ApiErrorMonitor: React.FC = () => {
           statusText: 'Connection Refused',
           error: 'Backend server appears to be offline'
         };
-        
         setErrors(prev => [newError, ...prev.slice(0, 9)]);
       }
     };
-
     return () => {
       console.warn = originalWarn;
       console.error = originalError;
     };
   }, []);
-
   const clearErrors = () => {
     setErrors([]);
   };
-
   const testApi = async () => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0'}/health`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      console.log('API test successful');
     } catch (error) {
-      console.error('API test failed:', error);
     }
   };
-
   if (!import.meta.env.DEV || errors.length === 0) {
     return null;
   }
-
   return (
     <div className="fixed bottom-4 right-4 z-50">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>

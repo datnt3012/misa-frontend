@@ -12,14 +12,12 @@ import { orderApi } from "@/api/order.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { useNavigate } from "react-router-dom";
-
 interface CreateOrderFromQuotationProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   quotation: Quotation | null;
   onOrderCreated?: () => void;
 }
-
 const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
   open,
   onOpenChange,
@@ -41,7 +39,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [initialPayment, setInitialPayment] = useState(0);
   const [notes, setNotes] = useState("");
-
   useEffect(() => {
     if (open && quotation) {
       loadWarehouses();
@@ -61,12 +58,10 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       setNotes(quotation.note || "");
     }
   }, [open, quotation]);
-
   const loadWarehouses = async () => {
     try {
       const warehousesRes = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
       setWarehouses(warehousesRes.warehouses || []);
-      
       // Auto-select warehouse if only one available
       if (warehousesRes.warehouses?.length === 1 && orderItems.length > 0) {
         setOrderItems(prev => prev.map(item => ({
@@ -75,7 +70,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
         })));
       }
     } catch (error) {
-      console.error('Error loading warehouses:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tải danh sách kho"),
@@ -83,7 +77,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       });
     }
   };
-
   const updateItemWarehouse = (index: number, warehouseId: string) => {
     setOrderItems(prev => {
       const items = [...prev];
@@ -91,11 +84,9 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       return items;
     });
   };
-
   const calculateTotalAmount = () => {
     return orderItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
   };
-
   const handleSubmit = async () => {
     if (!quotation) {
       toast({
@@ -105,7 +96,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       });
       return;
     }
-
     if (orderItems.length === 0) {
       toast({
         title: "Lỗi",
@@ -114,7 +104,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       });
       return;
     }
-
     // Validate all items have warehouse
     const invalidItems = orderItems.filter(item => !item.warehouse_id);
     if (invalidItems.length > 0) {
@@ -125,12 +114,9 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       });
       return;
     }
-
     try {
       setLoading(true);
-      
       const totalAmount = calculateTotalAmount();
-      
       const orderData = {
         customerId: quotation.customer_id,
         customerName: quotation.customer_name,
@@ -148,21 +134,16 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
           unitPrice: item.unit_price
         }))
       };
-
       const createdOrder = await orderApi.createOrder(orderData);
-      
       toast({
         title: "Thành công",
         description: `Đã tạo đơn hàng ${createdOrder.order_number} từ báo giá ${quotation.code}`,
       });
-      
       onOrderCreated?.();
       onOpenChange(false);
-      
       // Navigate to orders page
       navigate('/orders');
     } catch (error) {
-      console.error('Error creating order from quotation:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tạo đơn hàng từ báo giá"),
@@ -172,11 +153,8 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
       setLoading(false);
     }
   };
-
   if (!quotation) return null;
-
   const totalAmount = calculateTotalAmount();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -186,7 +164,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
             Tạo đơn hàng từ báo giá {quotation.code} - Khách hàng: {quotation.customer_name}
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-4">
           {/* Quotation Info */}
           <div className="bg-muted p-4 rounded-lg">
@@ -201,7 +178,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
               </div>
             </div>
           </div>
-
           {/* Order Items */}
           <div className="space-y-2">
             <Label>Chi tiết sản phẩm</Label>
@@ -260,7 +236,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
               </div>
             </div>
           </div>
-
           {/* Payment Info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -288,7 +263,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
               />
             </div>
           </div>
-
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes">Ghi chú</Label>
@@ -300,7 +274,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
               rows={3}
             />
           </div>
-
           {/* Actions */}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -315,6 +288,4 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
     </Dialog>
   );
 };
-
-export default CreateOrderFromQuotation;
-
+export default CreateOrderFromQuotation;

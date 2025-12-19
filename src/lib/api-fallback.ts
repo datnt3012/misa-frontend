@@ -1,5 +1,4 @@
 // API Fallback utilities for when backend is not available
-
 export const isBackendAvailable = async (): Promise<boolean> => {
   try {
     // Try the root endpoint first (should return "Hello World" from AppController)
@@ -7,20 +6,14 @@ export const isBackendAvailable = async (): Promise<boolean> => {
       method: 'GET',
       signal: AbortSignal.timeout(3000),
     });
-    
     if (response.ok) {
-      console.log('Backend health check successful at root endpoint');
       return true;
     }
-    
-    console.log('Backend health check failed');
     return false;
   } catch (error) {
-    console.log('Backend not available:', error);
     return false;
   }
 };
-
 export const createApiFallback = <T, P extends any[] = []>(
   apiCall: (...args: P) => Promise<T>,
   fallbackValue: T,
@@ -38,23 +31,17 @@ export const createApiFallback = <T, P extends any[] = []>(
         url: error.config?.url,
         method: error.config?.method
       };
-      
       // Only log if it's not a connection refused error (backend offline)
       if (!error.message?.includes('ECONNREFUSED') && !error.message?.includes('Network Error')) {
-        console.warn(errorMessage || 'API call failed, using fallback:', errorInfo);
       } else {
-        console.log('Backend appears to be offline, using fallback data');
       }
-      
       // Return fallback value for any error (network, 500, etc.)
       return fallbackValue;
     }
   };
 };
-
 // Mock data for development
 export const mockNotifications = [];
-
 export const mockWarehouses = [
   {
     id: '1',
@@ -66,7 +53,6 @@ export const mockWarehouses = [
     updated_at: new Date().toISOString(),
   }
 ];
-
 export const mockProducts = [
   {
     id: '1',
@@ -84,7 +70,6 @@ export const mockProducts = [
     updated_at: new Date().toISOString(),
   }
 ];
-
 export const mockCustomers = [
   {
     id: '1',
@@ -97,7 +82,6 @@ export const mockCustomers = [
     updated_at: new Date().toISOString(),
   }
 ];
-
 export const mockOrders = [
   {
     id: '1',
@@ -117,7 +101,6 @@ export const mockOrders = [
     updated_at: new Date().toISOString(),
   }
 ];
-
 // Mock authentication data
 export const mockUsers = [
   {
@@ -137,7 +120,6 @@ export const mockUsers = [
     updated_at: new Date().toISOString(),
   }
 ];
-
 export const mockLoginResponse = {
   access_token: 'mock-access-token-' + Date.now(),
   refresh_token: 'mock-refresh-token-' + Date.now(),

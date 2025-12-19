@@ -13,13 +13,11 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
-
 interface OrderViewDialogProps {
   order: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
 interface StatusHistoryItem {
   id: string;
   old_status?: string;
@@ -33,7 +31,6 @@ interface StatusHistoryItem {
     full_name: string;
   };
 }
-
 export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   order,
   open,
@@ -48,7 +45,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   const { toast } = useToast();
   // Use ref to track current orderId to prevent race conditions
   const currentOrderIdRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (open && order?.id) {
       // Reset state when opening dialog or order changes
@@ -59,7 +55,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       setPaymentHistory([]);
       setActivityHistory([]);
       setLoading(true);
-      
       // Load data for the current order
       loadOrderDetails(newOrderId);
       loadPaymentHistory(newOrderId);
@@ -75,12 +70,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order?.id]);
-
   const loadOrderDetails = async (orderId: string) => {
     if (!orderId) {
       return;
     }
-    
     setLoading(true);
     try {
       const orderData = await orderApi.getOrder(orderId);
@@ -89,7 +82,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
         setOrderDetails(orderData);
       }
     } catch (error) {
-      console.error('Error loading order details:', error);
       // Only show error if this is still the current order
       if (currentOrderIdRef.current === orderId) {
         toast({
@@ -105,7 +97,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       }
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -113,7 +104,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const getPaymentMethodLabel = (method: string) => {
     const methods: Record<string, string> = {
       cash: 'Tiền mặt',
@@ -123,18 +113,15 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     };
     return methods[method] || method;
   };
-
   const loadBanks = async () => {
     try {
       const banksList = await orderApi.getBanks();
       setBanks(banksList || []);
     } catch (error) {
-      console.error('[OrderViewDialog] Error loading banks:', error);
       // Don't show error toast - just log and continue with empty array
       setBanks([]);
     }
   };
-
   const getBankName = (bankIdOrName: string | undefined): string => {
     if (!bankIdOrName) return '';
     // First try to find by ID
@@ -146,12 +133,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     // If not found in banks list, return the value as-is (might be name from API)
     return bankIdOrName;
   };
-
   const loadPaymentHistory = async (orderId: string) => {
     if (!orderId) {
       return;
     }
-    
     try {
       const payments = await paymentsApi.getPaymentsByOrder(orderId);
       // Sort by payment date, most recent first
@@ -165,7 +150,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
         loadActivityHistory(orderId, payments);
       }
     } catch (error) {
-      console.error('Error loading payment history:', error);
       // Only update if this is still the current order
       if (currentOrderIdRef.current === orderId) {
         setPaymentHistory([]);
@@ -174,24 +158,19 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       }
     }
   };
-
   const loadActivityHistory = async (orderId: string, currentPaymentHistory?: Payment[]) => {
     if (!orderId) {
       return;
     }
-    
     // Mark that we've called the API
     setHistoryApiCalled(true);
-    
     try {
       // Try to get history from backend API first
       const historyData = await orderApi.getOrderHistory(orderId);
-      
       // Only update if this is still the current order
       if (currentOrderIdRef.current !== orderId) {
         return;
       }
-      
       if (historyData && historyData.length > 0) {
         // Normalize and map backend history data
         const activities: StatusHistoryItem[] = historyData.map((item: any) => ({
@@ -207,26 +186,22 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
             full_name: item.creator?.full_name || item.creator?.fullName || item.changed_by_user?.full_name || 'Hệ thống'
           },
         }));
-
         // Sort by date, most recent first
         activities.sort((a, b) => 
           new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
         );
-        
         // Double check this is still the current order before updating state
         if (currentOrderIdRef.current === orderId) {
           setActivityHistory(activities);
         }
         return;
       }
-      
       // If API returns empty, set empty array
       // Fallback will be created in useEffect when orderDetails is ready
       if (currentOrderIdRef.current === orderId) {
         setActivityHistory([]);
       }
     } catch (error) {
-      console.error('Error loading activity history:', error);
       // On error, set empty array
       // Fallback will be created in useEffect when orderDetails is ready
       if (currentOrderIdRef.current === orderId) {
@@ -234,7 +209,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       }
     }
   };
-
   // Create fallback activity history when orderDetails and paymentHistory are available
   // This runs when API returns empty or fails
   useEffect(() => {
@@ -242,14 +216,12 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     if (!currentOrderId || !orderDetails || orderDetails.id !== currentOrderId) {
       return;
     }
-
     // Only create fallback if:
     // 1. API was called (historyApiCalled === true)
     // 2. Activity history is empty (API returned empty or failed)
     // 3. We have orderDetails
     if (historyApiCalled && activityHistory.length === 0 && orderDetails) {
       const activities: StatusHistoryItem[] = [];
-      
       // Add order creation activity
       activities.push({
         id: 'creation',
@@ -260,7 +232,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
           full_name: `${orderDetails.creator_info.firstName || ''} ${orderDetails.creator_info.lastName || ''}`.trim() || 'Hệ thống'
         } : { full_name: 'Hệ thống' }
       });
-
       // Add payment activities
       paymentHistory.forEach((payment) => {
         activities.push({
@@ -272,7 +243,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
           user_profile: payment.creator_profile || { full_name: 'Hệ thống' }
         });
       });
-
       // Add status change if updated
       if (orderDetails.updated_at && orderDetails.updated_at !== orderDetails.created_at) {
         const timeDiff = new Date(orderDetails.updated_at).getTime() - new Date(orderDetails.created_at).getTime();
@@ -286,7 +256,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
           });
         }
       }
-
       // Add completion if completed
       if (orderDetails.completed_at) {
         activities.push({
@@ -297,12 +266,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
           user_profile: { full_name: 'Hệ thống' }
         });
       }
-
       // Sort by date, most recent first
       activities.sort((a, b) => 
         new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
       );
-      
       // Only update if this is still the current order
       if (currentOrderIdRef.current === currentOrderId) {
         setActivityHistory(activities);
@@ -310,11 +277,9 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderDetails?.id, paymentHistory.length, historyApiCalled, activityHistory.length]);
-
   const formatDateTime = (dateString: string) => {
     return format(new Date(dateString), "dd/MM/yyyy HH:mm", { locale: vi });
   };
-
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     return (
@@ -323,12 +288,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       </Badge>
     );
   };
-
   const getUserInitials = (name: string) => {
     if (!name) return 'U';
     return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
-
   if (loading && !orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -343,7 +306,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       </Dialog>
     );
   }
-
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -358,7 +320,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       </Dialog>
     );
   }
-
   const totalAmount = orderDetails.total_amount || 0;
   const expenses = orderDetails.expenses || [];
   const expensesTotal = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
@@ -368,7 +329,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     ? paymentHistory.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
     : (orderDetails.paid_amount || 0);
   const debtAmount = Math.max(0, totalAmount - paidAmount);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] flex flex-col p-0">
@@ -377,7 +337,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
             <span>Chi tiết đơn hàng</span>
           </DialogTitle>
         </DialogHeader>
-
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="space-y-6">
             {/* Order Information */}
@@ -434,7 +393,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 </div>
               </CardContent>
             </Card>
-
             {/* Customer Information */}
             <Card>
               <CardHeader>
@@ -473,7 +431,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 </div>
               </CardContent>
             </Card>
-
             {/* VAT Company Information */}
             {(orderDetails.taxCode || orderDetails.companyName || orderDetails.vatEmail || orderDetails.companyPhone || orderDetails.companyAddress) && (
               <Card>
@@ -528,7 +485,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 </CardContent>
               </Card>
             )}
-
             {/* Receiver Information */}
             {(orderDetails.receiverName || orderDetails.receiverPhone || orderDetails.receiverAddress) && (
               <Card>
@@ -559,7 +515,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 </CardContent>
               </Card>
             )}
-
             {/* Products */}
             <Card>
               <CardHeader>
@@ -604,7 +559,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                     )}
                   </TableBody>
                 </Table>
-
                 <div className="mt-4 flex justify-end">
                   <div className="w-96 space-y-2">
                     <div className="flex justify-between text-sm">
@@ -643,7 +597,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 </div>
               </CardContent>
             </Card>
-
             {/* Additional Expenses */}
             <Card>
               <CardHeader>
@@ -680,7 +633,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 )}
               </CardContent>
             </Card>
-
             {/* Payment History */}
             <Card>
               <CardHeader>
@@ -745,7 +697,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                 )}
               </CardContent>
             </Card>
-
             {/* Activity History */}
             <Card>
               <CardHeader>
@@ -769,14 +720,12 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                         {index < activityHistory.length - 1 && (
                           <div className="absolute left-5 top-12 w-0.5 h-full bg-gray-200" />
                         )}
-                        
                         <div className="flex gap-4">
                           <Avatar className="w-10 h-10 border-2 border-background">
                             <AvatarFallback className="text-xs">
                               {getUserInitials(item.user_profile?.full_name || 'Unknown')}
                             </AvatarFallback>
                           </Avatar>
-                          
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <User className="w-4 h-4" />
@@ -784,7 +733,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                               <span>•</span>
                               <span>{formatDateTime(item.changed_at)}</span>
                             </div>
-                            
                             <div className="space-y-2">
                               {/* Show status change if old_status and new_status are different */}
                               {item.old_status && item.new_status && item.old_status !== item.new_status && (
@@ -795,7 +743,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                   {getStatusBadge(item.new_status)}
                                 </div>
                               )}
-                              
                               {/* Show status if only new_status exists and no old_status */}
                               {item.new_status && !item.old_status && (
                                 <div className="flex items-center gap-2">
@@ -803,7 +750,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                   {getStatusBadge(item.new_status)}
                                 </div>
                               )}
-                              
                               {/* Show payment amount change */}
                               {item.old_paid_amount !== undefined && item.new_paid_amount !== undefined && item.old_paid_amount !== item.new_paid_amount && (
                                 <div className="flex items-center gap-2">
@@ -817,7 +763,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                   </span>
                                 </div>
                               )}
-                              
                               {/* Show payment amount if only new_paid_amount exists */}
                               {item.new_paid_amount && item.old_paid_amount === undefined && (
                                 <div className="flex items-center gap-2">
@@ -827,7 +772,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                   </span>
                                 </div>
                               )}
-                              
                               {item.notes && (
                                 <div className="bg-gray-50 rounded-md p-3">
                                   <p className="text-sm text-gray-700">{item.notes}</p>
@@ -836,7 +780,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                             </div>
                           </div>
                         </div>
-                        
                         {index < activityHistory.length - 1 && <Separator className="mt-4" />}
                       </div>
                     ))}
@@ -849,5 +792,4 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
-
+};

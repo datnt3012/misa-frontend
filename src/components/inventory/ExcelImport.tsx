@@ -15,7 +15,6 @@ import { productApi } from '@/api/product.api';
 import { supplierApi } from '@/api/supplier.api';
 import { generateImportSlipCode } from '@/utils/importSlipUtils';
 import * as XLSX from 'xlsx';
-
 interface ImportRecord {
   row: number;
   warehouseCode: string;
@@ -35,11 +34,9 @@ interface ImportRecord {
   status: 'valid' | 'error';
   error?: string;
 }
-
 interface ExcelImportProps {
   onImportComplete?: (data: any[]) => void;
 }
-
 const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<ImportRecord[]>([]);
@@ -52,7 +49,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
   const [selectedSupplier, setSelectedSupplier] = useState<string>('');
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
-
   // Load warehouses and products on component mount
   useEffect(() => {
     const loadData = async () => {
@@ -62,18 +58,14 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
           productApi.getProducts({ page: 1, limit: 1000 }),
           supplierApi.getSuppliers({ page: 1, limit: 1000 })
         ]);
-        
         setWarehouses(warehousesResponse.warehouses || []);
         setProducts(productsResponse.products || []);
         setSuppliers(suppliersResponse.suppliers || []);
       } catch (error) {
-        console.error('Error loading data:', error);
       }
     };
-    
     loadData();
   }, []);
-
   const downloadTemplate = () => {
     // Create Excel template
     const headers = [
@@ -84,7 +76,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       'Giá vốn',
       'Giá bán'
     ];
-    
     const sampleData = [
       ['WH000001', 'SUP160249502', 'PHN001', 50, 150000, 250000],
       ['WH000001', 'SUP160249502', 'PHN002', 30, 200000, 350000],
@@ -92,11 +83,9 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       ['WH000001', 'SUP160249502', 'PHN004', 15, 200000, 350000],
       ['WH000001', 'SUP160249502', 'PHN005', 20, 300000, 500000]
     ];
-
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
-
     // Set column widths
     const colWidths = [
       { wch: 12 }, // Mã kho
@@ -107,20 +96,17 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       { wch: 15 }  // Giá bán
     ];
     ws['!cols'] = colWidths;
-
     // Style header row
     const headerRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:F1');
     for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
       const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
       if (!ws[cellAddress]) continue;
-      
       ws[cellAddress].s = {
         font: { bold: true, color: { rgb: "FFFFFF" } },
         fill: { fgColor: { rgb: "366092" } },
         alignment: { horizontal: "center", vertical: "center" }
       };
     }
-
     // Add instructions sheet
     const instructionsData = [
       ['HƯỚNG DẪN SỬ DỤNG FILE MẪU'],
@@ -144,27 +130,21 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       ['   - Lưu file với định dạng Excel (.xlsx)'],
       ['   - Upload file lên hệ thống để tạo phiếu nhập kho']
     ];
-
     const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
     wsInstructions['!cols'] = [{ wch: 80 }];
-
     // Add sheets to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Dữ liệu nhập kho');
     XLSX.utils.book_append_sheet(wb, wsInstructions, 'Hướng dẫn');
-
     // Generate and download file
     const now = new Date();
     const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
     const filename = `Template_Nhap_Kho_${dateStr}.xlsx`;
-
     XLSX.writeFile(wb, filename);
-    
     toast({
       title: "Tải file mẫu thành công",
       description: `Đã tải file ${filename}`,
     });
   };
-
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
@@ -173,7 +153,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       ];
-      
       if (validTypes.includes(selectedFile.type) || selectedFile.name.endsWith('.csv')) {
         setFile(selectedFile);
       } else {
@@ -185,15 +164,11 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       }
     }
   };
-
   const processFile = async () => {
     if (!file) return;
-    
     setIsProcessing(true);
-    
     try {
       let data: any[][] = [];
-      
       // Check file type and process accordingly
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         // Process Excel file
@@ -208,27 +183,21 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
         const lines = text.split('\n').filter(line => line.trim());
         data = lines.map(line => line.split(',').map(v => v.replace(/^"|"$/g, '').trim()));
       }
-      
       if (data.length < 2) {
         throw new Error('File phải có ít nhất 1 hàng dữ liệu');
       }
-
       // Skip header row and filter out empty rows
       const dataLines = data.slice(1).filter(row => {
         // Check if row has any meaningful content
         return row.some(cell => cell && cell.toString().trim() !== '');
       });
-      
       const processedData: ImportRecord[] = [];
-
       dataLines.forEach((values, index) => {
         const row = index + 2; // +2 because we skipped header and arrays are 0-indexed
-        
         // Skip completely empty rows
         if (!values || values.length === 0 || values.every(cell => !cell || cell.toString().trim() === '')) {
           return;
         }
-        
         if (values.length < 6) {
           processedData.push({
             row,
@@ -246,30 +215,23 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
           });
           return;
         }
-
         const [warehouseCode, supplierCode, code, qty, cost, sell] = values;
-        
         // Skip rows that don't have product code
         if (!code || code.toString().trim() === '') {
           return;
         }
-        
         const quantity = parseInt(qty) || 0;
         const costPrice = parseFloat(cost) || 0;
         const sellPrice = parseFloat(sell) || 0;
-
         let status: 'valid' | 'error' = 'valid';
         let error = '';
-
         // Find existing entities by codes
         const existingProduct = products.find(p => p.code === code);
         const existingWarehouse = warehouses.find(w => w.code === warehouseCode);
         const existingSupplier = suppliers.find(s => s.code === supplierCode);
-        
         const productId = existingProduct?.id;
         const warehouseId = existingWarehouse?.id;
         const supplierId = existingSupplier?.id;
-
         // Validation
         if (!warehouseCode || warehouseCode.toString().trim() === '') error = 'Thiếu mã kho';
         else if (!supplierCode || supplierCode.toString().trim() === '') error = 'Thiếu mã nhà cung cấp';
@@ -281,9 +243,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
         else if (!warehouseId) error = 'Kho không tồn tại trong hệ thống';
         else if (!supplierId) error = 'Nhà cung cấp không tồn tại trong hệ thống';
         else if (!productId) error = 'Sản phẩm không tồn tại trong hệ thống';
-
         if (error) status = 'error';
-
         processedData.push({
           row,
           warehouseCode: warehouseCode || '',
@@ -304,11 +264,9 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
           error
         });
       });
-
       setPreviewData(processedData);
       setShowPreview(true);
     } catch (error) {
-      console.error('Error processing file:', error);
       toast({
         title: "Lỗi xử lý file",
         description: error instanceof Error ? error.message : "Không thể đọc file",
@@ -318,10 +276,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       setIsProcessing(false);
     }
   };
-
   const confirmImport = async () => {
     const validRecords = previewData.filter(record => record.status === 'valid');
-    
     if (validRecords.length === 0) {
       toast({
         title: "Không có dữ liệu hợp lệ",
@@ -330,10 +286,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       });
       return;
     }
-
     // Check if all records have valid warehouse and supplier IDs
     const invalidRecords = validRecords.filter(record => !record.warehouseId || !record.supplierId);
-    
     if (invalidRecords.length > 0) {
       toast({
         title: "Lỗi dữ liệu",
@@ -342,9 +296,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       });
       return;
     }
-
     setIsImporting(true);
-    
     try {
       // Group records by warehouse and supplier to create separate receipts
       const groupedRecords = validRecords.reduce((groups, record) => {
@@ -359,12 +311,10 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
         groups[key].records.push(record);
         return groups;
       }, {} as Record<string, { warehouseId: string; supplierId: string; records: any[] }>);
-
       // Create warehouse receipts for each group
       const receiptPromises = Object.values(groupedRecords).map(async (group) => {
         // Generate code using utility function
         const code = generateImportSlipCode();
-        
         const receiptData = {
           warehouseId: group.warehouseId,
           supplierId: group.supplierId,
@@ -378,50 +328,38 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
             unitPrice: Number(record.costPrice)
           }))
         };
-
         // Validate data before sending
         if (!receiptData.warehouseId || !receiptData.supplierId) {
           throw new Error('Missing warehouseId or supplierId');
         }
-        
         if (!receiptData.details || receiptData.details.length === 0) {
           throw new Error('No details provided');
         }
-        
         // Validate each detail
         for (const detail of receiptData.details) {
           if (!detail.productId || !detail.quantity || !detail.unitPrice) {
             throw new Error(`Invalid detail: ${JSON.stringify(detail)}`);
           }
         }
-        
         const result = await warehouseReceiptsApi.createReceipt(receiptData);
         return result;
       });
-
       const receipts = await Promise.all(receiptPromises);
-      
       toast({
         title: "Thành công",
         description: `Tạo ${receipts.length} phiếu nhập kho thành công với ${validRecords.length} sản phẩm`,
       });
-      
       // Call callback if provided
       if (onImportComplete) {
         onImportComplete(validRecords);
       }
-
       // Reset form
       setFile(null);
       setPreviewData([]);
       setShowPreview(false);
-      
     } catch (error: any) {
-      console.error('Error creating warehouse receipt:', error);
-      
       // Extract error message from API response
       let errorMessage = "Không thể tạo phiếu nhập kho";
-      
       if (error?.response?.data?.message) {
         if (Array.isArray(error.response.data.message)) {
           errorMessage = error.response.data.message.join('\n');
@@ -431,7 +369,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       } else if (error?.message) {
         errorMessage = error.message;
       }
-      
       toast({
         title: "Lỗi tạo phiếu nhập kho",
         description: errorMessage,
@@ -441,10 +378,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       setIsImporting(false);
     }
   };
-
   const validCount = previewData.filter(r => r.status === 'valid').length;
   const errorCount = previewData.filter(r => r.status === 'error').length;
-
   return (
     <div className="space-y-6">
       <Card>
@@ -469,8 +404,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
               Tải file mẫu Excel
             </Button>
           </div>
-
-
           {/* File Upload */}
           <div className="space-y-2">
             <Label htmlFor="file-upload">Chọn file Excel/CSV</Label>
@@ -501,7 +434,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
               </Button>
             </div>
           </div>
-
           {/* Instructions */}
           <Alert>
             <AlertTriangle className="h-4 w-4" />
@@ -513,7 +445,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
           </Alert>
         </CardContent>
       </Card>
-
       {/* Preview Data */}
       {showPreview && (
         <Card>
@@ -584,7 +515,6 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
                 </TableBody>
               </Table>
             </div>
-
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setShowPreview(false)}>
                 Hủy
@@ -613,5 +543,4 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
     </div>
   );
 };
-
 export default ExcelImport;

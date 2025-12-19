@@ -9,7 +9,6 @@ import { Plus, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { getErrorMessage } from "@/lib/error-utils";
-
 interface OrderTagsManagerProps {
   orderId: string;
   open: boolean;
@@ -19,23 +18,18 @@ interface OrderTagsManagerProps {
   currentTags?: OrderTag[];
   availableTags?: OrderTag[];
 }
-
 type OrderTag = ApiOrderTag;
-
 const normalizeLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_NAMES = ["đã đối soát", "reconciled"];
 const PENDING_NAMES = ["chưa đối soát", "pending reconciliation"];
-
 const isMatchingTag = (tag: OrderTag, candidates: string[]) => {
   const normalizedTargets = candidates.map(normalizeLabel);
   const sources = [tag.name, tag.raw_name, tag.display_name];
   return sources.some((source) => normalizedTargets.includes(normalizeLabel(source)));
 };
-
 const isReconciledTag = (tag: OrderTag) => isMatchingTag(tag, RECONCILED_NAMES);
 const isPendingTag = (tag: OrderTag) => isMatchingTag(tag, PENDING_NAMES);
 const isReconciliationTag = (tag: OrderTag) => isReconciledTag(tag) || isPendingTag(tag);
-
 export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   orderId,
   open,
@@ -51,13 +45,11 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   const [showNewTagForm, setShowNewTagForm] = useState(false);
   const [newTag, setNewTag] = useState({ name: '', color: '#64748b', description: '' });
   const { toast } = useToast();
-
   useEffect(() => {
     if (availableTags.length) {
       setAllTags(availableTags);
     }
   }, [availableTags]);
-
   useEffect(() => {
     if (open) {
       // Always load tags when dialog opens to ensure we have the latest data
@@ -65,7 +57,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       loadTags();
     }
   }, [open, orderId]);
-
   // Separate useEffect to handle currentTags updates - runs after allTags is loaded
   useEffect(() => {
     if (open && currentTags && allTags.length > 0) {
@@ -78,7 +69,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
           if (matchedById) {
             return matchedById;
           }
-          
           // If not found by ID, try to find by name/display_name/raw_name
           // (fallback for cases where tags are passed as names)
           const matchedByName = allTags.find(t => 
@@ -94,7 +84,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
           if (matchedByName) {
             return matchedByName;
           }
-          
           // Fallback: use the tag from props, but ensure it has at least a display name
           const displayName = tag.display_name || tag.name || tag.raw_name;
           return {
@@ -115,7 +104,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       onAssignedTagsChange?.([]);
     }
   }, [currentTags, open, allTags]);
-
   const loadTags = async () => {
     try {
       // Only load tags with type 'order'
@@ -131,10 +119,8 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       });
     }
   };
-
   const createNewTag = async () => {
     if (!newTag.name.trim()) return;
-
     setLoading(true);
     try {
       const createdTag = await orderTagsApi.createTag({
@@ -143,7 +129,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
         description: newTag.description.trim() || undefined,
         type: 'order', // Ensure new tags are created with type 'order'
       });
-
       setAllTags((prev) => {
         const next = prev.some(tag => tag.id === createdTag.id) ? prev : [...prev, createdTag];
         return next;
@@ -156,7 +141,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       });
       await loadTags();
     } catch (error) {
-      console.error('Error creating tag:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tạo nhãn mới",
@@ -166,7 +150,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       setLoading(false);
     }
   };
-
   const updateOrderTags = async (updatedList: OrderTag[], successMessage: string) => {
     setLoading(true);
     try {
@@ -189,12 +172,10 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       setLoading(false);
     }
   };
-
   const assignTag = async (tagId: string) => {
     if (assignedTags.some(tag => tag.id === tagId)) {
       return;
     }
-
     const tag = allTags.find(t => t.id === tagId);
     if (!tag) {
       toast({
@@ -204,26 +185,21 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       });
       return;
     }
-
     let updated = [...assignedTags, tag];
-
     if (isReconciledTag(tag)) {
       updated = updated.filter(existing => !isPendingTag(existing));
     } else if (isPendingTag(tag)) {
       updated = updated.filter(existing => !isReconciledTag(existing));
     }
-
     try {
       await updateOrderTags(updated, "Đã gán nhãn cho đơn hàng");
     } catch {
       // errors already handled inside updateOrderTags
     }
   };
-
   const removeTag = async (tagId: string) => {
     const tagToRemove = assignedTags.find(tag => tag.id === tagId);
     if (!tagToRemove) return;
-
     if (isReconciliationTag(tagToRemove)) {
       const reconciliationTags = assignedTags.filter(isReconciliationTag);
       if (reconciliationTags.length <= 1) {
@@ -235,7 +211,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
         return;
       }
     }
-
     const updated = assignedTags.filter(tag => tag.id !== tagId);
     try {
       await updateOrderTags(updated, "Đã bỏ nhãn khỏi đơn hàng");
@@ -243,11 +218,9 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       // errors already handled inside updateOrderTags
     }
   };
-
   const deleteTag = async (tagId: string) => {
     const tagToDelete = allTags.find(tag => tag.id === tagId);
     if (!tagToDelete) return;
-
     // Check if tag is assigned to this order
     const isAssigned = assignedTags.some(tag => tag.id === tagId);
     if (isAssigned) {
@@ -258,7 +231,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       });
       return;
     }
-
     // Check if it's a default tag (should not be deleted)
     if (tagToDelete.is_default) {
       toast({
@@ -268,11 +240,9 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       });
       return;
     }
-
     if (!confirm(`Bạn có chắc chắn muốn xóa nhãn "${getTagDisplayName(tagToDelete)}"?`)) {
       return;
     }
-
     setLoading(true);
     try {
       await orderTagsApi.deleteTag(tagId);
@@ -294,7 +264,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       setLoading(false);
     }
   };
-
   const unassignedTags = useMemo(
     () =>
       allTags.filter(
@@ -302,19 +271,16 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       ),
     [allTags, assignedTags]
   );
-
   // Helper function to get display name for tag
   const getTagDisplayName = (tag: OrderTag) => {
     return tag.display_name || tag.name || tag.raw_name || tag.id;
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Quản lý nhãn đơn hàng</DialogTitle>
         </DialogHeader>
-
         <div className="space-y-6">
           {/* Assigned Tags */}
           <div>
@@ -344,7 +310,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
               )}
             </div>
           </div>
-
           {/* Available Tags */}
           <div>
             <h4 className="font-medium mb-3">Nhãn có sẵn</h4>
@@ -382,7 +347,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
               )}
             </div>
           </div>
-
           {/* Create New Tag */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -396,7 +360,6 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                 Thêm nhãn
               </Button>
             </div>
-
             {showNewTagForm && (
               <div className="space-y-4 p-4 border rounded-lg">
                 <div className="grid grid-cols-2 gap-4">
@@ -458,5 +421,4 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
-
+};

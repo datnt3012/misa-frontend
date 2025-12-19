@@ -20,14 +20,12 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PaymentDialog } from '@/components/PaymentDialog';
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
-
 interface OrderDetailDialogProps {
   order: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOrderUpdated?: () => void;
 }
-
 export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   order,
   open,
@@ -47,7 +45,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [isEditingExpenses, setIsEditingExpenses] = useState(false);
   // Tags are display-only here
   const { toast } = useToast();
-
   useEffect(() => {
     if (open && order) {
       loadOrderDetails();
@@ -55,33 +52,27 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       loadTags();
     }
   }, [open, order]);
-
   const loadProducts = async () => {
     try {
       const response = await productApi.getProducts({ page: 1, limit: 1000 });
       setProducts(response.products || []);
     } catch (error) {
-      console.error('Error loading products:', error);
     }
   };
-
   const loadTags = async () => {
     try {
       // Only load tags with type 'order'
       const tags = await orderTagsApi.getAllTags({ type: 'order' });
       setAvailableTags(tags);
     } catch (error) {
-      console.error('Error loading tags:', error);
       // Fallback to empty array if API fails
       setAvailableTags([]);
     }
   };
-
   const loadOrderDetails = async () => {
     if (!order?.id) {
       return;
     }
-    
     setLoading(true);
     try {
       const orderData = await orderApi.getOrder(order.id);
@@ -95,14 +86,12 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           const customer = await customerApi.getCustomer(orderData.customer_id);
           setCustomerDetails(customer);
         } catch (e) {
-          console.warn('Could not load customer details', e);
           setCustomerDetails(null);
         }
       } else {
         setCustomerDetails(null);
       }
     } catch (error) {
-      console.error('Error loading order details:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
@@ -112,26 +101,20 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setLoading(false);
     }
   };
-
-
   const handleUpdateStatusDirect = async (newStatus: string) => {
     if (!orderDetails) return;
-    
     setLoading(true);
     try {
       await orderApi.updateOrder(orderDetails.id, {
         status: newStatus as any
       });
-      
       // Refresh order details from API
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
-      
       // Notify parent component to refresh order list
       if (onOrderUpdated) {
         onOrderUpdated();
       }
-      
       toast({
         title: "Thành công",
         description: "Đã cập nhật trạng thái đơn hàng",
@@ -146,9 +129,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setLoading(false);
     }
   };
-
   // Removed tag update logic
-
   const startEditing = (field: string, currentValue: any, addressInfo?: any) => {
     setEditingFields(prev => ({ ...prev, [field]: true }));
     setEditValues(prev => ({ 
@@ -157,7 +138,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       ...(addressInfo && { [`${field}_addressInfo`]: addressInfo })
     }));
   };
-
   const cancelEditing = (field: string) => {
     setEditingFields(prev => ({ ...prev, [field]: false }));
     setEditValues(prev => {
@@ -167,16 +147,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       return newValues;
     });
   };
-
   const saveField = async (field: string) => {
     if (!orderDetails) return;
-    
     setLoading(true);
     try {
       const updateData: any = {};
       const value = editValues[field];
       const addressInfo = editValues[`${field}_addressInfo`];
-      
       // Translate UI snake_case to API camelCase for updates
       // Only allow editing receiver fields if they are empty originally
       const original = orderDetails as any;
@@ -218,25 +195,20 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           updateData['addressInfo'] = normalizedInfo; // BE expects addressInfo for receiver
         }
       }
-      
       await orderApi.updateOrder(orderDetails.id, updateData);
-      
       // Refresh order details from API
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
-      
       setEditingFields(prev => ({ ...prev, [field]: false }));
       setEditValues(prev => {
         const newValues = { ...prev };
         delete newValues[field];
         return newValues;
       });
-      
       // Notify parent component to refresh order list
       if (onOrderUpdated) {
         onOrderUpdated();
       }
-      
       toast({
         title: "Thành công",
         description: "Đã cập nhật thông tin đơn hàng",
@@ -251,19 +223,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setLoading(false);
     }
   };
-
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(numAmount);
   };
-
   const renderEditableAddressField = (field: string, label: string, value: any, addressInfo?: any) => {
     const isEditing = editingFields[field];
     const editValue = editValues[field] ?? value;
     const editAddressInfo = editValues[`${field}_addressInfo`] ?? addressInfo;
-
     const formatFullAddress = (addr: string, ai: any) => {
       const wardName = ai?.ward?.name || ai?.wardName;
       const districtName = ai?.district?.name || ai?.districtName;
@@ -275,7 +244,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       if (provinceName) parts.push(provinceName);
       return parts.join(', ');
     };
-
     return (
       <div>
         <label className="text-sm font-medium text-muted-foreground">{label}:</label>
@@ -329,11 +297,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       </div>
     );
   };
-
   const renderEditableField = (field: string, label: string, value: any, type: 'text' | 'textarea' = 'text') => {
     const isEditing = editingFields[field];
     const editValue = editValues[field] ?? value;
-
     return (
       <div>
         <label className="text-sm font-medium text-muted-foreground">{label}:</label>
@@ -377,7 +343,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       </div>
     );
   };
-
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     return (
@@ -386,7 +351,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       </Badge>
     );
   };
-
   const getPaymentStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: any }> = {
       'unpaid': { label: 'Chưa thanh toán', variant: 'destructive' },
@@ -394,27 +358,22 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       'paid': { label: 'Đã thanh toán', variant: 'default' },
       'refunded': { label: 'Đã hoàn tiền', variant: 'outline' },
     };
-    
     const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
-
   // Calculate payment status based on paid amount vs total amount
   const calculatePaymentStatus = (paidAmount: number, totalAmount: number): string => {
     if (paidAmount <= 0) return 'unpaid';
     if (paidAmount >= totalAmount) return 'paid';
     return 'partially_paid';
   };
-
   // Helper function to get display name for tag
   const getTagDisplayName = (tag: OrderTag) => {
     return tag.display_name || tag.name || tag.raw_name || tag.id;
   };
-
   // Convert tags from string array to OrderTag objects for display
   const getTagsForDisplay = () => {
     if (!orderDetails?.tags || !Array.isArray(orderDetails.tags)) return [];
-
     return orderDetails.tags.map(tagName => {
       // Try to find tag by id, name, display_name, or raw_name
       const tag = availableTags.find(t =>
@@ -423,7 +382,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
         t.display_name === tagName ||
         t.raw_name === tagName
       );
-
       // If tag found, return it; otherwise create a default tag object
       return tag || {
         id: tagName,
@@ -434,7 +392,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       };
     });
   };
-  
   // Show all tags in this dialog, with reconciliation tags first
   const getOtherTags = () => {
     const allTags = getTagsForDisplay();
@@ -442,7 +399,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     const otherTags = allTags.filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
     return [...reconciliationTags, ...otherTags];
   };
-
   // Product editing functions
   const startEditingItem = (itemId: string, item: OrderItem) => {
     setEditingItems(prev => ({
@@ -457,7 +413,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       }
     }));
   };
-
   const cancelEditingItem = (itemId: string) => {
     setEditingItems(prev => {
       const newItems = { ...prev };
@@ -465,19 +420,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       return newItems;
     });
   };
-
   const updateEditingItem = (itemId: string, field: keyof OrderItem, value: any) => {
     setEditingItems(prev => {
       const current = prev[itemId] || {};
       const updated = { ...current, [field]: value };
-      
       // Auto-calculate total_price when quantity or unit_price changes
       if (field === 'quantity' || field === 'unit_price') {
         const quantity = field === 'quantity' ? Number(value) : (updated.quantity || 0);
         const unitPrice = field === 'unit_price' ? Number(value) : (updated.unit_price || 0);
         updated.total_price = quantity * unitPrice;
       }
-      
       // Auto-fill product info when product_id changes
       if (field === 'product_id') {
         const product = products.find(p => p.id === value);
@@ -489,17 +441,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           updated.total_price = (updated.quantity || 0) * (product.price || 0);
         }
       }
-      
       return { ...prev, [itemId]: updated };
     });
   };
-
   const saveItem = async (itemId: string) => {
     if (!orderDetails) return;
-    
     const editedItem = editingItems[itemId];
     if (!editedItem) return;
-    
     setLoading(true);
     try {
       await orderApi.updateOrderItem(orderDetails.id, itemId, {
@@ -509,18 +457,14 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
         quantity: editedItem.quantity || 0,
         unit_price: editedItem.unit_price || 0
       });
-      
       // Refresh order details
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
-      
       // Clear editing state
       cancelEditingItem(itemId);
-      
       if (onOrderUpdated) {
         onOrderUpdated();
       }
-      
       toast({
         title: "Thành công",
         description: "Đã cập nhật sản phẩm",
@@ -535,26 +479,20 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setLoading(false);
     }
   };
-
   const deleteItem = async (itemId: string) => {
     if (!orderDetails) return;
-    
     if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi đơn hàng?')) {
       return;
     }
-    
     setLoading(true);
     try {
       await orderApi.deleteOrderItem(orderDetails.id, itemId);
-      
       // Refresh order details
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
-      
       if (onOrderUpdated) {
         onOrderUpdated();
       }
-      
       toast({
         title: "Thành công",
         description: "Đã xóa sản phẩm",
@@ -569,10 +507,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setLoading(false);
     }
   };
-
   const addNewItem = () => {
     if (!orderDetails) return;
-    
     if (products.length === 0) {
       toast({
         title: "Lỗi",
@@ -581,7 +517,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       });
       return;
     }
-    
     setLoading(true);
     const firstProduct = products[0];
     orderApi.addOrderItem(orderDetails.id, {
@@ -611,7 +546,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setLoading(false);
     });
   };
-
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -626,31 +560,25 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       </Dialog>
     );
   }
-
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails.order_number}</DialogTitle>
         </DialogHeader>
-
         <div className="space-y-6">
           {/* Customer Information */}
           <div className="space-y-4">
             {renderEditableField('customer_name', 'Họ tên', customerDetails?.name || orderDetails.customer_name)}
             {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
-
             <div>
               <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
               <div className="text-base">{orderDetails.customer?.code || orderDetails.customer_code || 'Chưa có mã'}</div>
             </div>
-
             <div>
               <label className="text-sm font-medium text-muted-foreground">Email:</label>
               <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
             </div>
-
             <div>
               <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
               <div className="flex gap-2 flex-wrap mt-1">
@@ -668,10 +596,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 )}
               </div>
             </div>
-
             {renderEditableField('notes', 'Ghi chú', orderDetails.notes, 'textarea')}
           </div>
-
           {/* Shipping Information */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -691,9 +617,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               )}
             </div>
           </div>
-
           <Separator />
-
           {/* VAT Company Information */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -710,9 +634,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               </div>
             </div>
           </div>
-
           <Separator />
-
           {/* Products */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -725,7 +647,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 Thêm sản phẩm
               </Button>
             </div>
-            
             <Table>
               <TableHeader>
                 <TableRow>
@@ -743,7 +664,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   orderDetails.items.map((item: OrderItem, index: number) => {
                     const isEditing = !!editingItems[item.id || ''];
                     const editedItem = editingItems[item.id || ''] || item;
-                    
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{index + 1}</TableCell>
@@ -850,7 +770,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 )}
               </TableBody>
             </Table>
-
             <div className="flex justify-end">
               <div className="w-96 space-y-3">
                 {/* Summary Section */}
@@ -887,9 +806,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               </div>
             </div>
           </div>
-
           <Separator />
-
           {/* Additional Expenses */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1075,9 +992,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               </div>
             )}
           </div>
-
           <Separator />
-
           {/* Order Status and Info */}
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -1275,9 +1190,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
            </div>
          </div>
        </DialogContent>
-
       {/* Tags manager intentionally removed in this dialog */}
-      
       {/* Payment Dialog */}
       {orderDetails && (
         <PaymentDialog
@@ -1296,4 +1209,3 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
      </Dialog>
    );
  };
-

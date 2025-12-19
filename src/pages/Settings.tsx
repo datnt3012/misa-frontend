@@ -19,15 +19,12 @@ import RolePermissionsManager from "@/components/settings/RolePermissionsManager
 import { usersApi, User, UserRole } from "@/api/users.api";
 import { authApi } from "@/api/auth.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
-
 // UserRole interface imported from users.api.ts
-
 interface EmailPreferences {
   receive_order_notifications: boolean;
   receive_status_updates: boolean;
   receive_payment_updates: boolean;
 }
-
 const SettingsContent = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -66,46 +63,33 @@ const SettingsContent = () => {
   const { user } = useAuth();
   const { isAdmin } = usePermissions();
   const { toast } = useToast();
-
   useEffect(() => {
     loadEmailPreferences();
     loadCurrentUserRole();
   }, []);
-
   // Handle tab changes for lazy loading
   useEffect(() => {
-    console.log('🔍 Tab change detected:', { activeTab, usersLoaded, rolesLoaded });
-    
     if (activeTab === "roles" && !usersLoaded) {
-      console.log('🔍 Loading users for roles tab...');
       loadUsers();
       setUsersLoaded(true);
     }
     if (activeTab === "roles" && !rolesLoaded) {
-      console.log('🔍 Loading roles for roles tab...');
       loadUserRoles();
       setRolesLoaded(true);
     }
     if (activeTab === "permissions" && !rolesLoaded) {
-      console.log('🔍 Loading roles for permissions tab...');
       loadUserRoles();
       setRolesLoaded(true);
     }
   }, [activeTab, usersLoaded, rolesLoaded]);
-
-
   const loadCurrentUserRole = async () => {
     // Backend API call will be implemented later
   };
-
   const loadUsers = async () => {
     try {
-      console.log('🔍 Loading users...');
       const response = await usersApi.getUsers({ limit: 100 });
-      console.log('✅ Users API response:', response);
       const users = response.users || [];
       setUsers(users);
-      
       // Extract unique roles from users data
       const uniqueRoles = users.reduce((acc: any[], user: any) => {
         if (user.role && !acc.find(role => role.id === user.role.id)) {
@@ -113,21 +97,17 @@ const SettingsContent = () => {
         }
         return acc;
       }, []);
-      
       if (uniqueRoles.length > 0) {
         setUserRoles((prevRoles) => {
           const roleMap = new Map(prevRoles.map((role) => [role.id, role]));
-
           uniqueRoles.forEach((role) => {
             const existing = roleMap.get(role.id);
             roleMap.set(role.id, existing ? { ...existing, ...role } : role);
           });
-
           return Array.from(roleMap.values());
         });
       }
     } catch (error: any) {
-      console.error('❌ Error loading users from backend:', error);
       toast({
         title: "Lỗi",
         description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tải danh sách người dùng"),
@@ -138,7 +118,6 @@ const SettingsContent = () => {
       setUserRoles([]);
     }
   };
-
   const loadUserRoles = async () => {
     try {
       const roles = await usersApi.getUserRoles();
@@ -146,16 +125,13 @@ const SettingsContent = () => {
         setUserRoles(roles);
       }
     } catch (error) {
-      console.error('Error loading roles from /roles endpoint:', error);
       // Only use backend data - no fallback
       // Roles will be extracted from users data if available
     }
   };
-
   const loadEmailPreferences = async () => {
     // Backend API call will be implemented later
   };
-
   const updateEmailPreferences = async (newPrefs: Partial<EmailPreferences>) => {
     // Backend API call will be implemented later
     const updatedPrefs = { ...emailPreferences, ...newPrefs };
@@ -165,7 +141,6 @@ const SettingsContent = () => {
       description: "Đã cập nhật cài đặt email (local only)",
     });
   };
-
   const handlePasswordChange = async () => {
     if (!currentPassword) {
       toast({
@@ -175,7 +150,6 @@ const SettingsContent = () => {
       });
       return;
     }
-
     if (newPassword !== confirmPassword) {
       toast({
         title: "Lỗi",
@@ -184,7 +158,6 @@ const SettingsContent = () => {
       });
       return;
     }
-
     if (newPassword.length < 6) {
       toast({
         title: "Lỗi",
@@ -193,21 +166,17 @@ const SettingsContent = () => {
       });
       return;
     }
-
     try {
       setLoading(true);
-      
       // Change password using API
       await authApi.changePassword({
         oldPassword: currentPassword,
         newPassword: newPassword
       });
-
       toast({
         title: "Thành công",
         description: "Đã đổi mật khẩu thành công",
       });
-
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -221,9 +190,7 @@ const SettingsContent = () => {
       setLoading(false);
     }
   };
-
   const handleCreateUser = async () => {
-    
     if (!newUserUsername.trim() || !newUserPassword.trim()) {
       toast({
         title: "Lỗi",
@@ -232,7 +199,6 @@ const SettingsContent = () => {
       });
       return;
     }
-
     if (newUserPassword.length < 6) {
       toast({
         title: "Lỗi",
@@ -241,15 +207,12 @@ const SettingsContent = () => {
       });
       return;
     }
-
     try {
       setCreateUserLoading(true);
-      
       // Use the selected role ID directly
       if (!newUserRole) {
         throw new Error('Vai trò không hợp lệ');
       }
-
       const newUser = await usersApi.createUser({
         email: newUserEmail.trim() || undefined,
         username: newUserUsername.trim(),
@@ -260,7 +223,6 @@ const SettingsContent = () => {
         address: newUserAddress || undefined,
         roleId: newUserRole,
       });
-
       // Reset form
       setNewUserEmail("");
       setNewUserUsername("");
@@ -271,23 +233,18 @@ const SettingsContent = () => {
       setNewUserPassword("");
       setNewUserRole("");
       setShowCreateUserForm(false);
-
       // Reload users and roles to update both table and dropdown
       await loadUsers();
       await loadUserRoles();
-
       const userDisplayName = newUser.firstName || newUser.lastName 
         ? `${newUser.firstName || ''} ${newUser.lastName || ''}`.trim()
         : newUser.username;
       const userIdentifier = newUser.email || newUser.username;
-      
       toast({
         title: "Thành công",
         description: `Đã tạo tài khoản cho ${userDisplayName} (${userIdentifier})`,
       });
-
     } catch (error: any) {
-      console.error('Error creating user:', error);
       toast({
         title: "Lỗi",
         description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo người dùng"),
@@ -297,34 +254,25 @@ const SettingsContent = () => {
       setCreateUserLoading(false);
     }
   };
-
   const handleDeleteUserAccount = async (userId: string, userIdentifier: string, userRole: string) => {
     // Permission checks removed - let backend handle authorization
-
     if (!confirm(`Bạn có chắc muốn xóa tài khoản "${userIdentifier}"? Hành động này không thể hoàn tác.`)) {
       return;
     }
-
     try {
       setDeleteUserLoading(userId);
-      
       // Call backend API - let backend handle authorization/permission check
       const result = await usersApi.deleteUser(userId);
-
       toast({
         title: "Thành công",
         description: result?.message || "Đã xóa tài khoản người dùng",
       });
-
       // Reload users and roles after deletion
       await loadUsers();
       await loadUserRoles();
     } catch (error: any) {
-      console.error('Delete user error:', error);
-      
       // Backend will return appropriate error messages for permission/authorization issues
       const errorMessage = error.response?.data?.message || error.message || "Không thể xóa tài khoản người dùng";
-      
       toast({
         title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
         description: convertPermissionCodesInMessage(errorMessage),
@@ -334,7 +282,6 @@ const SettingsContent = () => {
       setDeleteUserLoading(null);
     }
   };
-
   const handleResetUserPassword = async () => {
     if (!selectedUserId) {
       toast({
@@ -344,7 +291,6 @@ const SettingsContent = () => {
       });
       return;
     }
-
     if (newUserPasswordReset !== confirmUserPasswordReset) {
       toast({
         title: "Lỗi",
@@ -353,7 +299,6 @@ const SettingsContent = () => {
       });
       return;
     }
-
     if (newUserPasswordReset.length < 6) {
       toast({
         title: "Lỗi",
@@ -362,30 +307,23 @@ const SettingsContent = () => {
       });
       return;
     }
-
     try {
       setResetPasswordLoading(true);
-
       // Call PATCH /users/{userId} with password field - backend handles authorization/permission check
       await usersApi.updateUser(selectedUserId, {
         password: newUserPasswordReset,
       });
-
       toast({
         title: "Thành công",
         description: "Đã đổi mật khẩu nhân viên thành công",
       });
-
       setSelectedUserId("");
       setNewUserPasswordReset("");
       setConfirmUserPasswordReset("");
       setShowResetPasswordForm(false);
     } catch (error: any) {
-      console.error('Reset user password error:', error);
-      
       // Backend will return appropriate error messages for permission/authorization issues
       const errorMessage = error.response?.data?.message || error.message || "Không thể đổi mật khẩu nhân viên";
-      
       toast({
         title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
         description: convertPermissionCodesInMessage(errorMessage),
@@ -395,31 +333,25 @@ const SettingsContent = () => {
       setResetPasswordLoading(false);
     }
   };
-
   const handleUpdateUserRole = async (userId: string, newRoleId: string) => {
     try {
       setUpdateRoleLoading(userId);
-      
       await usersApi.updateUser(userId, {
         roleId: newRoleId,
       });
-
       toast({
         title: "Thành công",
         description: "Đã cập nhật vai trò người dùng",
       });
-
       setEditingRole(null);
       setTempRoleValues(prev => {
         const newTemp = { ...prev };
         delete newTemp[userId];
         return newTemp;
       });
-
       // Reload users and roles
       await loadUsers();
       await loadUserRoles();
-
     } catch (error: any) {
       toast({
         title: "Lỗi",
@@ -430,7 +362,6 @@ const SettingsContent = () => {
       setUpdateRoleLoading(null);
     }
   };
-
   const getRoleBadge = (role: string) => {
     const roleConfig = {
       owner_director: { label: 'Giám đốc', variant: 'default' as const },
@@ -440,19 +371,15 @@ const SettingsContent = () => {
       shipper: { label: 'Giao hàng', variant: 'secondary' as const },
       admin: { label: 'Quản trị', variant: 'destructive' as const }
     };
-
     const config = roleConfig[role as keyof typeof roleConfig] || { label: role, variant: 'outline' as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   // Chỉ cho phép Admin xem và thao tác đổi mật khẩu nhân viên (Owner không được phép)
   const canViewPasswordReset = isAdmin;
   const canResetPassword = isAdmin;
-
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
@@ -462,7 +389,6 @@ const SettingsContent = () => {
           </h1>
           <p className="text-muted-foreground">Quản lý tài khoản và phân quyền hệ thống</p>
         </div>
-
         <Tabs defaultValue="password" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="password" className="flex items-center gap-2">
@@ -482,7 +408,6 @@ const SettingsContent = () => {
               Quản lý quyền
             </TabsTrigger>
           </TabsList>
-
           {/* Password Change Tab */}
           <TabsContent value="password">
             <Card>
@@ -506,7 +431,6 @@ const SettingsContent = () => {
                     placeholder="Nhập mật khẩu hiện tại"
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="new-password">Mật khẩu mới</Label>
                   <Input
@@ -517,7 +441,6 @@ const SettingsContent = () => {
                     placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Xác nhận mật khẩu mới</Label>
                   <Input
@@ -528,9 +451,7 @@ const SettingsContent = () => {
                     placeholder="Nhập lại mật khẩu mới"
                   />
                 </div>
-
                 <Separator />
-
                 <div className="flex justify-end">
                   <Button 
                     onClick={handlePasswordChange}
@@ -541,11 +462,9 @@ const SettingsContent = () => {
                     {loading ? "Đang cập nhật..." : "Đổi mật khẩu"}
                   </Button>
                 </div>
-
               </CardContent>
             </Card>
           </TabsContent>
-
           {/* Email Preferences Tab */}
           <TabsContent value="email">
             <Card>
@@ -574,9 +493,7 @@ const SettingsContent = () => {
                       className="w-4 h-4"
                     />
                   </div>
-                  
                   <Separator />
-                  
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <Label className="text-base">Thay đổi trạng thái đơn hàng</Label>
@@ -591,9 +508,7 @@ const SettingsContent = () => {
                       className="w-4 h-4"
                     />
                   </div>
-                  
                   <Separator />
-                  
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <Label className="text-base">Cập nhật thanh toán</Label>
@@ -609,7 +524,6 @@ const SettingsContent = () => {
                     />
                   </div>
                 </div>
-
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-medium text-blue-800 mb-2">Lưu ý về email</h4>
                   <ul className="text-sm text-blue-700 space-y-1">
@@ -621,7 +535,6 @@ const SettingsContent = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
           {/* User Roles Tab - For Admin and Owner Director */}
           <TabsContent value="roles">
             <PermissionGuard 
@@ -686,7 +599,6 @@ const SettingsContent = () => {
                               </SelectContent>
                             </Select>
                           </div>
-
                           <div className="space-y-2">
                             <Label htmlFor="new-user-password">Mật khẩu mới</Label>
                             <Input
@@ -698,7 +610,6 @@ const SettingsContent = () => {
                               minLength={6}
                             />
                           </div>
-
                           <div className="space-y-2">
                             <Label htmlFor="confirm-user-password">Xác nhận mật khẩu mới</Label>
                             <Input
@@ -711,7 +622,6 @@ const SettingsContent = () => {
                             />
                           </div>
                         </div>
-
                         <div className="flex gap-2 justify-end">
                           <Button 
                             variant="outline"
@@ -734,7 +644,6 @@ const SettingsContent = () => {
                             {resetPasswordLoading ? "Đang đổi mật khẩu..." : "Đổi mật khẩu nhân viên"}
                           </Button>
                         </div>
-
                         <div className="bg-yellow-50 p-4 rounded-lg">
                           <h4 className="font-medium text-yellow-800 mb-2">Lưu ý quan trọng</h4>
                           <ul className="text-sm text-yellow-700 space-y-1">
@@ -749,7 +658,6 @@ const SettingsContent = () => {
                   </CardContent>
                 </Card>
               )}
-
               {/* Add New User Role - Permission checks removed */}
               <Card>
                   <CardHeader>
@@ -784,7 +692,6 @@ const SettingsContent = () => {
                             />
                             <p className="text-xs text-muted-foreground">Dùng để đăng nhập vào hệ thống</p>
                           </div>
-
                           <div className="space-y-2">
                             <Label htmlFor="user-email">Email</Label>
                             <Input
@@ -796,7 +703,6 @@ const SettingsContent = () => {
                             />
                             <p className="text-xs text-muted-foreground">Có thể dùng email hoặc username để đăng nhập</p>
                           </div>
-
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label htmlFor="user-firstname">Họ</Label>
@@ -808,7 +714,6 @@ const SettingsContent = () => {
                                 placeholder="Nhập họ"
                               />
                             </div>
-
                             <div className="space-y-2">
                               <Label htmlFor="user-lastname">Tên</Label>
                               <Input
@@ -820,7 +725,6 @@ const SettingsContent = () => {
                               />
                             </div>
                           </div>
-
                           <div className="space-y-2">
                             <Label htmlFor="user-address">Địa chỉ</Label>
                             <Input
@@ -831,7 +735,6 @@ const SettingsContent = () => {
                               placeholder="Nhập địa chỉ"
                             />
                           </div>
-
                           <div className="space-y-2">
                             <Label htmlFor="user-phone">Số điện thoại</Label>
                             <Input
@@ -842,7 +745,6 @@ const SettingsContent = () => {
                               placeholder="Nhập số điện thoại"
                             />
                           </div>
-
                           <div className="space-y-2">
                             <Label htmlFor="user-password">Mật khẩu <span className="text-red-500">*</span></Label>
                             <Input
@@ -854,7 +756,6 @@ const SettingsContent = () => {
                               minLength={6}
                             />
                           </div>
-                          
                           <div className="space-y-2">
                             <Label htmlFor="user-role">Vai trò <span className="text-red-500">*</span></Label>
                             <Select value={newUserRole} onValueChange={setNewUserRole}>
@@ -871,7 +772,6 @@ const SettingsContent = () => {
                             </Select>
                           </div>
                         </div>
-
                         <div className="flex gap-2 justify-end">
                           <Button 
                             variant="outline"
@@ -903,7 +803,6 @@ const SettingsContent = () => {
                     )}
                   </CardContent>
                 </Card>
-
               {/* Current User Roles */}
               <Card>
                 <CardHeader>
@@ -1030,11 +929,9 @@ const SettingsContent = () => {
                   </div>
                 </CardContent>
               </Card>
-
             </div>
             </PermissionGuard>
           </TabsContent>
-
           {/* Role Permissions Management Tab */}
           <TabsContent value="permissions">
             <PermissionGuard requiredPermissions={['PERMISSIONS_READ']}>
@@ -1046,7 +943,6 @@ const SettingsContent = () => {
     </div>
   );
 };
-
 const Settings = () => {
   return (
     <PermissionGuard requiredPermissions={['SETTINGS_VIEW']}>
@@ -1054,6 +950,4 @@ const Settings = () => {
     </PermissionGuard>
   );
 };
-
-export default Settings;
-
+export default Settings;

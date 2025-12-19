@@ -3,14 +3,12 @@ import { useState, useEffect, useRef } from 'react';
 import { usersApi } from '@/api/users.api';
 import { authApi } from '@/api/auth.api';
 import { getPermissionDisplayName as getPermissionNameFromCache, initializePermissionNames } from '@/utils/permissionNames';
-
 interface Permission {
   id: string;
   code: string;
   name: string;
   description: string;
 }
-
 interface UserRole {
   id: string;
   name: string;
@@ -18,7 +16,6 @@ interface UserRole {
   description?: string;
   permissions?: string[];
 }
-
 export function usePermissions() {
   const { user, loading: authLoading } = useAuth();
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -29,7 +26,6 @@ export function usePermissions() {
   const [lastError, setLastError] = useState<Error | null>(null);
   const [permissionNamesLoaded, setPermissionNamesLoaded] = useState(false);
   const translationsLoadStarted = useRef<string | null>(null);
-
   // Map roleId to role name (fallback when API doesn't return role info)
   const getRoleNameFromId = (roleId: string): string | null => {
     // Based on the test results, map known roleIds to role names
@@ -42,11 +38,9 @@ export function usePermissions() {
     };
     return roleMap[roleId] || null;
   };
-
   // Map role name to permissions array (fallback when API doesn't return permissions)
   const getRolePermissions = (roleName: string): string[] => {
     const role = roleName.toLowerCase();
-    
     if (role.includes('admin') || role.includes('administrator')) {
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ', 'SETTINGS_CREATE', 'SETTINGS_UPDATE', 'SETTINGS_DELETE',
@@ -67,7 +61,6 @@ export function usePermissions() {
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ', 'NOTIFICATIONS_CREATE', 'NOTIFICATIONS_UPDATE', 'NOTIFICATIONS_DELETE'
       ];
     }
-    
     if (role.includes('owner') || role.includes('director')) {
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ', 'SETTINGS_CREATE', 'SETTINGS_UPDATE', 'SETTINGS_DELETE',
@@ -88,7 +81,6 @@ export function usePermissions() {
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ', 'NOTIFICATIONS_CREATE', 'NOTIFICATIONS_UPDATE', 'NOTIFICATIONS_DELETE'
       ];
     }
-    
     if (role.includes('chief')) {
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ',
@@ -106,7 +98,6 @@ export function usePermissions() {
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
       ];
     }
-    
     if (role.includes('accountant')) {
       return [
         'SETTINGS_VIEW', 'SETTINGS_READ',
@@ -119,7 +110,6 @@ export function usePermissions() {
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
       ];
     }
-    
     if (role.includes('inventory')) {
       return [
         'PRODUCTS_VIEW', 'PRODUCTS_READ', 'PRODUCTS_CREATE', 'PRODUCTS_UPDATE', 'PRODUCTS_DELETE',
@@ -132,7 +122,6 @@ export function usePermissions() {
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
       ];
     }
-    
     if (role.includes('sales')) {
       return [
         'PRODUCTS_VIEW', 'PRODUCTS_READ',
@@ -144,20 +133,17 @@ export function usePermissions() {
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
       ];
     }
-    
     if (role.includes('shipper')) {
       return [
         'ORDERS_VIEW', 'ORDERS_READ', 'ORDERS_UPDATE',
         'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
       ];
     }
-    
     // For unknown roles, return basic permissions
     return [
       'DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ'
     ];
   };
-
   // Initialize permission names cache (shared with permissionMessageConverter)
   // Load after user role is fetched to ensure user is authenticated
   // This avoids 403 errors when trying to access /permissions endpoint
@@ -171,106 +157,81 @@ export function usePermissions() {
       }
       return;
     }
-
     // Try to load all permissions from /permissions endpoint to supplement cache
     // Permission names from user role are already in cache (populated in fetchUserRole)
     // This will merge with existing cache to get all permissions (not just user's permissions)
     const loadAllPermissionNames = async () => {
       try {
-        console.log('🔄 Loading translations from /public/translations endpoint...');
         await initializePermissionNames();
-        
         // Check if translations were loaded successfully
         const { areTranslationsLoaded } = await import('@/utils/translations');
         const { arePermissionsLoaded } = await import('@/utils/permissionNames');
-        
         if (areTranslationsLoaded() || arePermissionsLoaded()) {
           setPermissionNamesLoaded(true);
-          console.log('✅ Translations/permissions loaded successfully');
         } else {
-          console.warn('⚠ Translations not loaded, but marking as ready to avoid blocking UI');
           setPermissionNamesLoaded(true);
         }
       } catch (error: any) {
-        console.error('❌ Failed to load translations:', error);
-        
         // Check if we have any permissions in cache (from user role or translations)
         const { arePermissionsLoaded } = await import('@/utils/permissionNames');
         const { areTranslationsLoaded } = await import('@/utils/translations');
-        
         if (areTranslationsLoaded() || arePermissionsLoaded()) {
-          console.log('✅ Using existing translations/permissions cache');
         } else {
-          console.warn('⚠ No translations/permissions available. Error messages will show formatted codes.');
         }
-        
         // Always set to true to avoid blocking UI
         // Even without translations, we can still format codes for better UX
         setPermissionNamesLoaded(true);
       }
     };
-    
     // Always try to load translations from /public/translations
     // Even if we have permissions from user role, we need ALL permissions for error messages
     // Use a ref to track if we've already initiated the load for this userRole to avoid duplicate calls
     const userRoleId = userRole?.id;
     const loadKey = `${user?.id}-${userRoleId}`;
-    
     // Always try to load translations - use ref to prevent duplicate calls for same user/role
     if (translationsLoadStarted.current !== loadKey) {
       translationsLoadStarted.current = loadKey;
-      console.log('🚀 Starting translations load for user/role:', loadKey);
       loadAllPermissionNames();
     } else {
-      console.log('⏳ Translations load already started for:', loadKey);
     }
   }, [user?.id, authLoading, userRole?.id]);
-
   // Reset retry count when user changes
   useEffect(() => {
     setRetryCount(0);
     setHasFetched(false);
     setLastError(null);
   }, [user?.id]);
-
   useEffect(() => {
     const fetchUserRole = async () => {
       if (!user || authLoading) {
         setLoading(false);
         return;
       }
-
       // Prevent infinite retries - only retry up to 3 times
       if (hasFetched && retryCount >= 3) {
         setLoading(false);
         return;
       }
-
       try {
         setLoading(true);
         setHasFetched(true);
         setLastError(null);
-        
         // Add timeout to prevent hanging API calls
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('API timeout')), 5000)
         );
-        
         // Use the /auth/me endpoint to get current user info with role and permissions
         const response = await Promise.race([
           authApi.getMe(),
           timeoutPromise
         ]) as any;
-        
         // Handle the response from /auth/me
         if (response && response.data) {
           const userData = response.data;
-          
           // The /auth/me endpoint returns user data with role object containing permissions
           if (userData.role && typeof userData.role === 'object') {
             // Extract permission codes from the permissions array
             const permissionCodes = userData.role.permissions?.map((perm: any) => perm.code) || [];
-            
             // Update permission name cache from user role permissions FIRST
             // This ensures we have permission names even if /permissions endpoint is not accessible
             if (userData.role.permissions && Array.isArray(userData.role.permissions)) {
@@ -278,11 +239,9 @@ export function usePermissions() {
               // This ensures we have permission names even if user doesn't have access to /permissions endpoint
               const { updatePermissionNameCacheFromRole } = await import('@/utils/permissionNames');
               updatePermissionNameCacheFromRole(userData.role.permissions);
-              
               // Don't mark as loaded yet - we still need to load translations from /public/translations
               // to get ALL permission names, not just the ones from user role
             }
-            
             setUserRole(userData.role);
             setPermissions(permissionCodes);
           }
@@ -297,7 +256,6 @@ export function usePermissions() {
       } catch (error) {
         setLastError(error as Error);
         setRetryCount(prev => prev + 1);
-        
         // If we've reached max retries, use fallback immediately
         if (retryCount >= 2) {
           const roleName = getRoleNameFromId(user.roleId);
@@ -326,48 +284,37 @@ export function usePermissions() {
         setLoading(false);
       }
     };
-
     fetchUserRole();
   }, [user, authLoading, hasFetched, retryCount]);
-
   const hasPermission = (permission: string, isPageAccess: boolean = false): boolean => {
     if (!user || loading || authLoading) {
       return false;
     }
-    
     // Check if userRole and permissions are loaded
     if (!userRole || !permissions || permissions.length === 0) {
       return false;
     }
-    
-    
     // Allow admin access to everything - only for specific admin roles
     const isAdmin = userRole?.code?.toLowerCase() === 'admin' || 
                    userRole?.name?.toLowerCase() === 'admin' ||
                    userRole?.name?.toLowerCase() === 'owner' ||
                    userRole?.name?.toLowerCase() === 'administrator';
-    
-    
     if (isAdmin) {
       return true;
     }
-    
     // Helper function to generate permission codes based on MODULE_ACTION format
     const generatePermissionCode = (module: string, action: string): string => {
       const moduleUpper = module.toUpperCase();
       const actionUpper = action.toUpperCase();
       return `${moduleUpper}_${actionUpper}`;
     };
-    
     // Helper function to find related permissions dynamically
     const findRelatedPermissions = (module: string, action: string): string[] => {
       const basePermission = generatePermissionCode(module, action);
       const relatedPermissions: string[] = [basePermission];
-      
       // Find all permissions that start with the module prefix
       const modulePrefix = module.toUpperCase();
       const allPermissions = permissions; // Use current user's permissions as reference
-      
       // For complex modules, find related permissions
       if (module === 'inventory') {
         const inventoryModules = ['PRODUCTS', 'STOCK_LEVELS', 'WAREHOUSES', 'CATEGORIES', 'INVENTORY'];
@@ -402,10 +349,8 @@ export function usePermissions() {
           }
         });
       }
-      
       return relatedPermissions;
     };
-
     // Helper function to get fallback permission (VIEW -> READ)
     const getFallbackPermission = (permission: string): string => {
       // If permission ends with VIEW, try READ as fallback
@@ -414,7 +359,6 @@ export function usePermissions() {
       }
       return permission;
     };
-    
     // Only keep truly special cases that can't be auto-generated
     const specialPermissionMap: Record<string, string[]> = {
       // Custom action mappings that don't follow MODULE_ACTION pattern
@@ -426,20 +370,17 @@ export function usePermissions() {
       'settings.manage': ['SETTINGS_MANAGE_ALL'],
       'users.reset_password': ['SETTINGS_CHANGE_PASSWORD'],
     };
-    
     // Auto-generate permissions for simple MODULE_ACTION format
     const getMappedPermissions = (permission: string): string[] => {
       // Check if it's already in the special cases map
       if (specialPermissionMap[permission]) {
         return specialPermissionMap[permission];
       }
-      
       // Parse MODULE.ACTION format
       const [module, action] = permission.split('.');
       if (module && action) {
         // Use dynamic permission finding for complex modules
         const mappedPermissions = findRelatedPermissions(module, action);
-        
         // If no permissions found, apply specific fallback logic
         if (mappedPermissions.length === 0) {
           // Only apply fallback logic for page access, not for action access
@@ -447,7 +388,6 @@ export function usePermissions() {
             // Check if module has VIEW action available
             const viewPermissions = findRelatedPermissions(module, 'view');
             const hasViewAction = viewPermissions.length > 0;
-            
             if (hasViewAction) {
               // Module has VIEW action (like products, revenue) - require VIEW for page access
               if (action === 'view') {
@@ -479,63 +419,49 @@ export function usePermissions() {
             return allPermissions;
           }
         }
-        
         return mappedPermissions;
       }
-      
       // For direct permission codes, return as-is (no automatic fallback)
       // Revenue page specifically requires REVENUE_VIEW, not REVENUE_READ
       return [permission];
     };
-    
     // Check if user has any of the mapped permissions
     const mappedPermissions = getMappedPermissions(permission);
     const hasAccess = mappedPermissions.some(perm => permissions.includes(perm));
-    
     return hasAccess;
   };
-
   const hasAnyPermission = (permissionList: string[], isPageAccess: boolean = true): boolean => {
     if (!user || loading || authLoading) {
       return false;
     }
-    
     // Check if userRole and permissions are loaded
     if (!userRole || !permissions || permissions.length === 0) {
       return false;
     }
-    
     // Allow admin access to everything
     const isAdmin = userRole?.code?.toLowerCase() === 'admin' || 
                    userRole?.name?.toLowerCase().includes('admin') ||
                    userRole?.name?.toLowerCase().includes('owner');
-    
-    
     if (isAdmin) {
       return true;
     }
-    
     // Check if user has any of the required permissions using permission mapping
     const hasAccess = permissionList.some(permission => hasPermission(permission, isPageAccess));
     return hasAccess;
   };
-
   const hasAllPermissions = (permissionList: string[]): boolean => {
     if (!user || loading || authLoading) {
       return false;
     }
     return permissionList.every(permission => permissions.includes(permission));
   };
-
   // Check action access (for API calls) - no fallback, require exact permission
   const hasActionPermission = (permission: string): boolean => {
     return hasPermission(permission, false); // isPageAccess = false
   };
-
   const hasAnyActionPermission = (permissionList: string[]): boolean => {
     return hasAnyPermission(permissionList, false); // isPageAccess = false
   };
-
   // Convert permission codes to more readable names
   // Uses shared permission names cache from backend API (same as RolePermissionsManager and permissionMessageConverter)
   // No hardcoded mapping to avoid name discrepancies
@@ -543,38 +469,31 @@ export function usePermissions() {
     // Use shared permission name cache
     return getPermissionNameFromCache(permissionCode);
   };
-
   // Get error message for permission check
   const getPermissionErrorMessage = (permissionList: string[], requireAll: boolean = false): string => {
     if (!user || loading || authLoading) {
       return 'Đang kiểm tra quyền truy cập...';
     }
-    
     if (!userRole || !permissions || permissions.length === 0) {
       return 'Không thể tải thông tin quyền truy cập';
     }
-    
     // Check if user has the required permissions
     // Note: For revenue page, we only check REVENUE_VIEW, not REVENUE_READ
     const hasAccess = requireAll 
       ? permissionList.every(permission => hasPermission(permission, false)) // No fallback for revenue
       : permissionList.some(permission => hasPermission(permission, false)); // No fallback for revenue
-    
     if (!hasAccess) {
       // Convert permission codes to readable names
       // This uses permission name cache from /permissions endpoint (same as settings page)
       const permissionNames = permissionList.map(code => getPermissionDisplayName(code));
-      
       if (requireAll) {
         return `Bạn cần tất cả các quyền sau: ${permissionNames.join(', ')}`;
       } else {
         return `Bạn cần một trong các quyền sau: ${permissionNames.join(', ')}`;
       }
     }
-    
     return '';
   };
-
   return {
     userRole,
     permissions,

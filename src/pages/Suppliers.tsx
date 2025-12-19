@@ -12,7 +12,6 @@ import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, AlertTriang
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { supplierApi, AddressInfo } from '@/api/supplier.api';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
-
 interface Supplier {
   id: string;
   code: string;
@@ -25,7 +24,6 @@ interface Supplier {
   createdAt: string;
   updatedAt: string;
 }
-
 interface CreateSupplierRequest {
   name: string;
   code?: string;
@@ -38,7 +36,6 @@ interface CreateSupplierRequest {
     wardCode?: string;
   };
 }
-
 interface UpdateSupplierRequest {
   name?: string;
   code?: string;
@@ -51,7 +48,6 @@ interface UpdateSupplierRequest {
     wardCode?: string;
   };
 }
-
 const SuppliersContent: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,7 +68,6 @@ const SuppliersContent: React.FC = () => {
     }
   });
   const { toast } = useToast();
-
   // Format full address with ward/district/province names when available
   const formatAddress = (s: Supplier) => {
     const ai = s?.addressInfo || {};
@@ -86,19 +81,16 @@ const SuppliersContent: React.FC = () => {
     if (provinceNameFromNested) parts.push(provinceNameFromNested);
     return parts.filter(Boolean).join(', ');
   };
-
   // Load suppliers on component mount
   useEffect(() => {
     loadSuppliers();
   }, []);
-
   const loadSuppliers = async () => {
     setLoading(true);
     try {
       const response = await supplierApi.getSuppliers({ page: 1, limit: 1000 });
       setSuppliers(response.suppliers || []);
     } catch (error) {
-      console.error('Error loading suppliers:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách nhà cung cấp",
@@ -108,7 +100,6 @@ const SuppliersContent: React.FC = () => {
       setLoading(false);
     }
   };
-
   const handleCreateSupplier = async () => {
     if (!newSupplier.name.trim()) {
       toast({
@@ -118,7 +109,6 @@ const SuppliersContent: React.FC = () => {
       });
       return;
     }
-
     if (!newSupplier.phoneNumber.trim()) {
       toast({
         title: "Lỗi",
@@ -127,7 +117,6 @@ const SuppliersContent: React.FC = () => {
       });
       return;
     }
-
     try {
       const response = await supplierApi.createSupplier({
         ...newSupplier,
@@ -156,7 +145,6 @@ const SuppliersContent: React.FC = () => {
       });
       loadSuppliers();
     } catch (error: any) {
-      console.error('Error creating supplier:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tạo nhà cung cấp",
@@ -164,10 +152,8 @@ const SuppliersContent: React.FC = () => {
       });
     }
   };
-
   const handleUpdateSupplier = async () => {
     if (!editingSupplier) return;
-
     if (!editingSupplier.name.trim()) {
       toast({
         title: "Lỗi",
@@ -176,7 +162,6 @@ const SuppliersContent: React.FC = () => {
       });
       return;
     }
-
     if (!editingSupplier.contact_phone.trim()) {
       toast({
         title: "Lỗi",
@@ -185,7 +170,6 @@ const SuppliersContent: React.FC = () => {
       });
       return;
     }
-
     try {
       const updateData: UpdateSupplierRequest = {
         name: editingSupplier.name,
@@ -199,7 +183,6 @@ const SuppliersContent: React.FC = () => {
           wardCode: editingSupplier.addressInfo?.wardCode || undefined
         }
       };
-
       const response = await supplierApi.updateSupplier(editingSupplier.id, updateData);
       toast({
         title: "Thành công",
@@ -209,7 +192,6 @@ const SuppliersContent: React.FC = () => {
       setEditingSupplier(null);
       loadSuppliers();
     } catch (error: any) {
-      console.error('Error updating supplier:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật nhà cung cấp",
@@ -217,12 +199,10 @@ const SuppliersContent: React.FC = () => {
       });
     }
   };
-
   const handleDeleteSupplier = async (supplier: Supplier) => {
     if (!confirm(`Bạn có chắc chắn muốn xóa nhà cung cấp "${supplier.name}"?`)) {
       return;
     }
-
     try {
       const response = await supplierApi.deleteSupplier(supplier.id);
       toast({
@@ -231,7 +211,6 @@ const SuppliersContent: React.FC = () => {
       });
       loadSuppliers();
     } catch (error: any) {
-      console.error('Error deleting supplier:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xóa nhà cung cấp",
@@ -239,12 +218,10 @@ const SuppliersContent: React.FC = () => {
       });
     }
   };
-
   const openEditDialog = (supplier: Supplier) => {
     setEditingSupplier({ ...supplier });
     setShowEditDialog(true);
   };
-
   // Filter suppliers based on search term
   const filteredSuppliers = suppliers.filter(supplier =>
     supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -252,7 +229,6 @@ const SuppliersContent: React.FC = () => {
     supplier.contact_phone.includes(searchTerm) ||
     supplier.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
@@ -350,7 +326,6 @@ const SuppliersContent: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
-
       {/* Search and Filters */}
       <Card>
         <CardHeader>
@@ -371,7 +346,6 @@ const SuppliersContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Suppliers Table */}
       <Card>
         <CardHeader>
@@ -477,7 +451,6 @@ const SuppliersContent: React.FC = () => {
           )}
         </CardContent>
       </Card>
-
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -569,7 +542,6 @@ const SuppliersContent: React.FC = () => {
     </div>
   );
 };
-
 const Suppliers: React.FC = () => {
   return (
     <PermissionGuard requiredPermissions={['SUPPLIERS_VIEW']}>
@@ -577,5 +549,4 @@ const Suppliers: React.FC = () => {
     </PermissionGuard>
   );
 };
-
-export default Suppliers;
+export default Suppliers;

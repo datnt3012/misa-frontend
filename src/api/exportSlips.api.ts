@@ -1,6 +1,5 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
 export interface ExportSlipItem {
   id: string;
   product_id: string;
@@ -11,7 +10,6 @@ export interface ExportSlipItem {
   remaining_quantity: number;
   unit_price: number;
 }
-
 export interface ExportSlip {
   id: string;
   code: string; // slip number
@@ -67,7 +65,6 @@ export interface ExportSlip {
     full_name: string;
   };
 }
-
 const normalizeItem = (it: any): ExportSlipItem => ({
   id: it.id || '',
   product_id: it.productId ?? it.product_id ?? '',
@@ -78,7 +75,6 @@ const normalizeItem = (it: any): ExportSlipItem => ({
   remaining_quantity: Number(it.remainingQuantity ?? it.remaining_quantity ?? 0),
   unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
 });
-
 const normalize = (row: any): ExportSlip => {
   return {
     id: row.id || '',
@@ -147,7 +143,6 @@ const normalize = (row: any): ExportSlip => {
     exporter_profile: row.exporter_profile ?? row.exporterProfile ?? undefined,
   };
 };
-
 export interface CreateExportSlipRequest {
   order_id: string;
   warehouse_id: string;
@@ -160,7 +155,6 @@ export interface CreateExportSlipRequest {
     unit_price: number;
   }>;
 }
-
 export const exportSlipsApi = {
   // Create new export slip
   createSlip: async (data: CreateExportSlipRequest): Promise<ExportSlip> => {
@@ -178,21 +172,17 @@ export const exportSlipsApi = {
         unitPrice: item.unit_price.toString()
       }))
     };
-
     const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, slipData);
     return normalize(response.data || response);
   },
-
   getSlips: async (params?: { page?: number; limit?: number; status?: string; search?: string }): Promise<{ slips: ExportSlip[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
     if (params?.status) queryParams.append('status', params.status);
     if (params?.search) queryParams.append('keyword', params.search);
-    
     queryParams.append('type', 'export'); // Filter for export type only
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`;
-    console.log('Fetching export slips from:', url);
     const response = await api.get<any>(url);
     const data = response?.data || response;
     if (data && Array.isArray(data.rows)) {
@@ -211,56 +201,38 @@ export const exportSlipsApi = {
       limit: Number(response?.limit ?? params?.limit ?? slips.length ?? 0),
     };
   },
-
   getSlipByOrderId: async (orderId: string): Promise<ExportSlip | null> => {
     try {
-      console.log('=== Searching for export slip with orderId:', orderId);
-      
       // Try to get all export slips with pagination
       let page = 1;
       let foundSlip = null;
-      
       while (!foundSlip) {
-        console.log(`=== Fetching page ${page}...`);
         const response = await exportSlipsApi.getSlips({ page, limit: 100 });
-        console.log(`=== Found ${response.slips.length} slips on page ${page}`);
-        
         foundSlip = response.slips.find(slip => slip.order_id === orderId);
-        
         if (foundSlip) {
-          console.log('=== Found matching export slip:', foundSlip);
           break;
         }
-        
         // If we got fewer slips than requested, we've reached the end
         if (response.slips.length < 100) {
-          console.log('=== Reached end of results, no matching slip found');
           break;
         }
-        
         page++;
-        
         // Safety check to prevent infinite loop
         if (page > 10) {
-          console.log('=== Stopped searching after 10 pages for safety');
           break;
         }
       }
-      
       return foundSlip || null;
     } catch (error) {
-      console.error('=== Error getting export slip by order ID:', error);
       return null;
     }
   },
-
   approveSlip: async (id: string, approval_notes?: string): Promise<{ message: string }> => {
     // Update status to approved
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.APPROVE(id), { 
       approvalNotes: approval_notes
     });
   },
-
   completeSlip: async (id: string, export_notes?: string): Promise<{ message: string }> => {
     // Update status to completed
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
@@ -268,7 +240,6 @@ export const exportSlipsApi = {
       description: export_notes
     });
   },
-
   // Mark as picked (thủ kho xác nhận đã lấy hàng)
   markAsPicked: async (id: string, export_notes?: string): Promise<{ message: string }> => {
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
@@ -276,7 +247,6 @@ export const exportSlipsApi = {
       description: export_notes
     });
   },
-
   // Mark as exported (hàng đã rời khỏi kho)
   markAsExported: async (id: string, export_notes?: string): Promise<{ message: string }> => {
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
@@ -284,7 +254,6 @@ export const exportSlipsApi = {
       description: export_notes
     });
   },
-
   // Direct transition from pending to exported (Admin/Giám đốc only)
   directExport: async (id: string, export_notes?: string): Promise<{ message: string }> => {
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
@@ -292,7 +261,6 @@ export const exportSlipsApi = {
       description: export_notes
     });
   },
-
   // Mark as cancelled (hủy lấy hàng)
   markAsCancelled: async (id: string, notes?: string): Promise<{ message: string }> => {
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
@@ -301,5 +269,3 @@ export const exportSlipsApi = {
     });
   },
 };
-
-

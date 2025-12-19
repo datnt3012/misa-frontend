@@ -18,12 +18,10 @@ import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { supplierApi, type Supplier } from "@/api/supplier.api";
 import { Loading } from "@/components/ui/loading";
-
 interface OrderSpecificExportSlipCreationProps {
   orderId: string;
   onExportSlipCreated?: () => void;
 }
-
 interface SelectedOrderItem {
   id: string;
   product_id: string;
@@ -33,7 +31,6 @@ interface SelectedOrderItem {
   unit_price: number;
   selected: boolean;
 }
-
 export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCreationProps> = ({ 
   orderId,
   onExportSlipCreated 
@@ -48,14 +45,11 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [orderLoading, setOrderLoading] = useState(true);
-  
   const { user } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-
   // Permission checks
   const canCreateExportSlip = hasPermission('WAREHOUSE_RECEIPTS_CREATE');
-
   useEffect(() => {
     loadOrder();
     loadWarehouses();
@@ -63,7 +57,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
     generateSlipCode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
-
   const generateSlipCode = () => {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -71,13 +64,11 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
     const code = `XK${dateStr}${timeStr}`.slice(0, 20);
     setSlipCode(code);
   };
-
   const loadOrder = async () => {
     try {
       setOrderLoading(true);
       const orderData = await orderApi.getOrderIncludeDeleted(orderId);
       setOrder(orderData);
-      
       // Initialize selected items
       setSelectedItems(
         (orderData.items || []).map(item => ({
@@ -91,7 +82,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         }))
       );
     } catch (error: any) {
-      console.error('Error loading order:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải thông tin đơn hàng",
@@ -101,18 +91,15 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       setOrderLoading(false);
     }
   };
-
   const loadWarehouses = async () => {
     try {
       const response = await warehouseApi.getWarehouses({ page: 1, limit: 100 });
       setWarehouses(response.warehouses || []);
-      
       // Set first warehouse as default if none selected
       if (response.warehouses && response.warehouses.length > 0 && !selectedWarehouse) {
         setSelectedWarehouse(response.warehouses[0].id);
       }
     } catch (error: any) {
-      console.error('Error loading warehouses:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải danh sách kho",
@@ -120,18 +107,15 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
     }
   };
-
   const loadSuppliers = async () => {
     try {
       const response = await supplierApi.getSuppliers({ page: 1, limit: 100 });
       setSuppliers(response.suppliers || []);
-      
       // Set first supplier as default if none selected
       if (response.suppliers && response.suppliers.length > 0 && !selectedSupplier) {
         setSelectedSupplier(response.suppliers[0].id);
       }
     } catch (error: any) {
-      console.error('Error loading suppliers:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải danh sách nhà cung cấp",
@@ -139,7 +123,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
     }
   };
-
   const handleItemSelectionChange = (itemId: string, selected: boolean) => {
     setSelectedItems(prev => 
       prev.map(item => 
@@ -147,7 +130,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       )
     );
   };
-
   const handleQuantityChange = (itemId: string, quantity: number) => {
     setSelectedItems(prev => 
       prev.map(item => 
@@ -155,7 +137,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       )
     );
   };
-
   const handleCreateExportSlip = async () => {
     if (!order) {
       toast({
@@ -165,7 +146,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-
     const selectedExportItems = selectedItems.filter(item => item.selected);
     if (selectedExportItems.length === 0) {
       toast({
@@ -175,7 +155,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-
     if (!selectedWarehouse) {
       toast({
         title: "Lỗi",
@@ -184,7 +163,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-
     if (!selectedSupplier) {
       toast({
         title: "Lỗi",
@@ -193,7 +171,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-
     if (!slipCode || slipCode.length < 3 || slipCode.length > 20) {
       toast({
         title: "Lỗi",
@@ -202,10 +179,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-
     try {
       setLoading(true);
-
       const createRequest: CreateExportSlipRequest = {
         order_id: order.id,
         warehouse_id: selectedWarehouse,
@@ -218,19 +193,14 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
           unit_price: item.unit_price
         }))
       };
-
       const result = await exportSlipsApi.createSlip(createRequest);
-
       toast({
         title: "Thành công",
         description: `Đã tạo phiếu xuất kho ${result.code} cho đơn hàng ${order.order_number}. Thông báo đã được gửi đến Quản lý kho.`,
       });
-
       onExportSlipCreated?.();
     } catch (error: any) {
-      console.error('Error creating export slip:', error);
       const errorMessage = error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho";
-      
       // Check if error is about order already having an export slip
       if (errorMessage.includes('đã có phiếu xuất kho') || errorMessage.includes('already has') || errorMessage.includes('export slip')) {
         toast({
@@ -249,17 +219,14 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       setLoading(false);
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'new':
@@ -282,12 +249,10 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
   const totalSelectedItems = selectedItems.filter(item => item.selected).length;
   const totalSelectedValue = selectedItems
     .filter(item => item.selected)
     .reduce((sum, item) => sum + (item.requested_quantity * item.unit_price), 0);
-
   if (!canCreateExportSlip) {
     return (
       <Card>
@@ -305,7 +270,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       </Card>
     );
   }
-
   if (orderLoading) {
     return (
       <Card>
@@ -323,7 +287,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       </Card>
     );
   }
-
   if (!order) {
     return (
       <Card>
@@ -341,7 +304,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       </Card>
     );
   }
-
   return (
     <Card>
       <CardHeader>
@@ -384,7 +346,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
           </div>
         </div>
-
         {/* Warehouse Selection */}
         <div>
           <Label htmlFor="warehouse-select">Chọn kho xuất hàng <span className="text-red-500">*</span></Label>
@@ -401,7 +362,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </SelectContent>
           </Select>
         </div>
-
         {/* Supplier Selection */}
         <div>
           <Label htmlFor="supplier-select">Chọn nhà cung cấp <span className="text-red-500">*</span></Label>
@@ -418,7 +378,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </SelectContent>
           </Select>
         </div>
-
         {/* Slip Code */}
         <div>
           <Label htmlFor="slip-code">Mã phiếu xuất kho <span className="text-red-500">*</span></Label>
@@ -433,7 +392,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             Mã phiếu phải từ 3-20 ký tự
           </p>
         </div>
-
         {/* Items Selection */}
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -442,7 +400,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
               Đã chọn: {totalSelectedItems} sản phẩm - Tổng: {formatCurrency(totalSelectedValue)}
             </div>
           </div>
-          
           <div className="border rounded-md">
             <Table>
               <TableHeader>
@@ -503,7 +460,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </Table>
           </div>
         </div>
-
         {/* Notes */}
         <div>
           <Label htmlFor="export-notes">Ghi chú phiếu xuất kho</Label>
@@ -515,7 +471,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             rows={3}
           />
         </div>
-
         {/* Status Info */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
@@ -530,7 +485,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
           </div>
         </div>
-
         {/* Notification Info */}
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-start gap-2">
@@ -544,7 +498,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
           </div>
         </div>
-
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4 border-t">
           <Button 
@@ -568,4 +521,4 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       </CardContent>
     </Card>
   );
-};
+};

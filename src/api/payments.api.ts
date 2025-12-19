@@ -1,6 +1,5 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
 export interface Payment {
   id: string;
   order_id: string;
@@ -24,7 +23,6 @@ export interface Payment {
     full_name: string;
   };
 }
-
 export interface CreatePaymentRequest {
   order_id: string;
   amount: number;
@@ -34,14 +32,12 @@ export interface CreatePaymentRequest {
   created_by?: string; // Optional - may be set by backend from auth token
   bank?: string; // Bank ID or code when payment method is bank_transfer
 }
-
 export interface UpdatePaymentRequest {
   amount?: number;
   payment_method?: 'cash' | 'bank_transfer' | 'card' | 'other';
   payment_date?: string;
   notes?: string;
 }
-
 export interface CreateMultiplePaymentRequest {
   orderIds: string[];
   totalAmount: number;
@@ -51,7 +47,6 @@ export interface CreateMultiplePaymentRequest {
   note?: string;
   files?: File[]; // Files to upload for the payments
 }
-
 export interface PaymentDistribution {
   orderId: string;
   orderCode?: string;
@@ -59,14 +54,12 @@ export interface PaymentDistribution {
   percentage: number;
   allocatedAmount: number;
 }
-
 export interface CreateMultiplePaymentResponse {
   payments: Payment[];
   distribution: PaymentDistribution[];
   totalAmount: number;
   groupPaymentId: string;
 }
-
 // Normalize payment data from API response
 const normalizePayment = (row: any): Payment => ({
   id: row.id || '',
@@ -93,19 +86,16 @@ const normalizePayment = (row: any): Payment => ({
                      row.creator?.fullName ?? 
                      row.user?.fullName;
     if (fullName) return { full_name: fullName };
-    
     // Try to construct from firstName and lastName
     const firstName = row.creator?.firstName ?? row.user?.firstName ?? '';
     const lastName = row.creator?.lastName ?? row.user?.lastName ?? '';
     const constructedName = `${firstName} ${lastName}`.trim();
     if (constructedName) return { full_name: constructedName };
-    
     // Fallback to name field
     const name = row.creator?.name ?? row.user?.name;
     return { full_name: name ?? 'Không xác định' };
   })() : undefined,
 });
-
 export const paymentsApi = {
   // Get payments for a specific order
   // Tries multiple endpoints in order:
@@ -117,7 +107,6 @@ export const paymentsApi = {
       try {
         const response = await api.get<any>(API_ENDPOINTS.ORDERS.PAYMENTS(orderId));
         const data = response?.data || response;
-        
         // Handle different response structures
         if (Array.isArray(data)) {
           return data.map(normalizePayment);
@@ -129,12 +118,9 @@ export const paymentsApi = {
           return data.data.map(normalizePayment);
         }
       } catch (ordersEndpointError: any) {
-        console.log('[paymentsApi] Orders endpoint not available, trying payments endpoint:', ordersEndpointError);
-        
         // Fallback: GET /payments?orderId=:id
         const response = await api.get<any>(`${API_ENDPOINTS.PAYMENTS.LIST}?orderId=${orderId}`);
         const data = response?.data || response;
-        
         // Handle different response structures
         if (Array.isArray(data)) {
           return data.map(normalizePayment);
@@ -146,15 +132,12 @@ export const paymentsApi = {
           return data.data.map(normalizePayment);
         }
       }
-      
       return [];
     } catch (error: any) {
-      console.error('[paymentsApi] Error loading payments:', error);
       // Return empty array if API doesn't exist or fails
       return [];
     }
   },
-
   // Create a new payment (JSON only, no files)
   createPayment: async (paymentData: CreatePaymentRequest): Promise<Payment> => {
     try {
@@ -174,14 +157,11 @@ export const paymentsApi = {
           'Content-Type': 'application/json',
         },
       });
-      
       const data = response?.data || response;
       const paymentData_raw = data?.data || data?.payment || data;
-      
       if (paymentData_raw) {
         return normalizePayment(paymentData_raw);
       }
-      
       // If response doesn't have the expected structure, create a normalized payment from request
       return normalizePayment({
         ...paymentData,
@@ -190,40 +170,32 @@ export const paymentsApi = {
         updated_at: new Date().toISOString(),
       });
     } catch (error: any) {
-      console.error('Error creating payment:', error);
       throw error;
     }
   },
-
   // Get a single payment by ID
   getPaymentById: async (paymentId: string): Promise<Payment> => {
     try {
       const response = await api.get<any>(`${API_ENDPOINTS.PAYMENTS.LIST}/${paymentId}`);
       const data = response?.data || response;
       const paymentData_raw = data?.data || data?.payment || data;
-      
       if (paymentData_raw) {
         return normalizePayment(paymentData_raw);
       }
-      
       throw new Error('Invalid payment response structure');
     } catch (error: any) {
-      console.error('Error loading payment:', error);
       throw error;
     }
   },
-
   // Upload files for a payment (multipart/form-data)
   // Upload one file at a time to match backend API (POST /payments/{paymentId}/files expects single file)
   uploadFiles: async (paymentId: string, files: File[]): Promise<Payment> => {
     try {
       let lastPayment: Payment | null = null;
-      
       // Upload files one by one (backend expects single file per request)
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
-
         const response = await api.post<any>(
           `${API_ENDPOINTS.PAYMENTS.LIST}/${paymentId}/files`,
           formData,
@@ -233,47 +205,36 @@ export const paymentsApi = {
             },
           }
         );
-        
         const data = response?.data || response;
         const paymentData_raw = data?.data || data?.payment || data;
-        
         if (paymentData_raw) {
           lastPayment = normalizePayment(paymentData_raw);
         }
       }
-      
       if (!lastPayment) {
         throw new Error('No payment data returned after file uploads');
       }
-      
       return lastPayment;
     } catch (error: any) {
-      console.error('Error uploading files:', error);
       throw error;
     }
   },
-
   // Delete a file from a payment
   deleteFile: async (paymentId: string, filePath: string): Promise<Payment> => {
     try {
       const response = await api.delete<any>(
         `${API_ENDPOINTS.PAYMENTS.LIST}/${paymentId}/files?filePath=${encodeURIComponent(filePath)}`
       );
-      
       const data = response?.data || response;
       const paymentData_raw = data?.data || data?.payment || data;
-      
       if (paymentData_raw) {
         return normalizePayment(paymentData_raw);
       }
-      
       throw new Error('Invalid payment response structure');
     } catch (error: any) {
-      console.error('Error deleting file:', error);
       throw error;
     }
   },
-
   // Update a payment (JSON only, no files)
   updatePayment: async (paymentId: string, paymentData: UpdatePaymentRequest): Promise<Payment> => {
     try {
@@ -282,7 +243,6 @@ export const paymentsApi = {
       if (paymentData.payment_method) payload.paymentMethod = paymentData.payment_method;
       if (paymentData.payment_date) payload.paymentDate = paymentData.payment_date;
       if (paymentData.notes !== undefined) payload.note = paymentData.notes;
-
       const response = await api.patch<any>(
         API_ENDPOINTS.PAYMENTS.UPDATE(paymentId),
         payload,
@@ -292,28 +252,22 @@ export const paymentsApi = {
           },
         }
       );
-      
       const data = response?.data || response;
       const paymentData_raw = data?.data || data?.payment || data;
-      
       if (paymentData_raw) {
         return normalizePayment(paymentData_raw);
       }
-      
       throw new Error('Invalid payment response structure');
     } catch (error: any) {
-      console.error('Error updating payment:', error);
       throw error;
     }
   },
-
   // Create multiple payments (bulk payment)
   createMultiplePayments: async (paymentData: CreateMultiplePaymentRequest): Promise<CreateMultiplePaymentResponse> => {
     try {
       // If files are provided, use FormData for multipart upload
       if (paymentData.files && paymentData.files.length > 0) {
         const formData = new FormData();
-
         // Add JSON data as string
         const jsonPayload = {
           orderIds: paymentData.orderIds,
@@ -324,21 +278,17 @@ export const paymentsApi = {
           note: paymentData.note || undefined,
         };
         formData.append('data', JSON.stringify(jsonPayload));
-
         // Add files
         paymentData.files.forEach((file, index) => {
           formData.append(`files`, file);
         });
-
         const response = await api.post<any>(API_ENDPOINTS.PAYMENTS.MULTIPLE, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
         });
-
         const data = response?.data || response;
         const responseData = data?.data || data;
-
         if (responseData) {
           return {
             payments: (responseData.payments || []).map(normalizePayment),
@@ -355,26 +305,21 @@ export const paymentsApi = {
           paymentDate: paymentData.paymentDate || new Date().toISOString(),
           paymentMethod: paymentData.paymentMethod,
         };
-
         // Include bank if payment method is bank_transfer
         if (paymentData.paymentMethod === 'bank_transfer' && paymentData.bank) {
           payload.bank = paymentData.bank;
         }
-
         // Include note if provided
         if (paymentData.note) {
           payload.note = paymentData.note;
         }
-
         const response = await api.post<any>(API_ENDPOINTS.PAYMENTS.MULTIPLE, payload, {
           headers: {
             'Content-Type': 'application/json',
           },
         });
-
         const data = response?.data || response;
         const responseData = data?.data || data;
-
         if (responseData) {
           return {
             payments: (responseData.payments || []).map(normalizePayment),
@@ -384,26 +329,21 @@ export const paymentsApi = {
           };
         }
       }
-
       throw new Error('Invalid multiple payment response structure');
     } catch (error: any) {
-      console.error('Error creating multiple payments:', error);
       throw error;
     }
   },
-
   // Delete a payment
   deletePayment: async (paymentId: string, hardDelete: boolean = false): Promise<{ message: string }> => {
     try {
       const url = hardDelete 
         ? `${API_ENDPOINTS.PAYMENTS.DELETE(paymentId)}?hard=true`
         : API_ENDPOINTS.PAYMENTS.DELETE(paymentId);
-      
       const response = await api.delete<any>(url);
       return response?.data || response || { message: 'Payment deleted successfully' };
     } catch (error: any) {
-      console.error('Error deleting payment:', error);
       throw error;
     }
   },
-};
+};

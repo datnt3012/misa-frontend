@@ -1,7 +1,6 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 import { mockNotifications } from '@/lib/api-fallback';
-
 export interface Notification {
   id: string;
   userId: string;
@@ -15,7 +14,6 @@ export interface Notification {
   updatedAt: string;
   deletedAt?: string;
 }
-
 export interface CreateNotificationRequest {
   userId: string;
   title: string;
@@ -23,14 +21,12 @@ export interface CreateNotificationRequest {
   type: 'info' | 'success' | 'warning' | 'error';
   relatedOrderId?: string;
 }
-
 const generateId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
-
 const normalizeNotification = (data: any): Notification => {
   if (!data) {
     return {
@@ -45,12 +41,10 @@ const normalizeNotification = (data: any): Notification => {
       updatedAt: new Date().toISOString(),
     };
   }
-
   const typeValue = (data.type || data.notification_type || 'info').toLowerCase();
   const normalizedType: Notification['type'] = ['success', 'warning', 'error'].includes(typeValue)
     ? (typeValue as Notification['type'])
     : 'info';
-
   return {
     id: data.id || data.notification_id || generateId(),
     userId: data.userId || data.user_id || data.user?.id || '',
@@ -65,7 +59,6 @@ const normalizeNotification = (data: any): Notification => {
     deletedAt: data.deletedAt || data.deleted_at || undefined,
   };
 };
-
 const normalizeListResponse = (response: any): { notifications: Notification[]; total: number; page: number; limit: number } => {
   const raw =
     response?.notifications ??
@@ -77,10 +70,8 @@ const normalizeListResponse = (response: any): { notifications: Notification[]; 
     response?.results ??
     response ??
     [];
-
   const notificationsArray = Array.isArray(raw) ? raw : [];
   const normalized = notificationsArray.map(normalizeNotification);
-
   const total =
     response?.total ??
     response?.data?.total ??
@@ -98,7 +89,6 @@ const normalizeListResponse = (response: any): { notifications: Notification[]; 
     response?.pagination?.limit ??
     response?.data?.pageSize ??
     (normalized.length || 50);
-
   return {
     notifications: normalized,
     total,
@@ -106,7 +96,6 @@ const normalizeListResponse = (response: any): { notifications: Notification[]; 
     limit,
   };
 };
-
 export const notificationApi = {
   // Get notifications from backend, normalize response structure
   getNotifications: async (params?: {
@@ -121,15 +110,12 @@ export const notificationApi = {
       if (params?.limit) queryParams.append('limit', params.limit.toString());
       if (params?.unread_only) queryParams.append('unread_only', 'true');
       if (params?.userId) queryParams.append('userId', params.userId);
-
       const url = queryParams.toString()
         ? `${API_ENDPOINTS.NOTIFICATIONS.LIST}?${queryParams.toString()}`
         : API_ENDPOINTS.NOTIFICATIONS.LIST;
-
       const response = await api.get<any>(url);
       return normalizeListResponse(response);
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
       // Fall back to mock data but still normalized, so UI stays consistent
       return normalizeListResponse({
         notifications: mockNotifications,
@@ -139,24 +125,19 @@ export const notificationApi = {
       });
     }
   },
-
   // Mark notification as read
   markAsRead: async (id: string): Promise<void> => {
     await api.patch<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.DETAIL(id), { isRead: true });
   },
-
   // Mark all notifications as read
   markAllAsRead: async (params?: { userId?: string }): Promise<void> => {
     const queryParams = new URLSearchParams();
     if (params?.userId) queryParams.append('userId', params.userId);
-
     const url = queryParams.toString()
       ? `${API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ}?${queryParams.toString()}`
       : API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ;
-
     await api.post<{ message: string }>(url);
   },
-
   // Create notification
   createNotification: async (data: CreateNotificationRequest): Promise<Notification> => {
     try {
@@ -167,11 +148,9 @@ export const notificationApi = {
         type: data.type,
         related_order_id: data.relatedOrderId,
       };
-
       const response = await api.post<any>(API_ENDPOINTS.NOTIFICATIONS.LIST, payload);
       return normalizeNotification(response);
     } catch (error) {
-      console.warn('Create notification API not available, using mock response');
       return normalizeNotification({
         id: Date.now().toString(),
         userId: data.userId,

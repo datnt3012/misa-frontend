@@ -8,19 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Edit, Trash2, Plus, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
-
 interface BankOption {
   id: string;
   name: string;
   code?: string;
 }
-
 interface BankSelectorProps {
   value?: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
 }
-
 const BankSelector: React.FC<BankSelectorProps> = ({
   value,
   onValueChange,
@@ -33,11 +30,9 @@ const BankSelector: React.FC<BankSelectorProps> = ({
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newBankData, setNewBankData] = useState({ accountNumber: "", bankName: "" });
   const [editingBank, setEditingBank] = useState<BankOption | null>(null);
-
   useEffect(() => {
     loadBanks();
   }, []);
-
   // Set default bank when banks are loaded
   useEffect(() => {
     if (banks.length > 0 && !value) {
@@ -45,14 +40,12 @@ const BankSelector: React.FC<BankSelectorProps> = ({
       onValueChange(defaultBank.code);
     }
   }, [banks, value, onValueChange]);
-
   const loadBanks = async () => {
     try {
       setLoading(true);
       const bankList = await orderApi.getBanks();
       setBanks(bankList);
     } catch (error) {
-      console.error('Error loading banks:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải danh sách ngân hàng",
@@ -62,35 +55,29 @@ const BankSelector: React.FC<BankSelectorProps> = ({
       setLoading(false);
     }
   };
-
   const selectedBank = banks.find(bank => bank.code === value);
-
   const handleSelect = (bankId: string) => {
     const selectedBank = banks.find(b => b.id === bankId);
     // Use account number (code) instead of ID for payment storage
     onValueChange(selectedBank?.code || bankId);
     setOpen(false);
   };
-
   const handleAddNew = () => {
     setNewBankData({ accountNumber: "", bankName: "" });
     setEditingBank(null);
     setAddDialogOpen(true);
     setOpen(false);
   };
-
   const handleEdit = (bank: BankOption) => {
     setNewBankData({ accountNumber: bank.code, bankName: bank.name });
     setEditingBank(bank);
     setAddDialogOpen(true);
     setOpen(false);
   };
-
   const handleDelete = async (bank: BankOption) => {
     if (!confirm(`Bạn có chắc muốn xóa ngân hàng "${bank.name}"?`)) {
       return;
     }
-
     try {
       setLoading(true);
       await orderApi.deleteBank(bank.id);
@@ -104,7 +91,6 @@ const BankSelector: React.FC<BankSelectorProps> = ({
         onValueChange("");
       }
     } catch (error) {
-      console.error('Error deleting bank:', error);
       toast({
         title: "Lỗi",
         description: "Không thể xóa ngân hàng",
@@ -114,7 +100,6 @@ const BankSelector: React.FC<BankSelectorProps> = ({
       setLoading(false);
     }
   };
-
   const handleSaveBank = async () => {
     if (!newBankData.accountNumber.trim() || !newBankData.bankName.trim()) {
       toast({
@@ -124,7 +109,6 @@ const BankSelector: React.FC<BankSelectorProps> = ({
       });
       return;
     }
-
     try {
       setLoading(true);
       if (editingBank) {
@@ -146,13 +130,11 @@ const BankSelector: React.FC<BankSelectorProps> = ({
           description: "Đã thêm ngân hàng mới",
         });
       }
-
       await loadBanks();
       setAddDialogOpen(false);
       setNewBankData({ accountNumber: "", bankName: "" });
       setEditingBank(null);
     } catch (error) {
-      console.error('Error saving bank:', error);
       toast({
         title: "Lỗi",
         description: editingBank ? "Không thể cập nhật ngân hàng" : "Không thể thêm ngân hàng",
@@ -162,7 +144,6 @@ const BankSelector: React.FC<BankSelectorProps> = ({
       setLoading(false);
     }
   };
-
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
@@ -225,7 +206,6 @@ const BankSelector: React.FC<BankSelectorProps> = ({
         </Command>
       </PopoverContent>
     </Popover>
-
     <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
       <DialogContent>
         <DialogHeader>
@@ -267,5 +247,4 @@ const BankSelector: React.FC<BankSelectorProps> = ({
   </>
 );
 };
-
 export default BankSelector;

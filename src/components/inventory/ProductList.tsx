@@ -24,7 +24,6 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-
 interface ProductListProps {
   products: any[];
   warehouses: any[];
@@ -43,7 +42,6 @@ interface ProductListProps {
     totalPages: number;
   } | null;
 }
-
 const IMPORT_STATUS_LABELS: Record<string, string> = {
   queued: 'Đang chờ xử lý',
   processing: 'Đang xử lý',
@@ -51,7 +49,6 @@ const IMPORT_STATUS_LABELS: Record<string, string> = {
   failed: 'Thất bại',
   cancelled: 'Đã hủy',
 };
-
 const ProductList: React.FC<ProductListProps> = ({
   products,
   warehouses,
@@ -65,7 +62,6 @@ const ProductList: React.FC<ProductListProps> = ({
   onRefreshImportJobs,
   jobHistoryPagination
 }) => {
-  console.log('[ProductList] Received importJobs:', importJobs.length, 'jobs');
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -87,9 +83,12 @@ const ProductList: React.FC<ProductListProps> = ({
     barcode: '',
     lowStockThreshold: 0,
     manufacturer: '',
-    description: ''
+    description: '',
+    isForeignCurrency: false,
+    exchangeRate: 1
   });
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [dialogKey, setDialogKey] = useState(0); // Force dialog re-render
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
@@ -107,12 +106,10 @@ const ProductList: React.FC<ProductListProps> = ({
   const [expandedJobErrors, setExpandedJobErrors] = useState<Set<string>>(new Set());
   // Use ref to store onProductsUpdate to prevent infinite loop when parent re-renders
   const onProductsUpdateRef = React.useRef(onProductsUpdate);
-
   // Keep ref updated when prop changes
   React.useEffect(() => {
     onProductsUpdateRef.current = onProductsUpdate;
   }, [onProductsUpdate]);
-
   // Load initial job history on component mount
   React.useEffect(() => {
     onRefreshImportJobs({
@@ -123,7 +120,6 @@ const ProductList: React.FC<ProductListProps> = ({
       limit: jobHistoryItemsPerPage
     });
   }, []); // Only run once on mount
-
   // Load job history when tab is activated or parameters change
   React.useEffect(() => {
     if (jobStatusTab === 'history') {
@@ -136,24 +132,20 @@ const ProductList: React.FC<ProductListProps> = ({
       });
     }
   }, [jobStatusTab, jobHistorySort, jobHistoryPage, jobHistoryItemsPerPage, onRefreshImportJobs]);
-
   // Refresh product list when import jobs complete successfully
   React.useEffect(() => {
     const completedJobsWithSuccess = importJobs.filter(job =>
       (job.status === 'completed' && job.imported > 0) ||
       (job.status === 'completed' && job.failed === 0 && job.totalRows > 0)
     );
-
     if (completedJobsWithSuccess.length > 0) {
       // Refresh product list when there are successfully completed import jobs
       onProductsUpdateRef.current();
     }
   }, [importJobs]);
-
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
-
   const findCategoryByValue = React.useCallback(
     (value?: string | null) => {
       if (!value) return undefined;
@@ -168,7 +160,6 @@ const ProductList: React.FC<ProductListProps> = ({
     },
     [categories]
   );
-
   const getCategoryNameFromValue = React.useCallback(
     (value?: string | null) => {
       if (!value) return "";
@@ -177,18 +168,34 @@ const ProductList: React.FC<ProductListProps> = ({
     },
     [findCategoryByValue]
   );
-
+  // Update form data when editing product changes
+  React.useEffect(() => {
+    if (editingProduct) {
+      setNewProduct({
+        name: editingProduct.name,
+        code: editingProduct.code,
+        category: findCategoryByValue(editingProduct.category)?.id || editingProduct.category || '',
+        costPrice: editingProduct.originalCostPrice || 0,
+        price: editingProduct.price || 0,
+        unit: editingProduct.unit || 'cái',
+        barcode: editingProduct.barcode || '',
+        lowStockThreshold: editingProduct.lowStockThreshold || 0,
+        manufacturer: editingProduct.manufacturer || '',
+        description: editingProduct.description || '',
+        isForeignCurrency: Boolean(editingProduct.isForeignCurrency),
+        exchangeRate: editingProduct.exchangeRate || 1
+      });
+      setDialogKey(prev => prev + 1);
+    }
+  }, [editingProduct, findCategoryByValue]);
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const productCategory = findCategoryByValue(product.category);
     const matchesCategory = filterCategory === "all" || 
                            (productCategory?.id && productCategory.id === filterCategory);
-    
     return matchesSearch && matchesCategory;
   });
-
   // Load categories from categories API
   const loadCategories = React.useCallback(async () => {
     try {
@@ -197,17 +204,14 @@ const ProductList: React.FC<ProductListProps> = ({
       const activeCategories = response.categories.filter(cat => cat.isActive);
       setCategories(activeCategories);
     } catch (error) {
-      console.error('Error loading categories:', error);
       // Fallback: extract unique categories from products
       const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
       setCategories(uniqueCategories.map(name => ({ id: name, name })));
     }
   }, [products]);
-
   React.useEffect(() => {
     loadCategories();
   }, [loadCategories]);
-
   React.useEffect(() => {
     if (categoryComboOpen) {
       setCategorySearchTerm('');
@@ -216,7 +220,6 @@ const ProductList: React.FC<ProductListProps> = ({
       }
     }
   }, [categoryComboOpen]);
-
   React.useEffect(() => {
     if (editCategoryComboOpen) {
       setEditCategorySearchTerm('');
@@ -225,17 +228,33 @@ const ProductList: React.FC<ProductListProps> = ({
       }
     }
   }, [editCategoryComboOpen]);
-
+  // Reset form when add dialog opens
+  React.useEffect(() => {
+    if (isAddProductDialogOpen) {
+      setNewProduct({
+        name: '',
+        code: '',
+        category: '',
+        costPrice: 0,
+        price: 0,
+        unit: 'cái',
+        barcode: '',
+        lowStockThreshold: 0,
+        manufacturer: '',
+        description: '',
+        isForeignCurrency: false,
+        exchangeRate: 1
+      });
+    }
+  }, [isAddProductDialogOpen]);
   const ensureCategoryId = React.useCallback(async (categoryValue?: string | null) => {
     if (!categoryValue) return null;
     const trimmed = typeof categoryValue === "string" ? categoryValue.trim() : categoryValue;
     if (!trimmed) return null;
-
     const existingCategory = findCategoryByValue(trimmed);
     if (existingCategory) {
       return existingCategory.id;
     }
-
     try {
       const newCategory = await categoriesApi.createCategory({
         name: typeof trimmed === "string" ? trimmed : String(trimmed),
@@ -244,20 +263,16 @@ const ProductList: React.FC<ProductListProps> = ({
       await loadCategories();
       return newCategory.id;
     } catch (error: any) {
-      console.error('Error saving category:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tạo danh mục mới';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
       return null;
     }
   }, [findCategoryByValue, loadCategories, toast]);
-
   const sortedProducts = React.useMemo(() => {
     if (!sortConfig) return filteredProducts;
-
     return [...filteredProducts].sort((a, b) => {
       let aValue: any;
       let bValue: any;
-
       switch (sortConfig.key) {
         case 'code':
           aValue = a.code;
@@ -286,7 +301,6 @@ const ProductList: React.FC<ProductListProps> = ({
         default:
           return 0;
       }
-
       if (aValue < bValue) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
@@ -296,7 +310,6 @@ const ProductList: React.FC<ProductListProps> = ({
       return 0;
     });
   }, [filteredProducts, sortConfig, getCategoryNameFromValue]);
-
   // Pagination logic
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -307,8 +320,6 @@ const ProductList: React.FC<ProductListProps> = ({
     [importJobs]
   );
   const completedJobs = React.useMemo(() => {
-    console.log(importJobs)
-    const filtered = importJobs.filter(job => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled');
     return filtered;
   }, [importJobs]);
   const activeImportJob = React.useMemo(() => {
@@ -319,16 +330,13 @@ const ProductList: React.FC<ProductListProps> = ({
   }, [activeJobId, importJobs, runningJobs]);
   const isJobActive = runningJobs.length > 0;
   const isImportActionDisabled = !importFile || isImporting || isJobActive;
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
   };
-
   const resetImportState = React.useCallback(() => {
     setImportFile(null);
     setImportErrors([]);
@@ -336,15 +344,12 @@ const ProductList: React.FC<ProductListProps> = ({
     setIsImporting(false);
     onActiveJobIdChange(null);
   }, [onActiveJobIdChange]);
-
   const handleImportDialogToggle = React.useCallback((open: boolean) => {
     setIsImportDialogOpen(open);
     if (!open) {
       resetImportState();
     }
   }, [resetImportState]);
-
-
   React.useEffect(() => {
     if (activeImportJob) {
       setImportSummary({
@@ -359,11 +364,9 @@ const ProductList: React.FC<ProductListProps> = ({
       setImportErrors([]);
     }
   }, [activeImportJob]);
-
   const handleJobCardSelect = React.useCallback((jobId: string) => {
     onActiveJobIdChange(jobId);
   }, [onActiveJobIdChange]);
-
   const handleCancelJob = React.useCallback(async (jobId: string) => {
     try {
       setCancellingJobId(jobId);
@@ -374,7 +377,6 @@ const ProductList: React.FC<ProductListProps> = ({
       });
       await onRefreshImportJobs({ onlyActive: true, showNotifications: true });
     } catch (error: any) {
-      console.error('Error cancelling job:', error);
       toast({
         title: 'Không thể hủy tiến trình',
         description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || 'Vui lòng thử lại sau'),
@@ -384,7 +386,6 @@ const ProductList: React.FC<ProductListProps> = ({
       setCancellingJobId(null);
     }
   }, [onRefreshImportJobs, toast]);
-
   const toggleJobErrors = React.useCallback((jobId: string) => {
     setExpandedJobErrors(prev => {
       const newSet = new Set(prev);
@@ -396,7 +397,6 @@ const ProductList: React.FC<ProductListProps> = ({
       return newSet;
     });
   }, []);
-
   // Handle sorting
   const handleSort = (key: string) => {
     setSortConfig(prevConfig => {
@@ -409,7 +409,6 @@ const ProductList: React.FC<ProductListProps> = ({
       return null;
     });
   };
-
   // Get sort icon
   const getSortIcon = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) {
@@ -419,7 +418,6 @@ const ProductList: React.FC<ProductListProps> = ({
       ? <ArrowUp className="h-4 w-4 ml-1" />
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
-
   const addProduct = async () => {
     if (!newProduct.name) {
       toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
@@ -430,53 +428,48 @@ const ProductList: React.FC<ProductListProps> = ({
       toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
       return;
     }
-
     try {
       setIsAddingProduct(true);
-
       const categoryId = await ensureCategoryId(newProduct.category);
-
       const productData: any = {
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: categoryId ?? undefined,
         unit: newProduct.unit,
       };
-
       // Optional price - only include if provided and > 0
       if (newProduct.price && newProduct.price > 0) {
         productData.price = newProduct.price;
       }
-
       // Optional costPrice - only include if provided
       if (newProduct.costPrice && newProduct.costPrice > 0) {
         productData.costPrice = newProduct.costPrice;
       }
-
+      // Optional foreign currency fields
+      if (newProduct.isForeignCurrency) {
+        productData.isForeignCurrency = newProduct.isForeignCurrency;
+        productData.exchangeRate = newProduct.exchangeRate;
+      }
       // lowStockThreshold - include if provided (can be 0 or positive number)
       if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
         productData.lowStockThreshold = newProduct.lowStockThreshold;
       }
-
       // manufacturer - include if provided (non-empty string)
       if (newProduct.manufacturer && newProduct.manufacturer.trim()) {
         productData.manufacturer = newProduct.manufacturer.trim();
       }
-
       // description - include if provided (non-empty string)
       if (newProduct.description && newProduct.description.trim()) {
         productData.description = newProduct.description.trim();
       }
-
       // barcode - include if provided (non-empty string)
       if (newProduct.barcode && newProduct.barcode.trim()) {
         productData.barcode = newProduct.barcode.trim();
       }
-
       const response = await productApi.createProduct(productData);
-
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
+      // Clear form while keeping dialog open
       setNewProduct({
         name: '',
         code: '',
@@ -487,35 +480,31 @@ const ProductList: React.FC<ProductListProps> = ({
         barcode: '',
         lowStockThreshold: 0,
         manufacturer: '',
-        description: ''
+        description: '',
+        isForeignCurrency: false,
+        exchangeRate: 1
       });
-      setIsAddProductDialogOpen(false);
     } catch (error: any) {
-      console.error('Error adding product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setIsAddingProduct(false);
     }
   };
-
-  const startEditProduct = (product: any) => {
-    setEditingProduct(product);
-    setNewProduct({
-      name: product.name,
-      code: product.code,
-      category: findCategoryByValue(product.category)?.id || product.category || '',
-      costPrice: product.costPrice || 0,
-      price: product.price || 0,
-      unit: product.unit || 'cái',
-      barcode: product.barcode || '',
-      lowStockThreshold: product.lowStockThreshold || 0,
-      manufacturer: product.manufacturer || '',
-      description: product.description || ''
-    });
-    setIsEditProductDialogOpen(true);
+  const startEditProduct = async (product: any) => {
+    try {
+      // Fetch full product details from API to ensure we have all fields including foreign currency data
+      const fullProductDetails = await productApi.getProduct(product.id);
+      setEditingProduct(fullProductDetails);
+      setIsEditProductDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: 'Lỗi',
+        description: 'Không thể tải thông tin sản phẩm',
+        variant: 'destructive'
+      });
+    }
   };
-
   const updateProduct = async () => {
     if (!newProduct.name) {
       toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
@@ -526,51 +515,45 @@ const ProductList: React.FC<ProductListProps> = ({
       toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
       return;
     }
-
     try {
       setIsEditingProduct(true);
-
       const categoryId = await ensureCategoryId(newProduct.category);
-
       const updateData: any = {
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
         category: categoryId ?? undefined,
         unit: newProduct.unit,
       };
-
       // Optional price - only include if provided and > 0
       if (newProduct.price && newProduct.price > 0) {
         updateData.price = newProduct.price;
       }
-
       // Optional costPrice - only include if provided
       if (newProduct.costPrice && newProduct.costPrice > 0) {
         updateData.costPrice = newProduct.costPrice;
       }
-
+      // Optional foreign currency fields
+      if (newProduct.isForeignCurrency) {
+        updateData.isForeignCurrency = newProduct.isForeignCurrency;
+        updateData.exchangeRate = newProduct.exchangeRate;
+      }
       // lowStockThreshold - include if provided (can be 0 or positive number)
       if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
         updateData.lowStockThreshold = newProduct.lowStockThreshold;
       }
-
       // manufacturer - include if provided (non-empty string)
       if (newProduct.manufacturer && newProduct.manufacturer.trim()) {
         updateData.manufacturer = newProduct.manufacturer.trim();
       }
-
       // description - include if provided (non-empty string)
       if (newProduct.description && newProduct.description.trim()) {
         updateData.description = newProduct.description.trim();
       }
-
       // barcode - include if provided (non-empty string)
       if (newProduct.barcode && newProduct.barcode.trim()) {
         updateData.barcode = newProduct.barcode.trim();
       }
-
       const response = await productApi.updateProduct(editingProduct.id, updateData);
-
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
       onProductsUpdate();
       setEditingProduct(null);
@@ -584,85 +567,69 @@ const ProductList: React.FC<ProductListProps> = ({
         barcode: '',
         lowStockThreshold: 0,
         manufacturer: '',
-        description: ''
+        description: '',
+        isForeignCurrency: false,
+        exchangeRate: 1
       });
       setIsEditProductDialogOpen(false);
     } catch (error: any) {
-      console.error('Error updating product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi cập nhật sản phẩm';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setIsEditingProduct(false);
     }
   };
-
   const deleteProduct = async (productId: string, productName: string) => {
     if (!confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${productName}"?`)) {
       return;
     }
-
     try {
       const response = await productApi.deleteProduct(productId);
-
       toast({ title: 'Thành công', description: response.message || 'Đã xóa sản phẩm!' });
       onProductsUpdate();
     } catch (error: any) {
-      console.error('Error deleting product:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi xóa sản phẩm';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
-
   const formatCurrency = (amount: number) => {
-    
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const downloadProductImportTemplate = async () => {
     try {
       const { blob, filename } = await productApi.downloadImportTemplate();
-      
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = filename; // Use filename from backend
-      
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
       toast({ title: 'Thành công', description: 'Đã tải mẫu từ hệ thống' });
     } catch (error: any) {
-      console.error('Error downloading template:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tải mẫu';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
-
   const handleImportProducts = async () => {
     if (!importFile) {
       toast({ title: 'Lỗi', description: 'Vui lòng chọn file Excel', variant: 'destructive' });
       return;
     }
-
     try {
       if (isImporting) return;
       setIsImporting(true);
-
       // Try to get job details from the import response
       let jobSnapshot: ProductImportJobSnapshot | null = null;
-
       try {
         jobSnapshot = await productApi.importProductsAsync({ file: importFile });
       } catch (importError: any) {
         // If the import API doesn't return job details, that's okay
         // The job might still be created successfully in the backend
-        console.log('Import API did not return job details, will poll for active jobs:', importError.message);
-
         // Check if it's a validation error (which means the import didn't start)
         const apiErrors: ProductImportError[] = importError.response?.data?.errors || importError.response?.data?.details?.errors || [];
         if (apiErrors.length > 0) {
@@ -674,29 +641,23 @@ const ProductList: React.FC<ProductListProps> = ({
           setImportSummary({ imported, failed, totalRows });
           throw importError; // Re-throw validation errors
         }
-
         // If no validation errors, assume the job was created and continue
         jobSnapshot = null;
       }
-
       // If we got job details, use them
       if (jobSnapshot?.jobId) {
         onActiveJobIdChange(jobSnapshot.jobId);
         onImportJobsChange(prev => [jobSnapshot!, ...prev.filter(job => job.jobId !== jobSnapshot!.jobId)]);
       }
-
       toast({
         title: 'Đang xử lý',
         description: 'Hệ thống đang nhập sản phẩm. Bạn có thể theo dõi tiến trình bên dưới.',
       });
-
       // Always refresh jobs to get the latest status, whether we got job details or not
       await onRefreshImportJobs({ onlyActive: false });
       setIsImporting(false);
     } catch (error: any) {
-      console.error('Error importing products:', error);
       setIsImporting(false);
-
       // Only show error if it's not already handled above
       if (!error.response?.data?.errors && !error.response?.data?.details?.errors) {
         const errorMessage = error.response?.data?.message || error.message || 'Không thể nhập sản phẩm';
@@ -710,7 +671,6 @@ const ProductList: React.FC<ProductListProps> = ({
       setIsImporting(false);
     }
   };
-
   const exportToExcel = () => {
     const exportData = sortedProducts.map((product, index) => {
       const exportItem: any = {
@@ -725,17 +685,13 @@ const ProductList: React.FC<ProductListProps> = ({
         'Giá bán': product.price || 0,
         'Cập nhật': product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : ''
       };
-
       if (canViewCostPrice) {
         exportItem['Giá vốn'] = product.costPrice || 0;
       }
-
       return exportItem;
     });
-
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportData);
-
     const colWidths = [
       { wch: 5 },   // STT
       { wch: 15 },  // Mã sản phẩm
@@ -746,28 +702,22 @@ const ProductList: React.FC<ProductListProps> = ({
       { wch: 15 },  // Barcode
       { wch: 30 },  // Mô tả
     ];
-
     if (canViewCostPrice) {
       colWidths.push({ wch: 15 }); // Giá vốn
     }
-    
     colWidths.push(
       { wch: 15 },  // Giá bán
       { wch: 12 }   // Cập nhật
     );
-
     ws['!cols'] = colWidths;
     XLSX.utils.book_append_sheet(wb, ws, 'Danh sách sản phẩm');
-
     const now = new Date();
     const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
     const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
     const filename = `Danh_sach_san_pham_${dateStr}_${timeStr}.xlsx`;
-
     XLSX.writeFile(wb, filename);
     toast({ title: 'Thành công', description: `Đã xuất ${exportData.length} sản phẩm ra Excel` });
   };
-
   return (
     <Card>
       <CardHeader>
@@ -785,7 +735,6 @@ const ProductList: React.FC<ProductListProps> = ({
               className="pl-10"
             />
           </div>
-          
           <div className="flex flex-col sm:flex-row gap-4">
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="w-full sm:w-48">
@@ -800,7 +749,6 @@ const ProductList: React.FC<ProductListProps> = ({
                 ))}
               </SelectContent>
             </Select>
-
             <div className="flex gap-2 sm:ml-auto">
               {canManageProducts && (
                 <Dialog open={isAddProductDialogOpen} onOpenChange={setIsAddProductDialogOpen}>
@@ -962,16 +910,48 @@ const ProductList: React.FC<ProductListProps> = ({
                         />
                       </div>
                       {canViewCostPrice && (
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
-                          <CurrencyInput 
-                            id="cost-price" 
-                            className="col-span-3"
-                            value={newProduct.costPrice}
-                            onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
-                            placeholder="0"
-                          />
-                        </div>
+                        <>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
+                            <CurrencyInput
+                              id="cost-price"
+                              className="col-span-3"
+                              value={newProduct.costPrice}
+                              onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <div></div>
+                            <div className="col-span-3 flex items-center gap-4">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  key="add-foreign-currency"
+                                  type="checkbox"
+                                  id="is-foreign-currency"
+                                  checked={Boolean(newProduct.isForeignCurrency)}
+                                  onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
+                                  className="h-4 w-4"
+                                />
+                                <Label htmlFor="is-foreign-currency" className="text-sm">Ngoại tệ</Label>
+                              </div>
+                              {newProduct.isForeignCurrency && (
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor="exchange-rate" className="text-sm">Tỷ giá:</Label>
+                                  <NumberInput
+                                    id="exchange-rate"
+                                    value={newProduct.exchangeRate}
+                                    onChange={(value) => setNewProduct(prev => ({ ...prev, exchangeRate: value }))}
+                                    placeholder="1"
+                                    min={0.01}
+                                    step={0.01}
+                                    className="w-24"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
                       )}
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
@@ -996,7 +976,6 @@ const ProductList: React.FC<ProductListProps> = ({
                   </DialogContent>
                 </Dialog>
               )}
-
               <Button 
                 variant="outline" 
                 onClick={exportToExcel}
@@ -1111,7 +1090,6 @@ const ProductList: React.FC<ProductListProps> = ({
             </div>
           </div>
         </div>
-
         {canManageProducts && (
           <Card className="mb-6">
             <CardHeader className="pb-2">
@@ -1228,7 +1206,6 @@ const ProductList: React.FC<ProductListProps> = ({
                       </Select>
                     </div>
                   </div>
-
                   {completedJobs.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
                   ) : (
@@ -1287,7 +1264,6 @@ const ProductList: React.FC<ProductListProps> = ({
                           </div>
                         ))}
                       </div>
-
                       {/* Job History Pagination */}
                       {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
                         <div className="flex items-center justify-center pt-4 border-t">
@@ -1341,10 +1317,9 @@ const ProductList: React.FC<ProductListProps> = ({
             </CardContent>
           </Card>
         )}
-
         {/* Edit Product Dialog */}
         {canManageProducts && (
-          <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
+          <Dialog key={dialogKey} open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Chỉnh Sửa Sản Phẩm</DialogTitle>
@@ -1497,16 +1472,48 @@ const ProductList: React.FC<ProductListProps> = ({
                   />
                 </div>
                 {canViewCostPrice && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
-                    <CurrencyInput 
-                      id="edit-cost-price" 
-                      className="col-span-3"
-                      value={newProduct.costPrice}
-                      onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
-                      placeholder="0"
-                    />
-                  </div>
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-cost-price" className="text-right">Giá vốn</Label>
+                      <CurrencyInput
+                        id="edit-cost-price"
+                        className="col-span-3"
+                        value={newProduct.costPrice}
+                        onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <div></div>
+                      <div className="col-span-3 flex items-center gap-4">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            key={`edit-foreign-currency-${editingProduct?.id || 'new'}`}
+                            type="checkbox"
+                            id="edit-is-foreign-currency"
+                            checked={Boolean(newProduct.isForeignCurrency)}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
+                            className="h-4 w-4"
+                          />
+                          <Label htmlFor="edit-is-foreign-currency" className="text-sm">Ngoại tệ</Label>
+                        </div>
+                        {newProduct.isForeignCurrency && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="edit-exchange-rate" className="text-sm">Tỷ giá:</Label>
+                            <NumberInput
+                              id="edit-exchange-rate"
+                              value={newProduct.exchangeRate}
+                              onChange={(value) => setNewProduct(prev => ({ ...prev, exchangeRate: value }))}
+                              placeholder="1"
+                              min={0.01}
+                              step={0.01}
+                              className="w-24"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-sell-price" className="text-right">Giá bán</Label>
@@ -1535,7 +1542,9 @@ const ProductList: React.FC<ProductListProps> = ({
                       barcode: '',
                       lowStockThreshold: 0,
                       manufacturer: '',
-                      description: ''
+                      description: '',
+                      isForeignCurrency: false,
+                      exchangeRate: 1
                     });
                   }}
                 >
@@ -1552,7 +1561,6 @@ const ProductList: React.FC<ProductListProps> = ({
             </DialogContent>
           </Dialog>
         )}
-
         {/* Pagination and items per page controls */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -1574,7 +1582,6 @@ const ProductList: React.FC<ProductListProps> = ({
             Hiển thị {startIndex + 1}-{Math.min(endIndex, sortedProducts.length)} trong tổng số {sortedProducts.length} sản phẩm
           </div>
         </div>
-
         <div className="rounded-md border overflow-x-auto">
           <Table className="min-w-full">
             <TableHeader>
@@ -1703,7 +1710,6 @@ const ProductList: React.FC<ProductListProps> = ({
             </TableBody>
           </Table>
         </div>
-
         {/* Pagination Controls */}
         {totalPages > 1 && (
           <div className="flex justify-center mt-6">
@@ -1719,7 +1725,6 @@ const ProductList: React.FC<ProductListProps> = ({
                     className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
-                
                 {/* Show first page */}
                 {currentPage > 3 && (
                   <>
@@ -1741,7 +1746,6 @@ const ProductList: React.FC<ProductListProps> = ({
                     )}
                   </>
                 )}
-
                 {/* Show pages around current page */}
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum;
@@ -1754,9 +1758,7 @@ const ProductList: React.FC<ProductListProps> = ({
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
-
                   if (pageNum < 1 || pageNum > totalPages) return null;
-
                   return (
                     <PaginationItem key={pageNum}>
                       <PaginationLink 
@@ -1772,7 +1774,6 @@ const ProductList: React.FC<ProductListProps> = ({
                     </PaginationItem>
                   );
                 })}
-
                 {/* Show last page */}
                 {currentPage < totalPages - 2 && (
                   <>
@@ -1794,7 +1795,6 @@ const ProductList: React.FC<ProductListProps> = ({
                     </PaginationItem>
                   </>
                 )}
-                
                 <PaginationItem>
                   <PaginationNext 
                     href="#" 
@@ -1813,6 +1813,4 @@ const ProductList: React.FC<ProductListProps> = ({
     </Card>
   );
 };
-
-export default ProductList;
-
+export default ProductList;

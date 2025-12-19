@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { authApi } from '@/api/auth.api';
-
 interface UserInfo {
   id: string;
   email?: string;
@@ -10,26 +9,21 @@ interface UserInfo {
   lastName?: string | null;
   role: string;
 }
-
 export const useUserInfo = (userId: string | null) => {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchUserInfo = async () => {
       if (!userId) {
         setUserInfo(null);
         return;
       }
-
       setLoading(true);
       setError(null);
-
       try {
         // Get all users and find the one with matching ID
         const response = await authApi.getUsers();
-        
         // Handle different response structures
         let users = [];
         if (Array.isArray(response)) {
@@ -41,9 +35,7 @@ export const useUserInfo = (userId: string | null) => {
         } else if (response && response.rows && Array.isArray(response.rows)) {
           users = response.rows;
         }
-        
         const user = users.find(u => u.id === userId);
-        
         if (user) {
           setUserInfo({
             id: user.id,
@@ -58,16 +50,13 @@ export const useUserInfo = (userId: string | null) => {
           setUserInfo(null);
         }
       } catch (err) {
-        console.error('Error fetching user info:', err);
         setError('Failed to fetch user info');
         setUserInfo(null);
       } finally {
         setLoading(false);
       }
     };
-
     fetchUserInfo();
   }, [userId]);
-
   return { userInfo, loading, error };
-};
+};

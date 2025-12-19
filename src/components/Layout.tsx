@@ -34,11 +34,9 @@ import { authApi } from "@/api/auth.api";
 import { usersApi } from "@/api/users.api";
 import { User as UserType } from "@/types/auth";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
-
 interface LayoutProps {
   children: React.ReactNode;
 }
-
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
@@ -49,7 +47,6 @@ const Layout = ({ children }: LayoutProps) => {
   const { user, signOut, userRole: userRoleFromAuth } = useAuth();
   const { userRole: userRoleFromPermissions } = usePermissions();
   const { toast } = useToast();
-
   // Fetch current user info from API
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -59,7 +56,6 @@ const Layout = ({ children }: LayoutProps) => {
           const userInfo = await authApi.getMe();
           setCurrentUser(userInfo);
         } catch (error) {
-          console.error('Error fetching current user:', error);
           // Fallback to user from auth context
           setCurrentUser(null);
         } finally {
@@ -67,10 +63,8 @@ const Layout = ({ children }: LayoutProps) => {
         }
       }
     };
-
     fetchCurrentUser();
   }, [user]);
-
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Báo Giá", href: "/quotations", icon: FileText },
@@ -82,14 +76,12 @@ const Layout = ({ children }: LayoutProps) => {
     { name: "Báo Cáo Doanh Thu", href: "/revenue", icon: TrendingUp },
     { name: "Cài Đặt", href: "/settings", icon: Settings },
   ];
-
   const isActive = (href: string) => {
     if (href === "/") {
       return location.pathname === "/";
     }
     return location.pathname.startsWith(href);
   };
-
   const handleSignOut = async () => {
     await signOut();
     toast({
@@ -97,7 +89,6 @@ const Layout = ({ children }: LayoutProps) => {
       description: "Hẹn gặp lại bạn!",
     });
   };
-
   const NavLinks = () => (
     <nav className="space-y-2">
       {navigation.map((item) => {
@@ -125,7 +116,6 @@ const Layout = ({ children }: LayoutProps) => {
       })}
     </nav>
   );
-
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -152,7 +142,6 @@ const Layout = ({ children }: LayoutProps) => {
           <NavLinks />
         </div>
       </div>
-
       {/* Mobile Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetTrigger asChild>
@@ -174,7 +163,6 @@ const Layout = ({ children }: LayoutProps) => {
           <NavLinks />
         </SheetContent>
       </Sheet>
-
       {/* Main Content */}
       <div className={`transition-all duration-300 ${
         isSidebarCollapsed ? "lg:pl-20" : "lg:pl-56"
@@ -184,10 +172,8 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1 items-center justify-between">
               <div className="lg:hidden" /> {/* Spacer for mobile menu button */}
-              
               <div className="flex items-center gap-4">
                 <NotificationCenter />
-                
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="icon">
@@ -201,12 +187,10 @@ const Layout = ({ children }: LayoutProps) => {
                           // Get firstName and lastName from currentUser or user
                           const firstName = (currentUser as any)?.firstName || (user as any)?.firstName || '';
                           const lastName = (currentUser as any)?.lastName || (user as any)?.lastName || '';
-                          
                           // If we have firstName or lastName, display them
                           if (firstName || lastName) {
                             return `${firstName} ${lastName}`.trim();
                           }
-                          
                           // Fallback to email or username, never show ID
                           return currentUser?.email || user?.email || currentUser?.username || user?.username || 'Người dùng';
                         })()}
@@ -223,17 +207,14 @@ const Layout = ({ children }: LayoutProps) => {
                           if (userRoleFromPermissions?.name) {
                             return userRoleFromPermissions.name;
                           }
-                          
                           // Priority 2: Get role name from currentUser or user object
                           const roleFromUser = (currentUser as any)?.role?.name || (user as any)?.role?.name;
                           if (roleFromUser) return roleFromUser;
-                          
                           // Priority 3: Check if userRoleFromAuth is a name (not UUID)
                           if (userRoleFromAuth) {
                             const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userRoleFromAuth);
                             if (!isUUID) return userRoleFromAuth;
                           }
-                          
                           // Fallback
                           return 'Chưa phân quyền';
                         })()}
@@ -254,11 +235,9 @@ const Layout = ({ children }: LayoutProps) => {
             </div>
           </div>
         </div>
-
         {/* Page Content */}
         <main>{children}</main>
       </div>
-
       {/* User Profile Dialog */}
       <UserProfileDialog
         open={showUserProfileDialog}
@@ -267,5 +246,4 @@ const Layout = ({ children }: LayoutProps) => {
     </div>
   );
 };
-
 export default Layout;

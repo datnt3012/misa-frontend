@@ -21,13 +21,11 @@ import { stockLevelsApi } from "@/api/stockLevels.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import BankSelector from "./BankSelector";
-
 interface CreateOrderFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOrderCreated: () => void;
 }
-
 interface OrderItem {
   product_id: string;
   product_code: string;
@@ -40,7 +38,6 @@ interface OrderItem {
   warehouse_id: string;
   current_stock?: number;
 }
-
 interface OrderFormState {
   customer_id: string;
   customer_name: string;
@@ -81,13 +78,11 @@ interface OrderFormState {
   expenses: Array<{ name: string; amount: number; note?: string }>;
   paymentDeadline: string;
 }
-
 const sanitizeVatField = (value?: string | null) => {
   if (value === undefined || value === null) return undefined;
   const trimmed = typeof value === "string" ? value.trim() : String(value);
   return trimmed.length ? trimmed : undefined;
 };
-
 const extractVatInfoFromOrder = (order: OrderFormState): VatInfo | undefined => {
   const vatInfo: VatInfo = {
     taxCode: sanitizeVatField(order.vat_tax_code),
@@ -96,10 +91,8 @@ const extractVatInfoFromOrder = (order: OrderFormState): VatInfo | undefined => 
     vatEmail: sanitizeVatField(order.vat_invoice_email),
     companyPhone: sanitizeVatField(order.vat_company_phone),
   };
-
   return Object.values(vatInfo).some(Boolean) ? vatInfo : undefined;
 };
-
 const buildVatInfoFromCustomer = (customer?: Customer) => ({
   vat_tax_code: customer?.vatInfo?.taxCode ?? "",
   vat_company_name: customer?.vatInfo?.companyName ?? "",
@@ -107,7 +100,6 @@ const buildVatInfoFromCustomer = (customer?: Customer) => ({
   vat_company_phone: customer?.vatInfo?.companyPhone ?? "",
   vat_invoice_email: customer?.vatInfo?.vatEmail ?? "",
 });
-
 const buildShippingInfoFromCustomer = (customer?: Customer) => ({
   shipping_recipient_name: customer?.name ?? "",
   shipping_recipient_phone: customer?.phoneNumber ?? "",
@@ -127,12 +119,10 @@ const buildShippingInfoFromCustomer = (customer?: Customer) => ({
       customer?.addressInfo?.wardName ?? customer?.addressInfo?.ward?.name ?? "",
   },
 });
-
 const hasCustomerVatInfo = (info?: VatInfo | null) => {
   if (!info) return false;
   return Object.values(info).some((value) => Boolean(sanitizeVatField(value)));
 };
-
 const createInitialOrderState = (): OrderFormState => ({
   // Default to special value "__new__" so that a brand new customer
   // will be created if the user doesn't change the dropdown
@@ -146,7 +136,6 @@ const createInitialOrderState = (): OrderFormState => ({
   notes: "",
   contract_number: "",
   purchase_order_number: "",
-  
   // VAT Information (for invoice)
   vat_tax_code: "",
   vat_company_name: "",
@@ -159,7 +148,6 @@ const createInitialOrderState = (): OrderFormState => ({
   },
   vat_invoice_email: "",
   vat_rate: undefined as number | undefined, // VAT rate (sẽ lấy từ customer nếu không có)
-  
   // Shipping Information (auto-fill from selected customer)
   shipping_recipient_name: "",
   shipping_recipient_phone: "",
@@ -172,7 +160,6 @@ const createInitialOrderState = (): OrderFormState => ({
     districtName: "",
     wardName: "",
   },
-  
   initial_payment: 0,
   initial_payment_method: "cash",
   initial_payment_bank: "",
@@ -181,31 +168,25 @@ const createInitialOrderState = (): OrderFormState => ({
   expenses: [{ name: "Chi phí vận chuyển", amount: 0, note: "" }],
   paymentDeadline: "",
 });
-
 const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
   const { toast } = useToast();
   const { user } = useAuth();
-  
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
-  
   const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
   const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
-
   useEffect(() => {
     if (open) {
       setNewOrder(createInitialOrderState());
       setShippingAddressVersion((v) => v + 1);
     }
   }, [open]);
-
   useEffect(() => {
     loadData();
   }, []);
-
   const loadData = async () => {
     try {
       const [customersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
@@ -219,7 +200,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       setWarehouses(warehousesRes.warehouses || []);
       setBanks(banksRes || []);
     } catch (error) {
-      console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải dữ liệu",
@@ -227,7 +207,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
     }
   };
-
   const handleCreateNewCustomer = async () => {
     // Validate required fields
     if (!newOrder.customer_name || !newOrder.customer_name.trim()) {
@@ -238,10 +217,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     try {
       setLoading(true);
-      
       // Build customer data from order form
       const customerData: any = {
         name: newOrder.customer_name.trim(),
@@ -253,20 +230,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
         } : undefined,
       };
-
       // Add VAT info if available
       const vatInfo = extractVatInfoFromOrder(newOrder);
       if (vatInfo) {
         customerData.vatInfo = vatInfo;
       }
-
       // Create customer
       const newCustomer = await customerApi.createCustomer(customerData);
-
       // Reload customers list
       const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
       setCustomers(customersRes.customers || []);
-
       // Auto-select the newly created customer
       const vatInfoFromNewCustomer = buildVatInfoFromCustomer(newCustomer);
       const shippingInfoFromNewCustomer = buildShippingInfoFromCustomer(newCustomer);
@@ -280,13 +253,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         ...shippingInfoFromNewCustomer,
       }));
       setShippingAddressVersion((v) => v + 1);
-
       toast({
         title: "Thành công",
         description: `Đã tạo khách hàng mới: ${newCustomer.name}`,
       });
     } catch (error) {
-      console.error('Error creating customer:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tạo khách hàng mới"),
@@ -296,7 +267,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       setLoading(false);
     }
   };
-
   const addItem = () => {
     setNewOrder(prev => ({
       ...prev,
@@ -313,19 +283,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       }]
     }));
   };
-
   const removeItem = (index: number) => {
     setNewOrder(prev => ({
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
     }));
   };
-
   const updateItem = (index: number, field: keyof OrderItem, value: any) => {
     setNewOrder(prev => {
       const items = [...prev.items];
       items[index] = { ...items[index], [field]: value };
-      
       // Auto-calculate when product, quantity, or unit_price changes
       if (field === 'product_id' || field === 'quantity' || field === 'unit_price') {
         if (field === 'product_id') {
@@ -342,39 +309,31 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             }
           }
         }
-        
         const subtotal = items[index].quantity * items[index].unit_price;
         items[index].total_price = subtotal;
       }
-      
       // Fetch stock level when product changes (kho lấy từ kho đơn hàng)
       if (field === 'product_id') {
         fetchStockLevel(index, items[index].product_id, items[index].warehouse_id);
       }
-      
       return { ...prev, items };
     });
   };
-
   const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
     if (!productId || !warehouseId) return;
-    
     try {
       const stockLevels = await stockLevelsApi.getStockLevels({
         productId,
         warehouseId,
         limit: 1
       });
-      
       const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
-      
       setNewOrder(prev => {
         const items = [...prev.items];
         items[index].current_stock = currentStock;
         return { ...prev, items };
       });
     } catch (error) {
-      console.warn('Could not fetch stock level:', error);
       setNewOrder(prev => {
         const items = [...prev.items];
         items[index].current_stock = 0;
@@ -382,21 +341,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
     }
   };
-
   const addExpense = () => {
     setNewOrder(prev => ({
       ...prev,
       expenses: [...prev.expenses, { name: "", amount: 0, note: "" }]
     }));
   };
-
   const removeExpense = (index: number) => {
     setNewOrder(prev => ({
       ...prev,
       expenses: prev.expenses.filter((_, i) => i !== index)
     }));
   };
-
   const updateExpense = (index: number, field: "name" | "amount" | "note", value: any) => {
     setNewOrder(prev => {
       const expenses = [...prev.expenses];
@@ -404,16 +360,13 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       return { ...prev, expenses };
     });
   };
-
   const calculateTotals = () => {
     const itemsSubtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
     const expensesTotal = newOrder.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const subtotal = itemsSubtotal + expensesTotal;
     const debt = subtotal - (newOrder.initial_payment || 0);
-    
     return { subtotal, debt };
   };
-
   const handleSubmit = async () => {
     if (!newOrder.customer_id || newOrder.customer_id === "__new__") {
       // Validate required fields for new customer
@@ -435,7 +388,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         });
         return;
       }
-
       if (!newOrder.customer_name) {
         toast({
           title: "Lỗi",
@@ -445,7 +397,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         return;
       }
     }
-
     if (newOrder.items.length === 0) {
       toast({
         title: "Lỗi",
@@ -454,7 +405,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     // Validate all items have required fields
     const invalidItems = newOrder.items.filter(item => 
       !item.product_id || !item.product_name || !item.product_code || 
@@ -468,7 +418,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     const { subtotal } = calculateTotals();
     if (subtotal < 0) {
       toast({
@@ -478,7 +427,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     const paymentMethod = newOrder.initial_payment_method || "cash";
     if (paymentMethod.length < 1 || paymentMethod.length > 20) {
       toast({
@@ -488,7 +436,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     // Validate bank selection for bank transfer
     if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
       toast({
@@ -498,7 +445,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     // Validate warehouse selection for order
     if (!newOrder.order_warehouse_id) {
       toast({
@@ -508,20 +454,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       });
       return;
     }
-
     setLoading(true);
     try {
       // If "Khách hàng mới" is selected, create the customer first
       let customerId = newOrder.customer_id;
       let selectedCustomer: Customer | undefined;
-      
       if (newOrder.customer_id === "__new__") {
-        console.log('[CreateOrderForm] Creating new customer...', {
-          name: newOrder.customer_name,
-          phone: newOrder.customer_phone,
-          email: newOrder.customer_email,
-        });
-        
         // Create new customer from form data
         const customerData: any = {
           name: newOrder.customer_name.trim(),
@@ -534,39 +472,28 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
           } : undefined,
         };
-
         // Add VAT info if available
         const vatInfo = extractVatInfoFromOrder(newOrder);
         if (vatInfo) {
           customerData.vatInfo = vatInfo;
         }
-
         try {
           // Create customer and wait for response
-          console.log('[CreateOrderForm] Calling customerApi.createCustomer...', customerData);
           const newCustomer = await customerApi.createCustomer(customerData);
-          console.log('[CreateOrderForm] Customer created:', newCustomer);
-          
           // Validate that customer was created successfully
           if (!newCustomer || !newCustomer.id) {
-            console.error('[CreateOrderForm] Invalid customer response:', newCustomer);
             throw new Error("Không thể tạo khách hàng mới. Phản hồi từ server không hợp lệ.");
           }
-          
           customerId = newCustomer.id;
           selectedCustomer = newCustomer;
-          console.log('[CreateOrderForm] Customer ID assigned:', customerId);
-
           // Reload customers list
           const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
           setCustomers(customersRes.customers || []);
-
           toast({
             title: "Thành công",
             description: `Đã tạo khách hàng mới: ${newCustomer.name}`,
           });
         } catch (customerError: any) {
-          console.error('[CreateOrderForm] Error creating customer:', customerError);
           toast({
             title: "Lỗi",
             description: getErrorMessage(customerError, "Không thể tạo khách hàng mới"),
@@ -579,12 +506,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         // Get existing customer details
         selectedCustomer = customers.find(c => c.id === newOrder.customer_id);
         customerId = newOrder.customer_id;
-        console.log('[CreateOrderForm] Using existing customer:', customerId);
       }
-
       // Validate customerId before creating order
       if (!customerId || customerId === "__new__" || customerId.trim() === "") {
-        console.error('[CreateOrderForm] Invalid customerId:', customerId);
         toast({
           title: "Lỗi",
           description: "Không thể xác định ID khách hàng. Vui lòng thử lại.",
@@ -593,11 +517,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         setLoading(false);
         return;
       }
-      
-      console.log('[CreateOrderForm] Proceeding to create order with customerId:', customerId);
-
       const { subtotal } = calculateTotals();
-      
       // Prepare customer address info if available
       const customerAddressInfo = selectedCustomer?.addressInfo ? {
         provinceCode: selectedCustomer.addressInfo.provinceCode || selectedCustomer.addressInfo.province?.code,
@@ -607,9 +527,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         latitude: selectedCustomer.addressInfo.latitude,
         longitude: selectedCustomer.addressInfo.longitude,
       } : undefined;
-      
       const orderVatInfo = extractVatInfoFromOrder(newOrder);
-
       // Create order via backend API
       // customerId should be valid at this point (validated above)
       const orderData = await orderApi.createOrder({
@@ -625,7 +543,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         note: newOrder.notes || undefined,
         status: 'new',
         orderType: newOrder.order_type || 'sale',
-        
         // VAT Information - removed VAT rate from UI, backend will handle
         vatRate: undefined,
         taxCode: orderVatInfo?.taxCode,
@@ -633,7 +550,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         companyAddress: orderVatInfo?.companyAddress,
         vatEmail: orderVatInfo?.vatEmail,
         companyPhone: orderVatInfo?.companyPhone,
-        
         // Receiver Information
         receiverName: newOrder.shipping_recipient_name || undefined,
         receiverPhone: newOrder.shipping_recipient_phone || undefined,
@@ -644,7 +560,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           const hasProvinceCode = addrInfo?.provinceCode && addrInfo.provinceCode.trim() !== "";
           const hasDistrictCode = addrInfo?.districtCode && addrInfo.districtCode.trim() !== "";
           const hasWardCode = addrInfo?.wardCode && addrInfo.wardCode.trim() !== "";
-          
           // Send addressInfo if we have any valid address codes or if we have receiverAddress
           if (hasProvinceCode || hasDistrictCode || hasWardCode || (newOrder.shipping_address && newOrder.shipping_address.trim() !== "")) {
             return {
@@ -655,7 +570,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           }
           return undefined;
         })(),
-        
         // Payment
         paymentMethod: newOrder.initial_payment_method || "cash",
         initialPayment: newOrder.initial_payment || 0,
@@ -664,7 +578,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           ? newOrder.initial_payment_bank 
           : undefined,
         paymentDeadline: newOrder.paymentDeadline || undefined,
-        
         // Order details
         details: newOrder.items.map(it => ({
           productId: it.product_id,
@@ -681,17 +594,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
           })),
       });
-
       // Items are included in order payload; adjust if BE requires separate calls
-
       // TODO: initial payment can be handled via payments API if available
-
-
       // Get order code from response
       const orderCode = orderData.order_number || 
                        orderData.id || 
                        'thành công';
-
       if (
         selectedCustomer?.id &&
         orderVatInfo &&
@@ -709,15 +617,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             )
           );
         } catch (vatError) {
-          console.error("Failed to update customer VAT info:", vatError);
         }
       }
-
       toast({
         title: "Thành công",
         description: `Đã tạo đơn hàng ${orderCode}`,
       });
-
       setNewOrder(createInitialOrderState());
       setShippingAddressVersion((v) => v + 1);
       onOrderCreated();
@@ -731,9 +636,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       setLoading(false);
     }
   };
-
   const { subtotal, debt } = calculateTotals();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -743,7 +646,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             Nhập thông tin chi tiết cho đơn hàng mới
           </DialogDescription>
         </DialogHeader>
-        
         <div className="space-y-6">
           {/* Customer Information */}
           <Card>
@@ -765,7 +667,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         }));
                         return;
                       }
-
                       // Handle existing customer selection
                       const customer = customers.find(c => c.id === value);
                       const vatInfo = buildVatInfoFromCustomer(customer);
@@ -808,7 +709,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   />
                 </div>
               </div>
-              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="customer_phone">Số điện thoại</Label>
@@ -833,7 +733,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
             </CardContent>
           </Card>
-
           {/* VAT Information */}
           <Card>
             <CardHeader>
@@ -890,7 +789,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </div>
             </CardContent>
           </Card>
-
           {/* Shipping Information */}
           <Card>
             <CardHeader>
@@ -948,7 +846,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </div>
             </CardContent>
           </Card>
-
           {/* Order Items */}
           <Card>
             <CardHeader>
@@ -973,14 +870,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         ...it,
                         warehouse_id: value,
                       }));
-
                       // Gọi lại API tồn kho cho từng sản phẩm với kho mới
                       updatedItems.forEach((it, index) => {
                         if (it.product_id) {
                           fetchStockLevel(index, it.product_id, value);
                         }
                       });
-
                       return {
                         ...prev,
                         order_warehouse_id: value,
@@ -1001,7 +896,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   </SelectContent>
                 </Select>
               </div>
-
               <Table className="border border-border/30 rounded-lg overflow-hidden">
                 <TableHeader>
                   <TableRow className="bg-slate-50 border-b-2 border-slate-200">
@@ -1094,7 +988,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </Table>
             </CardContent>
           </Card>
-
           {/* Additional Expenses */}
           <Card>
             <CardHeader>
@@ -1165,7 +1058,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       ))}
                     </TableBody>
                   </Table>
-
                   <div className="mt-3 flex justify-end">
                     <div className="text-sm font-medium">
                       Tổng chi phí:{" "}
@@ -1181,7 +1073,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               )}
             </CardContent>
           </Card>
-
           {/* Payment & Summary */}
           <Card>
             <CardHeader>
@@ -1229,7 +1120,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   </div>
                 )}
               </div>
-
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="payment_deadline">Hạn thanh toán</Label>
@@ -1243,7 +1133,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   />
                 </div>
               </div>
-              
               <div>
                 <Label htmlFor="notes">Ghi chú</Label>
                 <Textarea
@@ -1253,7 +1142,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   placeholder="Nhập ghi chú"
                 />
               </div>
-
               {/* Order Summary */}
               {(() => {
                 const { subtotal, debt } = calculateTotals();
@@ -1274,7 +1162,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               })()}
             </CardContent>
           </Card>
-
           {/* Action Buttons */}
           <div className="flex gap-4 justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -1289,6 +1176,4 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     </Dialog>
   );
 };
-
 export default CreateOrderForm;
-

@@ -14,14 +14,12 @@ import { customerApi, Customer } from "@/api/customer.api";
 import { productApi } from "@/api/product.api";
 import { quotationApi, Quotation } from "@/api/quotation.api";
 import { getErrorMessage } from "@/lib/error-utils";
-
 interface CreateQuotationFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onQuotationCreated: () => void;
   initialQuotation?: Quotation | null; // For edit mode
 }
-
 interface QuotationDetail {
   product_id: string;
   product_code: string;
@@ -30,21 +28,18 @@ interface QuotationDetail {
   quantity: number;
   note?: string;
 }
-
 interface QuotationFormState {
   customer_id: string;
   note: string;
   status: string;
   details: QuotationDetail[];
 }
-
 const createInitialQuotationState = (): QuotationFormState => ({
   customer_id: "",
   note: "",
   status: "draft",
   details: []
 });
-
 const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({ 
   open, 
   onOpenChange, 
@@ -57,7 +52,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
   const [products, setProducts] = useState<any[]>([]);
   const [quotation, setQuotation] = useState<QuotationFormState>(() => createInitialQuotationState());
   const isEditMode = !!initialQuotation;
-
   useEffect(() => {
     if (open) {
       if (isEditMode && initialQuotation) {
@@ -80,11 +74,9 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       }
     }
   }, [open, isEditMode, initialQuotation]);
-
   useEffect(() => {
     loadData();
   }, []);
-
   const loadData = async () => {
     try {
       const [customersRes, productsRes] = await Promise.all([
@@ -94,7 +86,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       setCustomers(customersRes.customers || []);
       setProducts(productsRes.products || []);
     } catch (error) {
-      console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tải dữ liệu"),
@@ -102,7 +93,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       });
     }
   };
-
   const addDetail = () => {
     setQuotation(prev => ({
       ...prev,
@@ -116,19 +106,16 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       }]
     }));
   };
-
   const removeDetail = (index: number) => {
     setQuotation(prev => ({
       ...prev,
       details: prev.details.filter((_, i) => i !== index)
     }));
   };
-
   const updateDetail = (index: number, field: keyof QuotationDetail, value: any) => {
     setQuotation(prev => {
       const details = [...prev.details];
       details[index] = { ...details[index], [field]: value };
-      
       // Auto-fill product info when product is selected
       if (field === 'product_id') {
         const product = products.find(p => p.id === value);
@@ -138,15 +125,12 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
           details[index].price = product.price;
         }
       }
-      
       return { ...prev, details };
     });
   };
-
   const calculateTotalAmount = () => {
     return quotation.details.reduce((sum, detail) => sum + (detail.price * detail.quantity), 0);
   };
-
   const handleSubmit = async () => {
     if (!quotation.customer_id) {
       toast({
@@ -156,7 +140,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       });
       return;
     }
-
     if (quotation.details.length === 0) {
       toast({
         title: "Lỗi",
@@ -165,7 +148,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       });
       return;
     }
-
     // Validate all details have required fields
     const invalidDetails = quotation.details.filter(detail => 
       !detail.product_id || !detail.product_name || !detail.product_code || 
@@ -179,10 +161,8 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       });
       return;
     }
-
     try {
       setLoading(true);
-      
       const quotationData = {
         customerId: quotation.customer_id,
         note: quotation.note || undefined,
@@ -194,7 +174,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
           note: d.note || undefined
         }))
       };
-
       if (isEditMode && initialQuotation) {
         await quotationApi.updateQuotation(initialQuotation.id, quotationData);
         toast({
@@ -208,11 +187,9 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
           description: "Đã tạo báo giá mới",
         });
       }
-      
       onQuotationCreated();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error saving quotation:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, isEditMode ? "Không thể cập nhật báo giá" : "Không thể tạo báo giá"),
@@ -222,10 +199,8 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       setLoading(false);
     }
   };
-
   const selectedCustomer = customers.find(c => c.id === quotation.customer_id);
   const totalAmount = calculateTotalAmount();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -235,7 +210,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
             {isEditMode ? "Cập nhật thông tin báo giá" : "Điền thông tin để tạo báo giá mới"}
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-4">
           {/* Customer Selection */}
           <div className="space-y-2">
@@ -256,7 +230,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
               </SelectContent>
             </Select>
           </div>
-
           {/* Status and Type */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -276,7 +249,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
               </Select>
             </div>
           </div>
-
           {/* Note */}
           <div className="space-y-2">
             <Label htmlFor="note">Ghi chú</Label>
@@ -288,7 +260,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
               rows={3}
             />
           </div>
-
           {/* Details */}
           <Card>
             <CardHeader>
@@ -386,7 +357,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
               )}
             </CardContent>
           </Card>
-
           {/* Actions */}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -401,6 +371,4 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
     </Dialog>
   );
 };
-
-export default CreateQuotationForm;
-
+export default CreateQuotationForm;

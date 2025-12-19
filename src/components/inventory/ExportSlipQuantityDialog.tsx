@@ -10,7 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { Package, AlertTriangle, Upload } from "lucide-react";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
-
 interface ExportSlipItem {
   id: string;
   product_id: string;
@@ -21,7 +20,6 @@ interface ExportSlipItem {
   remaining_quantity: number;
   unit_price: number;
 }
-
 interface ExportSlipQuantityDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,7 +33,6 @@ interface ExportSlipQuantityDialogProps {
   };
   onUpdate: () => void;
 }
-
 export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> = ({
   open,
   onOpenChange,
@@ -47,7 +44,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-
   useEffect(() => {
     if (items) {
       const initialQuantities: { [key: string]: number } = {};
@@ -57,7 +53,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
       setQuantities(initialQuantities);
     }
   }, [items]);
-
   const handleQuantityChange = (itemId: string, value: number, maxQuantity: number) => {
     const actualValue = Math.max(0, Math.min(value, maxQuantity));
     setQuantities(prev => ({
@@ -65,7 +60,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
       [itemId]: actualValue
     }));
   };
-
   const handleConfirmExport = async () => {
     setLoading(true);
     try {
@@ -73,7 +67,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
       for (const item of items) {
         const actualQuantity = quantities[item.id] || 0;
         const remainingQuantity = item.requested_quantity - actualQuantity;
-
         const { error } = await supabase
           .from('export_slip_items')
           .update({
@@ -81,18 +74,14 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
             remaining_quantity: remainingQuantity
           })
           .eq('id', item.id);
-
         if (error) throw error;
       }
-
       // Check if export is complete (all items fully exported)
       const totalRequested = items.reduce((sum, item) => sum + item.requested_quantity, 0);
       const totalActual = Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
       const isCompleteExport = totalActual === totalRequested && totalActual > 0;
-
       // Update export slip status
       const newStatus = isCompleteExport ? 'completed' : 'partial_export';
-      
       const { error: slipError } = await supabase
         .from('export_slips')
         .update({
@@ -100,20 +89,16 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
           approved_at: new Date().toISOString()
         })
         .eq('id', exportSlipId);
-
       if (slipError) throw slipError;
-
       toast({
         title: "Thành công",
         description: isCompleteExport 
           ? "Đã xuất kho hoàn tất tất cả sản phẩm"
           : "Đã xuất kho một phần. Còn lại sẽ được xuất trong lần tiếp theo",
       });
-
       onUpdate();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error updating export quantities:', error);
       toast({
         title: "Lỗi",
         description: "Không thể cập nhật số lượng xuất kho",
@@ -123,30 +108,25 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
       setLoading(false);
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const getTotalValue = () => {
     return items.reduce((total, item) => {
       const actualQty = quantities[item.id] || 0;
       return total + (actualQty * item.unit_price);
     }, 0);
   };
-
   const hasPartialExport = items.some(item => {
     const actualQty = quantities[item.id] || 0;
     return actualQty > 0 && actualQty < item.requested_quantity;
   });
-
   const hasCompleteExport = items.every(item => {
     const actualQty = quantities[item.id] || 0;
     return actualQty === item.requested_quantity;
   });
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
@@ -159,7 +139,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
             Nhập số lượng thực tế xuất kho cho từng sản phẩm
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-6">
           {/* Order Information Section */}
           {orderInfo && (
@@ -187,7 +166,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
               </div>
             </div>
           )}
-
           {/* Export Summary Section */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-semibold text-blue-900 mb-3">Tóm tắt phiếu xuất kho</h4>
@@ -227,7 +205,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
               </div>
             </div>
           </div>
-
           {hasPartialExport && (
             <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
               <AlertTriangle className="w-4 h-4 text-yellow-600" />
@@ -236,7 +213,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
               </span>
             </div>
           )}
-
           <div className="border rounded-md">
             <Table>
               <TableHeader>
@@ -254,7 +230,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
                 {items.map((item) => {
                   const actualQty = quantities[item.id] || 0;
                   const remainingQty = item.requested_quantity - actualQty;
-                  
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.product_name}</TableCell>
@@ -290,7 +265,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
               </TableBody>
             </Table>
           </div>
-
           <div className="flex justify-between items-center p-4 bg-gray-50 rounded-md">
             <div className="text-sm text-gray-600">
               Tổng giá trị xuất kho:
@@ -299,9 +273,7 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
               {formatCurrency(getTotalValue())}
             </div>
           </div>
-
           <Separator />
-          
           {/* Document Upload Section */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -321,7 +293,6 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
             />
           </div>
         </div>
-
         <DialogFooter>
           <Button 
             variant="outline" 
@@ -342,4 +313,3 @@ export const ExportSlipQuantityDialog: React.FC<ExportSlipQuantityDialogProps> =
     </Dialog>
   );
 };
-

@@ -2,13 +2,11 @@ import React, { useState, useEffect, createContext, useContext, useCallback, use
 import { notificationApi, type Notification } from "@/api/notification.api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-
 interface LoadNotificationsOptions {
   page?: number;
   append?: boolean;
   silent?: boolean;
 }
-
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
@@ -20,12 +18,9 @@ interface NotificationContextType {
   loadMore: () => Promise<void>;
   createNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
 }
-
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
-
 const POLLING_INTERVAL = Number(import.meta.env.VITE_NOTIFICATIONS_POLL_INTERVAL || 15000);
 const NOTIFICATION_PAGE_SIZE = 5;
-
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -34,7 +29,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-
   const mergeNotifications = useCallback((incoming: Notification[], options?: { append?: boolean }) => {
     setNotifications(prev => {
       if (options?.append) {
@@ -53,7 +47,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
         return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
-
       const map = new Map<string, Notification>();
       prev.forEach(notification => {
         map.set(notification.id, notification);
@@ -64,7 +57,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     });
   }, []);
-
   const loadNotifications = useCallback(async (options: LoadNotificationsOptions = {}) => {
     const { page: targetPage = 1, append = false, silent = false } = options;
     if (!user?.id) return;
@@ -81,19 +73,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setHasMore(more);
       mergeNotifications(response.notifications, { append: targetPage > 1 || append });
     } catch (error: any) {
-      console.error("Không thể tải thông báo:", error);
     } finally {
       if (!silent) {
         setIsLoading(false);
       }
     }
   }, [user, hasMore, mergeNotifications]);
-
   const loadMore = useCallback(async () => {
     if (!hasMore || isLoading) return;
     await loadNotifications({ page: currentPage + 1, append: true });
   }, [currentPage, hasMore, isLoading, loadNotifications]);
-
   const markAsRead = useCallback(async (id: string) => {
     try {
       await notificationApi.markAsRead(id);
@@ -112,7 +101,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     }
   }, [toast]);
-
   const markAllAsRead = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -131,7 +119,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     }
   }, [toast, user]);
-
   const createNotification = useCallback(async (notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>) => {
     const data = await notificationApi.createNotification({
       userId: notification.userId,
@@ -140,14 +127,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       type: notification.type,
       relatedOrderId: notification.relatedOrderId
     });
-
     if (data) {
       setNotifications(prev => [data, ...prev]);
     }
   }, []);
-
   const unreadCount = notifications.filter(n => !n.isRead).length;
-
   useEffect(() => {
     if (!user) {
       setNotifications([]);
@@ -159,12 +143,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
       return;
     }
-
     loadNotifications();
     pollingRef.current = setInterval(() => {
       loadNotifications({ page: 1, silent: true });
     }, POLLING_INTERVAL);
-
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -172,7 +154,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
   }, [user, loadNotifications]);
-
   return (
     <NotificationContext.Provider value={{
       notifications,
@@ -189,7 +170,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     </NotificationContext.Provider>
   );
 };
-
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (!context) {

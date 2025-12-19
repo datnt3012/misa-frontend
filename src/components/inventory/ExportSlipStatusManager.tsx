@@ -11,12 +11,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Package, CheckCircle, Clock, Truck, AlertTriangle, Info, XCircle } from "lucide-react";
 import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
-
 interface ExportSlipStatusManagerProps {
   exportSlip: ExportSlip;
   onStatusUpdated?: () => void;
 }
-
 interface StatusTransition {
   from: string;
   to: string;
@@ -25,7 +23,6 @@ interface StatusTransition {
   inventoryImpact: string;
   requiresPermission: string;
 }
-
 const STATUS_TRANSITIONS: StatusTransition[] = [
   {
     from: 'pending',
@@ -60,7 +57,6 @@ const STATUS_TRANSITIONS: StatusTransition[] = [
     requiresPermission: 'WAREHOUSE_MANAGE'
   }
 ];
-
 export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = ({
   exportSlip,
   onStatusUpdated
@@ -69,11 +65,9 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
   const [selectedTransition, setSelectedTransition] = useState<StatusTransition | null>(null);
   const [transitionNotes, setTransitionNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  
   const { user } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -108,33 +102,26 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
   const getAvailableTransitions = (): StatusTransition[] => {
     return STATUS_TRANSITIONS.filter(transition => {
       // Check if transition is valid for current status
       if (transition.from !== exportSlip.status) return false;
-      
       // Check if user has required permission
       if (transition.requiresPermission === 'ADMIN') {
         return hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
       }
-      
       return hasPermission(transition.requiresPermission);
     });
   };
-
   const handleStatusTransition = async (transition: StatusTransition) => {
     setSelectedTransition(transition);
     setTransitionNotes('');
     setTransitionDialog(true);
   };
-
   const executeTransition = async () => {
     if (!selectedTransition) return;
-
     try {
       setLoading(true);
-
       let result;
       switch (selectedTransition.to) {
         case 'picked':
@@ -153,18 +140,15 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
         default:
           throw new Error('Invalid transition');
       }
-
       toast({
         title: "Thành công",
         description: result.message || `Đã chuyển trạng thái sang "${selectedTransition.action}"`,
       });
-
       setTransitionDialog(false);
       setSelectedTransition(null);
       setTransitionNotes('');
       onStatusUpdated?.();
     } catch (error: any) {
-      console.error('Error updating export slip status:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái phiếu xuất kho",
@@ -174,13 +158,10 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
       setLoading(false);
     }
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   const availableTransitions = getAvailableTransitions();
-
   return (
     <>
       <Card>
@@ -239,7 +220,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               )}
             </div>
           </div>
-
           {/* Status Impact Info */}
           <Alert>
             <Info className="h-4 w-4" />
@@ -256,7 +236,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               </div>
             </AlertDescription>
           </Alert>
-
           {/* Available Actions */}
           {availableTransitions.length > 0 && (
             <div>
@@ -290,7 +269,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               </div>
             </div>
           )}
-
           {availableTransitions.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -300,7 +278,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               )}
             </div>
           )}
-
           {/* Notes */}
           {exportSlip.notes && (
             <div>
@@ -310,7 +287,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               </div>
             </div>
           )}
-
           {exportSlip.export_notes && (
             <div>
               <Label className="font-medium">Ghi chú xuất kho:</Label>
@@ -321,7 +297,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
           )}
         </CardContent>
       </Card>
-
       {/* Status Transition Dialog */}
       <Dialog open={transitionDialog} onOpenChange={setTransitionDialog}>
         <DialogContent className="max-w-2xl">
@@ -331,7 +306,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               {selectedTransition?.action} - Phiếu xuất kho {exportSlip.code}
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4">
             <Alert>
               <AlertTriangle className="h-4 w-4" />
@@ -342,7 +316,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
                 </div>
               </AlertDescription>
             </Alert>
-
             <div>
               <Label htmlFor="transition-notes">
                 Ghi chú {selectedTransition?.action.toLowerCase()}
@@ -356,7 +329,6 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
               />
             </div>
           </div>
-          
           <DialogFooter>
             <Button variant="outline" onClick={() => setTransitionDialog(false)}>
               Hủy
@@ -383,4 +355,4 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
       </Dialog>
     </>
   );
-};
+};
