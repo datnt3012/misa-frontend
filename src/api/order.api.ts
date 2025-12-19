@@ -239,7 +239,8 @@ export const orderApi = {
     paymentMethods?: string | string[];
     region?: 'north' | 'central' | 'south';
     includeDeleted?: boolean;
-  }): Promise<{ 
+    productIds?: string | string[];
+  }): Promise<{
     orders: Order[]; 
     total: number; 
     page: number; 
@@ -296,6 +297,18 @@ export const orderApi = {
     // Region filter
     if (params?.region) {
       queryParams.append('region', params.region);
+    }
+    // Product IDs filter: support CSV or array syntax per backend
+    if (params?.productIds) {
+      if (Array.isArray(params.productIds)) {
+        params.productIds.forEach((id) => queryParams.append('productIds[]', String(id)));
+      } else if (typeof params.productIds === 'string') {
+        if (params.productIds.includes(',')) {
+          queryParams.append('productIds', params.productIds);
+        } else {
+          queryParams.append('productIds', params.productIds);
+        }
+      }
     }
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
     const url = queryParams.toString() 

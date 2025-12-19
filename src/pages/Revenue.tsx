@@ -40,9 +40,7 @@ function RevenueContent() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  // Date filters
-  const [startDate, setStartDate] = useState<Date>();
-  const [endDate, setEndDate] = useState<Date>();
+  // Date filters (removed startDate and endDate as they are redundant with createdFromDate and createdToDate)
   const [createdFromDate, setCreatedFromDate] = useState<Date>();
   const [createdToDate, setCreatedToDate] = useState<Date>();
   const [completedFromDate, setCompletedFromDate] = useState<Date>();
@@ -91,12 +89,69 @@ function RevenueContent() {
       throw error;
     }
   };
-  // Fetch revenue report from backend API (without filters - total overview)
-  // Note: Currently report API doesn't support filters, but logic matches backend calculation
+  // Fetch revenue report from backend API with filters
   const fetchRevenueReport = async () => {
     try {
-      const report = await reportApi.getRevenueReport();
-      // Note: This is total overview (no filters). For filtered data, we calculate from filtered orders below
+      // Build filter parameters for report API
+      const filters: any = {};
+      
+      // Date filters - only use created date range
+      const createdStart = formatDateLocal(createdFromDate);
+      const createdEnd = formatDateLocal(createdToDate);
+      if (createdStart) filters.startDate = createdStart;
+      if (createdEnd) filters.endDate = createdEnd;
+      
+      // Completed date range
+      const completedStart = formatDateLocal(completedFromDate);
+      const completedEnd = formatDateLocal(completedToDate);
+      if (completedStart) filters.completedStartDate = completedStart;
+      if (completedEnd) filters.completedEndDate = completedEnd;
+      
+      // Value filters
+      if (valueFrom && valueFrom !== "0") {
+        filters.minTotalAmount = parseFloat(valueFrom.replace(/,/g, ''));
+      }
+      if (valueTo && valueTo !== "999,999,999") {
+        filters.maxTotalAmount = parseFloat(valueTo.replace(/,/g, ''));
+      }
+      
+      // Selection filters (for report API - note: report API may not support all filters)
+      if (selectedCustomer !== "all") {
+        filters.customerId = selectedCustomer;
+      }
+      // Note: Product filtering may not be supported by report API, so we skip it here
+      // The product filter will be applied to the orders API instead
+      if (selectedOrderStatus !== "all") {
+        const statusMapToBackend: Record<string, string> = {
+          new: 'new',
+          pending: 'pending',
+          picking: 'picking',
+          picked: 'picked',
+          delivered: 'delivered',
+          delivery_failed: 'delivery_failed',
+          completed: 'completed',
+          cancelled: 'cancelled',
+        };
+        const apiStatus = statusMapToBackend[selectedOrderStatus] || selectedOrderStatus;
+        filters.status = apiStatus;
+      }
+      if (selectedOrderCreator !== "all") {
+        filters.created_by = selectedOrderCreator;
+      }
+      if (selectedPaymentMethod !== "all") {
+        filters.paymentMethod = selectedPaymentMethod;
+      }
+      if (selectedArea !== "all") {
+        filters.region = selectedArea;
+      }
+      if (selectedProductGroup !== "all") {
+        filters.category = selectedProductGroup;
+      }
+      
+      // Debug: Log the filters being sent to report API
+      console.log('Report API filters:', filters);
+      
+      const report = await reportApi.getRevenueReport(filters);
       return report;
     } catch (error: any) {
       // Don't throw - we'll calculate from orders instead
@@ -194,7 +249,7 @@ function RevenueContent() {
       setRevenueData([]);
     }
   };
-  const fetchRevenueData = async () => {
+  const fetchRevenueData = async (): Promise<any[]> => {
     try {
       setOrdersLoading(true);
       // Build API-supported query parameters
@@ -203,9 +258,9 @@ function RevenueContent() {
         limit: 1000,
       };
       // Date filters
-      // Created date range -> startDate/endDate (prefer specific created range if provided)
-      const createdStart = formatDateLocal(createdFromDate || startDate);
-      const createdEnd = formatDateLocal(createdToDate || endDate);
+      // Created date range -> startDate/endDate
+      const createdStart = formatDateLocal(createdFromDate);
+      const createdEnd = formatDateLocal(createdToDate);
       if (createdStart) queryParams.startDate = createdStart;
       if (createdEnd) queryParams.endDate = createdEnd;
       // Completed date range -> completedStartDate/completedEndDate
@@ -243,6 +298,12 @@ function RevenueContent() {
       if (selectedProductGroup !== 'all') {
         queryParams.categories = String(selectedProductGroup);
       }
+      // Product IDs (backend: productIds accepts CSV)
+      if (selectedProduct !== 'all') {
+        console.log('Product filter selected:', selectedProduct);
+        queryParams.productIds = String(selectedProduct);
+        console.log('Product filter added to queryParams:', queryParams.productIds);
+      }
       // Payment methods (backend: paymentMethods accepts CSV or array)
       if (selectedPaymentMethod !== 'all') {
         queryParams.paymentMethods = String(selectedPaymentMethod);
@@ -251,6 +312,10 @@ function RevenueContent() {
       if (selectedArea !== 'all') {
         queryParams.region = selectedArea;
       }
+      
+      // Debug: Log the query parameters being sent to orders API
+      console.log('Orders API query params:', queryParams);
+      
       // Other filters will be applied client-side below
       // Fetch orders data from backend API with filters
       const ordersResponse = await orderApi.getOrders(queryParams);
@@ -265,14 +330,7 @@ function RevenueContent() {
           // Do not re-filter here to avoid dropping valid BE results
         }
         // Region: already handled by backend
-        // Product and Category by items
-        if (selectedProduct !== 'all') {
-          const hasProduct = (order.items || order.order_items || []).some((it: any) => String(it.product_id) === String(selectedProduct));
-          if (!hasProduct) return false;
-        }
-        if (selectedProductGroup !== 'all') {
-          // Category filter sent to backend via categories param; skip client-side item check to avoid false negatives
-        }
+        // Product and Category: now handled by backend via productIds and categories params
         // Completed date range if available
         if (completedFromDate || completedToDate) {
           const completedAt = order.updated_at || order.created_at;
@@ -317,7 +375,7 @@ function RevenueContent() {
         // Add total amount to revenue (use total_amount as revenue)
         // Match backend logic from report.service.ts
         const orderAmount = Number(order.total_amount || 0);
-        const initialPayment = Number(order.initialPayment || order.initial_payment || 0);
+        const initialPayment = Number(order.initial_payment || 0);
         monthlyRevenue[key].revenue += orderAmount;
         monthlyRevenue[key].orderCount += 1;
         totalRevenue += orderAmount;
@@ -330,30 +388,25 @@ function RevenueContent() {
         // Calculate profit: profit = revenue - cost from order details
         // Match backend logic from report.service.ts
         let orderProfit = 0;
-        if (order.profit !== undefined) {
-          // Backend provides profit directly
-          orderProfit = Number(order.profit || 0);
-        } else {
-          // Calculate profit from order details: profit = sum(revenue - cost * quantity) for each detail
-          const orderDetails = order.details || order.items || order.order_items || [];
-          orderProfit = orderDetails.reduce((sum: number, detail: any) => {
-            const unitCost = Number(detail.costPrice || detail.cost_price || (detail.product?.costPrice || 0));
-            const quantity = Number(detail.quantity || 0);
-            const revenue = Number(detail.totalPrice || detail.total_price || detail.price || 0);
-            // Profit per item = revenue - (cost * quantity)
-            return sum + Math.max(0, revenue - (unitCost * quantity));
-          }, 0);
-        }
+        // Note: Order interface doesn't include profit property, so we calculate it from items
+        const orderDetails = order.items || order.order_items || [];
+        orderProfit = orderDetails.reduce((sum: number, detail: any) => {
+          const unitCost = Number(detail.costPrice || detail.cost_price || (detail.product?.costPrice || 0));
+          const quantity = Number(detail.quantity || 0);
+          const revenue = Number(detail.totalPrice || detail.total_price || detail.price || 0);
+          // Profit per item = revenue - (cost * quantity)
+          return sum + Math.max(0, revenue - (unitCost * quantity));
+        }, 0);
         totalProfit += orderProfit;
       });
       // Determine the year to display (from filter or current year)
       let displayYear = new Date().getFullYear();
-      if (startDate) {
-        const filterDate = typeof startDate === 'string' ? new Date(startDate) : startDate;
+      if (createdFromDate) {
+        const filterDate = typeof createdFromDate === 'string' ? new Date(createdFromDate) : createdFromDate;
         const filterYear = filterDate.getFullYear();
         if (!isNaN(filterYear)) displayYear = filterYear;
-      } else if (endDate) {
-        const filterDate = typeof endDate === 'string' ? new Date(endDate) : endDate;
+      } else if (createdToDate) {
+        const filterDate = typeof createdToDate === 'string' ? new Date(createdToDate) : createdToDate;
         const filterYear = filterDate.getFullYear();
         if (!isNaN(filterYear)) displayYear = filterYear;
       } else if (Object.keys(monthlyRevenue).length > 0) {
@@ -386,13 +439,8 @@ function RevenueContent() {
           };
         }
       });
-      // Debug logging
-      // NOTE: Do NOT set revenueData here - it should come from dashboard API (fetchRevenueChartData)
-      // which automatically excludes cancelled orders
-      // setRevenueData(revenueArray); // REMOVED: Chart data comes from API, not from filtered orders
-      // Don't update debtData here - it should come from report API
-      // Only update if report API is not available (fallback)
-      // setDebtData will be handled by loadData after fetching report API
+      // Return the calculated revenue data for charts
+      return revenueArray;
     } catch (error) {
         toast({
           title: "Lỗi",
@@ -442,14 +490,15 @@ function RevenueContent() {
   const handleFilter = async () => {
     setCurrentPage(1); // Reset to first page when applying filters
     // Fetch revenue data for charts (filtered)
-    await fetchRevenueData();
+    const revenueArray = await fetchRevenueData();
+    setRevenueData(revenueArray);
     // Note: Card metrics (totalOrders, totalDebt, totalProfit) come from report API
     // which doesn't support filters, so they show total overview
     // Only charts and order list are filtered
     // Build filter description
     const filterDescriptions = [];
-    if (startDate || endDate) {
-      filterDescriptions.push(`Thời gian: ${startDate ? format(startDate, 'dd/MM/yyyy', { locale: vi }) : 'không xác định'} - ${endDate ? format(endDate, 'dd/MM/yyyy', { locale: vi }) : 'không xác định'}`);
+    if (createdFromDate || createdToDate) {
+      filterDescriptions.push(`Thời gian: ${createdFromDate ? format(createdFromDate, 'dd/MM/yyyy', { locale: vi }) : 'không xác định'} - ${createdToDate ? format(createdToDate, 'dd/MM/yyyy', { locale: vi }) : 'không xác định'}`);
     }
     if (selectedCustomer !== 'all') {
       const customer = customers.find(c => c.id === selectedCustomer);
@@ -483,8 +532,6 @@ function RevenueContent() {
     setSelectedPaymentMethod("all");
     setSelectedArea("all");
     setSelectedProductGroup("all");
-    setStartDate(undefined);
-    setEndDate(undefined);
     setCreatedFromDate(undefined);
     setCreatedToDate(undefined);
     setCompletedFromDate(undefined);
@@ -492,6 +539,8 @@ function RevenueContent() {
     setValueFrom("0");
     setValueTo("999,999,999");
     setCurrentPage(1); // Reset pagination
+    // Reset chart to overall data
+    fetchRevenueChartData();
     fetchRevenueData();
   };
   // Pagination logic
@@ -540,63 +589,6 @@ function RevenueContent() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Column */}
             <div className="space-y-4">
-            {/* Date Range */}
-              <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Từ ngày</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, 'dd/MM/yyyy', { locale: vi }) : "Chọn ngày"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 z-50 revenue-calendar-popover overflow-visible" align="start" side="bottom" sideOffset={8} avoidCollisions={true} collisionPadding={16}>
-                  <AdvancedCalendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    initialFocus
-                    className="rounded-md border bg-background p-2"
-                    showYearMonthPicker={true}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label>Đến ngày</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, 'dd/MM/yyyy', { locale: vi }) : "Chọn ngày"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 z-50 revenue-calendar-popover overflow-visible" align="start" side="bottom" sideOffset={8} avoidCollisions={true} collisionPadding={16}>
-                  <AdvancedCalendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    initialFocus
-                    className="rounded-md border bg-background p-2"
-                    showYearMonthPicker={true}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            </div>
               {/* Creation Date Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -734,7 +726,10 @@ function RevenueContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Sản phẩm</Label>
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                  <Select value={selectedProduct} onValueChange={(value) => {
+                    console.log('Product dropdown changed to:', value);
+                    setSelectedProduct(value);
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn sản phẩm" />
                     </SelectTrigger>
