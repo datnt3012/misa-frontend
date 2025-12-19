@@ -844,7 +844,7 @@ const SettingsContent = () => {
                                  </TableCell>
                                 <TableCell className="text-center">
                                   {editingRole === userItem.id ? (
-                                     <div className="flex items-center gap-2">
+                                     <div className="flex items-center justify-center gap-2">
                                         <Select 
                                           value={tempRoleValues[userItem.id] || userItem.role?.id || userItem.roleId} 
                                           onValueChange={(newRole) => {
