@@ -65,22 +65,34 @@ const InventoryHistory = () => {
   const loadMovements = async () => {
     try {
       setLoading(true);
-      const response = await warehouseReceiptsApi.getReceipts({ 
-        page: 1, 
-        limit: 1000 
+      const response = await warehouseReceiptsApi.getReceipts({
+        page: 1,
+        limit: 1000
       });
+      
       // Transform warehouse receipts to inventory movements
       const transformedMovements: InventoryMovement[] = [];
       response.receipts.forEach(receipt => {
         if (receipt.items && receipt.items.length > 0) {
           receipt.items.forEach(item => {
+            // Determine movement type based on receipt type and quantity
+            let movementType = 'in'; // Default to import
+            if (receipt.type === 'export') {
+              movementType = 'out';
+            } else if (receipt.type === 'import') {
+              movementType = 'in';
+            } else {
+              // Fallback: check quantity sign
+              movementType = item.quantity > 0 ? 'in' : 'out';
+            }
+            
             transformedMovements.push({
               id: `${receipt.id}-${item.id}`,
               product_id: item.product_id,
               product_code: item.product?.code || '',
               product_name: item.product?.name || '',
               quantity: item.quantity,
-              movement_type: 'in', // Warehouse receipts are always imports
+              movement_type: movementType,
               reference_type: 'warehouse_receipt',
               reference_id: receipt.id,
               warehouse_id: receipt.warehouse_id,
@@ -138,14 +150,21 @@ const InventoryHistory = () => {
     return warehouses.find(w => w.id === id);
   };
   const getMovementTypeBadge = (type: string, quantity: number) => {
-    if (type === 'in' || quantity > 0) {
+    if (type === 'out') {
+      return (
+        <Badge variant="secondary" className="text-red-600 border-red-600">
+          <TrendingDown className="w-3 h-3 mr-1" />
+          Xuất kho
+        </Badge>
+      );
+    } else if (type === 'in') {
       return (
         <Badge variant="secondary" className="text-green-600 border-green-600">
           <TrendingUp className="w-3 h-3 mr-1" />
           Nhập kho
         </Badge>
       );
-    } else if (type === 'out' || quantity < 0) {
+    } else if (quantity < 0) {
       return (
         <Badge variant="secondary" className="text-red-600 border-red-600">
           <TrendingDown className="w-3 h-3 mr-1" />
@@ -285,9 +304,9 @@ const InventoryHistory = () => {
                     <TableCell>
                       {getMovementTypeBadge(movement.movement_type, movement.quantity)}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <span className={movement.quantity > 0 ? "text-green-600" : "text-red-600"}>
-                        {movement.quantity > 0 ? "+" : ""}{movement.quantity.toLocaleString('vi-VN')}
+                    <TableCell className="text-center">
+                      <span className={movement.movement_type === 'out' ? "text-red-600" : "text-green-600"}>
+                        {movement.movement_type === 'out' ? "-" : "+"}{Math.abs(movement.quantity).toLocaleString('vi-VN')}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -345,4 +364,4 @@ const InventoryHistory = () => {
     </Card>
   );
 };
-export default InventoryHistory;
+export default InventoryHistory;
