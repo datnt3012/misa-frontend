@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Trash2, Edit, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
-
 interface Bank {
   id: string;
   accountNumber: string;
@@ -16,18 +15,15 @@ interface Bank {
   updatedAt: string;
   deletedAt?: string;
 }
-
 interface BankManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBankUpdated?: () => void;
 }
-
 interface BankFormData {
   accountNumber: string;
   bankName: string;
 }
-
 const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
   open,
   onOpenChange,
@@ -42,20 +38,17 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
     accountNumber: "",
     bankName: "",
   });
-
   useEffect(() => {
     if (open) {
       loadBanks();
     }
   }, [open]);
-
   const loadBanks = async () => {
     try {
       setLoading(true);
       const response = await orderApi.getAllBanks({ includeDeleted: false });
       setBanks(response.banks);
     } catch (error) {
-      console.error('Error loading banks:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải danh sách ngân hàng",
@@ -65,7 +58,6 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
       setLoading(false);
     }
   };
-
   const handleCreate = async () => {
     if (!formData.accountNumber.trim() || !formData.bankName.trim()) {
       toast({
@@ -75,25 +67,21 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
       });
       return;
     }
-
     try {
       setLoading(true);
       await orderApi.createBank({
         accountNumber: formData.accountNumber.trim(),
         bankName: formData.bankName.trim(),
       });
-
       toast({
         title: "Thành công",
         description: "Đã tạo ngân hàng mới",
       });
-
       setFormData({ accountNumber: "", bankName: "" });
       setShowForm(false);
       await loadBanks();
       onBankUpdated?.();
     } catch (error) {
-      console.error('Error creating bank:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tạo ngân hàng",
@@ -103,7 +91,6 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
       setLoading(false);
     }
   };
-
   const handleUpdate = async () => {
     if (!editingBank || !formData.accountNumber.trim() || !formData.bankName.trim()) {
       toast({
@@ -113,26 +100,22 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
       });
       return;
     }
-
     try {
       setLoading(true);
       await orderApi.updateBank(editingBank.id, {
         accountNumber: formData.accountNumber.trim(),
         bankName: formData.bankName.trim(),
       });
-
       toast({
         title: "Thành công",
         description: "Đã cập nhật ngân hàng",
       });
-
       setEditingBank(null);
       setFormData({ accountNumber: "", bankName: "" });
       setShowForm(false);
       await loadBanks();
       onBankUpdated?.();
     } catch (error) {
-      console.error('Error updating bank:', error);
       toast({
         title: "Lỗi",
         description: "Không thể cập nhật ngân hàng",
@@ -142,25 +125,20 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
       setLoading(false);
     }
   };
-
   const handleDelete = async (bank: Bank) => {
     if (!confirm(`Bạn có chắc muốn xóa ngân hàng "${bank.bankName}"?`)) {
       return;
     }
-
     try {
       setLoading(true);
       await orderApi.deleteBank(bank.id);
-
       toast({
         title: "Thành công",
         description: "Đã xóa ngân hàng",
       });
-
       await loadBanks();
       onBankUpdated?.();
     } catch (error) {
-      console.error('Error deleting bank:', error);
       toast({
         title: "Lỗi",
         description: "Không thể xóa ngân hàng",
@@ -170,7 +148,6 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
       setLoading(false);
     }
   };
-
   const startEdit = (bank: Bank) => {
     setEditingBank(bank);
     setFormData({
@@ -179,19 +156,16 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
     });
     setShowForm(true);
   };
-
   const startCreate = () => {
     setEditingBank(null);
     setFormData({ accountNumber: "", bankName: "" });
     setShowForm(true);
   };
-
   const cancelForm = () => {
     setEditingBank(null);
     setFormData({ accountNumber: "", bankName: "" });
     setShowForm(false);
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -201,7 +175,6 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
             Thêm, sửa, xóa thông tin ngân hàng cho thanh toán chuyển khoản
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-4">
           {!showForm && (
             <div className="flex justify-end">
@@ -211,13 +184,11 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
               </Button>
             </div>
           )}
-
           {showForm && (
             <div className="border rounded-lg p-4 space-y-4">
               <h3 className="font-medium">
                 {editingBank ? "Chỉnh sửa ngân hàng" : "Thêm ngân hàng mới"}
               </h3>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="accountNumber">Số tài khoản <span className="text-red-500">*</span></Label>
@@ -238,7 +209,6 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
                   />
                 </div>
               </div>
-
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={cancelForm}>
                   Hủy
@@ -249,7 +219,6 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
               </div>
             </div>
           )}
-
           <Table className="border border-border/30 rounded-lg overflow-hidden">
             <TableHeader>
               <TableRow className="bg-slate-50 border-b-2 border-slate-200">
@@ -313,5 +282,4 @@ const BankManagementDialog: React.FC<BankManagementDialogProps> = ({
     </Dialog>
   );
 };
-
 export default BankManagementDialog;

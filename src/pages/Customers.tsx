@@ -48,7 +48,6 @@ import {
 } from "@/components/ui/table";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-
 interface CustomerVatInfo {
   taxCode?: string | null;
   companyName?: string | null;
@@ -56,7 +55,6 @@ interface CustomerVatInfo {
   vatEmail?: string | null;
   companyPhone?: string | null;
 }
-
 interface Customer {
   id: string;
   code?: string;
@@ -81,7 +79,6 @@ interface Customer {
   wardName?: string;
   vatInfo?: CustomerVatInfo;
 }
-
 interface CustomerFormVatInfoState {
   taxCode: string;
   companyName: string;
@@ -89,7 +86,6 @@ interface CustomerFormVatInfoState {
   vatEmail: string;
   companyPhone: string;
 }
-
 interface CustomerFormAddressState {
   administrativeUnitId: string;
   provinceCode: string;
@@ -99,7 +95,6 @@ interface CustomerFormAddressState {
   districtName: string;
   wardName: string;
 }
-
 interface CustomerFormState {
   customer_code: string;
   name: string;
@@ -111,7 +106,6 @@ interface CustomerFormState {
   addressInfo: CustomerFormAddressState;
   vatInfo: CustomerFormVatInfoState;
 }
-
 const createEmptyAddressInfo = (): CustomerFormAddressState => ({
   administrativeUnitId: "",
   provinceCode: "",
@@ -121,7 +115,6 @@ const createEmptyAddressInfo = (): CustomerFormAddressState => ({
   districtName: "",
   wardName: "",
 });
-
 const createEmptyVatInfoState = (): CustomerFormVatInfoState => ({
   taxCode: "",
   companyName: "",
@@ -129,7 +122,6 @@ const createEmptyVatInfoState = (): CustomerFormVatInfoState => ({
   vatEmail: "",
   companyPhone: "",
 });
-
 const createEmptyCustomerFormState = (): CustomerFormState => ({
   customer_code: "",
   name: "",
@@ -141,7 +133,6 @@ const createEmptyCustomerFormState = (): CustomerFormState => ({
   addressInfo: createEmptyAddressInfo(),
   vatInfo: createEmptyVatInfoState(),
 });
-
 const populateVatInfoState = (info?: CustomerVatInfo | null): CustomerFormVatInfoState => ({
   taxCode: info?.taxCode ?? "",
   companyName: info?.companyName ?? "",
@@ -149,13 +140,11 @@ const populateVatInfoState = (info?: CustomerVatInfo | null): CustomerFormVatInf
   vatEmail: info?.vatEmail ?? "",
   companyPhone: info?.companyPhone ?? "",
 });
-
 const sanitizeVatField = (value?: string) => {
   if (!value) return undefined;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : undefined;
 };
-
 const buildVatInfoPayload = (
   info: CustomerFormVatInfoState
 ): CustomerVatInfo | undefined => {
@@ -166,14 +155,11 @@ const buildVatInfoPayload = (
     vatEmail: sanitizeVatField(info.vatEmail),
     companyPhone: sanitizeVatField(info.companyPhone),
   };
-
   return Object.values(payload).some(Boolean) ? payload : undefined;
 };
-
 const buildAddressInfoState = (info?: any): CustomerFormAddressState => {
   const base = createEmptyAddressInfo();
   if (!info) return base;
-
   return {
     administrativeUnitId: info.administrativeUnitId ?? base.administrativeUnitId,
     provinceCode: info.provinceCode ?? info.province?.code ?? base.provinceCode,
@@ -184,7 +170,6 @@ const buildAddressInfoState = (info?: any): CustomerFormAddressState => {
     wardName: info.wardName ?? info.ward?.name ?? base.wardName,
   };
 };
-
 interface Order {
   id: string;
   order_number: string;
@@ -195,13 +180,11 @@ interface Order {
   created_at: string;
   order_type: string;
 }
-
 interface CustomerStats {
   total_orders: number;
   total_spent: number;
   current_debt: number;
 }
-
 const CustomersContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -216,7 +199,6 @@ const CustomersContent = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast();
-
   // Format full address with ward/district/province names when available
   const formatAddress = (c: any) => {
     const ai = c?.addressInfo || {};
@@ -230,17 +212,13 @@ const CustomersContent = () => {
     if (provinceNameFromNested || ai.provinceName || (c as any).provinceName) parts.push(provinceNameFromNested || ai.provinceName || (c as any).provinceName);
     return parts.filter(Boolean).join(', ');
   };
-
   // Form states
   const [newCustomer, setNewCustomer] = useState<CustomerFormState>(() => createEmptyCustomerFormState());
-
   const [editCustomer, setEditCustomer] = useState<CustomerFormState>(() => createEmptyCustomerFormState());
-
   // Check permissions
   const { hasPermission } = usePermissions();
   const canReadCustomers = hasPermission('CUSTOMERS_READ');
   const canManageCustomers = hasPermission('CUSTOMERS_MANAGE');
-
   // Load customers data
   const loadCustomers = async () => {
     try {
@@ -248,7 +226,6 @@ const CustomersContent = () => {
       const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
       setCustomers(resp.customers || []);
     } catch (error) {
-      console.error('Error fetching customers:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách khách hàng",
@@ -258,14 +235,12 @@ const CustomersContent = () => {
       setIsLoading(false);
     }
   };
-
   // Load provinces data (administrative units = provinces)
   const loadAdministrativeUnits = async () => {
     try {
       // Fetch provinces from API
       const response = await fetch('https://provinces.open-api.vn/api/?depth=1');
       if (!response.ok) throw new Error('API not available');
-      
       const data = await response.json();
       const provincesData = data.map((p: any) => ({
         id: p.code,
@@ -275,7 +250,6 @@ const CustomersContent = () => {
       }));
       setAdministrativeUnits(provincesData);
     } catch (error) {
-      console.error('Error fetching provinces:', error);
       // Fallback data for common provinces
       const fallbackProvinces: AdministrativeUnit[] = [
         { id: 'HN', name: 'Hà Nội', code: 'HN', level: '1' },
@@ -287,18 +261,15 @@ const CustomersContent = () => {
       setAdministrativeUnits(fallbackProvinces);
     }
   };
-
   // Load data when permissions are available
   useEffect(() => {
     loadCustomers();
     loadAdministrativeUnits();
   }, [canReadCustomers]);
-
   // Restore form state from URL parameters after page reload
   useEffect(() => {
     const action = searchParams.get('action');
     const customerId = searchParams.get('customerId');
-    
     if (action === 'add') {
       setIsAddDialogOpen(true);
     } else if (action === 'edit' && customerId) {
@@ -315,29 +286,24 @@ const CustomersContent = () => {
       }
     }
   }, [customers, searchParams]);
-
   const fetchCustomerOrders = async (customerId: string) => {
     try {
       // Use backend API to fetch customer orders
       const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000 });
       const allOrders = ordersResponse.orders || [];
-      
       // Filter orders for this customer
       const customerOrders = allOrders.filter(order => order.customer_id === customerId);
       setCustomerOrders(customerOrders);
-
       // Calculate customer stats
       const totalOrders = customerOrders.length;
       const totalSpent = customerOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
       const currentDebt = customerOrders.reduce((sum, order) => sum + Number(order.debt_amount || 0), 0);
-
       setCustomerStats({
         total_orders: totalOrders,
         total_spent: totalSpent,
         current_debt: currentDebt
       });
     } catch (error) {
-      console.error('Error fetching customer orders:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải lịch sử đơn hàng",
@@ -345,7 +311,6 @@ const CustomersContent = () => {
       });
     }
   };
-
   const handleAddCustomer = async () => {
     try {
       const vatInfoPayload = buildVatInfoPayload(newCustomer.vatInfo);
@@ -361,27 +326,21 @@ const CustomersContent = () => {
           wardCode: newCustomer.addressInfo?.wardCode || null
         }
       };
-
       if (vatInfoPayload) {
         insertData.vatInfo = vatInfoPayload;
       }
-
       // Backend will auto-generate customer code
-
       const data = await customerApi.createCustomer(insertData);
-
       setCustomers([data, ...customers]);
       setNewCustomer(createEmptyCustomerFormState());
       setIsAddDialogOpen(false);
       // Clear URL parameters
       setSearchParams({});
-      
       toast({
         title: "Thành công",
         description: `Đã thêm khách hàng ${data.name} với mã ${data.customer_code}`,
       });
     } catch (error) {
-      console.error('Error adding customer:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể thêm khách hàng",
@@ -389,7 +348,6 @@ const CustomersContent = () => {
       });
     }
   };
-
   const handleEditCustomer = (customer: Customer) => {
     setEditingCustomer(customer);
     setEditCustomer({
@@ -407,10 +365,8 @@ const CustomersContent = () => {
     // Save state to URL
     setSearchParams({ action: 'edit', customerId: customer.id });
   };
-
   const handleUpdateCustomer = async () => {
     if (!editingCustomer) return;
-
     try {
       const vatInfoPayload = buildVatInfoPayload(editCustomer.vatInfo);
       const updatePayload: any = {
@@ -425,13 +381,10 @@ const CustomersContent = () => {
           wardCode: editCustomer.addressInfo?.wardCode || null
         }
       };
-
       if (vatInfoPayload) {
         updatePayload.vatInfo = vatInfoPayload;
       }
-
       await customerApi.updateCustomer(editingCustomer.id, updatePayload);
-
       // Reload customers to get updated data
       await loadCustomers();
       setIsEditDialogOpen(false);
@@ -439,13 +392,11 @@ const CustomersContent = () => {
       setEditCustomer(createEmptyCustomerFormState());
       // Clear URL parameters
       setSearchParams({});
-      
       toast({
         title: "Thành công",
         description: `Đã cập nhật thông tin khách hàng ${editCustomer.name}`,
       });
     } catch (error) {
-      console.error('Error updating customer:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật thông tin khách hàng",
@@ -453,23 +404,18 @@ const CustomersContent = () => {
       });
     }
   };
-
   const handleDeleteCustomer = async (customer: Customer) => {
     if (!window.confirm(`Bạn có chắc muốn xóa khách hàng "${customer.name}"? Hành động này không thể hoàn tác.`)) {
       return;
     }
-
     try {
       await customerApi.deleteCustomer(customer.id);
-
       setCustomers(customers.filter(c => c.id !== customer.id));
-      
       toast({
         title: "Thành công",
         description: `Đã xóa khách hàng ${customer.name}`,
       });
     } catch (error) {
-      console.error('Error deleting customer:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xóa khách hàng. Có thể khách hàng đã có đơn hàng.",
@@ -477,7 +423,6 @@ const CustomersContent = () => {
       });
     }
   };
-
   const handleViewCustomerDetail = (customer: Customer) => {
     setSelectedCustomer(customer);
     fetchCustomerOrders(customer.id);
@@ -485,7 +430,6 @@ const CustomersContent = () => {
     // Save state to URL
     setSearchParams({ action: 'view', customerId: customer.id });
   };
-
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     return (
@@ -494,7 +438,6 @@ const CustomersContent = () => {
       </Badge>
     );
   };
-
   const filteredCustomers = customers.filter(customer => {
     const name = (customer.name || '').toString();
     const code = (customer.customer_code || customer.code || '').toString();
@@ -508,7 +451,6 @@ const CustomersContent = () => {
       email.toLowerCase().includes(q)
     );
   });
-
   // Show loading state
   if (isLoading) {
     return (
@@ -524,7 +466,6 @@ const CustomersContent = () => {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
@@ -543,7 +484,6 @@ const CustomersContent = () => {
               className="pl-10"
             />
           </div>
-          
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open);
             if (open) {
@@ -734,7 +674,6 @@ const CustomersContent = () => {
             </DialogContent>
           </Dialog>
         </div>
-
         {/* Customer List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCustomers.map((customer) => (
@@ -805,7 +744,6 @@ const CustomersContent = () => {
             </Card>
           ))}
         </div>
-
         {filteredCustomers.length === 0 && (
           <Card>
             <CardContent className="py-10 text-center">
@@ -815,7 +753,6 @@ const CustomersContent = () => {
             </CardContent>
           </Card>
         )}
-
         {/* Edit Customer Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
           setIsEditDialogOpen(open);
@@ -997,7 +934,6 @@ const CustomersContent = () => {
             </div>
           </DialogContent>
         </Dialog>
-
         {/* Customer Detail Dialog */}
         <Dialog open={isCustomerDetailOpen} onOpenChange={(open) => {
           setIsCustomerDetailOpen(open);
@@ -1013,7 +949,6 @@ const CustomersContent = () => {
                 Thông tin và lịch sử giao dịch của {selectedCustomer?.name}
               </DialogDescription>
             </DialogHeader>
-            
             {selectedCustomer && (
               <div className="space-y-6">
                 {/* Customer Info */}
@@ -1102,7 +1037,6 @@ const CustomersContent = () => {
                     </div>
                   </CardContent>
                 </Card>
-
                 {/* Customer Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Card>
@@ -1114,7 +1048,6 @@ const CustomersContent = () => {
                       <div className="text-2xl font-bold">{customerStats.total_orders}</div>
                     </CardContent>
                   </Card>
-                  
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Tổng Chi Tiêu</CardTitle>
@@ -1126,7 +1059,6 @@ const CustomersContent = () => {
                       </div>
                     </CardContent>
                   </Card>
-                  
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Công Nợ</CardTitle>
@@ -1139,7 +1071,6 @@ const CustomersContent = () => {
                     </CardContent>
                   </Card>
                 </div>
-
                 {/* Order History */}
                 <Card>
                   <CardHeader>
@@ -1209,7 +1140,6 @@ const CustomersContent = () => {
     </div>
   );
 };
-
 const Customers = () => {
   return (
     <PermissionGuard requiredPermissions={['CUSTOMERS_VIEW']} requireAll={false}>
@@ -1217,5 +1147,4 @@ const Customers = () => {
     </PermissionGuard>
   );
 };
-
 export default Customers;

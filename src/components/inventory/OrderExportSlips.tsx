@@ -9,12 +9,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { Package, CheckCircle, XCircle, Clock, FileText, Eye } from "lucide-react";
 import { ExportSlip } from "./ExportSlip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
 interface OrderExportSlipsProps {
   orderId: string;
   onUpdate?: () => void;
 }
-
 interface ExportSlipSummary {
   id: string;
   slip_number: string;
@@ -32,18 +30,15 @@ interface ExportSlipSummary {
     remaining_quantity: number;
   }>;
 }
-
 export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onUpdate }) => {
   const [exportSlips, setExportSlips] = useState<ExportSlipSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlipId, setSelectedSlipId] = useState<string | null>(null);
   const [showSlipDialog, setShowSlipDialog] = useState(false);
   const { toast } = useToast();
-
   useEffect(() => {
     loadExportSlips();
   }, [orderId]);
-
   const loadExportSlips = async () => {
     try {
       setLoading(true);
@@ -68,26 +63,21 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
         `)
         .eq('order_id', orderId)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
-      
       // Get creator and approver profiles separately
       const enrichedData = await Promise.all((data || []).map(async (slip) => {
         const [creatorProfile, approverProfile] = await Promise.all([
           slip.created_by ? supabase.from('profiles').select('full_name').eq('id', slip.created_by).single() : null,
           slip.approved_by ? supabase.from('profiles').select('full_name').eq('id', slip.approved_by).single() : null,
         ]);
-
         return {
           ...slip,
           creator_profile: creatorProfile?.data || { full_name: 'Không xác định' },
           approver_profile: approverProfile?.data || { full_name: 'Không xác định' },
         };
       }));
-
       setExportSlips(enrichedData);
     } catch (error) {
-      console.error('Error loading export slips:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho",
@@ -97,7 +87,6 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
       setLoading(false);
     }
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -124,11 +113,9 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -139,7 +126,6 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
       </div>
     );
   }
-
   if (exportSlips.length === 0) {
     return (
       <div className="text-center p-8">
@@ -151,13 +137,11 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
       </div>
     );
   }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Phiếu Xuất Kho ({exportSlips.length})</h3>
       </div>
-
       <div className="space-y-4">
         {exportSlips.map((slip) => (
           <Card key={slip.id} className="border-l-4 border-l-primary">
@@ -228,7 +212,6 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
           </Card>
         ))}
       </div>
-
       {/* Export Slip Detail Dialog */}
       {selectedSlipId && (
         <Dialog open={showSlipDialog} onOpenChange={setShowSlipDialog}>
@@ -255,4 +238,3 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
     </div>
   );
 };
-

@@ -13,7 +13,6 @@ import { warehouseApi } from "@/api/warehouse.api";
 import { usersApi } from "@/api/users.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { useAuth } from "@/hooks/useAuth";
-
 interface InventoryMovement {
   id: string;
   product_id: string;
@@ -33,7 +32,6 @@ interface InventoryMovement {
   status: string;
   slip_number: string;
 }
-
 const InventoryHistory = () => {
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,34 +42,26 @@ const InventoryHistory = () => {
   const [userCache, setUserCache] = useState<{ [key: string]: string }>({});
   const { toast } = useToast();
   const { user } = useAuth();
-
   // Function to get user name from API
   const getUserName = async (userId: string): Promise<string> => {
     if (!userId || userId === 'Hệ thống') return 'Hệ thống';
-    
     // Check cache first
     if (userCache[userId]) return userCache[userId];
-    
     try {
       const userData = await usersApi.getUserById(userId);
-      
       // Try different field names that might exist
       const firstName = userData.firstName || userData.first_name || userData.name || userData.fullName || userData.full_name;
       const lastName = userData.lastName || userData.last_name;
-      
       const userName = firstName && lastName 
         ? `${firstName} ${lastName}`.trim()
         : firstName || lastName || userData.email || 'Không xác định';
-      
       // Cache the result
       setUserCache(prev => ({ ...prev, [userId]: userName }));
       return userName;
     } catch (error) {
-      console.error('Error fetching user:', error);
       return 'Không xác định';
     }
   };
-
   const loadMovements = async () => {
     try {
       setLoading(true);
@@ -79,11 +69,8 @@ const InventoryHistory = () => {
         page: 1, 
         limit: 1000 
       });
-      
-      
       // Transform warehouse receipts to inventory movements
       const transformedMovements: InventoryMovement[] = [];
-      
       response.receipts.forEach(receipt => {
         if (receipt.items && receipt.items.length > 0) {
           receipt.items.forEach(item => {
@@ -109,12 +96,9 @@ const InventoryHistory = () => {
           });
         }
       });
-      
       // Sort by created_at descending
       transformedMovements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
       setMovements(transformedMovements);
-      
       // Load user names for all movements
       const uniqueUserIds = [...new Set(transformedMovements.map(m => m.created_by).filter(Boolean))];
       for (const userId of uniqueUserIds) {
@@ -128,38 +112,31 @@ const InventoryHistory = () => {
                 : movement
             ));
           } catch (error) {
-            console.error(`Error loading user ${userId}:`, error);
           }
         }
       }
     } catch (error: any) {
-      console.error('Error loading inventory movements:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi tải lịch sử xuất nhập kho';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
-
   const loadWarehouses = async () => {
     try {
       const response = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
       setWarehouses(response.warehouses || []);
     } catch (error) {
-      console.error('Error loading warehouses:', error);
     }
   };
-
   useEffect(() => {
     loadMovements();
     loadWarehouses();
   }, []);
-
   const getWarehouseById = (id?: string) => {
     if (!id) return undefined;
     return warehouses.find(w => w.id === id);
   };
-
   const getMovementTypeBadge = (type: string, quantity: number) => {
     if (type === 'in' || quantity > 0) {
       return (
@@ -184,10 +161,8 @@ const InventoryHistory = () => {
       );
     }
   };
-
   const getReferenceDisplay = (referenceType: string, referenceId: string, slipNumber: string) => {
     if (!referenceType) return "Điều chỉnh thủ công";
-    
     switch (referenceType) {
       case 'warehouse_receipt':
         return `Phiếu nhập ${slipNumber}`;
@@ -203,29 +178,23 @@ const InventoryHistory = () => {
         return referenceType;
     }
   };
-
   const filteredMovements = movements.filter(movement => {
     const matchesSearch = 
       movement.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       movement.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       movement.slip_number.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesType = filterType === "all" || 
                        (filterType === "in" && (movement.movement_type === 'in' || movement.quantity > 0)) ||
                        (filterType === "out" && (movement.movement_type === 'out' || movement.quantity < 0));
-    
     const matchesWarehouse = filterWarehouse === "all" || 
                             movement.warehouse_id === filterWarehouse;
-    
     return matchesSearch && matchesType && matchesWarehouse;
   });
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   if (loading) {
     return (
       <Card>
@@ -237,7 +206,6 @@ const InventoryHistory = () => {
       </Card>
     );
   }
-
   return (
     <Card>
       <CardHeader>
@@ -257,7 +225,6 @@ const InventoryHistory = () => {
               className="pl-10"
             />
           </div>
-          
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Lọc theo loại" />
@@ -268,7 +235,6 @@ const InventoryHistory = () => {
               <SelectItem value="out">Xuất kho</SelectItem>
             </SelectContent>
           </Select>
-
           <Select value={filterWarehouse} onValueChange={setFilterWarehouse}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Lọc theo kho" />
@@ -283,7 +249,6 @@ const InventoryHistory = () => {
             </SelectContent>
           </Select>
         </div>
-
         <div className="border rounded-lg">
           <Table>
             <TableHeader>
@@ -370,7 +335,6 @@ const InventoryHistory = () => {
             </TableBody>
           </Table>
         </div>
-
         {filteredMovements.length > 0 && (
           <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
             <span>Hiển thị {filteredMovements.length} giao dịch gần nhất</span>
@@ -381,6 +345,4 @@ const InventoryHistory = () => {
     </Card>
   );
 };
-
-export default InventoryHistory;
-
+export default InventoryHistory;

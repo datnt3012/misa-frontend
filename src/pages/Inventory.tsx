@@ -32,9 +32,7 @@ import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConver
 import { CategoriesContent } from "@/pages/Categories";
 import { useSearchParams } from "react-router-dom";
 import React from "react";
-
 const InventoryContent = () => {
-  
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -72,7 +70,6 @@ const InventoryContent = () => {
     stockLevels: null as string | null,
     inventoryOverview: null as string | null
   });
-
   // Import job state and polling logic (moved from ProductList to persist across tab switches)
   const [importJobs, setImportJobs] = useState<ProductImportJobSnapshot[]>([]);
   const [jobHistoryPagination, setJobHistoryPagination] = useState<{
@@ -85,36 +82,30 @@ const InventoryContent = () => {
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const previousJobStatusesRef = React.useRef<Record<string, ProductImportJobStatus>>({});
   const [isPollingActive, setIsPollingActive] = useState(false);
-
   // Permission checks
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   const canViewProducts = hasPermission('PRODUCTS_READ');
   const canViewWarehouses = hasPermission('WAREHOUSES_READ') || true; // Temporarily bypass for testing
-
   // Toast hook - must be declared before functions that use it
   const { toast } = useToast();
-
   // Clear error states when permissions are available
   useEffect(() => {
     if (canViewProducts && canViewWarehouses) {
       setErrorStates(prev => ({ ...prev, products: null, warehouses: null }));
     }
   }, [canViewProducts, canViewWarehouses]);
-
   // Trigger data fetch when permissions are loaded
   useEffect(() => {
     if (!permissionsLoading) {
       loadData();
     }
   }, [permissionsLoading, canViewProducts, canViewWarehouses]);
-
   // Load warehouses when warehouses tab is active
   useEffect(() => {
     if (activeTab === 'warehouses' && canViewWarehouses && !permissionsLoading) {
       loadWarehouses();
     }
   }, [activeTab, canViewWarehouses, permissionsLoading]);
-
   // Import job polling functions (moved from ProductList)
   const stopImportPolling = React.useCallback(() => {
     if (pollingRef.current) {
@@ -122,18 +113,14 @@ const InventoryContent = () => {
       pollingRef.current = null;
     }
   }, []);
-
   const handleJobStatusNotification = React.useCallback(async (job: ProductImportJobSnapshot) => {
     const status = job.status as ProductImportJobStatus;
     if (status === 'completed') {
       // Refresh product list after successful import
       try {
         await loadData();
-        console.log('[Import Complete] Product list refreshed after successful import');
       } catch (error) {
-        console.error('Error refreshing products after import:', error);
       }
-
       if (job.errors && job.errors.length > 0) {
         toast({
           title: 'Hoàn thành với cảnh báo',
@@ -158,7 +145,6 @@ const InventoryContent = () => {
       });
     }
   }, [toast]);
-
   const refreshImportJobs = React.useCallback(async (options?: {
     onlyActive?: boolean;
     showNotifications?: boolean;
@@ -174,11 +160,9 @@ const InventoryContent = () => {
         page,
         limit
       });
-
       // If we're fetching active jobs and get empty result, it means all jobs are completed
       // Stop polling and fetch all jobs to update history
       if (onlyActive && response.jobs.length === 0 && isPollingActive) {
-        console.log('[Polling Debug] No active jobs found, stopping polling and updating history');
         setIsPollingActive(false);
         // Fetch all jobs to update history
         const allJobsResponse = await productApi.listImportJobs({
@@ -191,22 +175,18 @@ const InventoryContent = () => {
           prev.forEach(job => {
             jobMap.set(job.jobId, job);
           });
-
           allJobsResponse.jobs.forEach(job => {
             const previous = jobMap.get(job.jobId);
             const mergedJob = { ...previous, ...job };
-
             // For completed, failed, or cancelled jobs, ensure percent is 100%
             if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
                 (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
               mergedJob.percent = 100;
             }
-
             // Ensure percent never exceeds 100
             if (mergedJob.percent && mergedJob.percent > 100) {
               mergedJob.percent = 100;
             }
-
             const prevStatus = previousJobStatusesRef.current[job.jobId];
             if (showNotifications && prevStatus && prevStatus !== job.status) {
               handleJobStatusNotification(mergedJob);
@@ -214,21 +194,17 @@ const InventoryContent = () => {
             previousJobStatusesRef.current[job.jobId] = job.status;
             jobMap.set(job.jobId, mergedJob);
           });
-
           const mergedList = Array.from(jobMap.values());
           return mergedList;
         });
         return;
       }
-
       setImportJobs(prev => {
         // For history calls (onlyActive = false), replace all jobs with new results
         // For polling calls (onlyActive = true), merge with existing jobs
         const isHistoryCall = options?.onlyActive === false;
-
         if (isHistoryCall) {
           // Replace jobs for history pagination
-          console.log('[Import Jobs] Replacing jobs for history call, new jobs:', response.jobs.length);
           setJobHistoryPagination({
             total: response.total,
             page: response.page,
@@ -253,22 +229,18 @@ const InventoryContent = () => {
           prev.forEach(job => {
             jobMap.set(job.jobId, job);
           });
-
           response.jobs.forEach(job => {
             const previous = jobMap.get(job.jobId);
             const mergedJob = { ...previous, ...job };
-
             // For completed, failed, or cancelled jobs, ensure percent is 100%
             if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
                 (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
               mergedJob.percent = 100;
             }
-
             // Ensure percent never exceeds 100
             if (mergedJob.percent && mergedJob.percent > 100) {
               mergedJob.percent = 100;
             }
-
             const prevStatus = previousJobStatusesRef.current[job.jobId];
             if (showNotifications && prevStatus && prevStatus !== job.status) {
               handleJobStatusNotification(mergedJob);
@@ -276,14 +248,11 @@ const InventoryContent = () => {
             previousJobStatusesRef.current[job.jobId] = job.status;
             jobMap.set(job.jobId, mergedJob);
           });
-
           const mergedList = Array.from(jobMap.values());
-          console.log('[Import Jobs] Merged jobs for polling, total jobs:', mergedList.length);
           return mergedList;
         }
       });
     } catch (error: any) {
-      console.error('Error loading import jobs:', error);
       if (!onlyActive) {
         toast({
           title: 'Lỗi',
@@ -293,12 +262,10 @@ const InventoryContent = () => {
       }
     }
   }, [handleJobStatusNotification, toast, isPollingActive]);
-
   // Initialize import jobs on component mount
   React.useEffect(() => {
     refreshImportJobs();
   }, [refreshImportJobs]);
-
   // Check for active jobs and update polling state
   React.useEffect(() => {
     // Only consider jobs that are truly active (not completed, failed, cancelled, or cancel requested)
@@ -307,54 +274,42 @@ const InventoryContent = () => {
       const isActiveStatus = job.status === 'queued' || job.status === 'processing';
       const isNotTerminal = job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled';
       const isNotCancelled = !job.cancelRequested;
-
       // Continue polling if job is still processing and hasn't completed all rows
       const isIncomplete = job.status === 'processing' &&
                           job.totalRows &&
                           job.processedRows !== undefined &&
                           job.processedRows < job.totalRows;
-
       return (isActiveStatus && isNotTerminal && isNotCancelled) || isIncomplete;
     });
-
     const shouldPoll = activeJobs.length > 0;
-
-    console.log('[Polling Debug] Total jobs:', importJobs.length, 'Active jobs:', activeJobs.length, 'Should poll:', shouldPoll);
-
     if (shouldPoll !== isPollingActive) {
       setIsPollingActive(shouldPoll);
     }
   }, [importJobs, isPollingActive]);
-
   // Separate effect for starting/stopping polling
   React.useEffect(() => {
     if (isPollingActive) {
       if (!pollingRef.current) {
-        console.log('[Polling Debug] Starting polling');
         // Fetch active jobs initially
         refreshImportJobs({ onlyActive: true });
         pollingRef.current = setInterval(() => {
-          console.log('[Polling Debug] Polling for active jobs');
           refreshImportJobs({ onlyActive: true, showNotifications: true });
         }, 3000);
       }
     } else {
       if (pollingRef.current) {
-        console.log('[Polling Debug] Stopping polling');
         // When stopping polling, fetch all jobs once to ensure history is updated
         refreshImportJobs({ onlyActive: false });
         stopImportPolling();
       }
     }
   }, [isPollingActive, refreshImportJobs, stopImportPolling]);
-
   // Cleanup polling on unmount
   React.useEffect(() => {
     return () => {
       stopImportPolling();
     };
   }, [stopImportPolling]);
-
   // Load warehouses specifically for warehouses tab
   const loadWarehouses = async () => {
     try {
@@ -365,12 +320,10 @@ const InventoryContent = () => {
         }));
         return;
       }
-
       const response = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
       setWarehouses(response.warehouses || []);
       setErrorStates(prev => ({ ...prev, warehouses: null }));
     } catch (error: any) {
-      console.error('Error loading warehouses:', error);
       if (error?.response?.status === 403) {
         const errorMessage = error.response?.data?.message || 'Không có quyền truy cập dữ liệu kho (cần Read Warehouses)';
         setErrorStates(prev => ({ 
@@ -383,7 +336,6 @@ const InventoryContent = () => {
       }
     }
   };
-
   const [newWarehouse, setNewWarehouse] = useState<{
     name: string;
     code: string;
@@ -427,22 +379,18 @@ const InventoryContent = () => {
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const { user } = useAuth();
-
   // Permission checks removed - let backend handle authorization
   const canViewCostPrice = true; // Always show cost price - backend will handle access control
   const canManageWarehouses = true; // Always allow warehouse management - backend will handle access control
   const canManageProducts = true; // Always allow product management - backend will handle access control
-
   const loadData = async () => {
     try {
       // Don't fetch data if permissions are still loading
       if (permissionsLoading) {
         return;
       }
-      
       const promises: Promise<any>[] = [];
       const promiseLabels: string[] = [];
-      
       // Check permissions and set error states if no permissions
       if (!canViewProducts) {
         setErrorStates(prev => ({ 
@@ -463,7 +411,6 @@ const InventoryContent = () => {
         );
         promiseLabels.push('products');
       }
-      
       if (!canViewWarehouses) {
         setErrorStates(prev => ({ 
           ...prev, 
@@ -483,7 +430,6 @@ const InventoryContent = () => {
         );
         promiseLabels.push('warehouses');
       }
-
       // Load stock levels for summary cards
       promises.push(
         stockLevelsApi.getStockLevels({ 
@@ -501,16 +447,13 @@ const InventoryContent = () => {
         })
       );
       promiseLabels.push('stockLevels');
-
       // Load categories for mapping category IDs -> names
       promises.push(
         categoriesApi.getCategories({ page: 1, limit: 1000 }).catch(error => {
-          console.error('Error loading categories:', error);
           return { categories: [] };
         })
       );
       promiseLabels.push('categories');
-
       // Load inventory overview from dashboard API (same as dashboard uses)
       promises.push(
         dashboardApi.getInventoryOverview().catch(error => {
@@ -534,10 +477,8 @@ const InventoryContent = () => {
         })
       );
       promiseLabels.push('inventoryOverview');
-
       if (promises.length > 0) {
         const responses = await Promise.all(promises);
-        
         // Process responses
         let productsResponse = { products: [] };
         let warehousesResponse = { warehouses: [] };
@@ -554,7 +495,6 @@ const InventoryContent = () => {
             outOfStock: 0,
           }
         };
-        
         responses.forEach((response, index) => {
           const label = promiseLabels[index];
           if (label === 'products') {
@@ -569,16 +509,12 @@ const InventoryContent = () => {
             inventoryOverviewResponse = response;
           }
         });
-
         // Store inventory overview data
         setInventoryOverview(inventoryOverviewResponse);
-
         // Store stock levels
         setStockLevels(stockLevelsResponse.stockLevels || []);
-
         // Store categories (active and inactive)
         setCategories(categoriesResponse.categories || []);
-
         // Transform products to include stock information (mock data for now)
         const productsWithStock: ProductWithStock[] = (productsResponse.products || []).map(product => ({
           ...product,
@@ -589,7 +525,6 @@ const InventoryContent = () => {
           warehouse_name: 'Kho A',
           warehouse_code: 'KHO-A'
         }));
-        
         setProducts(productsWithStock);
         setWarehouses(warehousesResponse.warehouses || []);
       } else {
@@ -603,16 +538,12 @@ const InventoryContent = () => {
       throw error; // Re-throw for lazy loading error handling
     }
   };
-
   // Lazy loading configuration
   const lazyData = useRouteBasedLazyData({
     inventory: {
       loadFunction: loadData
     }
   });
-
-
-
   const getStatusBadge = (stock: number) => {
     if (stock === 0) {
       return <Badge variant="destructive">Hết hàng</Badge>;
@@ -622,28 +553,22 @@ const InventoryContent = () => {
       return <Badge variant="secondary" className="text-green-600 border-green-600">Còn hàng</Badge>;
     }
   };
-
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.code.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesStatus = filterStatus === "all" || 
                          (filterStatus === "in-stock" && product.current_stock >= 100) ||
                          (filterStatus === "low-stock" && product.current_stock > 1 && product.current_stock < 100) ||
                          (filterStatus === "out-of-stock" && product.current_stock === 0);
-    
     const matchesCategory = filterCategory === "all" || 
                            (product.category && product.category.toLowerCase().includes(filterCategory.toLowerCase()));
-
     const matchesWarehouse = filterWarehouse === "all" ||
                             warehouses.find(w => 
                               (product.location?.includes(`(${w.code})`) || product.location?.includes(w.code)) &&
                               w.id === filterWarehouse
                             );
-    
     return matchesSearch && matchesStatus && matchesCategory && matchesWarehouse;
   });
-
   // Get unique categories and warehouses for filters
   const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
   const usedWarehouses = warehouses.filter(w => 
@@ -651,15 +576,12 @@ const InventoryContent = () => {
       p.location?.includes(`(${w.code})`) || p.location?.includes(w.code)
     )
   );
-
   // Sorting logic
   const sortedProducts = React.useMemo(() => {
     if (!sortConfig) return filteredProducts;
-
     return [...filteredProducts].sort((a, b) => {
       let aValue: any;
       let bValue: any;
-
       switch (sortConfig.key) {
         case 'code':
           aValue = a.code;
@@ -702,7 +624,6 @@ const InventoryContent = () => {
         default:
           return 0;
       }
-
       if (aValue < bValue) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
@@ -712,15 +633,12 @@ const InventoryContent = () => {
       return 0;
     });
   }, [filteredProducts, sortConfig, warehouses]);
-
   // Warehouse sorting logic
   const sortedWarehouses = React.useMemo(() => {
     if (!warehouseSortConfig) return warehouses;
-
     return [...warehouses].sort((a, b) => {
       let aValue: any;
       let bValue: any;
-
       switch (warehouseSortConfig.key) {
         case 'code':
           aValue = a.code;
@@ -745,7 +663,6 @@ const InventoryContent = () => {
         default:
           return 0;
       }
-
       if (aValue < bValue) {
         return warehouseSortConfig.direction === 'asc' ? -1 : 1;
       }
@@ -755,22 +672,18 @@ const InventoryContent = () => {
       return 0;
     });
   }, [warehouses, warehouseSortConfig]);
-
   // Pagination logic
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1); // Reset to first page
   };
-
   // Handle sorting
   const handleSort = (key: string) => {
     setSortConfig(prevConfig => {
@@ -783,7 +696,6 @@ const InventoryContent = () => {
       return null; // Remove sorting
     });
   };
-
   // Handle warehouse sorting
   const handleWarehouseSort = (key: string) => {
     setWarehouseSortConfig(prevConfig => {
@@ -796,7 +708,6 @@ const InventoryContent = () => {
       return null; // Remove sorting
     });
   };
-
   // Get sort icon
   const getSortIcon = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) {
@@ -806,7 +717,6 @@ const InventoryContent = () => {
       ? <ArrowUp className="h-4 w-4 ml-1" />
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
-
   // Get warehouse sort icon
   const getWarehouseSortIcon = (key: string) => {
     if (!warehouseSortConfig || warehouseSortConfig.key !== key) {
@@ -816,25 +726,20 @@ const InventoryContent = () => {
       ? <ArrowUp className="h-4 w-4 ml-1" />
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
-
-
   const createWarehouse = async () => {
     if (!newWarehouse.name) {
       toast({ title: "Lỗi", description: "Tên kho là bắt buộc", variant: "destructive" });
       return;
     }
-
     // Validate address
     if (!newWarehouse.address || !newWarehouse.address.trim()) {
       toast({ title: "Lỗi", description: "Địa chỉ chi tiết là bắt buộc", variant: "destructive" });
       return;
     }
-
     if (!newWarehouse.addressInfo?.provinceCode || !newWarehouse.addressInfo?.districtCode || !newWarehouse.addressInfo?.wardCode) {
       toast({ title: "Lỗi", description: "Vui lòng chọn đầy đủ Tỉnh/TP, Quận/Huyện và Phường/Xã", variant: "destructive" });
       return;
     }
-
     try {
       const createResp: any = await warehouseApi.createWarehouse({
         name: newWarehouse.name,
@@ -847,7 +752,6 @@ const InventoryContent = () => {
           wardCode: newWarehouse.addressInfo?.wardCode || undefined
         }
       });
-
       toast({ title: "Thành công", description: "Đã tạo kho mới" });
       setNewWarehouse({ 
         name: "", 
@@ -870,22 +774,16 @@ const InventoryContent = () => {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
   };
-
   const deleteWarehouse = async (id: string) => {
     try {
       const resp = await warehouseApi.deleteWarehouse(id);
-
       toast({ title: "Thành công", description: resp.message || "Đã xóa kho" });
       loadData(); // Reload data
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa kho"), variant: "destructive" });
     }
   };
-
   const startEditWarehouse = (warehouse: any) => {
-    console.log('🔍 Editing warehouse:', warehouse);
-    console.log('🔍 Warehouse addressInfo:', warehouse.addressInfo);
-    
     setEditingWarehouse(warehouse);
     setNewWarehouse({
       name: warehouse.name,
@@ -903,7 +801,6 @@ const InventoryContent = () => {
     });
     setIsEditingWarehouse(true);
   };
-
   const cancelEditWarehouse = () => {
     setEditingWarehouse(null);
     setNewWarehouse({ 
@@ -922,13 +819,11 @@ const InventoryContent = () => {
     });
     setIsEditingWarehouse(false);
   };
-
   const updateWarehouse = async () => {
     if (!newWarehouse.name) {
       toast({ title: "Lỗi", description: "Tên kho là bắt buộc", variant: "destructive" });
       return;
     }
-
     try {
       const updateResp: any = await warehouseApi.updateWarehouse(editingWarehouse.id, {
         name: newWarehouse.name,
@@ -941,7 +836,6 @@ const InventoryContent = () => {
           wardCode: newWarehouse.addressInfo?.wardCode || undefined
         }
       });
-      
       toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
       loadData();
@@ -949,11 +843,9 @@ const InventoryContent = () => {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
   };
-
   const handleImportComplete = async (importedData: any[]) => {
     loadData();
   };
-
   const addProduct = async () => {
     if (!newProduct.name) {
       toast({ title: "Lỗi", description: 'Tên sản phẩm là bắt buộc', variant: "destructive" });
@@ -963,10 +855,8 @@ const InventoryContent = () => {
       toast({ title: "Lỗi", description: 'Giá bán phải lớn hơn 0', variant: "destructive" });
       return;
     }
-
     try {
       setIsAddingProduct(true);
-
       const createProductResp: any = await productApi.createProduct({
         name: newProduct.name,
         ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
@@ -975,7 +865,6 @@ const InventoryContent = () => {
         price: newProduct.price,
         ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
-      
       toast({ title: "Thành công", description: createProductResp?.message || 'Đã thêm sản phẩm vào danh mục!' });
       loadData(); // Refresh data
       setNewProduct({
@@ -995,20 +884,17 @@ const InventoryContent = () => {
       setIsAddingProduct(false);
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const exportToExcel = () => {
     // Prepare data for export
     const exportData = sortedProducts.map((product, index) => {
       const warehouse = warehouses.find(w => 
         product.location?.includes(`(${w.code})`) || product.location?.includes(w.code)
       );
-      
       const exportItem: any = {
         'STT': index + 1,
         'Mã sản phẩm': product.code,
@@ -1022,19 +908,15 @@ const InventoryContent = () => {
                      (product.current_stock > 1 && product.current_stock < 100) ? 'Sắp hết' : 'Còn hàng',
         'Cập nhật': product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : ''
       };
-
       // Only add cost price if user can view it
       if (canViewCostPrice) {
         exportItem['Giá vốn'] = product.costPrice || 0;
       }
-
       return exportItem;
     });
-
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportData);
-
     // Set column widths
     const colWidths = [
       { wch: 5 },   // STT
@@ -1044,39 +926,30 @@ const InventoryContent = () => {
       { wch: 10 },  // Tồn kho
       { wch: 10 },  // Đơn vị
     ];
-
     if (canViewCostPrice) {
       colWidths.push({ wch: 15 }); // Giá vốn
     }
-    
     colWidths.push(
       { wch: 15 },  // Giá bán
       { wch: 20 },  // Kho
       { wch: 12 },  // Trạng thái
       { wch: 12 }   // Cập nhật
     );
-
     ws['!cols'] = colWidths;
-
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Danh sách sản phẩm');
-
     // Generate filename with current date
     const now = new Date();
     const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
     const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
     const filename = `Danh_sach_san_pham_${dateStr}_${timeStr}.xlsx`;
-
     // Write and download file
     XLSX.writeFile(wb, filename);
-    
     toast({ title: "Thành công", description: `Đã xuất ${exportData.length} sản phẩm ra file Excel` });
   };
-
   // Component to show permission error for summary cards
   const PermissionErrorCard = ({ title, error }: { title: string; error: string | null }) => {
     if (!error) return null;
-    
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1094,10 +967,7 @@ const InventoryContent = () => {
       </Card>
     );
   };
-
   const inventoryState = lazyData.getDataState('inventory');
-  
-  
   if (inventoryState.isLoading) {
     return (
       <Loading 
@@ -1105,7 +975,6 @@ const InventoryContent = () => {
       />
     );
   }
-
   if (inventoryState.error) {
     return (
       <Loading 
@@ -1115,7 +984,6 @@ const InventoryContent = () => {
       />
     );
   }
-
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
@@ -1123,7 +991,6 @@ const InventoryContent = () => {
           <h1 className="text-3xl font-bold text-foreground">Quản Lý Tồn Kho</h1>
           <p className="text-muted-foreground">Theo dõi và quản lý hàng tồn kho</p>
         </div>
-
         {/* Thống kê nhanh */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {errorStates.products ? (
@@ -1139,13 +1006,11 @@ const InventoryContent = () => {
               </CardContent>
             </Card>
           )}
-          
           {(() => {
             // Read counts directly from API response (same as dashboard)
             let inStockCount = 0;
             let lowStockCount = 0;
             let outOfStockCount = 0;
-
             if (inventoryOverview && !errorStates.inventoryOverview && inventoryOverview.counts) {
               // Use counts from API response
               inStockCount = inventoryOverview.counts.inStock || 0;
@@ -1158,25 +1023,21 @@ const InventoryContent = () => {
                 const currentTotal = productStockMap.get(stock.productId) || 0;
                 productStockMap.set(stock.productId, currentTotal + stock.quantity);
               });
-              
               inStockCount = products.filter(p => {
                 const totalStock = productStockMap.get(p.id) || 0;
                 const threshold = p.lowStockThreshold ?? 100;
                 return totalStock > threshold;
               }).length;
-
               lowStockCount = products.filter(p => {
                 const totalStock = productStockMap.get(p.id) || 0;
                 const threshold = p.lowStockThreshold ?? 100;
                 return totalStock > 0 && totalStock <= threshold;
               }).length;
-
               outOfStockCount = products.filter(p => {
                 const totalStock = productStockMap.get(p.id) || 0;
                 return totalStock === 0;
               }).length;
             }
-
             return (
               <>
                 {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
@@ -1194,7 +1055,6 @@ const InventoryContent = () => {
                     </CardContent>
                   </Card>
                 )}
-                
                 {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
                   <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
                 ) : (
@@ -1210,7 +1070,6 @@ const InventoryContent = () => {
                     </CardContent>
                   </Card>
                 )}
-                
                 {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
                   <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
                 ) : (
@@ -1230,7 +1089,6 @@ const InventoryContent = () => {
             );
           })()}
         </div>
-
         {/* Tabs for different sections */}
         <Tabs value={activeTab} onValueChange={(value) => {
           setActiveTab(value);
@@ -1245,7 +1103,6 @@ const InventoryContent = () => {
               Quản lý kho
             </TabsTrigger>
           </TabsList>
-
            {/* Inventory Stock Tab */}
            <TabsContent value="inventory" className="space-y-6">
              <PermissionGuard 
@@ -1260,7 +1117,6 @@ const InventoryContent = () => {
                />
              </PermissionGuard>
            </TabsContent>
-
           {/* Products List Tab */}
           <TabsContent value="products" className="space-y-6">
             <PermissionGuard requiredPermissions={['PRODUCTS_VIEW']}>
@@ -1279,14 +1135,12 @@ const InventoryContent = () => {
               />
             </PermissionGuard>
           </TabsContent>
-
           {/* Categories Tab */}
           <TabsContent value="categories" className="space-y-6">
             <PermissionGuard requiredPermissions={['CATEGORIES_VIEW']}>
               <CategoriesContent embedded={true} />
             </PermissionGuard>
           </TabsContent>
-
           {/* Warehouses Management Tab */}
           <TabsContent value="warehouses" className="space-y-6">
             <PermissionGuard requiredPermissions={['WAREHOUSES_VIEW']}>
@@ -1384,7 +1238,6 @@ const InventoryContent = () => {
                     </div>
                   </div>
                 )}
-
                 {/* Warehouses List */}
                 <div className="rounded-md border overflow-x-auto">
                   <Table className="min-w-full">
@@ -1479,16 +1332,12 @@ const InventoryContent = () => {
             </Card>
             </PermissionGuard>
           </TabsContent>
-
         </Tabs>
       </div>
     </div>
   );
 };
-
 const Inventory = () => {
   return <InventoryContent />;
 };
-
-export default Inventory;
-
+export default Inventory;

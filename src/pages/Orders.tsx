@@ -30,25 +30,20 @@ import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import apiClient from "@/lib/api";
-
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
 const PENDING_TAG_NAMES = ["chưa đối soát", "pending reconciliation"];
-
 const tagMatchesNames = (tag: ApiOrderTag, names: string[]) => {
   const normalizedTargets = names.map(normalizeTagLabel);
   const candidates = [tag.name, tag.raw_name, tag.display_name];
   return candidates.some(candidate => normalizedTargets.includes(normalizeTagLabel(candidate)));
 };
-
 const isReconciledDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, RECONCILED_TAG_NAMES);
 const isPendingDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, PENDING_TAG_NAMES);
-
 // Helper function to get display name for tag
 const getTagDisplayName = (tag: ApiOrderTag) => {
   return tag.display_name || tag.name || tag.raw_name || tag.id;
 };
-
 const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -76,24 +71,19 @@ const OrdersContent: React.FC = () => {
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
-  
   // Export delivery note states
   const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
   const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
   const [exportingDeliveryPDF, setExportingDeliveryPDF] = useState(false);
   const [exportingDeliveryXLSX, setExportingDeliveryXLSX] = useState(false);
-  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalOrders, setTotalOrders] = useState(0);
-  
   // Cache for total payments per order
   const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
   const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
-
   // Bulk payment preview state - moved to MultiplePaymentDialog
-  
   // Summary state from API
   const [summary, setSummary] = useState<{
     totalAmount: number;
@@ -102,19 +92,16 @@ const OrdersContent: React.FC = () => {
     totalDebt: number;
     totalExpenses: number;
   } | null>(null);
-  
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const location = useLocation();
-
   const loadOrderTagsCatalog = useCallback(async () => {
     try {
       // Only load tags with type 'order'
       const tags = await orderTagsApi.getAllTags({ type: 'order' });
       setAvailableTags(tags);
     } catch (error) {
-      console.error('Error loading order tags catalog:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tải danh sách nhãn"),
@@ -122,7 +109,6 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [toast]);
-
   // Fetch orders function
   const fetchOrders = useCallback(async () => {
     try {
@@ -135,24 +121,14 @@ const OrdersContent: React.FC = () => {
       if (endDate) params.endDate = endDate;
       if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
       const resp = await orderApi.getOrders(params);
-      console.log('[Orders] API response:', {
-        ordersCount: resp.orders?.length || 0,
-        total: resp.total,
-        hasSummary: !!resp.summary,
-        summary: resp.summary,
-      });
-      
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
-      
       // Load payments for all orders to calculate accurate paid amounts
       if (resp.orders && resp.orders.length > 0) {
         loadPaymentsForOrders(resp.orders.map(o => o.id));
       }
-      
       // Set summary from API if available
       if (resp.summary) {
-        console.log('[Orders] Setting summary from API:', resp.summary);
         setSummary({
           totalAmount: resp.summary.totalAmount,
           totalInitialPayment: resp.summary.totalInitialPayment,
@@ -161,7 +137,6 @@ const OrdersContent: React.FC = () => {
           totalExpenses: resp.summary.totalExpenses,
         });
       } else {
-        console.log('[Orders] No summary from API, using fallback calculation');
         // Fallback: calculate from orders if summary not available
         const fallbackSummary = resp.orders.reduce(
           (acc, order: any) => {
@@ -169,7 +144,6 @@ const OrdersContent: React.FC = () => {
             const paidAmount = order.totalPaidAmount ?? order.total_paid_amount ?? order.paid_amount ?? order.initial_payment ?? 0;
             const debtAmount = order.remainingDebt ?? order.remaining_debt ?? order.debt_amount ?? Math.max(0, totalAmount - paidAmount);
             const totalExpenses = order.totalExpenses ?? 0;
-
             return {
               totalAmount: acc.totalAmount + totalAmount,
               totalInitialPayment: acc.totalInitialPayment + (order.initial_payment ?? 0),
@@ -183,7 +157,6 @@ const OrdersContent: React.FC = () => {
         setSummary(fallbackSummary);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách đơn hàng",
@@ -194,23 +167,18 @@ const OrdersContent: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, toast]);
-
-
   // Load payments for orders and cache total paid amounts
   const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
     if (!orderIds || orderIds.length === 0) return;
-
     // Filter out orders we already have cached
     const uncachedOrderIds = orderIds.filter(id => !orderPaymentsCache[id] && !loadingPayments.has(id));
     if (uncachedOrderIds.length === 0) return;
-
     // Mark as loading
     setLoadingPayments(prev => {
       const newSet = new Set(prev);
       uncachedOrderIds.forEach(id => newSet.add(id));
       return newSet;
     });
-
     try {
       // Load payments for all orders in parallel
       const paymentPromises = uncachedOrderIds.map(async (orderId) => {
@@ -222,13 +190,10 @@ const OrdersContent: React.FC = () => {
             : 0;
           return { orderId, totalPaid };
         } catch (error) {
-          console.error(`[Orders] Error loading payments for order ${orderId}:`, error);
           return { orderId, totalPaid: 0 };
         }
       });
-
       const results = await Promise.all(paymentPromises);
-      
       // Update cache
       setOrderPaymentsCache(prev => {
         const newCache = { ...prev };
@@ -238,7 +203,6 @@ const OrdersContent: React.FC = () => {
         return newCache;
       });
     } catch (error) {
-      console.error('[Orders] Error loading payments for orders:', error);
     } finally {
       // Remove from loading set
       setLoadingPayments(prev => {
@@ -248,7 +212,6 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
-
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -256,7 +219,6 @@ const OrdersContent: React.FC = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
   // Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
@@ -266,18 +228,15 @@ const OrdersContent: React.FC = () => {
         const activeCategories = response.categories.filter(cat => cat.isActive);
         setCategories(activeCategories);
       } catch (error) {
-        console.error('Error fetching categories:', error);
       }
     };
     fetchCategories();
   }, []);
-
   // Handle creating export slip
   const handleCreateExportSlip = (order: any) => {
     setSelectedOrderForExport(order);
     setShowExportSlipDialog(true);
   };
-
   // Handle checkbox selection
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev => 
@@ -286,7 +245,6 @@ const OrdersContent: React.FC = () => {
         : [...prev, orderId]
     );
   };
-
   const handleSelectAll = () => {
     if (selectedOrders.length === orders.length) {
       setSelectedOrders([]);
@@ -294,7 +252,6 @@ const OrdersContent: React.FC = () => {
       setSelectedOrders(orders.map(order => order.id));
     }
   };
-
   // Handle delete orders
   const handleDeleteOrders = async () => {
     if (selectedOrders.length === 0) {
@@ -305,25 +262,20 @@ const OrdersContent: React.FC = () => {
       });
       return;
     }
-
     try {
       setLoading(true);
       const deletePromises = selectedOrders.map(orderId =>
         orderApi.deleteOrder(orderId)
       );
-      
       const responses = await Promise.all(deletePromises);
-      
       toast({
         title: "Thành công",
         description: `Đã xóa ${selectedOrders.length} đơn hàng`,
       });
-      
       setSelectedOrders([]);
       setShowDeleteDialog(false);
       fetchOrders();
     } catch (error) {
-      console.error("Error deleting orders:", error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xóa đơn hàng",
@@ -333,7 +285,6 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
-
   // Handle delete single order
   const handleDeleteSingleOrder = async () => {
     if (!orderToDelete) {
@@ -344,21 +295,17 @@ const OrdersContent: React.FC = () => {
       });
       return;
     }
-
     try {
       setLoading(true);
       const response = await orderApi.deleteOrder(orderToDelete.id);
-      
       toast({
         title: "Thành công",
         description: response.message || `Đã xóa đơn hàng ${orderToDelete.order_number}`,
       });
-      
       setOrderToDelete(null);
       setShowDeleteDialog(false);
       fetchOrders();
     } catch (error) {
-      console.error("Error deleting order:", error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xóa đơn hàng",
@@ -368,35 +315,27 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
-
   // Scroll to top when component mounts or route changes
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [location.pathname]);
-
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, fetchOrders]); // Fetch when pagination or filters change
-
   useEffect(() => {
     loadOrderTagsCatalog();
   }, [loadOrderTagsCatalog]);
-
-
   // Removed automatic refresh - only reload on user actions
-
   const fetchCreators = async () => {
     setCreators([]); // Not implemented on BE yet
   };
-
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(numAmount);
   };
-
   // Format VND without currency symbol for per-item unit prices
   const formatVndNoSymbol = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
@@ -404,7 +343,6 @@ const OrdersContent: React.FC = () => {
       maximumFractionDigits: 0
     }).format(numAmount);
   };
-
   // Mask phone number - hide 4 middle digits
   const maskPhoneNumber = (phone: string) => {
     if (!phone || phone.length < 8) return phone;
@@ -413,7 +351,6 @@ const OrdersContent: React.FC = () => {
     const middle = '*'.repeat(4);
     return `${start}${middle}${end}`;
   };
-
   // Format address to show only district - city
   const formatAddress = (address: string) => {
     if (!address) return "";
@@ -424,17 +361,14 @@ const OrdersContent: React.FC = () => {
     }
     return address;
   };
-
   const mapOrderTags = useCallback((tagNames?: string[]): ApiOrderTag[] => {
     if (!Array.isArray(tagNames)) return [];
     return tagNames
       .map((tagName) => {
         if (!tagName) return null;
-        
         // Check if tagName looks like a UUID (ID format)
         // UUID format: 8-4-4-4-12 hex characters
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tagName);
-        
         // If it's a UUID, prioritize finding by ID (API returns IDs in order.tags)
         if (isUUID) {
           const matchedById = availableTags.find((tag) => tag.id === tagName);
@@ -451,7 +385,6 @@ const OrdersContent: React.FC = () => {
             color: "#94a3b8",
           } as ApiOrderTag;
         }
-        
         // If not a UUID, try to find by name/display_name/raw_name
         const matchedByName = availableTags.find((tag) =>
           tagMatchesNames(tag, [tagName])
@@ -459,7 +392,6 @@ const OrdersContent: React.FC = () => {
         if (matchedByName) {
           return matchedByName;
         }
-        
         // Fallback: create a tag with prefix
         const fallbackId = `tag_${normalizeTagLabel(tagName) || Date.now().toString()}`;
         return {
@@ -472,18 +404,15 @@ const OrdersContent: React.FC = () => {
       })
       .filter((tag): tag is ApiOrderTag => Boolean(tag));
   }, [availableTags]);
-
   // Handle quick note update
   const handleQuickNote = async (orderId: string, note: string) => {
     try {
       await orderApi.updateOrder(orderId, { note: note });
-      
       // Update local state
       setOrders(prev => prev.map(order => 
         order.id === orderId ? { ...order, notes: note } : order
       ));
     } catch (error) {
-      console.error('Error updating note:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật ghi chú",
@@ -491,7 +420,6 @@ const OrdersContent: React.FC = () => {
       });
     }
   };
-
   // Handle order status update (requires ORDERS_UPDATE_STATUS permission)
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
@@ -504,15 +432,12 @@ const OrdersContent: React.FC = () => {
         });
         return;
       }
-
       // Use the new endpoint specifically for status updates
       const response = await orderApi.updateOrderStatus(orderId, newStatus);
-      
       // Update local state
       setOrders(prev => prev.map(order => 
         order.id === orderId ? { ...order, status: newStatus } : order
       ));
-      
       toast({
         title: "Thành công",
         description: "Đã cập nhật trạng thái đơn hàng",
@@ -525,22 +450,18 @@ const OrdersContent: React.FC = () => {
       });
     }
   };
-
   // Export delivery note to PDF
   const exportDeliveryNoteToPDF = async (order: any) => {
     try {
       setExportingDeliveryPDF(true);
       const url = `/orders/${order.id}/export?type=pdf`;
-
       const response = await apiClient.get(url, {
         responseType: 'blob',
       });
-
       const blob = response.data;
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-
       // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `delivery_note_${order.order_number}.pdf`;
@@ -550,23 +471,17 @@ const OrdersContent: React.FC = () => {
           filename = decodeURIComponent(filenameMatch[1]);
         }
       }
-
       link.download = filename;
-
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
-
       toast({
         title: "Thành công",
         description: `Đã xuất biên bản giao hàng ${order.order_number} ra file PDF`,
       });
-
       setShowExportDeliveryDialog(false);
     } catch (error: any) {
-      console.error("Error exporting delivery note PDF:", error);
-      
       let errorMessage = "Không thể xuất file PDF";
       if (error?.response?.data instanceof Blob) {
         try {
@@ -577,7 +492,6 @@ const OrdersContent: React.FC = () => {
           errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
         }
       }
-
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -587,22 +501,18 @@ const OrdersContent: React.FC = () => {
       setExportingDeliveryPDF(false);
     }
   };
-
   // Export delivery note to XLSX
   const exportDeliveryNoteToXLSX = async (order: any) => {
     try {
       setExportingDeliveryXLSX(true);
       const url = `/orders/${order.id}/export?type=xlsx`;
-
       const response = await apiClient.get(url, {
         responseType: 'blob',
       });
-
       const blob = response.data;
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-
       // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `delivery_note_${order.order_number}.xlsx`;
@@ -612,23 +522,17 @@ const OrdersContent: React.FC = () => {
           filename = decodeURIComponent(filenameMatch[1]);
         }
       }
-
       link.download = filename;
-
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
-
       toast({
         title: "Thành công",
         description: `Đã xuất biên bản giao hàng ${order.order_number} ra file Excel`,
       });
-
       setShowExportDeliveryDialog(false);
     } catch (error: any) {
-      console.error("Error exporting delivery note XLSX:", error);
-      
       let errorMessage = "Không thể xuất file Excel";
       if (error?.response?.data instanceof Blob) {
         try {
@@ -639,7 +543,6 @@ const OrdersContent: React.FC = () => {
           errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
         }
       }
-
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -649,7 +552,6 @@ const OrdersContent: React.FC = () => {
       setExportingDeliveryXLSX(false);
     }
   };
-
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -658,7 +560,6 @@ const OrdersContent: React.FC = () => {
       setSortDirection("asc");
     }
   };
-  
   const handleResetFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
@@ -668,7 +569,6 @@ const OrdersContent: React.FC = () => {
     setCreatorFilter("all");
     setCurrentPage(1);
   };
-
   const handleMultiplePayments = () => {
     if (selectedOrders.length === 0) {
       toast({
@@ -680,7 +580,6 @@ const OrdersContent: React.FC = () => {
     }
     setShowMultiplePaymentDialog(true);
   }
-
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
       return <ChevronsUpDown className="w-4 h-4" />;
@@ -689,7 +588,6 @@ const OrdersContent: React.FC = () => {
       <ChevronUp className="w-4 h-4" /> : 
       <ChevronDown className="w-4 h-4" />;
   };
-
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
@@ -707,7 +605,6 @@ const OrdersContent: React.FC = () => {
       </Badge>
     );
   };
-
   // Use summary from API if available, otherwise calculate from orders
   // Prefer backend aggregated fields (totalAmount, totalPaidAmount, remainingDebt)
   const totals = summary ? {
@@ -730,7 +627,6 @@ const OrdersContent: React.FC = () => {
         order.debt_amount ??
         Math.max(0, totalAmount - paidAmount);
       const totalExpenses = order.totalExpenses ?? 0;
-
       return {
         totalAmount: acc.totalAmount + totalAmount,
         paidAmount: acc.paidAmount + paidAmount,
@@ -740,7 +636,6 @@ const OrdersContent: React.FC = () => {
     },
     { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
   );
-
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
       <div className="w-full mx-auto space-y-3 sm:space-y-4">
@@ -756,7 +651,6 @@ const OrdersContent: React.FC = () => {
           THÊM MỚI
         </Button>
       </div>
-
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
@@ -770,7 +664,6 @@ const OrdersContent: React.FC = () => {
                 className="w-64"
               />
             </div>
-            
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Chọn trạng thái" />
@@ -784,7 +677,6 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Chọn loại sản phẩm" />
@@ -798,7 +690,6 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-
             {/* Date Filter */}
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Từ ngày:</label>
@@ -809,7 +700,6 @@ const OrdersContent: React.FC = () => {
                 onChange={(e) => setStartDate(e.target.value || undefined)}
               />
             </div>
-
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Đến ngày:</label>
               <Input
@@ -819,7 +709,6 @@ const OrdersContent: React.FC = () => {
                 onChange={(e) => setEndDate(e.target.value || undefined)}
               />
             </div>
-
             {/* Creator Filter */}
             <Select value={creatorFilter} onValueChange={setCreatorFilter}>
               <SelectTrigger className="w-48">
@@ -834,7 +723,6 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            
             {/* Reset Filters Button */}
             <Button
               onClick={handleResetFilters}
@@ -846,7 +734,6 @@ const OrdersContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Summary Row */}
       <Card>
         <CardContent className="pt-6">
@@ -874,7 +761,6 @@ const OrdersContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Action Bar */}
       {selectedOrders.length > 0 && (
         <Card className="shadow-sm border bg-blue-50">
@@ -915,7 +801,6 @@ const OrdersContent: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
       {/* Orders Table */}
       <Card className="shadow-sm border">
         <CardContent className="p-0">
@@ -981,7 +866,6 @@ const OrdersContent: React.FC = () => {
                     const specialTags = tags.filter((tag) => isReconciledDisplayTag(tag) || isPendingDisplayTag(tag));
                     const otherTags = tags.filter((tag) => !specialTags.includes(tag));
                     const hasReconciliation = specialTags.some((tag) => isReconciledDisplayTag(tag));
-                    
                     return (
                       <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
                         <TableCell className="py-3 border-r border-slate-200">
@@ -1033,7 +917,6 @@ const OrdersContent: React.FC = () => {
                              </div>
                            </div>
                          </TableCell>
-                         
                          {/* Customer Column */}
                          <TableCell className="py-3 border-r border-slate-200 text-center w-48 sm:w-60 max-w-sm">
                            <div className="space-y-1 whitespace-nowrap">
@@ -1058,7 +941,6 @@ const OrdersContent: React.FC = () => {
                              </div>
                            </div>
                          </TableCell>
-                         
                           {/* Products Column */}
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
@@ -1072,7 +954,6 @@ const OrdersContent: React.FC = () => {
                               )}
                             </div>
                           </TableCell>
-                           
                            {/* Price Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                               <div className="divide-y divide-slate-100">
@@ -1086,7 +967,6 @@ const OrdersContent: React.FC = () => {
                                 )}
                               </div>
                             </TableCell>
-                           
                            {/* Quantity Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                              <div className="divide-y divide-slate-100">
@@ -1100,7 +980,6 @@ const OrdersContent: React.FC = () => {
                                )}
                              </div>
                            </TableCell>
-                          
                            {/* Expenses Column - use backend totalExpenses if available */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                              <div className="text-sm font-medium text-orange-600">
@@ -1115,7 +994,6 @@ const OrdersContent: React.FC = () => {
                                )}
                              </div>
                            </TableCell>
-
                           {/* Total Amount Column - use backend aggregated totalAmount */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                              <div className="text-sm font-semibold text-slate-900">
@@ -1125,7 +1003,6 @@ const OrdersContent: React.FC = () => {
                                )}
                              </div>
                            </TableCell>
-
                            {/* Payment Column - use backend totalPaidAmount / remainingDebt */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
                               <div className="space-y-1">
@@ -1162,7 +1039,6 @@ const OrdersContent: React.FC = () => {
                                 </div>
                               </div>
                            </TableCell>
-                         
                           {/* Quick Notes Column */}
                           <TableCell className="relative p-3 border-r border-slate-200 w-64 sm:w-40">
                             <textarea
@@ -1177,12 +1053,10 @@ const OrdersContent: React.FC = () => {
                               }}
                             />
                           </TableCell>
-                          
                            {/* Creator Column */}
                           <TableCell className="py-3 border-r border-slate-200">
                              <CreatorDisplay createdBy={order.created_by} creatorInfo={order.creator_info} />
                            </TableCell>
-                          
                           {/* Completed At Column */}
                           <TableCell className="py-3 border-r border-slate-200 text-center">
                             {(() => {
@@ -1193,7 +1067,6 @@ const OrdersContent: React.FC = () => {
                                 : '-';
                             })()}
                           </TableCell>
-                          
                           {/* Status Column */}
                           <TableCell className="py-4 border-r border-slate-200 min-w-[88px] sm:min-w-[104px]">
                             <Select
@@ -1215,7 +1088,6 @@ const OrdersContent: React.FC = () => {
                               </SelectContent>
                             </Select>
                           </TableCell>
-                         
                          {/* Actions Column */}
                           <TableCell className="text-center py-3">
                            <DropdownMenu>
@@ -1302,7 +1174,6 @@ const OrdersContent: React.FC = () => {
               </TableBody>
             </Table>
           </div>
-          
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
             <div className="flex items-center gap-2">
@@ -1353,7 +1224,6 @@ const OrdersContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Create Order Dialog */}
       <CreateOrderForm
         open={showCreateDialog}
@@ -1363,14 +1233,12 @@ const OrdersContent: React.FC = () => {
           setShowCreateDialog(false);
         }}
       />
-
       {/* Order View Dialog (Read-only) */}
       <OrderViewDialog
         order={selectedOrder}
         open={showOrderViewDialog}
         onOpenChange={setShowOrderViewDialog}
       />
-
       {/* Order Detail Dialog (Editable) */}
       <OrderDetailDialog
         order={selectedOrder}
@@ -1383,7 +1251,6 @@ const OrdersContent: React.FC = () => {
           }
         }}
       />
-
       {/* Order Tags Manager */}
       {showTagsManager && selectedOrder && (
         <OrderTagsManager
@@ -1406,7 +1273,6 @@ const OrdersContent: React.FC = () => {
           availableTags={availableTags}
         />
       )}
-
       {/* Payment Dialog */}
       <PaymentDialog
         open={showPaymentDialog}
@@ -1427,7 +1293,6 @@ const OrdersContent: React.FC = () => {
           }
         }}
       />
-
       {/* Multiple Payment Dialog */}
       <MultiplePaymentDialog
         open={showMultiplePaymentDialog}
@@ -1455,7 +1320,6 @@ const OrdersContent: React.FC = () => {
           setSelectedOrders(prev => prev.filter(id => id !== orderId));
         }}
       />
-
       {/* Export Slip Creation Dialog */}
       <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
@@ -1489,7 +1353,6 @@ const OrdersContent: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={(open) => {
         setShowDeleteDialog(open);
@@ -1530,7 +1393,6 @@ const OrdersContent: React.FC = () => {
           </DialogFooter>
         </DialogContent>
        </Dialog>
-
        {/* Export Delivery Note Dialog */}
        <Dialog open={showExportDeliveryDialog} onOpenChange={setShowExportDeliveryDialog}>
          <DialogContent>
@@ -1578,7 +1440,6 @@ const OrdersContent: React.FC = () => {
      </div>
    );
  };
-
 const Orders: React.FC = () => {
   return (
     <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>
@@ -1586,6 +1447,4 @@ const Orders: React.FC = () => {
     </PermissionGuard>
   );
 };
-
-export default Orders;
-
+export default Orders;

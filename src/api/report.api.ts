@@ -1,6 +1,5 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
 export interface RevenueReportResponse {
   totalRevenue: number;
   totalDebt: number;
@@ -9,7 +8,6 @@ export interface RevenueReportResponse {
   averagePerMonth: number;
   monthsCount?: number;
 }
-
 export const reportApi = {
   /**
    * Get revenue report summary
@@ -18,10 +16,8 @@ export const reportApi = {
   getRevenueReport: async (): Promise<RevenueReportResponse> => {
     try {
       const response = await api.get<any>(API_ENDPOINTS.REPORT.REVENUE);
-      
       // Handle different response structures
       const data = response?.data || response;
-      
       return {
         totalRevenue: data.totalRevenue || 0,
         totalDebt: data.totalDebt || 0,
@@ -31,8 +27,7 @@ export const reportApi = {
         monthsCount: data.monthsCount,
       };
     } catch (error: any) {
-      console.error('[Report API] Error fetching revenue report:', error);
       throw error;
     }
   },
-};
+};

@@ -7,11 +7,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { Clock, DollarSign, User, Package } from "lucide-react";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
-
 interface OrderStatusHistoryProps {
   orderId: string;
 }
-
 interface StatusHistoryItem {
   id: string;
   old_status: string;
@@ -31,15 +29,12 @@ interface StatusHistoryItem {
     status: string;
   };
 }
-
 export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId }) => {
   const [history, setHistory] = useState<StatusHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     loadHistory();
   }, [orderId]);
-
   const loadHistory = async () => {
     try {
       // Fetch order status history with export slip info
@@ -54,29 +49,22 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
         `)
         .eq('order_id', orderId)
         .order('changed_at', { ascending: false });
-
       if (historyError) throw historyError;
-
       // Fetch order creation date
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select('created_at, created_by, order_number')
         .eq('id', orderId)
         .single();
-
       if (orderError) throw orderError;
-
       // Fetch profiles for all unique changed_by users
       const userIds = [...new Set(historyData?.map(h => h.changed_by).filter(Boolean) || [])];
-      
       let profilesMap: Record<string, { full_name: string }> = {};
-      
       if (userIds.length > 0) {
         const { data: profilesData, error: profilesError } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', userIds);
-
         if (!profilesError && profilesData) {
           profilesMap = profilesData.reduce((acc, profile) => {
             acc[profile.id] = { full_name: profile.full_name || 'Không xác định' };
@@ -84,13 +72,11 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
           }, {} as Record<string, { full_name: string }>);
         }
       }
-
       // Combine history with profile data
       const enrichedHistory = historyData?.map(item => ({
         ...item,
         user_profile: item.changed_by ? profilesMap[item.changed_by] || { full_name: 'Không xác định' } : { full_name: 'Hệ thống' }
       })) || [];
-
       // Add order creation entry if not already present
       const hasCreationEntry = enrichedHistory.some(item => item.notes?.includes('Đơn hàng được tạo'));
       if (!hasCreationEntry && orderData) {
@@ -111,24 +97,19 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
         };
         enrichedHistory.push(creationEntry);
       }
-
       // Sort by date, most recent first
       enrichedHistory.sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime());
-
       setHistory(enrichedHistory);
     } catch (error) {
-      console.error('Error loading status history:', error);
     } finally {
       setLoading(false);
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN', {
       year: 'numeric',
@@ -138,7 +119,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
       minute: '2-digit'
     });
   };
-
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     return (
@@ -147,12 +127,10 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
       </Badge>
     );
   };
-
   const getUserInitials = (name: string) => {
     if (!name) return 'U';
     return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
-
   if (loading) {
     return (
       <Card>
@@ -168,7 +146,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
       </Card>
     );
   }
-
   return (
     <Card>
       <CardHeader>
@@ -193,14 +170,12 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
                   {index < history.length - 1 && (
                     <div className="absolute left-5 top-12 w-0.5 h-full bg-gray-200" />
                   )}
-                  
                   <div className="flex gap-4">
                     <Avatar className="w-10 h-10 border-2 border-background">
                       <AvatarFallback className="text-xs">
                         {getUserInitials(item.user_profile?.full_name || 'Unknown')}
                       </AvatarFallback>
                     </Avatar>
-                    
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <User className="w-4 h-4" />
@@ -208,7 +183,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
                         <span>•</span>
                         <span>{formatDateTime(item.changed_at)}</span>
                       </div>
-                      
                       <div className="space-y-2">
                         {/* Status change */}
                         {item.old_status !== item.new_status && (
@@ -219,7 +193,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
                             {getStatusBadge(item.new_status)}
                           </div>
                         )}
-                        
                         {/* Payment change */}
                         {item.old_paid_amount !== item.new_paid_amount && (
                           <div className="flex items-center gap-2">
@@ -233,7 +206,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
                             </span>
                           </div>
                         )}
-                        
                         {/* Export slip info */}
                         {item.export_slip_action && item.export_slip && (
                           <div className="flex items-center gap-2">
@@ -244,7 +216,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
                             <Badge variant="outline">{item.export_slip.slip_number}</Badge>
                           </div>
                         )}
-                        
                         {/* Notes */}
                         {item.notes && (
                           <div className="bg-gray-50 rounded-md p-3">
@@ -254,7 +225,6 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
                       </div>
                     </div>
                   </div>
-                  
                   {index < history.length - 1 && <Separator className="mt-4" />}
                 </div>
               ))}
@@ -264,5 +234,4 @@ export const OrderStatusHistory: React.FC<OrderStatusHistoryProps> = ({ orderId 
       </CardContent>
     </Card>
   );
-};
-
+};

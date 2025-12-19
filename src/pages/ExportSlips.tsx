@@ -25,8 +25,6 @@ import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import BankSelector from './BankSelector';
-
-
 function ExportSlipsContent() {
   const navigate = useNavigate();
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
@@ -43,7 +41,6 @@ function ExportSlipsContent() {
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [loading, setLoading] = useState(false);
-
   // Export slip form state
   const [exportSlipForm, setExportSlipForm] = useState({
     order_id: '',
@@ -64,18 +61,12 @@ function ExportSlipsContent() {
     }>,
     expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
   });
-
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-
   const canDirectExport = hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
-
   // Get available status options based on current status and role
   const getAvailableStatusOptions = (currentStatus: string) => {
     const options = [];
-    
-    console.log('Getting status options for:', currentStatus);
-    
     // Only show options that make sense for the current status
     if (currentStatus === 'pending') {
       options.push({ 
@@ -105,33 +96,24 @@ function ExportSlipsContent() {
       });
     }
     // No options for 'exported' or 'cancelled' status - they are final
-    
-    console.log('Available options:', options);
     return options;
   };
-
   useEffect(() => {
     fetchExportSlips();
     loadOrders();
   }, [displayLimit]);
-
   // Load data when create dialog opens
   useEffect(() => {
     if (showCreateDialog) {
-      console.log('Create dialog opened, loading orders...');
       loadOrders();
     }
   }, [showCreateDialog]);
-
   const fetchExportSlips = async () => {
     try {
       const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
-      
-      
       // If order data is missing, we'll need to fetch it separately
       const slips = await Promise.all((resp.slips || []).map(async (s) => {
         let orderData = s.order;
-        
         // If order data is missing but we have order_id, try to fetch it
         if (!orderData && s.order_id) {
           try {
@@ -146,10 +128,8 @@ function ExportSlipsContent() {
               order_items: orderResponse.order_items
             };
           } catch (error) {
-            console.error('Error fetching order data:', error);
           }
         }
-        
         return {
           id: s.id || '',
           code: s.code || '',
@@ -173,34 +153,21 @@ function ExportSlipsContent() {
           export_slip_items: s.export_slip_items || [],
         };
       }));
-      
       setExportSlips(slips);
-      
       // Update address cache for slips that now have addressInfo
       const newCache: Record<string, string> = {};
       for (const slip of slips) {
-        console.log(`Slip ${slip.id}:`, {
-          hasAddress: !!slip.order?.customer_address,
-          hasAddressInfo: !!slip.order?.customer_addressInfo,
-          addressInfo: slip.order?.customer_addressInfo
-        });
-        
         if (slip.order?.customer_address && slip.order?.customer_addressInfo) {
           const fullAddress = formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo);
           newCache[slip.id] = fullAddress;
-          console.log(`Cached full address for ${slip.id}:`, fullAddress);
         } else if (slip.order?.customer_address) {
           // Even without addressInfo, cache the basic address
           newCache[slip.id] = slip.order.customer_address;
-          console.log(`Cached basic address for ${slip.id}:`, slip.order.customer_address);
         }
       }
-      console.log('Final address cache:', newCache);
       setAddressCache(newCache);
-      
       // No toast notification for empty export slips list
     } catch (error: any) {
-      console.error('Error fetching export slips:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho. Vui lòng kiểm tra kết nối backend.",
@@ -208,13 +175,10 @@ function ExportSlipsContent() {
       });
     }
   };
-
-
   // Handle status updates based on role permissions
   const handleStatusUpdate = async (slipId: string, newStatus: string, notes: string = '') => {
     try {
       let response;
-      
       switch (newStatus) {
         case 'picked':
           response = await exportSlipsApi.markAsPicked(slipId, notes);
@@ -225,15 +189,12 @@ function ExportSlipsContent() {
         default:
           throw new Error('Trạng thái không hợp lệ');
       }
-
       toast({
         title: "Thành công",
         description: response.message || `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
       });
-
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error updating status:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
@@ -241,20 +202,16 @@ function ExportSlipsContent() {
       });
     }
   };
-
   // Direct export (Admin/Giám đốc only)
   const handleDirectExport = async (slipId: string, notes: string = '') => {
     try {
       const response = await exportSlipsApi.directExport(slipId, notes);
-
       toast({
         title: "Thành công",
         description: response.message || "Đã xuất kho trực tiếp",
       });
-
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error direct exporting:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xuất kho trực tiếp",
@@ -262,12 +219,10 @@ function ExportSlipsContent() {
       });
     }
   };
-
   // Handle status update with selected status
   const handleStatusUpdateWithSelection = async (slipId: string, newStatus: string, notes: string = '') => {
     try {
       let response;
-      
       switch (newStatus) {
         case 'picked':
           response = await exportSlipsApi.markAsPicked(slipId, notes);
@@ -281,21 +236,17 @@ function ExportSlipsContent() {
         default:
           throw new Error('Trạng thái không hợp lệ');
       }
-
       const statusLabels: Record<string, string> = {
         'picked': 'Đã lấy hàng',
         'exported': 'Đã xuất kho',
         'cancelled': 'Hủy lấy hàng'
       };
-
       toast({
         title: "Thành công",
         description: response.message || `Đã cập nhật trạng thái thành ${statusLabels[newStatus] || newStatus}`,
       });
-
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error updating status:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
@@ -303,7 +254,6 @@ function ExportSlipsContent() {
       });
     }
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -318,13 +268,11 @@ function ExportSlipsContent() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const formatFullAddress = (address: string, addressInfo?: any) => {
     const wardName = addressInfo?.ward?.name || addressInfo?.wardName;
     const districtName = addressInfo?.district?.name || addressInfo?.districtName;
@@ -336,13 +284,11 @@ function ExportSlipsContent() {
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
   };
-
   // Enhanced address formatting with fallback to order API
   const formatAddressWithFallback = async (slip: ExportSlip) => {
     if (slip.order?.customer_addressInfo) {
       return formatFullAddress(slip.order.customer_address || '', slip.order.customer_addressInfo);
     }
-    
     // If no addressInfo in export slip, try to get from order API
     if (slip.order_id) {
       try {
@@ -351,18 +297,13 @@ function ExportSlipsContent() {
           return formatFullAddress(slip.order?.customer_address || '', orderDetails.customer_addressInfo);
         }
       } catch (error) {
-        console.warn('Could not fetch order details for address:', error);
       }
     }
-    
     return slip.order?.customer_address || '';
   };
-
   // Permission checks removed - let backend handle authorization
-
   const loadOrders = async () => {
     try {
-      console.log('🔄 Loading orders for export slip creation...');
       const [ordersResp, customersResp, productsResp, warehousesResp, banksResp] = await Promise.all([
         orderApi.getOrders({
           page: 1,
@@ -374,15 +315,12 @@ function ExportSlipsContent() {
         warehouseApi.getWarehouses({ page: 1, limit: 1000 }),
         orderApi.getBanks()
       ]);
-
-      console.log('Orders loaded:', ordersResp.orders?.length || 0, ordersResp.orders);
       setOrders(ordersResp.orders || []);
       setCustomers(customersResp.customers || []);
       setProducts(productsResp.products || []);
       setWarehouses(warehousesResp.warehouses || []);
       setBanks(banksResp || []);
     } catch (error) {
-      console.error('Error loading data:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải dữ liệu",
@@ -390,7 +328,6 @@ function ExportSlipsContent() {
       });
     }
   };
-
   // Form management functions
   const addItem = () => {
     setExportSlipForm(prev => ({
@@ -405,19 +342,16 @@ function ExportSlipsContent() {
       }]
     }));
   };
-
   const removeItem = (index: number) => {
     setExportSlipForm(prev => ({
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
     }));
   };
-
   const updateItem = (index: number, field: string, value: any) => {
     setExportSlipForm(prev => {
       const items = [...prev.items];
       items[index] = { ...items[index], [field]: value };
-
       // Auto-calculate when product, quantity, or unit_price changes
       if (field === 'product_id' || field === 'quantity' || field === 'unit_price') {
         if (field === 'product_id') {
@@ -428,39 +362,31 @@ function ExportSlipsContent() {
             items[index].unit_price = product.price;
           }
         }
-
         const subtotal = items[index].quantity * items[index].unit_price;
         items[index].total_price = subtotal;
       }
-
       // Fetch stock level when product changes
       if (field === 'product_id') {
         fetchStockLevel(index, items[index].product_id, prev.warehouse_id);
       }
-
       return { ...prev, items };
     });
   };
-
   const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
     if (!productId || !warehouseId) return;
-
     try {
       const stockLevels = await stockLevelsApi.getStockLevels({
         productId,
         warehouseId,
         limit: 1
       });
-
       const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
-
       setExportSlipForm(prev => {
         const items = [...prev.items];
         items[index].current_stock = currentStock;
         return { ...prev, items };
       });
     } catch (error) {
-      console.warn('Could not fetch stock level:', error);
       setExportSlipForm(prev => {
         const items = [...prev.items];
         items[index].current_stock = 0;
@@ -468,21 +394,18 @@ function ExportSlipsContent() {
       });
     }
   };
-
   const addExpense = () => {
     setExportSlipForm(prev => ({
       ...prev,
       expenses: [...prev.expenses, { name: '', amount: 0, note: '' }]
     }));
   };
-
   const removeExpense = (index: number) => {
     setExportSlipForm(prev => ({
       ...prev,
       expenses: prev.expenses.filter((_, i) => i !== index)
     }));
   };
-
   const updateExpense = (index: number, field: 'name' | 'amount' | 'note', value: any) => {
     setExportSlipForm(prev => {
       const expenses = [...prev.expenses];
@@ -490,24 +413,19 @@ function ExportSlipsContent() {
       return { ...prev, expenses };
     });
   };
-
   // Get available products for a specific row (excluding already selected products)
   const getAvailableProductsForRow = (currentIndex: number) => {
     const selectedProductIds = exportSlipForm.items
       .map((item, index) => index !== currentIndex ? item.product_id : null)
       .filter(id => id); // Remove nulls and current row
-
     return products.filter(product => !selectedProductIds.includes(product.id));
   };
-
   const calculateTotals = () => {
     const itemsSubtotal = exportSlipForm.items.reduce((sum, item) => sum + item.total_price, 0);
     const expensesTotal = exportSlipForm.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const subtotal = itemsSubtotal + expensesTotal;
-
     return { subtotal };
   };
-
   const createExportSlip = async () => {
     // Validate required notes field
     if (!exportSlipForm.notes || !exportSlipForm.notes.trim()) {
@@ -518,7 +436,6 @@ function ExportSlipsContent() {
       });
       return;
     }
-
     // Validate items
     if (exportSlipForm.items.length === 0) {
       toast({
@@ -528,7 +445,6 @@ function ExportSlipsContent() {
       });
       return;
     }
-
     // Validate all items have required fields
     const invalidItems = exportSlipForm.items.filter(item =>
       !item.product_id || !item.product_name || !item.product_code ||
@@ -542,7 +458,6 @@ function ExportSlipsContent() {
       });
       return;
     }
-
     // Validate warehouse selection
     if (!exportSlipForm.warehouse_id) {
       toast({
@@ -552,21 +467,18 @@ function ExportSlipsContent() {
       });
       return;
     }
-
     setLoading(true);
     try {
       // Generate a unique code for the export slip
       const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
       const code = `EXP${timestamp}${random}`;
-
       // Prepare items
       const items = exportSlipForm.items.map(item => ({
         product_id: item.product_id,
         requested_quantity: item.quantity,
         unit_price: item.unit_price
       }));
-
       const response = await exportSlipsApi.createSlip({
         order_id: exportSlipForm.order_id || undefined, // Optional order ID
         warehouse_id: exportSlipForm.warehouse_id,
@@ -575,12 +487,10 @@ function ExportSlipsContent() {
         notes: exportSlipForm.notes,
         items: items
       });
-
       toast({
         title: "Thành công",
         description: `Đã tạo phiếu xuất kho ${response.code || code} thành công`,
       });
-
       setShowCreateDialog(false);
       setExportSlipForm({
         order_id: '',
@@ -595,7 +505,6 @@ function ExportSlipsContent() {
       });
       fetchExportSlips();
     } catch (error: any) {
-      console.error('Error creating export slip:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho",
@@ -605,7 +514,6 @@ function ExportSlipsContent() {
       setLoading(false);
     }
   };
-
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -614,7 +522,6 @@ function ExportSlipsContent() {
       setSortDirection('asc');
     }
   };
-
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
       return <ChevronsUpDown className="w-4 h-4 text-gray-400" />;
@@ -623,7 +530,6 @@ function ExportSlipsContent() {
       ? <ChevronUp className="w-4 h-4 text-gray-600" />
       : <ChevronDown className="w-4 h-4 text-gray-600" />;
   };
-
   const exportToExcel = () => {
     // Prepare data for export
     const exportData = filteredAndSortedSlips.map((slip, index) => {
@@ -640,7 +546,6 @@ function ExportSlipsContent() {
           'Thành tiền': (exportItem?.actual_quantity || 0) * item.unit_price,
         };
       }) || [];
-
       return {
         'STT': index + 1,
         'Số phiếu': slip.code,
@@ -657,11 +562,9 @@ function ExportSlipsContent() {
         'Chi tiết sản phẩm': productDetails.map(p => `${p['Tên sản phẩm']} (${p['SL Yêu cầu']})`).join('; '),
       };
     });
-
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportData);
-
     // Set column widths
     const colWidths = [
       { wch: 5 },   // STT
@@ -676,24 +579,19 @@ function ExportSlipsContent() {
       { wch: 60 },  // Chi tiết sản phẩm
     ];
     ws['!cols'] = colWidths;
-
     XLSX.utils.book_append_sheet(wb, ws, 'Danh sách phiếu xuất kho');
-
     // Generate filename with timestamp
     const now = new Date();
     const dateStr = now.toLocaleDateString('vi-VN').replace(/\//g, '-');
     const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false }).replace(/:/g, '-');
     const filename = `Danh_sach_phieu_xuat_kho_${dateStr}_${timeStr}.xlsx`;
-
     // Write file
     XLSX.writeFile(wb, filename);
-
     toast({
       title: "Thành công",
       description: `Đã xuất ${exportData.length} phiếu xuất kho ra file Excel`,
     });
   };
-
   // Filter and sort export slips
   const filteredAndSortedSlips = exportSlips
     .filter(slip => {
@@ -707,7 +605,6 @@ function ExportSlipsContent() {
     })
     .sort((a, b) => {
       let aValue: any, bValue: any;
-      
       switch (sortField) {
         case 'slip_number':
           aValue = a.code;
@@ -735,17 +632,14 @@ function ExportSlipsContent() {
           bValue = new Date(b.created_at);
           break;
       }
-      
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = bValue.toLowerCase();
       }
-      
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -754,7 +648,6 @@ function ExportSlipsContent() {
           Danh sách và duyệt phiếu xuất kho hàng hóa
         </p>
       </div>
-
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -782,7 +675,6 @@ function ExportSlipsContent() {
                       Nhập thông tin chi tiết cho phiếu xuất kho mới
                     </DialogDescription>
                   </DialogHeader>
-
                   <div className="space-y-6">
                     {/* Order Selection (Optional) */}
                     <Card>
@@ -850,33 +742,17 @@ function ExportSlipsContent() {
                               <SelectValue placeholder="Chọn đơn hàng (tùy chọn)" />
                             </SelectTrigger>
                             <SelectContent>
-                              {console.log('Rendering orders dropdown, orders:', orders)}
-                              {orders.length === 0 ? (
-                                <SelectItem value="" disabled>
-                                  Không có đơn hàng nào (hệ thống chưa có đơn hàng)
+                              {orders.map((order) => (
+                                <SelectItem key={order.id} value={order.id}>
+                                  {order.order_number} - {order.customer_name || 'Không xác định'}
                                 </SelectItem>
-                              ) : (
-                                orders.map((order) => (
-                                  <SelectItem key={order.id} value={order.id}>
-                                    {order.order_number} - {order.customer_name} ({formatCurrency(order.total_amount)})
-                                  </SelectItem>
-                                ))
-                              )}
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Customer Information */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Thông tin khách hàng</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="customer">Khách hàng</Label>
+                            <Label htmlFor="customer_id">Khách hàng</Label>
                             <Select
                               value={exportSlipForm.customer_id}
                               onValueChange={(value) => {
@@ -912,7 +788,6 @@ function ExportSlipsContent() {
                             />
                           </div>
                         </div>
-
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="customer_phone">Số điện thoại</Label>
@@ -936,7 +811,6 @@ function ExportSlipsContent() {
                         </div>
                       </CardContent>
                     </Card>
-
                     {/* Products */}
                     <Card>
                       <CardHeader>
@@ -960,14 +834,12 @@ function ExportSlipsContent() {
                                 const updatedItems = prev.items.map((it) => ({
                                   ...it,
                                 }));
-
                                 // Update stock levels for all items with new warehouse
                                 updatedItems.forEach((it, index) => {
                                   if (it.product_id) {
                                     fetchStockLevel(index, it.product_id, value);
                                   }
                                 });
-
                                 return {
                                   ...prev,
                                   warehouse_id: value,
@@ -988,7 +860,6 @@ function ExportSlipsContent() {
                             </SelectContent>
                           </Select>
                         </div>
-
                         <Table className="border border-border/30 rounded-lg overflow-hidden">
                           <TableHeader>
                             <TableRow className="bg-slate-50 border-b-2 border-slate-200">
@@ -1086,7 +957,6 @@ function ExportSlipsContent() {
                           </Table>
                       </CardContent>
                     </Card>
-
                     {/* Additional Expenses */}
                     <Card>
                       <CardHeader>
@@ -1157,7 +1027,6 @@ function ExportSlipsContent() {
                                 ))}
                               </TableBody>
                             </Table>
-
                             <div className="mt-3 flex justify-end">
                               <div className="text-sm font-medium">
                                 Tổng chi phí:{" "}
@@ -1173,7 +1042,6 @@ function ExportSlipsContent() {
                         )}
                       </CardContent>
                     </Card>
-
                     {/* Notes (Required) */}
                     <Card>
                       <CardHeader>
@@ -1188,7 +1056,6 @@ function ExportSlipsContent() {
                         />
                       </CardContent>
                     </Card>
-
                     {/* Summary */}
                     {(() => {
                       const { subtotal } = calculateTotals();
@@ -1207,7 +1074,6 @@ function ExportSlipsContent() {
                       );
                     })()}
                   </div>
-
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                       Hủy
@@ -1218,7 +1084,6 @@ function ExportSlipsContent() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-
               <Button
                 variant="outline"
                 onClick={() => exportToExcel()}
@@ -1418,7 +1283,6 @@ function ExportSlipsContent() {
                                 </p>
                               </div>
                             </div>
-
                             {/* Product List */}
                             {((slip.order?.order_items && slip.order.order_items.length > 0) || (slip.export_slip_items && slip.export_slip_items.length > 0)) && (
                               <div>
@@ -1446,10 +1310,8 @@ function ExportSlipsContent() {
                                           const exportItem = slip.export_slip_items?.find(
                                             item => item.product_code === orderItem.product_code
                                           );
-
                                           const requestedQuantity = orderItem.quantity;
                                           const actualQuantity = exportItem?.actual_quantity || 0;
-
                                           return (
                                             <TableRow key={index}>
                                               <TableCell className="text-center font-medium">{orderItem.product_name}</TableCell>
@@ -1481,7 +1343,6 @@ function ExportSlipsContent() {
                                 </div>
                               </div>
                             )}
-
                             {/* Notes */}
                             {slip.notes && (
                               <div>
@@ -1499,7 +1360,6 @@ function ExportSlipsContent() {
                                 </div>
                               </div>
                             )}
-
                             {/* Documents - Temporarily disabled */}
                             <div>
                               <Label className="font-medium block mb-3">Tài liệu đính kèm:</Label>
@@ -1510,13 +1370,11 @@ function ExportSlipsContent() {
                           </div>
                         </DialogContent>
                       </Dialog>
-                      
                       {/* Status Update Dropdown - Only show when status can be updated */}
                       {getAvailableStatusOptions(slip.status).length > 0 && (
                         <Select
                           value=""
                           onValueChange={(newStatus) => {
-                            console.log('Status changed for slip:', slip.code, 'to:', newStatus);
                             handleStatusUpdateWithSelection(slip.id, newStatus, '');
                           }}
                         >
@@ -1574,7 +1432,6 @@ function ExportSlipsContent() {
     </div>
   );
 }
-
 export default function ExportSlips() {
   return (
     <PermissionGuard 
@@ -1585,4 +1442,3 @@ export default function ExportSlips() {
     </PermissionGuard>
   );
 }
-

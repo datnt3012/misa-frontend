@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/api/auth.api';
-
 interface ResetPasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -20,7 +19,6 @@ interface ResetPasswordDialogProps {
   temporaryPassword: string;
   onSuccess: () => void;
 }
-
 export default function ResetPasswordDialog({
   open,
   onOpenChange,
@@ -34,10 +32,8 @@ export default function ResetPasswordDialog({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
-
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-
     // Validate passwords
     if (!newPassword || !confirmPassword) {
       toast({
@@ -47,7 +43,6 @@ export default function ResetPasswordDialog({
       });
       return;
     }
-
     if (newPassword !== confirmPassword) {
       toast({
         title: 'Lỗi',
@@ -56,7 +51,6 @@ export default function ResetPasswordDialog({
       });
       return;
     }
-
     if (newPassword === temporaryPassword) {
       toast({
         title: 'Lỗi',
@@ -65,29 +59,23 @@ export default function ResetPasswordDialog({
       });
       return;
     }
-
     setIsLoading(true);
-
     try {
       await authApi.resetPasswordWithTemporary({
         emailOrUsername: email,
         temporaryPassword,
         newPassword,
       });
-
       toast({
         title: 'Thành công',
         description: 'Mật khẩu đã được đổi thành công',
       });
-
       // Reset form
       setNewPassword('');
       setConfirmPassword('');
       onSuccess();
     } catch (error: any) {
-      console.error('Reset password error:', error);
       let errorMessage = 'Có lỗi xảy ra khi đổi mật khẩu';
-
       if (error.response?.data?.message) {
         if (Array.isArray(error.response.data.message)) {
           errorMessage = error.response.data.message.join('\n');
@@ -97,7 +85,6 @@ export default function ResetPasswordDialog({
       } else if (error.message) {
         errorMessage = error.message;
       }
-
       toast({
         title: 'Lỗi',
         description: errorMessage,
@@ -107,7 +94,6 @@ export default function ResetPasswordDialog({
       setIsLoading(false);
     }
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -117,7 +103,6 @@ export default function ResetPasswordDialog({
             Vui lòng nhập mật khẩu mới để hoàn tất quy trình khôi phục
           </DialogDescription>
         </DialogHeader>
-
         <form onSubmit={handleResetPassword} className="space-y-4">
           {/* New Password */}
           <div className="space-y-2">
@@ -147,7 +132,6 @@ export default function ResetPasswordDialog({
               Ít nhất 8 chữ, số và ký tự đặc biệt
             </p>
           </div>
-
           {/* Confirm Password */}
           <div className="space-y-2">
             <Label htmlFor="confirm-password">Xác nhận mật khẩu</Label>
@@ -173,7 +157,6 @@ export default function ResetPasswordDialog({
               </button>
             </div>
           </div>
-
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <Button
@@ -188,4 +171,4 @@ export default function ResetPasswordDialog({
       </DialogContent>
     </Dialog>
   );
-}
+}

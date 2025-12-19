@@ -54,11 +54,9 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UnauthorizedPage } from '@/components/UnauthorizedPage';
-
 interface CategoriesContentProps {
   embedded?: boolean;
 }
-
 const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,17 +75,13 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
     name: '',
     description: ''
   });
-
   const { toast } = useToast();
-  
   // Frontend permission checks for UI controls
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('CATEGORIES_CREATE');
   const canUpdate = hasPermission('CATEGORIES_UPDATE');
   const canDelete = hasPermission('CATEGORIES_DELETE');
-
   // Hybrid permission system: Frontend controls UI visibility, Backend blocks API calls
-
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
@@ -99,7 +93,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
       setCategories(response.categories || []);
     } catch (error) {
-      console.error('Error fetching categories:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách loại sản phẩm",
@@ -109,11 +102,9 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       setLoading(false);
     }
   }, [statusFilter, toast]);
-
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
-
   const handleAddCategory = async () => {
     if (!newCategory.name.trim()) {
       toast({
@@ -123,7 +114,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
       return;
     }
-
     try {
       const response = await categoriesApi.createCategory(newCategory);
       toast({
@@ -134,7 +124,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       setIsAddDialogOpen(false);
       fetchCategories();
     } catch (error) {
-      console.error('Error creating category:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể thêm loại sản phẩm",
@@ -142,7 +131,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
     }
   };
-
   const handleEditCategory = async () => {
     if (!editingCategory || !editCategory.name?.trim()) {
       toast({
@@ -152,7 +140,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
       return;
     }
-
     try {
       const response = await categoriesApi.updateCategory(editingCategory.id, editCategory);
       toast({
@@ -164,7 +151,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       setIsEditDialogOpen(false);
       fetchCategories();
     } catch (error) {
-      console.error('Error updating category:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật loại sản phẩm",
@@ -172,10 +158,8 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
     }
   };
-
   const handleDeleteCategory = async () => {
     if (!categoryToDelete) return;
-
     try {
       const response = await categoriesApi.deleteCategory(categoryToDelete.id);
       toast({
@@ -186,7 +170,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       setIsDeleteDialogOpen(false);
       fetchCategories();
     } catch (error) {
-      console.error('Error deleting category:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể xóa loại sản phẩm",
@@ -194,7 +177,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
     }
   };
-
   const openEditDialog = (category: Category) => {
     setEditingCategory(category);
       setEditCategory({
@@ -203,12 +185,10 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
     setIsEditDialogOpen(true);
   };
-
   const openDeleteDialog = (category: Category) => {
     setCategoryToDelete(category);
     setIsDeleteDialogOpen(true);
   };
-
   const handleToggleStatus = async (category: Category) => {
     if (!canUpdate) {
       toast({
@@ -218,7 +198,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
       return;
     }
-
     try {
       const newStatus = !category.isActive;
       await categoriesApi.updateCategory(category.id, { isActive: newStatus });
@@ -230,7 +209,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
       fetchCategories();
     } catch (error) {
-      console.error('Error toggling category status:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái loại sản phẩm",
@@ -238,13 +216,11 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
     }
   };
-
   const filteredCategories = categories.filter(category => {
     const matchesSearch = category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesSearch;
   });
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -255,7 +231,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       </div>
     );
   }
-
   return (
     <div className={embedded ? "space-y-6" : "container mx-auto px-4 py-6 space-y-6"}>
       {/* Header */}
@@ -291,7 +266,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
           )}
         </div>
       )}
-
       {/* Filters */}
       <Card>
         <CardHeader className="pb-4">
@@ -328,7 +302,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
           </div>
         </CardContent>
       </Card>
-
       {/* Categories Table */}
       <Card>
         <CardHeader className="pb-4">
@@ -448,7 +421,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
           )}
         </CardContent>
       </Card>
-
       {/* Add Category Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
@@ -489,7 +461,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Edit Category Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
@@ -530,7 +501,6 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Delete Category Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
@@ -552,9 +522,7 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
     </div>
   );
 };
-
 export { CategoriesContent };
-
 export default function Categories() {
     return (
       <PermissionGuard 

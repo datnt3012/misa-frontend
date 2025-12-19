@@ -19,14 +19,12 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { API_CONFIG } from "@/config/api";
 import { DollarSign, Clock, Upload, X, FileText, Image, Eye } from "lucide-react";
 import BankSelector from "@/components/orders/BankSelector";
-
 interface PaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: any;
   onUpdate: () => void;
 }
-
 export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   open,
   onOpenChange,
@@ -51,9 +49,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const { toast } = useToast();
   const { user } = useAuth();
-
   const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
-
   // Calculate paid amount from payment history if available, otherwise from order
   const paidAmount = useMemo(() => {
     if (paymentHistory.length > 0) {
@@ -63,7 +59,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     // Fallback to order data
     return Number(order?.totalPaidAmount || order?.total_paid_amount || order?.paid_amount || order?.initial_payment) || 0;
   }, [paymentHistory, order]);
-
   // Calculate debt amount
   const debtAmount = useMemo(() => {
     if (paymentHistory.length > 0) {
@@ -73,38 +68,31 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     // Fallback to order data
     return Number(order?.remainingDebt || order?.remaining_debt || order?.debt_amount) || Math.max(0, totalAmount - paidAmount);
   }, [paymentHistory, totalAmount, paidAmount, order]);
-
   useEffect(() => {
     if (open && order?.id) {
       loadPaymentHistory();
       loadBanks();
     }
   }, [open, order?.id]);
-
   const loadBanks = async () => {
     try {
       const banksList = await orderApi.getBanks();
       setBanks(banksList || []);
     } catch (error) {
-      console.error('[PaymentDialog] Error loading banks:', error);
       // Don't show error toast - just log and continue with empty array
       setBanks([]);
     }
   };
-
   const loadPaymentHistory = async () => {
     try {
       const payments = await paymentsApi.getPaymentsByOrder(order.id);
-      
       // Sort payments by date (newest first)
       const sortedPayments = [...payments].sort((a, b) => {
         const dateA = new Date(a.payment_date).getTime();
         const dateB = new Date(b.payment_date).getTime();
         return dateB - dateA; // Descending order (newest first)
       });
-      
       setPaymentHistory(sortedPayments);
-      
       // Pre-fetch file metadata for all files
       const filePaths: string[] = [];
       sortedPayments.forEach((payment) => {
@@ -115,7 +103,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             : [];
         filePaths.push(...paths);
       });
-
       // Fetch metadata for all files in parallel (silently, don't block on errors)
       if (filePaths.length > 0) {
         // Fire and forget - don't wait for metadata to load
@@ -132,12 +119,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         });
       }
     } catch (error: any) {
-      console.error('[PaymentDialog] Error loading payment history:', error);
       // Don't show error toast - just log and continue with empty array
       setPaymentHistory([]);
     }
   };
-
   const handleAddPayment = async () => {
     if (paymentAmount === undefined || paymentAmount === 0) {
       toast({
@@ -147,7 +132,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
       return;
     }
-
     // Validate bank selection for bank transfer
     if (paymentMethod === 'bank_transfer' && !bankAccount) {
       toast({
@@ -157,11 +141,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
       return;
     }
-
     setLoading(true);
     try {
       const amount = paymentAmount;
-      
       // Step 1: Create payment (JSON only)
       let createdPayment;
       try {
@@ -175,7 +157,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           bank: paymentMethod === 'bank_transfer' && bankAccount ? bankAccount : undefined,
         });
       } catch (paymentError: any) {
-        console.error('[PaymentDialog] Error creating payment:', paymentError);
         toast({
           title: "Lỗi",
           description: getErrorMessage(paymentError, "Không thể tạo payment record"),
@@ -183,13 +164,11 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         });
         return;
       }
-      
       // Step 2: Upload files if any (separate API call)
       if (uploadedFiles.length > 0 && createdPayment?.id) {
         try {
           await paymentsApi.uploadFiles(createdPayment.id, uploadedFiles);
         } catch (uploadError: any) {
-          console.error('[PaymentDialog] Error uploading files:', uploadError);
           toast({
             title: "Cảnh báo",
             description: "Payment đã được tạo nhưng không thể upload file. Vui lòng thử upload lại sau.",
@@ -197,35 +176,28 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           });
         }
       }
-      
       // Step 3: Update order's paid_amount
       try {
         const { orderApi } = await import('@/api/order.api');
         const currentPaidAmount = order.paid_amount || 0;
         const newPaidAmount = currentPaidAmount + amount;
-
         await orderApi.updateOrder(order.id, {
           paid_amount: newPaidAmount
         });
       } catch (orderUpdateError: any) {
-        console.warn('[PaymentDialog] Could not update order initialPayment:', orderUpdateError);
         // Non-critical error, continue
       }
-
       toast({
         title: "Thành công",
         description: amount >= 0 
           ? `Đã thêm thanh toán: ${formatCurrency(amount)}`
           : `Đã điều chỉnh thanh toán: ${formatCurrency(amount)}`,
       });
-
       onUpdate();
-      
       // Refresh payment history after a short delay to allow backend to process
       setTimeout(() => {
         loadPaymentHistory();
       }, 500);
-      
       // Reset form
       setPaymentAmount(undefined);
       setPaymentNotes('');
@@ -242,26 +214,22 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setLoading(false);
     }
   };
-
   const handleDeleteFile = async (paymentId: string, filePath: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa file này?')) {
       return;
     }
-
     try {
       await paymentsApi.deleteFile(paymentId, filePath);
       toast({
         title: "Thành công",
         description: "Đã xóa file",
       });
-      
       // Remove from metadata cache
       setFileMetadataCache(prev => {
         const newCache = { ...prev };
         delete newCache[filePath];
         return newCache;
       });
-      
       // Refresh payment history
       loadPaymentHistory();
       onUpdate();
@@ -273,7 +241,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
     }
   };
-
   const handleUploadFilesForPayment = async (paymentId: string) => {
     const files = filesToUploadForPayment[paymentId];
     if (!files || files.length === 0) {
@@ -284,7 +251,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
       return;
     }
-
     setUploadingFilesForPayment(paymentId);
     try {
       await paymentsApi.uploadFiles(paymentId, files);
@@ -292,14 +258,12 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         title: "Thành công",
         description: "Đã upload file",
       });
-      
       // Clear files for this payment
       setFilesToUploadForPayment(prev => {
         const newState = { ...prev };
         delete newState[paymentId];
         return newState;
       });
-      
       // Clear metadata cache for this payment's files (they will be re-fetched)
       // Refresh payment history will fetch new metadata
       // Refresh payment history
@@ -315,7 +279,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setUploadingFilesForPayment(null);
     }
   };
-
   // Helper to construct file download URL
   const getFileDownloadUrl = (filePath: string): string => {
     // Construct download URL using API base URL
@@ -324,14 +287,11 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
       return filePath;
     }
-    
     // Use API base URL from environment or default
     const baseUrl = API_CONFIG.BASE_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0';
-    
     // Construct URL: backend serves files via /files/{path}
     return `${baseUrl}/files/${encodeURIComponent(filePath)}`;
   };
-
   // Get file metadata from API (?info=true)
   const getFileMetadata = async (filePath: string): Promise<{
     fileName: string;
@@ -343,36 +303,28 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     if (fileMetadataCache[filePath]) {
       return fileMetadataCache[filePath];
     }
-
     // Skip if filePath is empty or invalid
     if (!filePath || filePath.trim() === '') {
       return null;
     }
-
     try {
       const fileUrl = getFileDownloadUrl(filePath);
       const metadataUrl = `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}info=true`;
-      
       const response = await fetch(metadataUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
         },
       });
-
       // Handle 404 gracefully - endpoint might not be available yet
        if (response.status === 404) {
          return null;
        }
-
       if (!response.ok) {
         // For other errors, log but don't throw
-        console.warn('[PaymentDialog] Failed to fetch metadata:', response.status, response.statusText, 'for:', filePath);
         return null;
       }
-
       const data = await response.json();
-      
       if (data?.success && data?.data) {
         const metadata = {
           fileName: data.data.fileName || data.data.filename || '',
@@ -380,7 +332,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           mimeType: data.data.mimeType || data.data.mime_type,
           extension: data.data.extension,
         };
-
         // Only cache if we have a fileName
         if (metadata.fileName) {
           setFileMetadataCache(prev => ({
@@ -390,93 +341,75 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           return metadata;
         }
       }
-
       return null;
     } catch (error: any) {
       // Don't log as error if it's just a network error or endpoint not available
        if (error?.message?.includes('Failed to fetch') || error?.message?.includes('404')) {
          // Metadata endpoint not available; use fallback parsing
        } else {
-        console.warn('[PaymentDialog] Error fetching file metadata:', error, 'for:', filePath);
       }
       return null;
     }
   };
-
   // Get file name from header (when fetching file)
   const getFileNameFromHeader = async (filePath: string): Promise<string | null> => {
     if (!filePath || filePath.trim() === '') {
       return null;
     }
-
     try {
       const fileUrl = getFileDownloadUrl(filePath);
-      
       const response = await fetch(fileUrl, {
         method: 'HEAD',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
         },
       });
-
       if (response.ok) {
         const fileName = response.headers.get('X-File-Name');
         if (fileName) {
           return decodeURIComponent(fileName);
         }
       }
-
       return null;
     } catch (error: any) {
       // Silently fail - header method is optional
-      console.debug('[PaymentDialog] Could not get file name from header for:', filePath);
       return null;
     }
   };
-
   // Synchronous version for display (uses cache or fallback parsing)
   const getDisplayFileNameSync = (filePath: string, paymentId: string): string => {
     // Check cache first - this is the best source
     if (fileMetadataCache[filePath]?.fileName) {
       return fileMetadataCache[filePath].fileName;
     }
-
     // Fallback: parse from path
     if (!filePath || typeof filePath !== 'string') {
       return 'Tệp tin';
     }
-
     // Normalize path - handle both forward and back slashes, remove leading/trailing slashes
     let normalizedPath = filePath.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-    
     // Extract filename from path (last part after /)
     // Handle cases like "uploads/payments/id/file.pdf" or just "file.pdf"
     const parts = normalizedPath.split('/').filter(p => p && p.trim());
-    
     // Always take the last part as filename
     let rawName = parts.length > 0 ? parts[parts.length - 1] : normalizedPath;
-    
     // Decode URL encoding if present
     try {
       rawName = decodeURIComponent(rawName);
     } catch (e) {
       // If decode fails, use raw name as-is
     }
-    
     if (!rawName || rawName.trim() === '') {
       return 'Tệp tin';
     }
-
     // Extract extension
     const dotIndex = rawName.lastIndexOf('.');
     const extension = dotIndex >= 0 ? rawName.slice(dotIndex) : '';
     let nameWithoutExt = dotIndex >= 0 ? rawName.slice(0, dotIndex) : rawName;
-
     // Clean up the name: remove payment ID, timestamp, and random suffix
     // Format examples:
     // - "invoice-abc123-1234567890-987654.pdf" -> "invoice.pdf"
     // - "document-5b30d173-9661-4cd5-8c86-f4bfe7b63dab-1762505253482-233534523.pdf" -> "document.pdf"
-    
     // Pattern 1: Remove UUID-like pattern followed by timestamp and random number
     // Matches: -{uuid}-{timestamp}-{random}
     const fullPattern = /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{10,}-\d+$/i;
@@ -486,7 +419,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         return nameWithoutExt.trim() + extension;
       }
     }
-
     // Pattern 2: Remove payment ID pattern if paymentId is provided
     if (paymentId) {
       const paymentToken = `-${paymentId}-`;
@@ -498,34 +430,28 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         }
       }
     }
-
     // Pattern 3: Remove trailing UUID-like pattern (20+ hex chars with dashes)
     const uuidPattern = /-[0-9a-f-]{20,}$/i;
     if (uuidPattern.test(nameWithoutExt)) {
       nameWithoutExt = nameWithoutExt.replace(uuidPattern, '');
     }
-
     // Pattern 4: Remove trailing timestamp (long numbers, 10+ digits)
     const timestampPattern = /-\d{10,}$/;
     if (timestampPattern.test(nameWithoutExt)) {
       nameWithoutExt = nameWithoutExt.replace(timestampPattern, '');
     }
-
     // Pattern 5: Remove trailing random number (shorter numbers that might be random)
     // Only if it looks like a suffix (preceded by dash and the name has other content)
     const randomPattern = /-\d{6,9}$/;
     if (randomPattern.test(nameWithoutExt) && nameWithoutExt.length > 15) {
       nameWithoutExt = nameWithoutExt.replace(randomPattern, '');
     }
-
     // Clean up: remove trailing dashes and trim
     nameWithoutExt = nameWithoutExt.replace(/-+$/, '').trim();
-
     // Return cleaned name with extension, or fallback to raw filename
     const finalName = nameWithoutExt ? nameWithoutExt + extension : rawName;
     return finalName || 'Tệp tin';
   };
-
   const handleViewFile = async (filePath: string) => {
     const fileUrl = getFileDownloadUrl(filePath);
     if (!fileUrl) {
@@ -536,10 +462,8 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       });
       return;
     }
-
     // Open file in new tab
     window.open(fileUrl, '_blank', 'noopener,noreferrer');
-    
     // Try to update cache with header name (if not already cached)
     if (!fileMetadataCache[filePath]) {
       getFileNameFromHeader(filePath).then((fileName) => {
@@ -550,17 +474,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           }));
         }
       }).catch((error) => {
-        console.warn('[PaymentDialog] Could not get file name from header:', error);
       });
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const getPaymentMethodText = (method: string) => {
     const methods: Record<string, string> = {
       cash: 'tiền mặt',
@@ -570,7 +491,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     };
     return methods[method] || method;
   };
-
   const getBankName = (bankIdOrName: string | undefined): string => {
     if (!bankIdOrName) return '';
     // First try to find by code (account number)
@@ -585,10 +505,8 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     // If not found in banks list, return the value as-is (might be name from API)
     return bankIdOrName;
   };
-
   const newPaidAmount = paidAmount + (paymentAmount || 0);
   const newDebtAmount = totalAmount - newPaidAmount;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -598,7 +516,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             Đơn hàng {order?.order_number}
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-6">
           {/* Current Payment Info */}
           <Card>
@@ -627,7 +544,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               )}
             </CardContent>
           </Card>
-
           {/* Add Payment */}
           <div className="space-y-4">
             <h4 className="font-medium">Thêm thanh toán mới</h4>
@@ -665,7 +581,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 </Select>
               </div>
             </div>
-            
             {/* Bank Account Selection for Bank Transfer */}
             {paymentMethod === 'bank_transfer' && (
               <div>
@@ -686,7 +601,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 placeholder="Ghi chú về khoản thanh toán này..."
               />
             </div>
-
             {/* File Upload */}
             <div>
               <Label>Tải lên hóa đơn/chứng từ</Label>
@@ -712,7 +626,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                   <Upload className="w-4 h-4 mr-2" />
                   Chọn file (ảnh, PDF, Word)
                 </Button>
-                
                 {/* Show uploaded files */}
                 {uploadedFiles.length > 0 && (
                   <div className="mt-2 space-y-2">
@@ -742,7 +655,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 )}
               </div>
             </div>
-
             {/* New Payment Summary */}
             {paymentAmount !== undefined && paymentAmount !== 0 && (
               <Card className="bg-blue-50">
@@ -766,7 +678,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </Card>
             )}
           </div>
-
           {/* Payment History - Always show */}
           <Separator />
           <Card>
@@ -803,7 +714,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                             : [];
                         const hasFiles = filePathsRaw.length > 0;
                         const filesToUpload = filesToUploadForPayment[payment.id] || [];
-                        
                         return (
                           <TableRow key={payment.id}>
                             <TableCell className="text-sm">
@@ -845,12 +755,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                                     {filePathsRaw.map((filePath: string, idx: number) => {
                                       // Ensure we're working with the file path, not the full path
                                       const displayName = getDisplayFileNameSync(filePath, payment.id);
-                                      
                                       // Debug log to see what we're working with
                                        if (process.env.NODE_ENV === 'development') {
                                          // In development we could log file info if needed
                                        }
-                                       
                                       return (
                                         <div key={idx} className="flex items-center gap-1 text-xs">
                                           <FileText className="w-3 h-3 flex-shrink-0" />
@@ -882,7 +790,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                                     })}
                                   </div>
                                 )}
-                                
                                 {/* Upload files for existing payment */}
                                 <div className="flex flex-col gap-1">
                                   <Input
@@ -981,7 +888,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </CardContent>
           </Card>
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Hủy
@@ -993,5 +899,4 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
-
+};

@@ -25,7 +25,6 @@ import { ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status
 import { API_CONFIG } from "@/config/api";
 import apiClient from "@/lib/api";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
-
 const QuotationsContent: React.FC = () => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,16 +52,13 @@ const QuotationsContent: React.FC = () => {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [selectedQuotationForExport, setSelectedQuotationForExport] = useState<Quotation | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalQuotations, setTotalQuotations] = useState(0);
-  
   const { toast } = useToast();
   const { user, session } = useAuth();
   const { hasPermission } = usePermissions();
-
   // Fetch quotations function
   const fetchQuotations = useCallback(async () => {
     try {
@@ -74,12 +70,10 @@ const QuotationsContent: React.FC = () => {
       if (creatorFilter !== 'all') params.createdBy = creatorFilter;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
-      
       const resp = await quotationApi.getQuotations(params);
       setQuotations(resp.quotations || []);
       setTotalQuotations(resp.total || 0);
     } catch (error) {
-      console.error('Error fetching quotations:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể tải danh sách báo giá"),
@@ -89,7 +83,6 @@ const QuotationsContent: React.FC = () => {
       setLoading(false);
     }
   }, [currentPage, itemsPerPage, statusFilter, typeFilter, creatorFilter, debouncedSearchTerm, startDate, endDate, toast]);
-
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -97,7 +90,6 @@ const QuotationsContent: React.FC = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
   const handleResetFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
@@ -107,7 +99,6 @@ const QuotationsContent: React.FC = () => {
     setEndDate(undefined);
     setCurrentPage(1);
   };
-
   // Fetch customers and creators for filters
   useEffect(() => {
     const fetchData = async () => {
@@ -119,19 +110,15 @@ const QuotationsContent: React.FC = () => {
         setCustomers(customersResp.customers || []);
         setCreators(usersResp.users || []);
       } catch (error) {
-        console.error('Error fetching filter data:', error);
       }
     };
     fetchData();
   }, []);
-
   useEffect(() => {
     fetchQuotations();
   }, [currentPage, itemsPerPage, statusFilter, typeFilter, creatorFilter, debouncedSearchTerm, startDate, endDate, fetchQuotations]);
-
   const handleDeleteQuotation = async () => {
     if (!quotationToDelete) return;
-
     try {
       setLoading(true);
       await quotationApi.deleteQuotation(quotationToDelete.id);
@@ -143,7 +130,6 @@ const QuotationsContent: React.FC = () => {
       setShowDeleteDialog(false);
       fetchQuotations();
     } catch (error) {
-      console.error("Error deleting quotation:", error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể xóa báo giá"),
@@ -153,35 +139,29 @@ const QuotationsContent: React.FC = () => {
       setLoading(false);
     }
   };
-
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(numAmount);
   };
-
   const maskPhoneNumber = (phone: string) => {
     if (!phone || phone.length < 8) return phone;
     const start = phone.slice(0, 3);
     const end = phone.slice(-3);
     return `${start}****${end}`;
   };
-
   const calculateTotalAmount = (quotation: Quotation) => {
     if (!quotation.details || quotation.details.length === 0) return 0;
     return quotation.details.reduce((sum, detail) => sum + (detail.price * detail.quantity), 0);
   };
-
   const calculateTotalQuantity = (quotation: Quotation) => {
     if (!quotation.details || quotation.details.length === 0) return 0;
     return quotation.details.reduce((sum, detail) => sum + detail.quantity, 0);
   };
-
   // Calculate totals for all quotations
   const totalAmount = quotations.reduce((sum, q) => sum + calculateTotalAmount(q), 0);
   const totalQuantity = quotations.reduce((sum, q) => sum + calculateTotalQuantity(q), 0);
-
   const handleSelectQuotation = (quotationId: string) => {
     setSelectedQuotations(prev => 
       prev.includes(quotationId) 
@@ -189,7 +169,6 @@ const QuotationsContent: React.FC = () => {
         : [...prev, quotationId]
     );
   };
-
   const handleSelectAll = () => {
     if (selectedQuotations.length === quotations.length) {
       setSelectedQuotations([]);
@@ -197,7 +176,6 @@ const QuotationsContent: React.FC = () => {
       setSelectedQuotations(quotations.map(q => q.id));
     }
   };
-
   const handleUpdateQuotationStatus = async (quotationId: string, newStatus: string) => {
     try {
       if(!hasPermission('QUOTATIONS_UPDATE_STATUS')) {
@@ -208,16 +186,13 @@ const QuotationsContent: React.FC = () => {
         });
         return;
       }
-
       await quotationApi.updateQuotationStatus(quotationId, newStatus);
-
       // Update local state directly with newStatus
       setQuotations(prevQuotations => 
         prevQuotations.map(q => 
           q.id === quotationId ? { ...q, status: newStatus } : q
         )
       );
-
       toast({
         title: "Thành công",
         description: `Đã cập nhật trạng thái báo giá`,
@@ -230,7 +205,6 @@ const QuotationsContent: React.FC = () => {
       });
     }
   };
-
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
       'completed': { label: 'Hoàn thành', variant: 'default' },
@@ -240,7 +214,6 @@ const QuotationsContent: React.FC = () => {
     const config = statusConfig[status] || { label: status, variant: 'outline' as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
-
   const exportToExcel = () => {
     if (quotations.length === 0) {
       toast({
@@ -250,7 +223,6 @@ const QuotationsContent: React.FC = () => {
       });
       return;
     }
-
     try {
       // Prepare data for export
       const exportData = quotations.flatMap((quotation, index) => {
@@ -259,10 +231,8 @@ const QuotationsContent: React.FC = () => {
           'pending': 'Chờ xử lý',
           'cancelled': 'Đã hủy',
         };
-
         // Tính tổng tiền của tất cả sản phẩm trong báo giá
         const totalAmountForQuotation = calculateTotalAmount(quotation);
-
         // Map each detail to a new row
         return (quotation.details || []).map((detail, detailIndex) => ({
           'STT': detailIndex === 0 ? `${index + 1}` : `${index + 1}.${detailIndex + 1}`, // Main product gets `index + 1`, others get `index + 1.detailIndex`
@@ -285,7 +255,6 @@ const QuotationsContent: React.FC = () => {
             const firstName = creator.firstName?.trim();
             const lastName = creator.lastName?.trim();
             const email = creator.email?.trim();
-
             if (firstName || lastName) {
               return `${firstName || ''} ${lastName || ''}`.trim();
             }
@@ -295,11 +264,9 @@ const QuotationsContent: React.FC = () => {
           'Trạng thái': detailIndex === 0 ? (statusLabels[quotation.status] || quotation.status) : '',
         }));
       });
-
       // Create workbook and worksheet
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(exportData);
-
       // Set column widths
       const colWidths = [
         { wch: 5 },   // STT
@@ -318,22 +285,17 @@ const QuotationsContent: React.FC = () => {
         { wch: 15 },  // Trạng thái
       ];
       ws['!cols'] = colWidths;
-
       // Add worksheet to workbook
       XLSX.utils.book_append_sheet(wb, ws, 'Danh sách báo giá');
-
       // Generate filename with current date
       const filename = `Bao_gia_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
-
       // Write file
       XLSX.writeFile(wb, filename);
-
       toast({
         title: "Thành công",
         description: `Đã xuất ${exportData.length} dòng báo giá ra file Excel`,
       });
     } catch (error) {
-      console.error('Error exporting to Excel:', error);
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể xuất file Excel"),
@@ -341,33 +303,27 @@ const QuotationsContent: React.FC = () => {
       });
     }
   };
-
   const exportToPDF = async (quotation: Quotation) => {
     // Tạo AbortController mới
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
-
     try {
       setExportingPDF(true);
       const url = `/quotations/${quotation.id}/export?type=pdf`;
-
       // Sử dụng apiClient với responseType: 'blob' và signal để có thể cancel
       const response = await apiClient.get(url, {
         responseType: 'blob',
         signal: abortController.signal,
       });
-
       // Kiểm tra nếu request đã bị cancel
       if (abortController.signal.aborted) {
         return;
       }
-
       // response.data đã là blob từ axios
       const blob = response.data;
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-
       // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `quotation_${quotation.code}.pdf`;
@@ -377,14 +333,11 @@ const QuotationsContent: React.FC = () => {
           filename = decodeURIComponent(filenameMatch[1]);
         }
       }
-
       link.download = filename;
-
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
-
       toast({
         title: "Thành công",
         description: `Đã xuất báo giá ${quotation.code} ra file PDF`,
@@ -392,12 +345,8 @@ const QuotationsContent: React.FC = () => {
     } catch (error: any) {
       // Không hiển thị lỗi nếu request bị cancel
       if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || abortController.signal.aborted) {
-        console.log("PDF export cancelled by user");
         return;
       }
-
-      console.error("Error exporting quotation PDF via API:", error);
-      
       // Cố gắng lấy thông báo lỗi từ response nếu có
       let errorMessage = "Không thể xuất file PDF";
       if (error?.response?.data) {
@@ -416,7 +365,6 @@ const QuotationsContent: React.FC = () => {
       } else if (error?.message) {
         errorMessage = error.message;
       }
-
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -427,33 +375,27 @@ const QuotationsContent: React.FC = () => {
       abortControllerRef.current = null;
     }
   };
-
   const exportToXLSX = async (quotation: Quotation) => {
     // Tạo AbortController mới
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
-
     try {
       setExportingXLSX(true);
       const url = `/quotations/${quotation.id}/export?type=xlsx`;
-
       // Sử dụng apiClient với responseType: 'blob' và signal để có thể cancel
       const response = await apiClient.get(url, {
         responseType: 'blob',
         signal: abortController.signal,
       });
-
       // Kiểm tra nếu request đã bị cancel
       if (abortController.signal.aborted) {
         return;
       }
-
       // response.data đã là blob từ axios
       const blob = response.data;
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-
       // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `quotation_${quotation.code}.xlsx`;
@@ -463,14 +405,11 @@ const QuotationsContent: React.FC = () => {
           filename = decodeURIComponent(filenameMatch[1]);
         }
       }
-
       link.download = filename;
-
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
-
       toast({
         title: "Thành công",
         description: `Đã xuất báo giá ${quotation.code} ra file Excel`,
@@ -478,12 +417,8 @@ const QuotationsContent: React.FC = () => {
     } catch (error: any) {
       // Không hiển thị lỗi nếu request bị cancel
       if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED' || abortController.signal.aborted) {
-        console.log("XLSX export cancelled by user");
         return;
       }
-
-      console.error("Error exporting quotation XLSX via API:", error);
-      
       // Cố gắng lấy thông báo lỗi từ response nếu có
       let errorMessage = "Không thể xuất file Excel";
       if (error?.response?.data) {
@@ -502,7 +437,6 @@ const QuotationsContent: React.FC = () => {
       } else if (error?.message) {
         errorMessage = error.message;
       }
-
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -513,7 +447,6 @@ const QuotationsContent: React.FC = () => {
       abortControllerRef.current = null;
     }
   };
-
   // Hàm để cancel export khi đóng dialog
   const handleCancelExport = () => {
     if (abortControllerRef.current) {
@@ -523,8 +456,6 @@ const QuotationsContent: React.FC = () => {
     setExportingPDF(false);
     setExportingXLSX(false);
   };
-
-
   return (
     <div className="space-y-4 p-6 sm:p-6 md:p-7">
       <div className="flex items-center justify-between">
@@ -542,7 +473,6 @@ const QuotationsContent: React.FC = () => {
           </Button>
         </div>
       </div>
-
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -622,7 +552,6 @@ const QuotationsContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -664,7 +593,6 @@ const QuotationsContent: React.FC = () => {
                 ) : (
                   quotations.map((quotation) => {
                     const totalAmount = calculateTotalAmount(quotation);
-                    
                     return (
                       <TableRow key={quotation.id}>
                         <TableCell className="text-center">
@@ -831,7 +759,6 @@ const QuotationsContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-
       {/* Pagination */}
       {totalQuotations > itemsPerPage && (
         <div className="flex items-center justify-between">
@@ -858,7 +785,6 @@ const QuotationsContent: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* Delete Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
@@ -878,7 +804,6 @@ const QuotationsContent: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -964,7 +889,6 @@ const QuotationsContent: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Create Quotation Dialog */}
       <CreateQuotationForm
         open={showCreateDialog}
@@ -974,7 +898,6 @@ const QuotationsContent: React.FC = () => {
           fetchQuotations();
         }}
       />
-
       {/* Edit Quotation Dialog */}
       <CreateQuotationForm
         open={showEditDialog}
@@ -989,7 +912,6 @@ const QuotationsContent: React.FC = () => {
         }}
         initialQuotation={quotationToEdit}
       />
-
       {/* Create Order from Quotation Dialog */}
       <CreateOrderFromQuotation
         open={showCreateOrderDialog}
@@ -1003,7 +925,6 @@ const QuotationsContent: React.FC = () => {
           setQuotationForOrder(null);
         }}
       />
-
       {/* Loading Dialog for Export */}
       <Dialog open={exportingPDF || exportingXLSX} onOpenChange={(open) => {
         if (!open) {
@@ -1043,7 +964,6 @@ const QuotationsContent: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Export Quotation Dialog */}
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
         <DialogContent>
@@ -1090,6 +1010,4 @@ const QuotationsContent: React.FC = () => {
     </div>
   );
 };
-
-export default QuotationsContent;
-
+export default QuotationsContent;

@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Upload, Download, Trash2, Plus, Eye } from "lucide-react";
-
 interface Document {
   id: string;
   document_type: string;
@@ -23,12 +22,10 @@ interface Document {
     full_name: string;
   };
 }
-
 interface DocumentManagerProps {
   orderId: string;
   onUpdate?: () => void;
 }
-
 export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpdate }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,11 +34,9 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('contract');
   const { toast } = useToast();
-
   useEffect(() => {
     loadDocuments();
   }, [orderId]);
-
   const loadDocuments = async () => {
     try {
       const { data, error } = await supabase
@@ -52,41 +47,32 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
         `)
         .eq('order_id', orderId)
         .order('uploaded_at', { ascending: false });
-
       if (error) throw error;
       setDocuments((data as any[])?.map(item => ({
         ...item,
         uploader_profile: item.uploader_profile || { full_name: 'Không xác định' }
       })) || []);
     } catch (error) {
-      console.error('Error loading documents:', error);
     } finally {
       setLoading(false);
     }
   };
-
   const handleUpload = async () => {
     if (!uploadFile) return;
-
     try {
       setUploading(true);
-
       // Create unique file name
       const fileExt = uploadFile.name.split('.').pop();
       const fileName = `${orderId}/${Date.now()}.${fileExt}`;
-
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('contracts')
         .upload(fileName, uploadFile);
-
       if (uploadError) throw uploadError;
-
       // Get public URL
       const { data: urlData } = supabase.storage
         .from('contracts')
         .getPublicUrl(fileName);
-
       // Save document record
       const { error: docError } = await supabase
         .from('order_documents')
@@ -98,20 +84,16 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
           file_size: uploadFile.size,
           mime_type: uploadFile.type
         });
-
       if (docError) throw docError;
-
       toast({
         title: "Thành công",
         description: "Đã tải lên tài liệu",
       });
-
       setUploadDialog(false);
       setUploadFile(null);
       loadDocuments();
       onUpdate?.();
     } catch (error) {
-      console.error('Error uploading document:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải lên tài liệu",
@@ -121,7 +103,6 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
       setUploading(false);
     }
   };
-
   const handleDelete = async (document: Document) => {
     try {
       // Delete from storage
@@ -131,24 +112,19 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
           .from('contracts')
           .remove([fileName]);
       }
-
       // Delete record
       const { error } = await supabase
         .from('order_documents')
         .delete()
         .eq('id', document.id);
-
       if (error) throw error;
-
       toast({
         title: "Thành công",
         description: "Đã xóa tài liệu",
       });
-
       loadDocuments();
       onUpdate?.();
     } catch (error) {
-      console.error('Error deleting document:', error);
       toast({
         title: "Lỗi",
         description: "Không thể xóa tài liệu",
@@ -156,7 +132,6 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
       });
     }
   };
-
   const getDocumentTypeBadge = (type: string) => {
     const types = {
       contract: { label: 'Hợp đồng', variant: 'default' as const },
@@ -165,11 +140,9 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
       receipt: { label: 'Biên lai', variant: 'outline' as const },
       other: { label: 'Khác', variant: 'secondary' as const }
     };
-
     const config = types[type as keyof typeof types] || types.other;
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -177,11 +150,9 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   if (loading) {
     return (
       <Card>
@@ -197,7 +168,6 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
       </Card>
     );
   }
-
   return (
     <>
       <Card>
@@ -351,5 +321,4 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
       </Card>
     </>
   );
-};
-
+};

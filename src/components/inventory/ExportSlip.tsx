@@ -11,13 +11,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
 import { Package, CheckCircle, XCircle, Clock, FileText, Upload } from "lucide-react";
 import { ExportSlipQuantityDialog } from "@/components/inventory/ExportSlipQuantityDialog";
-
-
 interface ExportSlipProps {
   orderId: string;
   onUpdate?: () => void;
 }
-
 export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => {
   const [exportSlip, setExportSlip] = useState<ExportSlip | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,41 +24,19 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
   const [quantityDialog, setQuantityDialog] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
-
   useEffect(() => {
     loadExportSlip();
   }, [orderId]);
-
   const loadExportSlip = async () => {
     try {
-      console.log('=== Loading export slip for orderId:', orderId);
-      
       // Get export slip by order ID
       const slip = await exportSlipsApi.getSlipByOrderId(orderId);
-      console.log('=== Found export slip:', slip);
-      
       if (slip) {
-        console.log('=== Export slip details:');
-        console.log('- ID:', slip.id);
-        console.log('- Code:', slip.code);
-        console.log('- Status:', slip.status);
-        console.log('- Order ID:', slip.order_id);
-        console.log('- Created by:', slip.created_by);
-        console.log('- Created at:', slip.created_at);
-        console.log('- Items:', slip.export_slip_items);
-        console.log('- Order data:', slip.order);
-        console.log('- Creator profile:', slip.creator_profile);
-        console.log('- Approver profile:', slip.approver_profile);
-        console.log('- Picker profile:', slip.picker_profile);
-        console.log('- Exporter profile:', slip.exporter_profile);
-        
         setExportSlip(slip);
       } else {
-        console.log('=== No export slip found for orderId:', orderId);
         setExportSlip(null);
       }
     } catch (error) {
-      console.error('=== Error loading export slip:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải thông tin phiếu xuất kho",
@@ -71,25 +46,19 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       setLoading(false);
     }
   };
-
-
   const handleApproval = async () => {
     try {
       if (!exportSlip?.id) return;
-      
       await exportSlipsApi.approveSlip(exportSlip.id, approvalNotes);
-
       toast({
         title: "Thành công",
         description: `Đã ${approvalAction === 'approve' ? 'duyệt' : 'từ chối'} phiếu xuất kho`,
       });
-
       setApprovalDialog(false);
       setApprovalNotes('');
       loadExportSlip();
       onUpdate?.();
     } catch (error) {
-      console.error('Error updating export slip:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật phiếu xuất kho",
@@ -97,22 +66,17 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       });
     }
   };
-
   const handleMarkAsPicked = async () => {
     try {
       if (!exportSlip?.id) return;
-      
       await exportSlipsApi.markAsPicked(exportSlip.id, 'Đã lấy hàng từ kho');
-
       toast({
         title: "Thành công",
         description: "Đã xác nhận lấy hàng. Tồn kho đã được trừ theo số lượng trong phiếu.",
       });
-
       loadExportSlip();
       onUpdate?.();
     } catch (error) {
-      console.error('Error marking as picked:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái lấy hàng",
@@ -120,22 +84,17 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       });
     }
   };
-
   const handleMarkAsExported = async () => {
     try {
       if (!exportSlip?.id) return;
-      
       await exportSlipsApi.markAsExported(exportSlip.id, 'Đã hoàn thành xuất kho - hàng đã rời khỏi kho');
-
       toast({
         title: "Thành công",
         description: "Đã hoàn tất xuất kho. Hàng đã rời khỏi kho.",
       });
-
       loadExportSlip();
       onUpdate?.();
     } catch (error) {
-      console.error('Error marking export as completed:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái xuất kho",
@@ -143,7 +102,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       });
     }
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -178,13 +136,11 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const formatFullAddress = (address: string, addressInfo?: any) => {
     const wardName = addressInfo?.ward?.name || addressInfo?.wardName;
     const districtName = addressInfo?.district?.name || addressInfo?.districtName;
@@ -196,15 +152,12 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   // Check user roles for different actions
   const canPick = user && exportSlip?.status === 'pending';
   const canExport = user && (exportSlip?.status === 'picked');
-
   if (loading) {
     return (
       <Card>
@@ -220,7 +173,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       </Card>
     );
   }
-
   if (!exportSlip) {
     return (
       <Card>
@@ -238,7 +190,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
       </Card>
     );
   }
-
   return (
     <>
       <Card>
@@ -311,7 +262,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               </>
             )}
           </div>
-
           {/* Order Information */}
           {exportSlip.order && (
             <div className="border-t pt-4">
@@ -354,7 +304,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               </div>
             </div>
           )}
-
           {/* Items to Export */}
           <div>
             <Label className="font-medium mb-3 block">Danh sách sản phẩm xuất kho:</Label>
@@ -399,7 +348,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               </Table>
             </div>
           </div>
-
           {/* Notes */}
           {exportSlip.notes && (
             <div>
@@ -409,7 +357,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               </div>
             </div>
           )}
-
           {/* Approval Notes */}
           {exportSlip.approval_notes && (
             <div>
@@ -419,8 +366,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               </div>
             </div>
           )}
-
-
           {/* Action Buttons */}
           {canPick && (
             <div className="flex gap-2 pt-4 border-t">
@@ -433,7 +378,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               </Button>
             </div>
           )}
-
           {canExport && (
             <div className="flex gap-2 pt-4 border-t">
               <Button
@@ -454,7 +398,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
           )}
         </CardContent>
       </Card>
-
       {/* Approval Dialog */}
       <Dialog open={approvalDialog} onOpenChange={setApprovalDialog}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
@@ -466,7 +409,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               Phiếu xuất kho {exportSlip.code}
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-6">
             {/* Order Summary */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -502,7 +444,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
                 </div>
               </div>
             </div>
-
             {/* Export Items Summary */}
             <div className="border rounded-md">
               <Table>
@@ -528,7 +469,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
                 </TableBody>
               </Table>
             </div>
-
             <div>
               <Label htmlFor="approval-notes">
                 Ghi chú {approvalAction === 'approve' ? 'duyệt' : 'từ chối'}
@@ -542,7 +482,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
               />
             </div>
           </div>
-          
           <DialogFooter>
             <Button variant="outline" onClick={() => setApprovalDialog(false)}>
               Hủy
@@ -556,7 +495,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Quantity Confirmation Dialog */}
       {quantityDialog && exportSlip && (
         <ExportSlipQuantityDialog
@@ -579,4 +517,3 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
     </>
   );
 };
-

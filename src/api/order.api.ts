@@ -1,6 +1,5 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -14,7 +13,6 @@ export interface OrderItem {
   vat_amount?: number;
   created_at: string;
 }
-
 export interface Order {
   id: string;
   order_number: string;
@@ -111,7 +109,6 @@ export interface Order {
   companyPhone?: string;
   expenses?: Array<{ name: string; amount: number; note?: string | null }>;
 }
-
 export interface CreateOrderRequest {
   customerId: string;
   customerName?: string;
@@ -130,7 +127,6 @@ export interface CreateOrderRequest {
   note?: string;
   status?: string;
   orderType?: string;
-  
   // VAT Information
   vatRate?: number; // VAT rate (optional, nếu không có sẽ lấy từ customer)
   taxCode?: string;
@@ -138,7 +134,6 @@ export interface CreateOrderRequest {
   companyAddress?: string;
   vatEmail?: string;
   companyPhone?: string;
-  
   // Receiver Information
   receiverName?: string;
   receiverPhone?: string;
@@ -151,14 +146,12 @@ export interface CreateOrderRequest {
     latitude?: number;
     longitude?: number;
   };
-  
   // Payment
   paymentMethod: string;
   initialPayment?: number;
   totalAmount: number;
   bank?: string; // Bank ID or code when payment method is bank_transfer
   paymentDeadline?: string; // YYYY-MM-DD
-  
   // Order details
   details: {
     productId: string;
@@ -172,7 +165,6 @@ export interface CreateOrderRequest {
     amount: number;
     note?: string;
   }[];
-  
   // Optional fields
   description?: string;
   tags?: string[];
@@ -180,7 +172,6 @@ export interface CreateOrderRequest {
   contractNumber?: string;
   purchaseOrderNumber?: string;
 }
-
 export interface UpdateOrderRequest {
   customer_name?: string;
   customer_phone?: string;
@@ -220,7 +211,6 @@ export interface UpdateOrderRequest {
   }[];
   paymentDeadline?: string; // YYYY-MM-DD
 }
-
 export interface CreateOrderItemRequest {
   product_id: string;
   product_name: string;
@@ -228,7 +218,6 @@ export interface CreateOrderItemRequest {
   quantity: number;
   unit_price: number;
 }
-
 export const orderApi = {
   // Get all orders
   getOrders: async (params?: {
@@ -309,18 +298,14 @@ export const orderApi = {
       queryParams.append('region', params.region);
     }
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
-
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.ORDERS.LIST;
-
     const response = await api.get<any>(url);
-    
     // Handle different response structures:
     // Structure 1: { code: 200, data: { rows: [], summary: {} } }
     // Structure 2: { rows: [], summary: {} }
     const data = response?.data || response;
-    
     const normalizeItem = (it: any) => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
@@ -351,7 +336,6 @@ export const orderApi = {
       })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
-
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
@@ -465,7 +449,6 @@ export const orderApi = {
         phone: row.customer.phoneNumber ?? row.customer.phone,
       } : undefined,
     } as Order);
-
     if (data && Array.isArray(data.rows)) {
       return {
         orders: data.rows.map(normalizeOrder),
@@ -480,7 +463,6 @@ export const orderApi = {
         } : undefined,
       };
     }
-
     const orders = (response?.orders || []).map(normalizeOrder);
     return {
       orders,
@@ -495,7 +477,6 @@ export const orderApi = {
       limit: Number(response?.limit ?? params?.limit ?? orders.length ?? 0),
     };
   },
-
   // Get order by ID
   getOrder: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}`);
@@ -529,7 +510,6 @@ export const orderApi = {
       })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
-
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
@@ -642,15 +622,12 @@ export const orderApi = {
         phone: row.customer.phoneNumber ?? row.customer.phone,
       } : undefined,
     });
-
     const normalizedOrder = normalizeOrder(data);
     return normalizedOrder;
   },
-
   // Create order
   createOrder: async (data: CreateOrderRequest): Promise<Order> => {
     const response = await api.post<any>(API_ENDPOINTS.ORDERS.CREATE, data);
-    
     // Normalize the response to ensure consistent field mapping
     const normalizeItem = (it: any) => ({
       id: it.id,
@@ -681,7 +658,6 @@ export const orderApi = {
       })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
-
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? row.number ?? '',
@@ -747,10 +723,8 @@ export const orderApi = {
           }))
         : undefined,
     } as Order);
-
     return normalizeOrder(response);
   },
-
   // Update order
   updateOrder: async (id: string, data: UpdateOrderRequest): Promise<Order> => {
     try {
@@ -760,7 +734,6 @@ export const orderApi = {
       throw error;
     }
   },
-
   // Update order status (requires ORDERS_UPDATE_STATUS permission)
   updateOrderStatus: async (id: string, status: string): Promise<Order> => {
     try {
@@ -770,22 +743,18 @@ export const orderApi = {
       throw error;
     }
   },
-
   // Delete order
   deleteOrder: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DELETE(id));
   },
-
   // Get order items
   getOrderItems: async (orderId: string): Promise<OrderItem[]> => {
     return api.get<OrderItem[]>(API_ENDPOINTS.ORDERS.ITEMS(orderId));
   },
-
   // Get order by ID including soft deleted orders
   getOrderIncludeDeleted: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}?includeDeleted=true`);
     const data = response?.data || response;
-
     const normalizeItem = (it: any) => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
@@ -813,7 +782,6 @@ export const orderApi = {
       })(),
       created_at: it.created_at ?? it.createdAt ?? '',
     });
-
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
@@ -890,10 +858,8 @@ export const orderApi = {
         : undefined,
       paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
     });
-
     return normalizeOrder(data);
   },
-
   // Add item to order
   addOrderItem: async (orderId: string, data: CreateOrderItemRequest): Promise<OrderItem> => {
     return api.post<OrderItem>(API_ENDPOINTS.ORDERS.ITEMS(orderId), {
@@ -901,7 +867,6 @@ export const orderApi = {
       order_id: orderId
     });
   },
-
   // Update order item
   updateOrderItem: async (orderId: string, itemId: string, data: Partial<CreateOrderItemRequest>): Promise<OrderItem> => {
     // Use /orders/{orderId}/details/{itemId} endpoint with camelCase body
@@ -911,13 +876,11 @@ export const orderApi = {
       unitPrice: data.unit_price
     });
   },
-
   // Delete order item
   deleteOrderItem: async (orderId: string, itemId: string): Promise<{ message: string }> => {
     // Use /orders/{orderId}/details/{itemId} endpoint
     return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DETAILS(orderId, itemId));
   },
-
   // Get order history
   getOrderHistory: async (orderId: string): Promise<{
     id: string;
@@ -940,12 +903,9 @@ export const orderApi = {
     try {
       // Use the new History API endpoint: GET /history/entity/order/:orderId
       const response = await api.get<any>(API_ENDPOINTS.HISTORY.ENTITY('order', orderId));
-      console.log('[orderApi] History API response:', response);
-      
       // Extract data from response (handle JsonDTORsp format)
       let historyItems: any[] = [];
       const responseData = response?.data || response;
-      
       // Backend returns JsonDTORsp with structure: { code, data, message }
       // data can be an array or an object with { count, rows, page, limit, totalPage }
       if (responseData?.data) {
@@ -961,9 +921,6 @@ export const orderApi = {
       } else if (responseData?.rows && Array.isArray(responseData.rows)) {
         historyItems = responseData.rows;
       }
-      
-      console.log('[orderApi] Found', historyItems.length, 'history items');
-      
       // Transform History entity format to frontend format
       const transformedHistory = historyItems.map((item: any) => {
         // History entity has: id, entityType, entityId, action, title, message, oldValue, newValue, metadata, userId, createdAt, user
@@ -979,10 +936,8 @@ export const orderApi = {
               : item.user.fullName || item.user.email || 'Hệ thống'
           } : { full_name: 'Hệ thống' }
         };
-        
         // Map action and values based on HistoryAction type
         const action = item.action?.toLowerCase() || '';
-        
         if (action === 'status_changed') {
           // Extract status from oldValue and newValue
           transformed.old_status = item.oldValue?.status || item.oldValue?.oldStatus || null;
@@ -1001,7 +956,6 @@ export const orderApi = {
             transformed.new_status = item.newValue?.status || null;
           }
         }
-        
         // Extract export slip info from metadata if available
         if (item.metadata?.exportSlip || item.metadata?.export_slip) {
           const exportSlip = item.metadata.exportSlip || item.metadata.export_slip;
@@ -1010,30 +964,23 @@ export const orderApi = {
             status: exportSlip.status || ''
           };
         }
-        
         return transformed;
       });
-      
       // Sort by date, most recent first
       transformedHistory.sort((a, b) => 
         new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
       );
-      
       return transformedHistory;
     } catch (error: any) {
-      console.error('[orderApi] Error loading order history:', error);
-      console.error('[orderApi] Endpoint:', API_ENDPOINTS.HISTORY.ENTITY('order', orderId));
       // Return empty array if API doesn't exist or fails (will trigger fallback)
       return [];
     }
   },
-
   // Get banks list (for payment selection)
   getBanks: async (): Promise<Array<{ id: string; name: string; code?: string }>> => {
     try {
       const response = await api.get<any>(API_ENDPOINTS.BANKS.LIST);
       const data = response?.data || response;
-
       // Handle different response structures
       let banks = [];
       if (Array.isArray(data)) {
@@ -1043,19 +990,16 @@ export const orderApi = {
       } else if (data?.data && Array.isArray(data.data)) {
         banks = data.data;
       }
-
       return banks.map((bank: any) => ({
         id: bank.id,
         name: bank.bankName,
         code: bank.accountNumber,
       }));
     } catch (error) {
-      console.error('[orderApi] Error loading banks:', error);
       // Return empty array instead of throwing to prevent UI crashes
       return [];
     }
   },
-
   // Get all bank accounts (for management)
   getAllBanks: async (params?: { includeDeleted?: boolean }): Promise<{
     banks: Array<{
@@ -1071,14 +1015,11 @@ export const orderApi = {
     try {
       const queryParams = new URLSearchParams();
       if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
-
       const url = queryParams.toString()
         ? `${API_ENDPOINTS.BANKS.LIST}?${queryParams.toString()}`
         : API_ENDPOINTS.BANKS.LIST;
-
       const response = await api.get<any>(url);
       const data = response?.data || response;
-
       if (Array.isArray(data)) {
         return {
           banks: data.map((bank: any) => ({
@@ -1104,14 +1045,11 @@ export const orderApi = {
           total: data.count || data.rows.length,
         };
       }
-
       return { banks: [], total: 0 };
     } catch (error) {
-      console.error('[orderApi] Error loading all banks:', error);
       return { banks: [], total: 0 };
     }
   },
-
   // Create bank account
   createBank: async (data: { accountNumber: string; bankName: string }): Promise<{
     id: string;
@@ -1130,7 +1068,6 @@ export const orderApi = {
       updatedAt: bankData.updatedAt,
     };
   },
-
   // Update bank account
   updateBank: async (id: string, data: { accountNumber?: string; bankName?: string }): Promise<{
     id: string;
@@ -1149,12 +1086,10 @@ export const orderApi = {
       updatedAt: bankData.updatedAt,
     };
   },
-
   // Delete bank account (soft delete)
   deleteBank: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.BANKS.DELETE(id));
   },
-
   // Restore bank account
   restoreBank: async (id: string): Promise<{
     id: string;
@@ -1173,7 +1108,6 @@ export const orderApi = {
       updatedAt: bankData.updatedAt,
     };
   },
-
   // Preview bulk payment distribution
   previewBulkPayment: async (data: {
     orderIds: string[];
@@ -1193,7 +1127,6 @@ export const orderApi = {
   }> => {
     const response = await api.post<any>(`${API_ENDPOINTS.ORDERS.LIST}/bulk-payment-preview`, data);
     const responseData = response?.data || response;
-
     if (responseData) {
       return {
         orders: responseData.orders || [],
@@ -1201,7 +1134,6 @@ export const orderApi = {
         totalRemainingDebt: responseData.totalRemainingDebt || 0,
       };
     }
-
     throw new Error('Invalid bulk payment preview response structure');
   },
 };

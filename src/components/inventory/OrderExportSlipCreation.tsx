@@ -19,11 +19,9 @@ import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.
 import { Loading } from "@/components/ui/loading";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
 import { cn } from "@/lib/utils";
-
 interface OrderExportSlipCreationProps {
   onExportSlipCreated?: () => void;
 }
-
 interface SelectedOrderItem {
   id: string;
   product_id: string;
@@ -33,7 +31,6 @@ interface SelectedOrderItem {
   unit_price: number;
   selected: boolean;
 }
-
 export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = ({ 
   onExportSlipCreated 
 }) => {
@@ -47,20 +44,16 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
   const [statusFilter, setStatusFilter] = useState('pending');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [orderSelectionOpen, setOrderSelectionOpen] = useState(false);
-  
   const { user } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-
   // Permission checks
   const canCreateExportSlip = hasPermission('EXPORT_SLIPS_CREATE');
-
   useEffect(() => {
     if (orderSelectionOpen) {
       loadOrders();
     }
   }, [orderSelectionOpen, statusFilter]);
-
   // Reinitialize selectedItems when dialog opens and order is selected (only if items are missing)
   useEffect(() => {
     if (createDialogOpen && selectedOrder && selectedItems.length === 0 && selectedOrder.items && selectedOrder.items.length > 0) {
@@ -77,7 +70,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       );
     }
   }, [createDialogOpen, selectedOrder]);
-
   const loadOrders = async () => {
     try {
       setOrdersLoading(true);
@@ -89,7 +81,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       });
       setOrders(response.orders);
     } catch (error: any) {
-      console.error('Error loading orders:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải danh sách đơn hàng",
@@ -99,25 +90,15 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       setOrdersLoading(false);
     }
   };
-
   const handleOrderSelect = async (order: Order) => {
     try {
       setOrdersLoading(true);
       // Load full order details to ensure items are included
       const fullOrder = await orderApi.getOrderIncludeDeleted(order.id);
       setSelectedOrder(fullOrder);
-      
       // Initialize selectedItems from the full order
       // Use items or order_items (backward compatibility)
       const orderItems = fullOrder.items || fullOrder.order_items || [];
-      console.log('Debug - Full order items:', {
-        orderId: fullOrder.id,
-        hasItems: !!fullOrder.items,
-        hasOrderItems: !!fullOrder.order_items,
-        itemsCount: orderItems.length,
-        items: orderItems
-      });
-      
       const items = orderItems.map(item => ({
         id: item.id,
         product_id: item.product_id,
@@ -127,12 +108,10 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
         unit_price: item.unit_price,
         selected: true
       }));
-      
       setSelectedItems(items);
       setCreateDialogOpen(true);
       setOrderSelectionOpen(false);
     } catch (error: any) {
-      console.error('Error loading order details:', error);
       toast({
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể tải chi tiết đơn hàng",
@@ -142,7 +121,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       setOrdersLoading(false);
     }
   };
-
   const handleItemSelectionChange = (itemId: string, selected: boolean) => {
     setSelectedItems(prev => 
       prev.map(item => 
@@ -150,7 +128,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       )
     );
   };
-
   const handleQuantityChange = (itemId: string, quantity: number) => {
     setSelectedItems(prev => 
       prev.map(item => 
@@ -158,7 +135,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       )
     );
   };
-
   const handleCreateExportSlip = async () => {
     if (!selectedOrder) {
       toast({
@@ -168,7 +144,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       });
       return;
     }
-
     const selectedExportItems = selectedItems.filter(item => item.selected);
     if (selectedExportItems.length === 0) {
       toast({
@@ -178,10 +153,8 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       });
       return;
     }
-
     try {
       setLoading(true);
-
       const createRequest: CreateExportSlipRequest = {
         order_id: selectedOrder.id,
         notes: notes.trim() || undefined,
@@ -193,25 +166,19 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
           unit_price: item.unit_price
         }))
       };
-
       const result = await exportSlipsApi.createSlip(createRequest);
-
       toast({
         title: "Thành công",
         description: `Đã tạo phiếu xuất kho ${result.code} cho đơn hàng ${selectedOrder.order_number}. Thông báo đã được gửi đến Quản lý kho.`,
       });
-
       // Reset form
       setSelectedOrder(null);
       setSelectedItems([]);
       setNotes('');
       setCreateDialogOpen(false);
-      
       onExportSlipCreated?.();
     } catch (error: any) {
-      console.error('Error creating export slip:', error);
       const errorMessage = error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho";
-      
       // Check if error is about order already having an export slip
       if (errorMessage.includes('đã có phiếu xuất kho') || errorMessage.includes('already has') || errorMessage.includes('export slip')) {
         toast({
@@ -230,17 +197,14 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       setLoading(false);
     }
   };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(amount);
   };
-
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN');
   };
-
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
@@ -254,26 +218,15 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       </Badge>
     );
   };
-
   const totalSelectedItems = selectedItems.filter(item => item.selected).length;
   const totalSelectedValue = selectedItems
     .filter(item => item.selected)
     .reduce((sum, item) => sum + (item.requested_quantity * item.unit_price), 0);
-
   // Debug: Log to console (can be removed later)
   useEffect(() => {
     if (createDialogOpen && selectedOrder) {
-      console.log('Debug - OrderExportSlipCreation:', {
-        selectedOrder: selectedOrder?.order_number,
-        orderItemsCount: selectedOrder?.items?.length || 0,
-        selectedItemsCount: selectedItems.length,
-        totalSelectedItems,
-        selectedItems: selectedItems.map(i => ({ name: i.product_name, selected: i.selected })),
-        orderItems: selectedOrder?.items?.map(i => ({ name: i.product_name, quantity: i.quantity })) || []
-      });
     }
   }, [createDialogOpen, selectedItems, totalSelectedItems, selectedOrder]);
-
   if (!canCreateExportSlip) {
     return (
       <Card>
@@ -291,7 +244,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
       </Card>
     );
   }
-
   return (
     <>
       <Card>
@@ -313,7 +265,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               <ShoppingCart className="w-4 h-4" />
               Chọn đơn hàng
             </Button>
-            
             {selectedOrder && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Đã chọn:</span>
@@ -322,7 +273,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               </div>
             )}
           </div>
-
           {selectedOrder && (
             <div className="border rounded-lg p-4 bg-muted/50">
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -353,12 +303,10 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               </div>
             </div>
           )}
-
           <div className="space-y-3">
             <div className="text-sm text-muted-foreground">
               <p>💡 <strong>Lưu ý:</strong> Phiếu xuất kho được tạo với trạng thái "Chờ" sẽ không ảnh hưởng đến tồn kho cho đến khi được chuyển sang trạng thái "Đã lấy hàng".</p>
             </div>
-            
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-start gap-2">
                 <Bell className="w-4 h-4 text-blue-600 mt-0.5" />
@@ -374,7 +322,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
           </div>
         </CardContent>
       </Card>
-
       {/* Order Selection Dialog */}
       <Dialog open={orderSelectionOpen} onOpenChange={setOrderSelectionOpen}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
@@ -384,7 +331,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               Chọn đơn hàng có trạng thái phù hợp để tạo phiếu xuất kho
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4">
             {/* Filters */}
             <div className="flex gap-4">
@@ -421,7 +367,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 </Button>
               </div>
             </div>
-
             {/* Orders List */}
             {ordersLoading ? (
               <div className="flex justify-center py-8">
@@ -475,7 +420,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               </div>
             )}
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setOrderSelectionOpen(false)}>
               Hủy
@@ -483,7 +427,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Create Export Slip Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
         setCreateDialogOpen(open);
@@ -500,7 +443,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               Đơn hàng: {selectedOrder?.order_number} - {selectedOrder?.customer_name}
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-6">
             {/* Order Summary */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -526,7 +468,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 </div>
               </div>
             </div>
-
             {/* Items Selection */}
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -535,7 +476,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                   Đã chọn: {totalSelectedItems} sản phẩm - Tổng: {formatCurrency(totalSelectedValue)}
                 </div>
               </div>
-              
               <div className="border rounded-md">
                 <Table>
                   <TableHeader>
@@ -604,7 +544,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 </Table>
               </div>
             </div>
-
             {/* Notes */}
             <div>
               <Label htmlFor="export-notes">Ghi chú phiếu xuất kho</Label>
@@ -616,7 +555,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 rows={3}
               />
             </div>
-
             {/* Status Info */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
@@ -632,7 +570,6 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
               </div>
             </div>
           </div>
-          
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
               Hủy

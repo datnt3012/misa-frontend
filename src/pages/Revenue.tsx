@@ -28,13 +28,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from '@/constants/order-status.constants';
-
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', {
     maximumFractionDigits: 0
   }).format(value);
 };
-
 function RevenueContent() {
   const formatDateLocal = (d?: Date) => (d ? formatDate(d, 'yyyy-MM-dd') : undefined);
   // Filter states
@@ -42,7 +40,6 @@ function RevenueContent() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  
   // Date filters
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
@@ -50,11 +47,9 @@ function RevenueContent() {
   const [createdToDate, setCreatedToDate] = useState<Date>();
   const [completedFromDate, setCompletedFromDate] = useState<Date>();
   const [completedToDate, setCompletedToDate] = useState<Date>();
-  
   // Value filters
   const [valueFrom, setValueFrom] = useState<string>("0");
   const [valueTo, setValueTo] = useState<string>("999,999,999");
-  
   // Selection filters
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<string>("all");
@@ -63,28 +58,23 @@ function RevenueContent() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("all");
   const [selectedArea, setSelectedArea] = useState<string>("all");
   const [selectedProductGroup, setSelectedProductGroup] = useState<string>("all");
-  
   // Data states
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [debtData, setDebtData] = useState<any>({});
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersPerPage] = useState(10);
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
-
   // Check permissions
   const canReadRevenue = hasPermission('REVENUE_READ');
   const canViewProfit = hasPermission('REVENUE_PROFIT_VIEW');
-  
   // Access to profit relies on permission only to avoid type errors on user role fields
   const canAccessProfit = !!user && canViewProfit;
-
   const fetchFilterData = async () => {
     try {
       const [customersResponse, productsResponse, categoriesResponse, usersResponse] = await Promise.all([
@@ -93,39 +83,30 @@ function RevenueContent() {
         categoriesApi.getCategories({ page: 1, limit: 1000 }),
         usersApi.getUsers({ page: 1, limit: 1000 })
       ]);
-      
       setCustomers(customersResponse.customers || []);
       setProducts(productsResponse.products || []);
       setCategories(categoriesResponse.categories || []);
       setUsers(usersResponse.users || []);
     } catch (error) {
-      console.error('Error fetching filter data:', error);
       throw error;
     }
   };
-
   // Fetch revenue report from backend API (without filters - total overview)
   // Note: Currently report API doesn't support filters, but logic matches backend calculation
   const fetchRevenueReport = async () => {
     try {
       const report = await reportApi.getRevenueReport();
-      console.log('[Revenue] Report API response:', report);
       // Note: This is total overview (no filters). For filtered data, we calculate from filtered orders below
       return report;
     } catch (error: any) {
-      console.error('[Revenue] Error fetching revenue report:', error);
       // Don't throw - we'll calculate from orders instead
       return null;
     }
   };
-
   // Fetch revenue chart data from dashboard API (excludes cancelled orders automatically)
   const fetchRevenueChartData = async () => {
     try {
-      console.log('[Revenue] Fetching revenue chart data from dashboard API...');
       const revenueSeries = await dashboardApi.getRevenueSeries();
-      console.log('[Revenue] Revenue series from API:', revenueSeries);
-      
       // Transform API data to match chart format
       // API returns: { month, label, current, previous, currentDebt, previousDebt, monthNumber, year }
       // Note: monthNumber from API might be 0-based (0-11), but label (e.g., "T11") is 1-based (1-12)
@@ -150,10 +131,8 @@ function RevenueContent() {
             ? item.monthNumber + 1 
             : item.monthNumber;
         }
-        
         // Use monthLabel from API if available, otherwise construct it
         const monthLabel = item.label || `T${String(monthNum).padStart(2, '0')}/${item.year}`;
-        
         return {
           month: item.month || `Thg ${monthNum}`,
           year: item.year,
@@ -165,45 +144,32 @@ function RevenueContent() {
           paymentCount: 0, // API doesn't provide payment count per month
         };
       });
-
       // Ensure we have 12 months sorted by monthNumber
       const sortedData = chartData.sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         return a.monthNumber - b.monthNumber;
       });
-
-      console.log('[Revenue] Sorted chart data from API:', sortedData);
-
       // Find the most recent year with data (usually current year)
       const years = Array.from(new Set(sortedData.map(d => d.year))).sort((a, b) => b - a);
       const displayYear = years.length > 0 ? years[0] : new Date().getFullYear();
-      
-      console.log('[Revenue] Using display year:', displayYear);
-
       // Build a map of all available data by year and monthNumber for easy lookup
       const dataMap = new Map<string, typeof chartData[0]>();
       sortedData.forEach(item => {
         const key = `${item.year}-${item.monthNumber}`;
         dataMap.set(key, item);
       });
-      
       // Always show 12 months of the displayYear (current year) only
       // Do not use data from previous year
       const completeData: typeof chartData = [];
       const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
                      'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
-      
       // Build 12 months for the displayYear only
       for (let monthNum = 1; monthNum <= 12; monthNum++) {
         const key = `${displayYear}-${monthNum}`;
         const existingData = dataMap.get(key);
-        
         if (existingData) {
           // All months are from current year, so just show "T01", "T02", etc.
           const monthLabel = `T${String(monthNum).padStart(2, '0')}`;
-          
-          console.log(`[Revenue] Found data for ${months[monthNum - 1]}/${displayYear}: revenue=${existingData.revenue}, debt=${existingData.debt}, label=${monthLabel}`);
-          
           completeData.push({
             ...existingData,
             monthLabel: monthLabel,
@@ -222,16 +188,12 @@ function RevenueContent() {
           });
         }
       }
-      
-      console.log('[Revenue] Final chart data (12 months of current year):', completeData);
       setRevenueData(completeData);
     } catch (error: any) {
-      console.error('[Revenue] Error fetching revenue chart data:', error);
       // Fallback to empty array if API fails
       setRevenueData([]);
     }
   };
-
   const fetchRevenueData = async () => {
     try {
       setOrdersLoading(true);
@@ -240,20 +202,17 @@ function RevenueContent() {
         page: 1,
         limit: 1000,
       };
-
       // Date filters
       // Created date range -> startDate/endDate (prefer specific created range if provided)
       const createdStart = formatDateLocal(createdFromDate || startDate);
       const createdEnd = formatDateLocal(createdToDate || endDate);
       if (createdStart) queryParams.startDate = createdStart;
       if (createdEnd) queryParams.endDate = createdEnd;
-
       // Completed date range -> completedStartDate/completedEndDate
       const completedStart = formatDateLocal(completedFromDate);
       const completedEnd = formatDateLocal(completedToDate);
       if (completedStart) queryParams.completedStartDate = completedStart;
       if (completedEnd) queryParams.completedEndDate = completedEnd;
-
       // Value filters (backend expects minTotalAmount/maxTotalAmount)
       if (valueFrom && valueFrom !== "0") {
         queryParams.minTotalAmount = parseFloat(valueFrom.replace(/,/g, ''));
@@ -261,7 +220,6 @@ function RevenueContent() {
       if (valueTo && valueTo !== "999,999,999") {
         queryParams.maxTotalAmount = parseFloat(valueTo.replace(/,/g, ''));
       }
-
       // Selection filters
       if (selectedCustomer !== "all") {
         queryParams.customerId = selectedCustomer;
@@ -285,40 +243,28 @@ function RevenueContent() {
       if (selectedProductGroup !== 'all') {
         queryParams.categories = String(selectedProductGroup);
       }
-
       // Payment methods (backend: paymentMethods accepts CSV or array)
       if (selectedPaymentMethod !== 'all') {
         queryParams.paymentMethods = String(selectedPaymentMethod);
       }
-
       // Region (backend handles region based on receiver/customer province)
       if (selectedArea !== 'all') {
         queryParams.region = selectedArea;
       }
-
       // Other filters will be applied client-side below
-
       // Fetch orders data from backend API with filters
-      console.log('[Revenue] Fetch orders with params:', queryParams);
       const ordersResponse = await orderApi.getOrders(queryParams);
-      console.log('[Revenue] Received orders:', ordersResponse.total);
-      console.log('[Revenue] Orders sample:', ordersResponse.orders?.[0]);
       let ordersData = ordersResponse.orders || [];
-
       // Apply client-side filters not supported by API
       ordersData = ordersData.filter((order) => {
         // Value range is now handled by backend (minTotalAmount/maxTotalAmount)
-        
         // Creator
         if (selectedOrderCreator !== 'all' && String(order.created_by) !== String(selectedOrderCreator)) return false;
-
         // Payment method: already handled by backend when selectedPaymentMethod !== 'all'
         if (selectedPaymentMethod !== 'all') {
           // Do not re-filter here to avoid dropping valid BE results
         }
-
         // Region: already handled by backend
-
         // Product and Category by items
         if (selectedProduct !== 'all') {
           const hasProduct = (order.items || order.order_items || []).some((it: any) => String(it.product_id) === String(selectedProduct));
@@ -327,7 +273,6 @@ function RevenueContent() {
         if (selectedProductGroup !== 'all') {
           // Category filter sent to backend via categories param; skip client-side item check to avoid false negatives
         }
-
         // Completed date range if available
         if (completedFromDate || completedToDate) {
           const completedAt = order.updated_at || order.created_at;
@@ -336,24 +281,19 @@ function RevenueContent() {
           if (completedFromDate && d < new Date(completedFromDate.setHours(0,0,0,0))) return false;
           if (completedToDate && d > new Date(completedToDate.setHours(23,59,59,999))) return false;
         }
-
         return true;
       });
-      
       // Store orders for detailed view and reset pagination
       setOrders(ordersData);
       setCurrentPage(1);
-
       // Calculate revenue by month from filtered orders
       const monthlyRevenue: any = {};
       let totalDebt = 0;
       let totalRevenue = 0;
-
       // Process orders to calculate revenue, debt, and profit
       // Logic matches backend report.service.ts for consistency
       let totalProfit = 0;
       let totalOrderCount = 0;
-
       ordersData.forEach(order => {
         const orderDate = new Date(order.created_at);
         const monthIndex = orderDate.getMonth(); // 0-11
@@ -363,7 +303,6 @@ function RevenueContent() {
                            'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
         const month = monthNames[monthIndex];
         const key = `${month}-${year}`;
-
         if (!monthlyRevenue[key]) {
           monthlyRevenue[key] = {
             month: month,
@@ -375,23 +314,19 @@ function RevenueContent() {
             paymentCount: 0
           };
         }
-
         // Add total amount to revenue (use total_amount as revenue)
         // Match backend logic from report.service.ts
         const orderAmount = Number(order.total_amount || 0);
         const initialPayment = Number(order.initialPayment || order.initial_payment || 0);
-        
         monthlyRevenue[key].revenue += orderAmount;
         monthlyRevenue[key].orderCount += 1;
         totalRevenue += orderAmount;
         totalOrderCount += 1;
-
         // Calculate debt: debt = max(0, totalAmount - initialPayment)
         // Match backend logic from report.service.ts
         const debtAmount = Math.max(0, orderAmount - initialPayment);
         monthlyRevenue[key].debt += debtAmount;
         totalDebt += debtAmount;
-
         // Calculate profit: profit = revenue - cost from order details
         // Match backend logic from report.service.ts
         let orderProfit = 0;
@@ -411,7 +346,6 @@ function RevenueContent() {
         }
         totalProfit += orderProfit;
       });
-
       // Determine the year to display (from filter or current year)
       let displayYear = new Date().getFullYear();
       if (startDate) {
@@ -427,15 +361,12 @@ function RevenueContent() {
         const years = Array.from(new Set(Object.values(monthlyRevenue).map((item: any) => item.year)));
         displayYear = Math.max(...years.map(y => Number(y)));
       }
-
       // Create array of 12 months for the display year
       const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
                      'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
-      
       const revenueArray = months.map((monthName, index) => {
         const monthKey = `${monthName}-${displayYear}`;
         const existingData = monthlyRevenue[monthKey];
-        
         if (existingData) {
           return {
             ...existingData,
@@ -455,26 +386,14 @@ function RevenueContent() {
           };
         }
       });
-      
       // Debug logging
-      console.log('[Revenue] Monthly revenue data (from orders, for reference only):', {
-        monthlyRevenueKeys: Object.keys(monthlyRevenue),
-        displayYear,
-        revenueArrayLength: revenueArray.length,
-        revenueArraySample: revenueArray.slice(0, 3),
-        ordersDataLength: ordersData.length,
-      });
-      
       // NOTE: Do NOT set revenueData here - it should come from dashboard API (fetchRevenueChartData)
       // which automatically excludes cancelled orders
       // setRevenueData(revenueArray); // REMOVED: Chart data comes from API, not from filtered orders
-      
       // Don't update debtData here - it should come from report API
       // Only update if report API is not available (fallback)
       // setDebtData will be handled by loadData after fetching report API
-
     } catch (error) {
-      console.error('Error fetching revenue data:', error);
         toast({
           title: "Lỗi",
           description: error.response?.data?.message || error.message || "Không thể tải dữ liệu doanh thu",
@@ -485,20 +404,16 @@ function RevenueContent() {
       setOrdersLoading(false);
     }
   };
-
   // Load data when permissions are available
   const loadData = async () => {
     try {
       setLoading(true);
       // Fetch report summary from backend API for card metrics
       const reportSummary = await fetchRevenueReport();
-      
       // Fetch chart data from dashboard API (excludes cancelled orders automatically)
       await fetchRevenueChartData();
-      
       // Fetch filter data and orders data (for table view)
       await Promise.all([fetchFilterData(), fetchRevenueData()]);
-      
       // Update debtData with report summary if available
       if (reportSummary) {
         setDebtData(prev => ({
@@ -512,68 +427,53 @@ function RevenueContent() {
         }));
       }
     } catch (error) {
-      console.error('Error loading revenue data:', error);
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     loadData();
   }, [canReadRevenue]);
-
   const getMonthIndex = (monthName: string) => {
     const months = ['Thg 1', 'Thg 2', 'Thg 3', 'Thg 4', 'Thg 5', 'Thg 6', 
                    'Thg 7', 'Thg 8', 'Thg 9', 'Thg 10', 'Thg 11', 'Thg 12'];
     return months.indexOf(monthName);
   };
-
   const handleFilter = async () => {
     setCurrentPage(1); // Reset to first page when applying filters
-    
     // Fetch revenue data for charts (filtered)
     await fetchRevenueData();
-    
     // Note: Card metrics (totalOrders, totalDebt, totalProfit) come from report API
     // which doesn't support filters, so they show total overview
     // Only charts and order list are filtered
-    
     // Build filter description
     const filterDescriptions = [];
-    
     if (startDate || endDate) {
       filterDescriptions.push(`Thời gian: ${startDate ? format(startDate, 'dd/MM/yyyy', { locale: vi }) : 'không xác định'} - ${endDate ? format(endDate, 'dd/MM/yyyy', { locale: vi }) : 'không xác định'}`);
     }
-    
     if (selectedCustomer !== 'all') {
       const customer = customers.find(c => c.id === selectedCustomer);
       filterDescriptions.push(`Khách hàng: ${customer?.name || 'Không xác định'}`);
     }
-    
     if (selectedProduct !== 'all') {
       const product = products.find(p => p.id === selectedProduct);
       filterDescriptions.push(`Sản phẩm: ${product?.name || 'Không xác định'}`);
     }
-    
     if (selectedOrderStatus !== 'all') {
       const config = getOrderStatusConfig(selectedOrderStatus);
       filterDescriptions.push(`Trạng thái: ${config.label}`);
     }
-    
     if (valueFrom !== "0" || valueTo !== "999,999,999") {
       filterDescriptions.push(`Giá trị: ${valueFrom} - ${valueTo} VNĐ`);
     }
-    
     const description = filterDescriptions.length > 0 
       ? `Áp dụng bộ lọc: ${filterDescriptions.join(', ')}`
       : 'Áp dụng bộ lọc mặc định';
-    
     toast({
       title: "Bộ lọc được áp dụng",
       description: description,
     });
   };
-
   const resetFilter = () => {
     // Reset all filters
     setSelectedCustomer("all");
@@ -594,17 +494,14 @@ function RevenueContent() {
     setCurrentPage(1); // Reset pagination
     fetchRevenueData();
   };
-
   // Pagination logic
   const totalPages = Math.ceil(orders.length / ordersPerPage);
   const startIndex = (currentPage - 1) * ordersPerPage;
   const endIndex = startIndex + ordersPerPage;
   const currentOrders = orders.slice(startIndex, endIndex);
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-
   // Show loading state
   if (loading) {
     return (
@@ -620,7 +517,6 @@ function RevenueContent() {
       </div>
     );
   }
-
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -629,7 +525,6 @@ function RevenueContent() {
           Theo dõi và phân tích doanh thu theo thời gian
         </p>
       </div>
-
       {/* Filter Section */}
       <Card>
         <CardHeader>
@@ -674,7 +569,6 @@ function RevenueContent() {
                 </PopoverContent>
               </Popover>
             </div>
-
             <div className="space-y-2">
               <Label>Đến ngày</Label>
               <Popover>
@@ -703,7 +597,6 @@ function RevenueContent() {
               </Popover>
             </div>
             </div>
-
               {/* Creation Date Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -733,7 +626,6 @@ function RevenueContent() {
                 </PopoverContent>
                   </Popover>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Ngày tạo đến</Label>
                   <Popover>
@@ -762,7 +654,6 @@ function RevenueContent() {
                   </Popover>
                 </div>
               </div>
-
               {/* Completion Date Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -792,7 +683,6 @@ function RevenueContent() {
                 </PopoverContent>
                   </Popover>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Ngày hoàn thành đến</Label>
                   <Popover>
@@ -821,7 +711,6 @@ function RevenueContent() {
                   </Popover>
                 </div>
               </div>
-
               {/* Value Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -832,7 +721,6 @@ function RevenueContent() {
                     placeholder="0"
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Giá trị đến (VNĐ)</Label>
                   <Input
@@ -842,7 +730,6 @@ function RevenueContent() {
                   />
                 </div>
               </div>
-
               {/* Product and Status */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -861,7 +748,6 @@ function RevenueContent() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Trạng thái đơn hàng</Label>
                   <Select value={selectedOrderStatus} onValueChange={setSelectedOrderStatus}>
@@ -880,7 +766,6 @@ function RevenueContent() {
                 </div>
               </div>
             </div>
-
             {/* Right Column */}
             <div className="space-y-4">
               {/* Order Creator and Customer */}
@@ -905,7 +790,6 @@ function RevenueContent() {
                     </SelectContent>
                   </Select>
                 </div>
-
             <div className="space-y-2">
               <Label>Khách hàng</Label>
               <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
@@ -923,7 +807,6 @@ function RevenueContent() {
               </Select>
                 </div>
             </div>
-
               {/* Payment Method and Area */}
               <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -940,7 +823,6 @@ function RevenueContent() {
                       </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Khu vực</Label>
                   <Select value={selectedArea} onValueChange={setSelectedArea}>
@@ -956,7 +838,6 @@ function RevenueContent() {
                   </Select>
                 </div>
               </div>
-
               {/* Product Group */}
               <div className="space-y-2">
                 <Label>Nhóm sản phẩm</Label>
@@ -988,7 +869,6 @@ function RevenueContent() {
           </div>
         </CardContent>
       </Card>
-
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
@@ -1005,7 +885,6 @@ function RevenueContent() {
             </p>
           </CardContent>
         </Card>
-        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -1020,7 +899,6 @@ function RevenueContent() {
             </p>
           </CardContent>
         </Card>
-        
          {canAccessProfit && (
            <Card>
              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1037,7 +915,6 @@ function RevenueContent() {
              </CardContent>
            </Card>
          )}
-        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -1051,7 +928,6 @@ function RevenueContent() {
             </p>
           </CardContent>
         </Card>
-        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -1068,7 +944,6 @@ function RevenueContent() {
           </CardContent>
         </Card>
       </div>
-
       {/* Revenue Chart */}
       <Card>
         <CardHeader>
@@ -1106,7 +981,6 @@ function RevenueContent() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
-
       {/* Revenue Trend */}
       <Card>
         <CardHeader>
@@ -1148,7 +1022,6 @@ function RevenueContent() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
-
       {/* Customer Revenue Breakdown - if specific customer selected */}
       {selectedCustomer !== "all" && (
         <Card>
@@ -1165,7 +1038,6 @@ function RevenueContent() {
           </CardContent>
         </Card>
       )}
-
       {/* Orders Detail Table */}
       <Card>
         <CardHeader>
@@ -1217,7 +1089,6 @@ function RevenueContent() {
                   {currentOrders.map((order) => {
                     const customer = customers.find(c => c.id === order.customer_id);
                     const creator = users.find(u => u.id === order.created_by);
-                    
                     const getCreatorName = () => {
                       // Try to get from users list first
                       if (creator) {
@@ -1228,7 +1099,6 @@ function RevenueContent() {
                         }
                         return creator.email || 'Không xác định';
                       }
-                      
                       // Fallback to order.creator if available
                       if (order.creator) {
                         const fullName = `${order.creator.firstName || ''} ${order.creator.lastName || ''}`.trim();
@@ -1238,10 +1108,8 @@ function RevenueContent() {
                         }
                         return order.creator.email || 'Không xác định';
                       }
-                      
                       return 'Không xác định';
                     };
-                    
                     const getStatusBadge = (status: string) => {
                       const config = getOrderStatusConfig(status);
                       // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
@@ -1255,7 +1123,6 @@ function RevenueContent() {
                         </Badge>
                       );
                     };
-
                                         const getPaymentMethodLabel = (method: string) => {
                         const methodMap: { [key: string]: string } = {
                           'cash': 'Tiền mặt',
@@ -1267,7 +1134,6 @@ function RevenueContent() {
                         };
                         return methodMap[method] || method;
                       };
-
                     return (
                       <TableRow key={order.id}>
                         <TableCell className="font-medium">
@@ -1312,7 +1178,6 @@ function RevenueContent() {
               </Table>
             </div>
           )}
-          
           {/* Pagination */}
           {orders.length > ordersPerPage && (
             <div className="flex justify-center mt-6">
@@ -1324,7 +1189,6 @@ function RevenueContent() {
                       className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                     />
                   </PaginationItem>
-                  
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <PaginationItem key={page}>
                       <PaginationLink
@@ -1336,7 +1200,6 @@ function RevenueContent() {
                       </PaginationLink>
                     </PaginationItem>
                   ))}
-                  
                   <PaginationItem>
                     <PaginationNext 
                       onClick={() => handlePageChange(currentPage + 1)}
@@ -1352,7 +1215,6 @@ function RevenueContent() {
     </div>
   );
 }
-
 export default function Revenue() {
   // Revenue page requires REVENUE_VIEW permission only
   return (
@@ -1361,4 +1223,3 @@ export default function Revenue() {
     </PermissionGuard>
   );
 }
-

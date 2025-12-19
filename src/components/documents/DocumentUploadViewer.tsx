@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentUpload } from "./DocumentUpload";
 import { FileText, Download, Eye, Trash2, Upload } from "lucide-react";
-
 interface Document {
   id: string;
   file_name: string;
@@ -17,12 +16,10 @@ interface Document {
   uploaded_at: string;
   uploaded_by?: string;
 }
-
 interface DocumentUploadViewerProps {
   exportSlipId: string;
   allowUpload?: boolean;
 }
-
 export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({ 
   exportSlipId, 
   allowUpload = false 
@@ -31,24 +28,19 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const { toast } = useToast();
-
   useEffect(() => {
     loadDocuments();
   }, [exportSlipId]);
-
   const loadDocuments = async () => {
     try {
       // TODO: Implement document loading via API when backend supports it
       // For now, set empty documents to avoid Supabase errors
-      console.log('Document loading not implemented - using API fallback');
       setDocuments([]);
     } catch (error) {
-      console.error('Error loading documents:', error);
     } finally {
       setLoading(false);
     }
   };
-
   const handleDocumentUploaded = (newDoc: Document) => {
     setDocuments([newDoc, ...documents]);
     setShowUpload(false);
@@ -57,18 +49,15 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
       description: "Đã tải lên tài liệu thành công",
     });
   };
-
   const handleDocumentDeleted = async (docId: string) => {
     try {
       // TODO: Implement document deletion via API when backend supports it
-      console.log('Document deletion not implemented - using API fallback');
       setDocuments(documents.filter(doc => doc.id !== docId));
       toast({
         title: "Thành công", 
         description: "Đã xóa tài liệu thành công",
       });
     } catch (error) {
-      console.error('Error deleting document:', error);
       toast({
         title: "Lỗi",
         description: "Không thể xóa tài liệu",
@@ -76,14 +65,11 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
       });
     }
   };
-
   const handleDownload = async (doc: Document) => {
     try {
       // TODO: Implement document download via API when backend supports it
-      console.log('Document download not implemented - using direct link fallback');
       window.open(doc.file_url, '_blank');
     } catch (error) {
-      console.error('Error downloading document:', error);
       toast({
         title: "Lỗi",
         description: "Không thể tải xuống tài liệu",
@@ -91,14 +77,11 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
       });
     }
   };
-
   const handleView = async (doc: Document) => {
     try {
       // TODO: Implement document viewing via API when backend supports it
-      console.log('Document viewing not implemented - using direct link fallback');
       window.open(doc.file_url, '_blank');
     } catch (error) {
-      console.error('Error viewing document:', error);
       toast({
         title: "Lỗi",
         description: "Không thể xem tài liệu",
@@ -106,7 +89,6 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
       });
     }
   };
-
   const getDocumentTypeBadge = (type: string) => {
     switch (type) {
       case 'export_slip':
@@ -117,18 +99,15 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
         return <Badge variant="outline">{type}</Badge>;
     }
   };
-
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return '';
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
   };
-
   if (loading) {
     return <div className="text-sm text-muted-foreground">Đang tải tài liệu...</div>;
   }
-
   return (
     <div className="space-y-4">
       {allowUpload && (
@@ -153,7 +132,6 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
           )}
         </div>
       )}
-
       {showUpload && (
         <div className="border rounded-lg p-4 bg-gray-50">
           <DocumentUpload
@@ -164,7 +142,6 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
           />
         </div>
       )}
-
       {documents.length === 0 ? (
         <div className="text-sm text-muted-foreground">
           Chưa có tài liệu nào được tải lên
@@ -222,4 +199,3 @@ export const DocumentUploadViewer: React.FC<DocumentUploadViewerProps> = ({
     </div>
   );
 };
-
