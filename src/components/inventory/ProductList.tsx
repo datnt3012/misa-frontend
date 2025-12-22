@@ -12,7 +12,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown, ChevronDown, ChevronRight } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import React from "react";
@@ -320,7 +319,7 @@ const ProductList: React.FC<ProductListProps> = ({
     [importJobs]
   );
   const completedJobs = React.useMemo(() => {
-    return filtered;
+    return importJobs.filter(job => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled');
   }, [importJobs]);
   const activeImportJob = React.useMemo(() => {
     if (activeJobId) {
@@ -1813,4 +1812,4 @@ const ProductList: React.FC<ProductListProps> = ({
     </Card>
   );
 };
-export default ProductList;
+export default ProductList;
