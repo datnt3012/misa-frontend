@@ -150,16 +150,18 @@ export const productApi = {
   getProducts: async (params?: {
     page?: number;
     limit?: number;
-    search?: string;
+    keyword?: string;
     category?: string;
-    warehouse_id?: string;
+    warehouse?: string;
+    hasStock?: boolean;
   }): Promise<{ products: Product[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.search) queryParams.append('search', params.search);
+    if (params?.keyword) queryParams.append('keyword', params.keyword);
     if (params?.category) queryParams.append('category', params.category);
-    if (params?.warehouse_id) queryParams.append('warehouse_id', params.warehouse_id);
+    if (params?.warehouse) queryParams.append('warehouse', params.warehouse);
+    if (params?.hasStock) queryParams.append('hasStock', params.hasStock.toString());
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.PRODUCTS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.PRODUCTS.LIST;
@@ -246,7 +248,7 @@ export const productApi = {
     sortOrder?: string;
     page?: number;
     limit?: number;
-  }): Promise<{ jobs: ProductImportJobSnapshot[]; total: number; page: number; limit: number }> => {
+  }): Promise<{ jobs: ProductImportJobSnapshot[]; total: number; page: number; limit: number; totalPages: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.onlyActive === true) {
       queryParams.append('onlyActive', 'true');
@@ -268,7 +270,8 @@ export const productApi = {
           jobs,
           total: payload.data.pagination?.total || payload.data.rows.length,
           page: payload.data.pagination?.page || params?.page || 1,
-          limit: payload.data.pagination?.limit || params?.limit || 10
+          limit: payload.data.pagination?.limit || params?.limit || 10,
+          totalPages: payload.data.pagination?.totalPages || Math.ceil((payload.data.pagination?.total || payload.data.rows.length) / (payload.data.pagination?.limit || params?.limit || 10))
         };
       } catch (error) {
         throw error;
@@ -282,7 +285,8 @@ export const productApi = {
           jobs,
           total: payload.pagination?.total || payload.rows.length,
           page: payload.pagination?.page || params?.page || 1,
-          limit: payload.pagination?.limit || params?.limit || 10
+          limit: payload.pagination?.limit || params?.limit || 10,
+          totalPages: payload.pagination?.totalPages || Math.ceil((payload.pagination?.total || payload.rows.length) / (payload.pagination?.limit || params?.limit || 10))
         };
       } catch (error) {
         throw error;
@@ -294,7 +298,8 @@ export const productApi = {
         jobs: (payload.jobs || []).map(normalizeImportJobResponse),
         total: payload.total || 0,
         page: payload.page || params?.page || 1,
-        limit: payload.limit || params?.limit || 10
+        limit: payload.limit || params?.limit || 10,
+        totalPages: payload.totalPages || Math.ceil((payload.total || 0) / (payload.limit || params?.limit || 10))
       };
     }
     // Handle non-paginated response (backward compatibility)
@@ -309,13 +314,20 @@ export const productApi = {
       jobs: jobArray.map(normalizeImportJobResponse),
       total: jobArray.length,
       page: params?.page || 1,
-      limit: params?.limit || jobArray.length
+      limit: params?.limit || jobArray.length,
+      totalPages: Math.ceil(jobArray.length / (params?.limit || jobArray.length))
     };
   },
   // Request cancel for import job
   cancelImportJob: async (jobId: string): Promise<ProductImportJobSnapshot> => {
     const response = await api.delete<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
-    return normalizeImportJobResponse(response);
+    // Handle case where response might not have jobId - merge with original jobId
+    const responseData = response?.data || response;
+    if (responseData && typeof responseData === 'object') {
+      // Ensure jobId is present in the response
+      responseData.jobId = responseData.jobId || responseData.id || responseData.job_id || jobId;
+    }
+    return normalizeImportJobResponse(responseData);
   },
   // Get import job status
   getImportStatus: async (jobId: string): Promise<ProductImportJobSnapshot> => {
@@ -365,4 +377,4 @@ export const productApi = {
     const blob = await response.blob();
     return { blob, filename };
   }
-};
+};

@@ -16,6 +16,7 @@ import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { customerApi } from "@/api/customer.api";
 import { productApi } from "@/api/product.api";
 import { orderTagsApi, OrderTag } from "@/api/orderTags.api";
+import { warehouseApi } from "@/api/warehouse.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PaymentDialog } from '@/components/PaymentDialog';
@@ -39,24 +40,50 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
   const [availableTags, setAvailableTags] = useState<OrderTag[]>([]);
   const [editingExpenses, setEditingExpenses] = useState<Array<{ name: string; amount: number; note?: string }>>([]);
   const [isEditingExpenses, setIsEditingExpenses] = useState(false);
+  const [pendingNewItems, setPendingNewItems] = useState<Partial<OrderItem>[]>([]);
   // Tags are display-only here
   const { toast } = useToast();
   useEffect(() => {
     if (open && order) {
+      // Clear pending items when opening dialog for a new order
+      setPendingNewItems([]);
       loadOrderDetails();
-      loadProducts();
       loadTags();
+      loadWarehouses();
     }
   }, [open, order]);
-  const loadProducts = async () => {
+  const loadProducts = async (orderData?: any) => {
     try {
-      const response = await productApi.getProducts({ page: 1, limit: 1000 });
+      // Use provided orderData or fall back to state
+      const currentOrderData = orderData || orderDetails;
+console.log('Current order data:', currentOrderData); // Debug log
+      // Determine warehouse from existing order items
+      let warehouseFilter = undefined;
+      if (currentOrderData?.items && currentOrderData.items.length > 0) {
+        // Get warehouse_id from the first item (assuming all items are from the same warehouse)
+        const firstItem = currentOrderData.items[0];
+        if (firstItem.warehouse_id) {
+          warehouseFilter = firstItem.warehouse_id;
+        }
+      }
+
+      console.log('Loading products with warehouse filter:', warehouseFilter); // Debug log
+
+      const response = await productApi.getProducts({
+        page: 1,
+        limit: 1000,
+        warehouse: warehouseFilter,
+        hasStock: true
+      });
+      console.log('Loaded products:', response.products?.length || 0); // Debug log
       setProducts(response.products || []);
     } catch (error) {
+      console.error('Error loading products:', error); // Debug log
     }
   };
   const loadTags = async () => {
@@ -67,6 +94,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     } catch (error) {
       // Fallback to empty array if API fails
       setAvailableTags([]);
+    }
+  };
+
+  const loadWarehouses = async () => {
+    try {
+      const response = await warehouseApi.getWarehouses({ page: 1, limit: 100 });
+      setWarehouses(response.warehouses || []);
+    } catch (error) {
+      // Fallback to empty array if API fails
+      setWarehouses([]);
     }
   };
   const loadOrderDetails = async () => {
@@ -91,6 +128,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       } else {
         setCustomerDetails(null);
       }
+      // Load products after order details are loaded (to get warehouse info)
+      await loadProducts(orderData);
     } catch (error) {
       toast({
         title: "Lỗi",
@@ -450,13 +489,15 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     if (!editedItem) return;
     setLoading(true);
     try {
+      // Sử dụng updateOrderItem với format data đúng (camelCase)
       await orderApi.updateOrderItem(orderDetails.id, itemId, {
-        product_id: editedItem.product_id || '',
-        product_name: editedItem.product_name || '',
-        product_code: editedItem.product_code || '',
+        productId: editedItem.product_id || '',
+        productName: editedItem.product_name || '',
+        productCode: editedItem.product_code || '',
         quantity: editedItem.quantity || 0,
-        unit_price: editedItem.unit_price || 0
+        unitPrice: editedItem.unit_price || 0
       });
+      
       // Refresh order details
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
@@ -517,35 +558,122 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       });
       return;
     }
-    setLoading(true);
-    const firstProduct = products[0];
-    orderApi.addOrderItem(orderDetails.id, {
-      product_id: firstProduct.id,
-      product_name: firstProduct.name,
-      product_code: firstProduct.code,
+    if (warehouses.length === 0) {
+      toast({
+        title: "Lỗi",
+        description: "Không có kho hàng nào để thêm sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+    const newItemId = `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const defaultWarehouse = warehouses[0]; // Use first warehouse as default
+    const newItem = {
+      id: newItemId,
+      product_id: "",
+      product_code: "",
+      product_name: "",
+      warehouse_id: defaultWarehouse.id,
       quantity: 1,
-      unit_price: firstProduct.price || 0
-    }).then(() => {
-      return orderApi.getOrder(orderDetails.id);
-    }).then((updatedOrder) => {
+      unit_price: 0,
+      total_price: 0
+    };
+    setPendingNewItems(prev => [...prev, newItem]);
+  };
+
+  const handlePendingNewItemChange = (itemId: string, field: keyof OrderItem, value: any) => {
+    setPendingNewItems(prev =>
+      prev.map(item => {
+        if (item.id !== itemId) return item;
+
+        const updated = { ...item, [field]: value };
+
+        // Auto-fill product info when product_id changes
+        if (field === 'product_id') {
+          const product = products.find(p => p.id === value);
+          if (product) {
+            updated.product_id = product.id;
+            updated.product_name = product.name;
+            updated.product_code = product.code;
+            updated.unit_price = product.price || 0;
+            updated.total_price = (updated.quantity || 0) * (product.price || 0);
+          }
+        }
+
+        // Auto-calculate total_price when quantity or unit_price changes
+        if (field === 'quantity' || field === 'unit_price') {
+          const quantity = field === 'quantity' ? Number(value) : (updated.quantity || 0);
+          const unitPrice = field === 'unit_price' ? Number(value) : (updated.unit_price || 0);
+          updated.total_price = quantity * unitPrice;
+        }
+
+        return updated;
+      })
+    );
+  };
+
+
+  const cancelPendingNewItem = (itemId: string) => {
+    setPendingNewItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  const saveAllPendingItems = async () => {
+    if (!orderDetails || pendingNewItems.length === 0) return;
+
+    // Validate all items
+    const invalidItems = pendingNewItems.filter(item =>
+      !item.product_id || !item.product_name || !item.quantity || item.quantity <= 0
+    );
+
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng điền đầy đủ thông tin cho tất cả sản phẩm",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Save all items sequentially
+      for (const pendingItem of pendingNewItems) {
+        await orderApi.addOrderItem(orderDetails.id, {
+          productId: pendingItem.product_id,
+          productName: pendingItem.product_name,
+          productCode: pendingItem.product_code,
+          warehouseId: pendingItem.warehouse_id!,
+          quantity: pendingItem.quantity,
+          unitPrice: pendingItem.unit_price
+        });
+      }
+
+      // Refresh order details
+      const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
+
+      // Clear all pending items
+      setPendingNewItems([]);
+
       if (onOrderUpdated) {
         onOrderUpdated();
       }
+
       toast({
         title: "Thành công",
-        description: "Đã thêm sản phẩm",
+        description: `Đã thêm ${pendingNewItems.length} sản phẩm`,
       });
-    }).catch((error) => {
+    } catch (error) {
       toast({
         title: "Lỗi",
         description: getErrorMessage(error, "Không thể thêm sản phẩm"),
         variant: "destructive",
       });
-    }).finally(() => {
+    } finally {
       setLoading(false);
-    });
+    }
   };
+  
   if (!orderDetails) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -642,10 +770,22 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <span className="text-lg">📦</span>
                 <h3 className="text-lg font-semibold">Sản phẩm</h3>
               </div>
-              <Button size="sm" onClick={addNewItem} disabled={loading}>
-                <Plus className="w-4 h-4 mr-1" />
-                Thêm sản phẩm
-              </Button>
+              <div className="flex gap-2">
+                {pendingNewItems.length > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={saveAllPendingItems}
+                    disabled={loading || pendingNewItems.some(item => !item.product_id)}
+                  >
+                    <Check className="w-4 h-4 mr-1" />
+                    Lưu tất cả ({pendingNewItems.length})
+                  </Button>
+                )}
+                <Button size="sm" onClick={addNewItem} disabled={loading}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Thêm sản phẩm
+                </Button>
+              </div>
             </div>
             <Table>
               <TableHeader>
@@ -661,106 +801,181 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               </TableHeader>
               <TableBody>
                 {orderDetails.items && orderDetails.items.length > 0 ? (
-                  orderDetails.items.map((item: OrderItem, index: number) => {
-                    const isEditing = !!editingItems[item.id || ''];
-                    const editedItem = editingItems[item.id || ''] || item;
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{index + 1}</TableCell>
+                  <>
+                    {orderDetails.items.map((item: OrderItem, index: number) => {
+                      const isEditing = !!editingItems[item.id || ''];
+                      const editedItem = editingItems[item.id || ''] || item;
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell>
+                            {isEditing ? (
+                              <Select
+                                value={editedItem.product_id || ''}
+                                onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Chọn sản phẩm" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {products.map((product) => {
+                                    const isProductAlreadyUsed = orderDetails.items.some(
+                                      (existingItem: OrderItem) => 
+                                        existingItem.product_id === product.id && existingItem.id !== item.id
+                                    );
+                                    return (
+                                      <SelectItem 
+                                        key={product.id} 
+                                        value={product.id}
+                                        disabled={isProductAlreadyUsed}
+                                      >
+                                        {product.code} - {product.name}
+                                        {isProductAlreadyUsed && ' (đã có)'}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="space-y-1">
+                                <div className="font-medium">{item.product_code || 'N/A'}</div>
+                                <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">-</TableCell>
+                          <TableCell className="text-center">
+                            {isEditing ? (
+                              <NumberInput
+                                min={1}
+                                value={editedItem.quantity || 0}
+                                onChange={(value) => updateEditingItem(item.id || '', 'quantity', value)}
+                                className="w-20 text-center"
+                              />
+                            ) : (
+                              item.quantity
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditing ? (
+                              <CurrencyInput
+                                value={editedItem.unit_price || 0}
+                                onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
+                                className="w-24 text-right"
+                              />
+                            ) : (
+                              formatCurrency(item.unit_price)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                          </TableCell>
+                          <TableCell>
+                            {isEditing ? (
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => saveItem(item.id || '')}
+                                  disabled={loading}
+                                >
+                                  <Check className="w-4 h-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => cancelEditingItem(item.id || '')}
+                                >
+                                  <X className="w-4 h-4 text-red-600" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => startEditingItem(item.id || '', item)}
+                                  disabled={loading}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => deleteItem(item.id || '')}
+                                  disabled={loading}
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-600" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+
+                    {/* Pending new item rows */}
+                    {pendingNewItems.map((pendingItem, index) => (
+                      <TableRow key={pendingItem.id} className="bg-blue-50/50 border-t-2 border-blue-200">
+                        <TableCell className="font-medium text-blue-600">{(orderDetails.items?.length || 0) + index + 1}</TableCell>
                         <TableCell>
-                          {isEditing ? (
-                            <Select
-                              value={editedItem.product_id || ''}
-                              onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Chọn sản phẩm" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {products.map((product) => (
-                                  <SelectItem key={product.id} value={product.id}>
-                                    {product.code} - {product.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <div className="space-y-1">
-                              <div className="font-medium">{item.product_code || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
-                            </div>
-                          )}
+                          <Select
+                            value={pendingItem.product_id || ''}
+                            onValueChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'product_id', value)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Chọn sản phẩm" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products
+                                .filter(product =>
+                                  !orderDetails.items.some(
+                                    (existingItem: OrderItem) => existingItem.product_id === product.id
+                                  ) &&
+                                  !pendingNewItems.some(
+                                    (otherPending: any) => otherPending.id !== pendingItem.id && otherPending.product_id === product.id
+                                  )
+                                )
+                                .map((product) => (
+                                <SelectItem key={product.id} value={product.id}>
+                                  {product.code} - {product.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="text-center">-</TableCell>
                         <TableCell className="text-center">
-                          {isEditing ? (
-                            <NumberInput
-                              min={1}
-                              value={editedItem.quantity || 0}
-                              onChange={(value) => updateEditingItem(item.id || '', 'quantity', value)}
-                              className="w-20 text-center"
-                            />
-                          ) : (
-                            item.quantity
-                          )}
+                          <NumberInput
+                            min={1}
+                            value={pendingItem.quantity || 1}
+                            onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'quantity', value)}
+                            className="w-20 text-center"
+                          />
                         </TableCell>
                         <TableCell className="text-right">
-                          {isEditing ? (
-                            <CurrencyInput
-                              value={editedItem.unit_price || 0}
-                              onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
-                              className="w-24 text-right"
-                            />
-                          ) : (
-                            formatCurrency(item.unit_price)
-                          )}
+                          <CurrencyInput
+                            value={pendingItem.unit_price || 0}
+                            onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'unit_price', value)}
+                            className="w-24 text-right"
+                          />
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                          {formatCurrency(pendingItem.total_price || 0)}
                         </TableCell>
                         <TableCell>
-                          {isEditing ? (
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => saveItem(item.id || '')}
-                                disabled={loading}
-                              >
-                                <Check className="w-4 h-4 text-green-600" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => cancelEditingItem(item.id || '')}
-                              >
-                                <X className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => startEditingItem(item.id || '', item)}
-                                disabled={loading}
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => deleteItem(item.id || '')}
-                                disabled={loading}
-                              >
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => cancelPendingNewItem(pendingItem.id!)}
+                            disabled={loading}
+                          >
+                            <X className="w-4 h-4 text-red-600" />
+                          </Button>
                         </TableCell>
                       </TableRow>
-                    );
-                  })
+                    ))}
+                  </>
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
@@ -774,34 +989,44 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <div className="w-96 space-y-3">
                 {/* Summary Section */}
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
-                    <span className="font-medium">{orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + item.quantity, 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tổng tiền sản phẩm:</span>
-                    <span>
-                      {formatCurrency(
-                        orderDetails.items?.reduce((sum: number, item: OrderItem) => sum + (item.total_price || 0), 0) || 0
-                      )}
-                    </span>
-                  </div>
                   {(() => {
+                    // Calculate totals including pending items
+                    const existingItems = orderDetails.items || [];
+                    const allItems = [...existingItems, ...pendingNewItems];
+
+                    const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+                    const totalProductAmount = allItems.reduce((sum: number, item: any) => sum + ((item.total_price || 0)), 0);
+
                     const expensesTotal = (orderDetails.expenses || []).reduce(
                       (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
                       0
                     );
-                    return expensesTotal > 0 ? (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Chi phí:</span>
-                        <span>{formatCurrency(expensesTotal)}</span>
-                      </div>
-                    ) : null;
+
+                    const grandTotal = totalProductAmount + expensesTotal;
+
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
+                          <span className="font-medium">{totalQuantity}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Tổng tiền sản phẩm:</span>
+                          <span>{formatCurrency(totalProductAmount)}</span>
+                        </div>
+                        {expensesTotal > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Chi phí:</span>
+                            <span>{formatCurrency(expensesTotal)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-lg font-bold border-t pt-2">
+                          <span>Tổng tiền:</span>
+                          <span className="text-xl">{formatCurrency(grandTotal)}</span>
+                        </div>
+                      </>
+                    );
                   })()}
-                  <div className="flex justify-between text-lg font-bold border-t pt-2">
-                    <span>Tổng tiền:</span>
-                    <span className="text-xl">{formatCurrency(orderDetails.total_amount || 0)}</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1001,7 +1226,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <Select 
                   value={(orderDetails as any).order_status || orderDetails.status || 'pending'}
                    onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
-                 >
+                >
                    <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
                      <div className="cursor-pointer">
                       {getStatusBadge((orderDetails as any).order_status || orderDetails.status)}
@@ -1015,7 +1240,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                      ))}
                    </SelectContent>
                  </Select>
-               </div>
+                </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
                 {getPaymentStatusBadge(
@@ -1188,9 +1413,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               </div>
             </div>
            </div>
-         </div>
-       </DialogContent>
-      {/* Tags manager intentionally removed in this dialog */}
+        </div>
+      </DialogContent>
       {/* Payment Dialog */}
       {orderDetails && (
         <PaymentDialog
@@ -1206,6 +1430,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           }}
         />
       )}
-     </Dialog>
-   );
- };
+    </Dialog>
+  );
+};

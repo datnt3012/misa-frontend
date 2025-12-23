@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Download, FileSpreadsheet, Check, X, AlertTriangle } from 'lucide-react';
 import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
@@ -48,6 +49,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('');
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
   const { toast } = useToast();
   // Load warehouses and products on component mount
   useEffect(() => {
@@ -311,8 +314,17 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
         groups[key].records.push(record);
         return groups;
       }, {} as Record<string, { warehouseId: string; supplierId: string; records: any[] }>);
-      // Create warehouse receipts for each group
-      const receiptPromises = Object.values(groupedRecords).map(async (group) => {
+
+      // Initialize progress
+      setImportProgress(0);
+      const totalGroups = Object.keys(groupedRecords).length;
+      setImportTotal(totalGroups);
+
+      // Create warehouse receipts sequentially to show progress
+      const receipts = [];
+      const groups = Object.values(groupedRecords);
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
         // Generate code using utility function
         const code = generateImportSlipCode();
         const receiptData = {
@@ -342,9 +354,10 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
           }
         }
         const result = await warehouseReceiptsApi.createReceipt(receiptData);
-        return result;
-      });
-      const receipts = await Promise.all(receiptPromises);
+        receipts.push(result);
+        // Update progress
+        setImportProgress(i + 1);
+      }
       toast({
         title: "Thành công",
         description: `Tạo ${receipts.length} phiếu nhập kho thành công với ${validRecords.length} sản phẩm`,
@@ -376,6 +389,8 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
       });
     } finally {
       setIsImporting(false);
+      setImportProgress(0);
+      setImportTotal(0);
     }
   };
   const validCount = previewData.filter(r => r.status === 'valid').length;
@@ -519,7 +534,16 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
               <Button variant="outline" onClick={() => setShowPreview(false)}>
                 Hủy
               </Button>
-              <Button 
+              {isImporting && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Đang tạo phiếu nhập kho...</span>
+                    <span>{importProgress}/{importTotal}</span>
+                  </div>
+                  <Progress value={(importProgress / importTotal) * 100} className="w-full" />
+                </div>
+              )}
+              <Button
                 onClick={confirmImport}
                 disabled={validCount === 0 || isImporting}
                 className="bg-green-600 hover:bg-green-700"

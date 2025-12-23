@@ -37,6 +37,10 @@ const InventoryContent = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [productFilterCategory, setProductFilterCategory] = useState("all");
+  const [currentSearchParams, setCurrentSearchParams] = useState<{ keyword?: string; category?: string } | null>(null);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [warehouseSortConfig, setWarehouseSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -72,6 +76,8 @@ const InventoryContent = () => {
   });
   // Import job state and polling logic (moved from ProductList to persist across tab switches)
   const [importJobs, setImportJobs] = useState<ProductImportJobSnapshot[]>([]);
+  const [activeJobs, setActiveJobs] = useState<ProductImportJobSnapshot[]>([]);
+  const [activeJobsLoaded, setActiveJobsLoaded] = useState(false);
   const [jobHistoryPagination, setJobHistoryPagination] = useState<{
     total: number;
     page: number;
@@ -94,12 +100,21 @@ const InventoryContent = () => {
       setErrorStates(prev => ({ ...prev, products: null, warehouses: null }));
     }
   }, [canViewProducts, canViewWarehouses]);
-  // Trigger data fetch when permissions are loaded
+  // Trigger data fetch when permissions are loaded (only once)
   useEffect(() => {
-    if (!permissionsLoading) {
-      loadData();
+    if (!permissionsLoading && canViewProducts && !isInitialLoadDone) {
+      loadData(currentSearchParams || undefined);
+      setIsInitialLoadDone(true);
     }
-  }, [permissionsLoading, canViewProducts, canViewWarehouses]);
+  }, [permissionsLoading, canViewProducts, isInitialLoadDone]); // Removed currentSearchParams from deps
+
+  // Reload products when search params change
+  useEffect(() => {
+    if (!permissionsLoading && canViewProducts) {
+      loadData(currentSearchParams || undefined);
+    }
+  }, [currentSearchParams]); // Only depends on currentSearchParams
+
   // Load warehouses when warehouses tab is active
   useEffect(() => {
     if (activeTab === 'warehouses' && canViewWarehouses && !permissionsLoading) {
@@ -118,7 +133,7 @@ const InventoryContent = () => {
     if (status === 'completed') {
       // Refresh product list after successful import
       try {
-        await loadData();
+        await loadData(currentSearchParams || undefined);
       } catch (error) {
       }
       if (job.errors && job.errors.length > 0) {
@@ -172,21 +187,10 @@ const InventoryContent = () => {
         });
         setImportJobs(prev => {
           const jobMap = new Map<string, ProductImportJobSnapshot>();
-          prev.forEach(job => {
-            jobMap.set(job.jobId, job);
-          });
+          prev.forEach(job => jobMap.set(job.jobId, job));
           allJobsResponse.jobs.forEach(job => {
             const previous = jobMap.get(job.jobId);
             const mergedJob = { ...previous, ...job };
-            // For completed, failed, or cancelled jobs, ensure percent is 100%
-            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
-                (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
-              mergedJob.percent = 100;
-            }
-            // Ensure percent never exceeds 100
-            if (mergedJob.percent && mergedJob.percent > 100) {
-              mergedJob.percent = 100;
-            }
             const prevStatus = previousJobStatusesRef.current[job.jobId];
             if (showNotifications && prevStatus && prevStatus !== job.status) {
               handleJobStatusNotification(mergedJob);
@@ -194,64 +198,29 @@ const InventoryContent = () => {
             previousJobStatusesRef.current[job.jobId] = job.status;
             jobMap.set(job.jobId, mergedJob);
           });
-          const mergedList = Array.from(jobMap.values());
-          return mergedList;
+          return Array.from(jobMap.values());
         });
         return;
       }
-      setImportJobs(prev => {
-        // For history calls (onlyActive = false), replace all jobs with new results
-        // For polling calls (onlyActive = true), merge with existing jobs
-        const isHistoryCall = options?.onlyActive === false;
-        if (isHistoryCall) {
-          // Replace jobs for history pagination
-          setJobHistoryPagination({
-            total: response.total,
-            page: response.page,
-            limit: response.limit,
-            totalPages: Math.ceil(response.total / response.limit)
-          });
-          return response.jobs.map(job => {
-            // Ensure percent is 100% for completed/failed/cancelled jobs
-            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
-                (job.percent === undefined || job.percent === null || job.percent < 100)) {
-              job.percent = 100;
-            }
-            // Ensure percent never exceeds 100
-            if (job.percent && job.percent > 100) {
-              job.percent = 100;
-            }
-            return job;
-          });
-        } else {
-          // Merge jobs for polling updates
-          const jobMap = new Map<string, ProductImportJobSnapshot>();
-          prev.forEach(job => {
-            jobMap.set(job.jobId, job);
-          });
-          response.jobs.forEach(job => {
-            const previous = jobMap.get(job.jobId);
-            const mergedJob = { ...previous, ...job };
-            // For completed, failed, or cancelled jobs, ensure percent is 100%
-            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
-                (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
-              mergedJob.percent = 100;
-            }
-            // Ensure percent never exceeds 100
-            if (mergedJob.percent && mergedJob.percent > 100) {
-              mergedJob.percent = 100;
-            }
-            const prevStatus = previousJobStatusesRef.current[job.jobId];
-            if (showNotifications && prevStatus && prevStatus !== job.status) {
-              handleJobStatusNotification(mergedJob);
-            }
-            previousJobStatusesRef.current[job.jobId] = job.status;
-            jobMap.set(job.jobId, mergedJob);
-          });
-          const mergedList = Array.from(jobMap.values());
-          return mergedList;
-        }
-      });
+      // Use backend status directly (do not infer status from processedRows/totalRows)
+      const processedJobs = response.jobs;
+
+      // Update appropriate state based on call type
+      const isActiveCall = options?.onlyActive === true;
+
+      if (isActiveCall) {
+        // Update active jobs state
+        setActiveJobs(processedJobs);
+      } else {
+        // Update history jobs state
+        setJobHistoryPagination({
+          total: response.total,
+          page: response.page,
+          limit: response.limit,
+          totalPages: response.totalPages
+        });
+        setImportJobs(processedJobs);
+      }
     } catch (error: any) {
       if (!onlyActive) {
         toast({
@@ -266,44 +235,69 @@ const InventoryContent = () => {
   React.useEffect(() => {
     refreshImportJobs();
   }, [refreshImportJobs]);
-  // Check for active jobs and update polling state
-  React.useEffect(() => {
-    // Only consider jobs that are truly active (not completed, failed, cancelled, or cancel requested)
-    // Also continue polling if job is processing but hasn't processed all rows yet
-    const activeJobs = importJobs.filter(job => {
-      const isActiveStatus = job.status === 'queued' || job.status === 'processing';
-      const isNotTerminal = job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled';
-      const isNotCancelled = !job.cancelRequested;
-      // Continue polling if job is still processing and hasn't completed all rows
-      const isIncomplete = job.status === 'processing' &&
-                          job.totalRows &&
-                          job.processedRows !== undefined &&
-                          job.processedRows < job.totalRows;
-      return (isActiveStatus && isNotTerminal && isNotCancelled) || isIncomplete;
-    });
-    const shouldPoll = activeJobs.length > 0;
-    if (shouldPoll !== isPollingActive) {
-      setIsPollingActive(shouldPoll);
+  // Polling function for active jobs - calls API directly every 3 seconds
+  const pollActiveJobs = React.useCallback(async () => {
+    try {
+      const response = await productApi.listImportJobs({
+        onlyActive: true,
+        sortBy: 'createdAt',
+        sortOrder: 'DESC'
+      });
+
+      // Use backend status directly (do not infer status from processedRows/totalRows)
+      const processedJobs = response.jobs;
+
+      // Update active jobs state
+      setActiveJobs(processedJobs);
+
+      // Check pagination total to decide whether to continue polling
+      const hasActiveJobs = response.total > 0;
+
+      if (hasActiveJobs) {
+        // Continue polling in next 3 seconds
+        setIsPollingActive(true);
+      } else {
+        // Stop polling if no active jobs
+        setIsPollingActive(false);
+      }
+
+      // Show notifications for status changes
+      processedJobs.forEach(job => {
+        const prevStatus = previousJobStatusesRef.current[job.jobId];
+        if (prevStatus && prevStatus !== job.status) {
+          handleJobStatusNotification(job);
+        }
+        previousJobStatusesRef.current[job.jobId] = job.status;
+      });
+
+    } catch (error) {
+      // On error, stop polling to avoid infinite retries
+      setIsPollingActive(false);
+    } finally {
+      setActiveJobsLoaded(true);
     }
-  }, [importJobs, isPollingActive]);
-  // Separate effect for starting/stopping polling
+  }, [handleJobStatusNotification]);
+
+  // Ensure active jobs are fetched at least once on page load.
+  // If backend already has a running job (status: queued/processing), we should show the progress bar immediately.
+  React.useEffect(() => {
+    pollActiveJobs();
+  }, [pollActiveJobs]);
+
+  // Start/stop polling based on isPollingActive state
   React.useEffect(() => {
     if (isPollingActive) {
       if (!pollingRef.current) {
-        // Fetch active jobs initially
-        refreshImportJobs({ onlyActive: true });
-        pollingRef.current = setInterval(() => {
-          refreshImportJobs({ onlyActive: true, showNotifications: true });
-        }, 3000);
+        // Start polling immediately
+        pollActiveJobs();
+        pollingRef.current = setInterval(pollActiveJobs, 3000);
       }
     } else {
       if (pollingRef.current) {
-        // When stopping polling, fetch all jobs once to ensure history is updated
-        refreshImportJobs({ onlyActive: false });
         stopImportPolling();
       }
     }
-  }, [isPollingActive, refreshImportJobs, stopImportPolling]);
+  }, [isPollingActive, pollActiveJobs, stopImportPolling]);
   // Cleanup polling on unmount
   React.useEffect(() => {
     return () => {
@@ -383,7 +377,7 @@ const InventoryContent = () => {
   const canViewCostPrice = true; // Always show cost price - backend will handle access control
   const canManageWarehouses = true; // Always allow warehouse management - backend will handle access control
   const canManageProducts = true; // Always allow product management - backend will handle access control
-  const loadData = async () => {
+  const loadData = async (searchParams?: { keyword?: string; category?: string }) => {
     try {
       // Don't fetch data if permissions are still loading
       if (permissionsLoading) {
@@ -393,17 +387,24 @@ const InventoryContent = () => {
       const promiseLabels: string[] = [];
       // Check permissions and set error states if no permissions
       if (!canViewProducts) {
-        setErrorStates(prev => ({ 
-          ...prev, 
-          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)' 
+        setErrorStates(prev => ({
+          ...prev,
+          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)'
         }));
       } else {
+        const productParams: any = { page: 1, limit: 1000 };
+        if (searchParams?.keyword) {
+          productParams.keyword = searchParams.keyword;
+        }
+        if (searchParams?.category && searchParams.category !== 'all') {
+          productParams.category = searchParams.category;
+        }
         promises.push(
-          productApi.getProducts({ page: 1, limit: 1000 }).catch(error => {
+          productApi.getProducts(productParams).catch(error => {
             if (error?.response?.status === 403) {
-              setErrorStates(prev => ({ 
-                ...prev, 
-                products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)' 
+              setErrorStates(prev => ({
+                ...prev,
+                products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)'
               }));
             }
             return { products: [] };
@@ -538,10 +539,26 @@ const InventoryContent = () => {
       throw error; // Re-throw for lazy loading error handling
     }
   };
+  // Function to handle product updates with search parameters
+  const handleProductsUpdate = (searchParams?: { keyword?: string; category?: string }) => {
+    // Force a refresh by always updating the search params, even if they're the same
+    // This ensures the useEffect triggers and loadData is called
+    const newParams = searchParams || null;
+    setCurrentSearchParams(newParams);
+    // Also directly call loadData to ensure immediate refresh
+    if (!permissionsLoading && canViewProducts) {
+      loadData(newParams || undefined);
+    }
+  };
+
   // Lazy loading configuration
   const lazyData = useRouteBasedLazyData({
     inventory: {
-      loadFunction: loadData
+      loadFunction: () => {
+        if (!permissionsLoading && canViewProducts) {
+          return loadData(currentSearchParams || undefined);
+        }
+      }
     }
   });
   const getStatusBadge = (stock: number) => {
@@ -753,10 +770,10 @@ const InventoryContent = () => {
         }
       });
       toast({ title: "Thành công", description: "Đã tạo kho mới" });
-      setNewWarehouse({ 
-        name: "", 
-        code: "", 
-        description: "", 
+      setNewWarehouse({
+        name: "",
+        code: "",
+        description: "",
         address: "",
         addressInfo: {
           provinceCode: undefined,
@@ -769,7 +786,9 @@ const InventoryContent = () => {
       });
       setIsEditingWarehouse(false);
       setEditingWarehouse(null);
-      loadData();
+      loadData(currentSearchParams || undefined);
+      // Close the warehouse creation form
+      setIsEditingWarehouse(false);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
@@ -778,7 +797,7 @@ const InventoryContent = () => {
     try {
       const resp = await warehouseApi.deleteWarehouse(id);
       toast({ title: "Thành công", description: resp.message || "Đã xóa kho" });
-      loadData(); // Reload data
+      loadData(currentSearchParams || undefined); // Reload data
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa kho"), variant: "destructive" });
     }
@@ -838,13 +857,15 @@ const InventoryContent = () => {
       });
       toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
-      loadData();
+      loadData(currentSearchParams || undefined);
+      // Ensure editing form is closed
+      setIsEditingWarehouse(false);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
   };
   const handleImportComplete = async (importedData: any[]) => {
-    loadData();
+    loadData(currentSearchParams || undefined);
   };
   const addProduct = async () => {
     if (!newProduct.name) {
@@ -866,7 +887,7 @@ const InventoryContent = () => {
         ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
       toast({ title: "Thành công", description: createProductResp?.message || 'Đã thêm sản phẩm vào danh mục!' });
-      loadData(); // Refresh data
+      loadData(currentSearchParams || undefined); // Refresh data
       setNewProduct({
         name: '',
         code: '',
@@ -979,7 +1000,11 @@ const InventoryContent = () => {
     return (
       <Loading 
         error={inventoryState.error}
-        onRetry={() => lazyData.reloadData('inventory')}
+        onRetry={() => {
+          if (!permissionsLoading && canViewProducts) {
+            loadData(currentSearchParams || undefined);
+          }
+        }}
         isUnauthorized={inventoryState.error.includes('403') || inventoryState.error.includes('401')}
       />
     );
@@ -1125,12 +1150,15 @@ const InventoryContent = () => {
                 warehouses={warehouses}
                 canViewCostPrice={canViewCostPrice}
                 canManageProducts={canManageProducts}
-                onProductsUpdate={loadData}
+                onProductsUpdate={handleProductsUpdate}
                 importJobs={importJobs}
+                activeJobs={activeJobs}
+                activeJobsLoaded={activeJobsLoaded}
                 activeJobId={activeJobId}
                 onActiveJobIdChange={setActiveJobId}
                 onImportJobsChange={setImportJobs}
                 onRefreshImportJobs={refreshImportJobs}
+                onStartPollingActiveJobs={() => setIsPollingActive(true)}
                 jobHistoryPagination={jobHistoryPagination}
               />
             </PermissionGuard>
@@ -1340,4 +1368,4 @@ const InventoryContent = () => {
 const Inventory = () => {
   return <InventoryContent />;
 };
-export default Inventory;
+export default Inventory;

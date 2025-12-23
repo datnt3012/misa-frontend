@@ -28,12 +28,16 @@ interface ProductListProps {
   warehouses: any[];
   canViewCostPrice: boolean;
   canManageProducts: boolean;
-  onProductsUpdate: () => void;
+  onProductsUpdate: (searchParams?: { keyword?: string; category?: string }) => void;
   importJobs: ProductImportJobSnapshot[];
+  activeJobs?: ProductImportJobSnapshot[];
+  /** True once the app has checked `/products/import/status?onlyActive=true` at least once. */
+  activeJobsLoaded?: boolean;
   activeJobId: string | null;
   onActiveJobIdChange: (jobId: string | null) => void;
   onImportJobsChange: React.Dispatch<React.SetStateAction<ProductImportJobSnapshot[]>>;
   onRefreshImportJobs: (options?: { onlyActive?: boolean; showNotifications?: boolean; sortBy?: string; sortOrder?: string; page?: number; limit?: number }) => Promise<void>;
+  onStartPollingActiveJobs?: () => void;
   jobHistoryPagination?: {
     total: number;
     page: number;
@@ -48,6 +52,11 @@ const IMPORT_STATUS_LABELS: Record<string, string> = {
   failed: 'Thất bại',
   cancelled: 'Đã hủy',
 };
+
+// Always use backend job.status directly (do not infer status from processedRows/totalRows).
+const getJobStatusLabel = (job: ProductImportJobSnapshot): string => {
+  return IMPORT_STATUS_LABELS[job.status] ?? job.status;
+};
 const ProductList: React.FC<ProductListProps> = ({
   products,
   warehouses,
@@ -55,10 +64,13 @@ const ProductList: React.FC<ProductListProps> = ({
   canManageProducts,
   onProductsUpdate,
   importJobs,
+  activeJobs = [],
+  activeJobsLoaded = false,
   activeJobId,
   onActiveJobIdChange,
   onImportJobsChange,
   onRefreshImportJobs,
+  onStartPollingActiveJobs,
   jobHistoryPagination
 }) => {
   const { toast } = useToast();
@@ -67,6 +79,8 @@ const ProductList: React.FC<ProductListProps> = ({
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [categoryComboOpen, setCategoryComboOpen] = useState(false);
   const [editCategoryComboOpen, setEditCategoryComboOpen] = useState(false);
@@ -133,15 +147,19 @@ const ProductList: React.FC<ProductListProps> = ({
   }, [jobStatusTab, jobHistorySort, jobHistoryPage, jobHistoryItemsPerPage, onRefreshImportJobs]);
   // Refresh product list when import jobs complete successfully
   React.useEffect(() => {
-    const completedJobsWithSuccess = importJobs.filter(job =>
+    const completedJobsWithSuccess = activeJobs.filter(job =>
       (job.status === 'completed' && job.imported > 0) ||
       (job.status === 'completed' && job.failed === 0 && job.totalRows > 0)
     );
     if (completedJobsWithSuccess.length > 0) {
       // Refresh product list when there are successfully completed import jobs
       onProductsUpdateRef.current();
+      // Close import dialog if it's still open
+      if (isImportDialogOpen) {
+        setIsImportDialogOpen(false);
+      }
     }
-  }, [importJobs]);
+  }, [activeJobs, isImportDialogOpen]);
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
@@ -187,13 +205,13 @@ const ProductList: React.FC<ProductListProps> = ({
       setDialogKey(prev => prev + 1);
     }
   }, [editingProduct, findCategoryByValue]);
+  // When searching via API, we don't need frontend filtering for search term
+  // Only apply category filtering on frontend
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.code.toLowerCase().includes(searchTerm.toLowerCase());
     const productCategory = findCategoryByValue(product.category);
-    const matchesCategory = filterCategory === "all" || 
-                           (productCategory?.id && productCategory.id === filterCategory);
-    return matchesSearch && matchesCategory;
+    const matchesCategory = filterCategory === "all" ||
+                        (productCategory?.id && productCategory.id === filterCategory);
+    return matchesCategory;
   });
   // Load categories from categories API
   const loadCategories = React.useCallback(async () => {
@@ -314,19 +332,35 @@ const ProductList: React.FC<ProductListProps> = ({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
-  const runningJobs = React.useMemo(
-    () => importJobs.filter(job => job.status === 'queued' || job.status === 'processing'),
-    [importJobs]
-  );
+  // Merge activeJobs + importJobs so the UI still shows progress even if the backend/endpoint doesn't support `onlyActive=true`
+  // or if polling hasn't started yet (e.g., user refreshes page while a job is already processing).
+  const mergedJobs = React.useMemo(() => {
+    const jobMap = new Map<string, ProductImportJobSnapshot>();
+    [...importJobs, ...activeJobs].forEach(job => {
+      jobMap.set(job.jobId, job);
+    });
+    return Array.from(jobMap.values());
+  }, [activeJobs, importJobs]);
+
+  // If we have already queried the active-jobs endpoint and it returned empty,
+  // we should not “revive” running jobs from importJobs (history) and must hide the loading bar.
+  const runningJobs = React.useMemo(() => {
+    const source = activeJobsLoaded ? activeJobs : mergedJobs;
+    return source.filter(job => job.status === 'queued' || job.status === 'processing');
+  }, [activeJobsLoaded, activeJobs, mergedJobs]);
+
   const completedJobs = React.useMemo(() => {
-    return importJobs.filter(job => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled');
-  }, [importJobs]);
+    return mergedJobs.filter(job => {
+      return job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled';
+    });
+  }, [mergedJobs]);
+
   const activeImportJob = React.useMemo(() => {
     if (activeJobId) {
-      return importJobs.find(job => job.jobId === activeJobId) ?? null;
+      return mergedJobs.find(job => job.jobId === activeJobId) ?? null;
     }
     return runningJobs[0] ?? null;
-  }, [activeJobId, importJobs, runningJobs]);
+  }, [activeJobId, mergedJobs, runningJobs]);
   const isJobActive = runningJobs.length > 0;
   const isImportActionDisabled = !importFile || isImporting || isJobActive;
   const handlePageChange = (page: number) => {
@@ -335,6 +369,46 @@ const ProductList: React.FC<ProductListProps> = ({
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
+  };
+
+  // Handle search with debouncing and API calls
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page when searching
+
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+
+    // Set new timeout for debounced search
+    const timeout = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        // Trigger parent component to reload products with search parameter
+        onProductsUpdate({
+          keyword: value.trim() || undefined,
+          category: filterCategory !== 'all' ? filterCategory : undefined
+        });
+      } catch (error) {
+        console.error('Search error:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // 500ms debounce
+
+    setSearchTimeout(timeout);
+  };
+
+  // Handle category filter change
+  const handleCategoryChange = (value: string) => {
+    setFilterCategory(value);
+    setCurrentPage(1); // Reset to first page when filtering
+    // Trigger parent component to reload products with category filter
+    onProductsUpdate({
+      keyword: searchTerm.trim() || undefined,
+      category: value !== 'all' ? value : undefined
+    });
   };
   const resetImportState = React.useCallback(() => {
     setImportFile(null);
@@ -349,6 +423,18 @@ const ProductList: React.FC<ProductListProps> = ({
       resetImportState();
     }
   }, [resetImportState]);
+
+  // Close import dialog after successful import completion
+  React.useEffect(() => {
+    const completedJobsWithSuccess = activeJobs.filter(job =>
+      (job.status === 'completed' && job.imported > 0) ||
+      (job.status === 'completed' && job.failed === 0 && job.totalRows > 0)
+    );
+    if (completedJobsWithSuccess.length > 0 && isImportDialogOpen) {
+      // Close import dialog when import completes successfully
+      setIsImportDialogOpen(false);
+    }
+  }, [activeJobs, isImportDialogOpen]);
   React.useEffect(() => {
     if (activeImportJob) {
       setImportSummary({
@@ -468,7 +554,8 @@ const ProductList: React.FC<ProductListProps> = ({
       const response = await productApi.createProduct(productData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
-      // Clear form while keeping dialog open
+      // Close dialog and clear form
+      setIsAddProductDialogOpen(false);
       setNewProduct({
         name: '',
         code: '',
@@ -622,6 +709,11 @@ const ProductList: React.FC<ProductListProps> = ({
     try {
       if (isImporting) return;
       setIsImporting(true);
+      // Start polling immediately when import starts (don't wait for API response)
+      // This ensures the loading bar shows even if the job takes time to appear in active jobs
+      if (onStartPollingActiveJobs) {
+        onStartPollingActiveJobs();
+      }
       // Try to get job details from the import response
       let jobSnapshot: ProductImportJobSnapshot | null = null;
       try {
@@ -655,6 +747,8 @@ const ProductList: React.FC<ProductListProps> = ({
       // Always refresh jobs to get the latest status, whether we got job details or not
       await onRefreshImportJobs({ onlyActive: false });
       setIsImporting(false);
+      // Close dialog after successful import
+      setIsImportDialogOpen(false);
     } catch (error: any) {
       setIsImporting(false);
       // Only show error if it's not already handled above
@@ -730,12 +824,13 @@ const ProductList: React.FC<ProductListProps> = ({
             <Input
               placeholder="Tìm kiếm theo tên hoặc mã sản phẩm..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
+              disabled={isSearching}
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <Select value={filterCategory} onValueChange={handleCategoryChange}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Lọc theo loại" />
               </SelectTrigger>
@@ -1036,7 +1131,7 @@ const ProductList: React.FC<ProductListProps> = ({
                     {activeImportJob && (
                       <div className="rounded-md border border-border/60 bg-muted/10 p-3 space-y-2">
                         <div className="flex items-center justify-between text-sm font-medium">
-                          <span>Trạng thái: {IMPORT_STATUS_LABELS[activeImportJob.status] ?? activeImportJob.status}</span>
+                           <span>Trạng thái: {getJobStatusLabel(activeImportJob)}</span>
                           <span>{Math.round(activeImportJob.percent ?? 0)}%</span>
                         </div>
                         <Progress value={activeImportJob.percent ?? 0} />
@@ -1062,7 +1157,7 @@ const ProductList: React.FC<ProductListProps> = ({
                         </ul>
                         {importErrors.length > 5 && (
                           <p className="text-xs text-destructive/80">
-                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra file để xem đầy đủ.
+                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra lịch sử để xem đầy đủ.
                           </p>
                         )}
                       </div>
@@ -1102,10 +1197,12 @@ const ProductList: React.FC<ProductListProps> = ({
                 </TabsList>
                 <TabsContent value="running" className="mt-4 space-y-3">
                   {runningJobs.length === 0 ? (
+                    console.log('No running jobs'),
                     <p className="text-sm text-muted-foreground">
                       Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
                     </p>
                   ) : (
+                    console.log('Running jobs:', runningJobs),
                     runningJobs.map((job) => (
                       <div
                         key={job.jobId}
@@ -1115,14 +1212,14 @@ const ProductList: React.FC<ProductListProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between text-sm font-medium">
-                          <span>Job #{job.jobId.slice(-6)}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{IMPORT_STATUS_LABELS[job.status] ?? job.status}</Badge>
-                            {(job.status === 'queued' || job.status === 'processing') && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
+                           <span>Job #{job.jobId.slice(-6)}</span>
+                           <div className="flex items-center gap-2">
+                             <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
+                             {(job.status === 'queued' || job.status === 'processing') && (
+                               <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleCancelJob(job.jobId);
                                 }}
@@ -1221,8 +1318,8 @@ const ProductList: React.FC<ProductListProps> = ({
                           >
                             <div className="flex items-center justify-between">
                               <span>Job #{job.jobId.slice(-6)}</span>
-                              <Badge variant={job.status === 'completed' ? 'secondary' : 'destructive'}>
-                                {IMPORT_STATUS_LABELS[job.status] ?? job.status}
+                              <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
+                                {getJobStatusLabel(job)}
                               </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground">
