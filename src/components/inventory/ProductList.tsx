@@ -162,8 +162,12 @@ const ProductList: React.FC<ProductListProps> = ({
     if (completedJobsWithSuccess.length > 0) {
       // Refresh product list when there are successfully completed import jobs
       onProductsUpdateRef.current();
+      // Close import dialog if it's still open
+      if (isImportDialogOpen) {
+        setIsImportDialogOpen(false);
+      }
     }
-  }, [importJobs]);
+  }, [importJobs, isImportDialogOpen]);
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
@@ -419,6 +423,18 @@ const ProductList: React.FC<ProductListProps> = ({
       resetImportState();
     }
   }, [resetImportState]);
+
+  // Close import dialog after successful import completion
+  React.useEffect(() => {
+    const completedJobsWithSuccess = importJobs.filter(job =>
+      (job.status === 'completed' && job.imported > 0) ||
+      (job.status === 'completed' && job.failed === 0 && job.totalRows > 0)
+    );
+    if (completedJobsWithSuccess.length > 0 && isImportDialogOpen) {
+      // Close import dialog when import completes successfully
+      setIsImportDialogOpen(false);
+    }
+  }, [importJobs, isImportDialogOpen]);
   React.useEffect(() => {
     if (activeImportJob) {
       setImportSummary({
@@ -538,7 +554,8 @@ const ProductList: React.FC<ProductListProps> = ({
       const response = await productApi.createProduct(productData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       onProductsUpdate();
-      // Clear form while keeping dialog open
+      // Close dialog and clear form
+      setIsAddProductDialogOpen(false);
       setNewProduct({
         name: '',
         code: '',
@@ -725,6 +742,8 @@ const ProductList: React.FC<ProductListProps> = ({
       // Always refresh jobs to get the latest status, whether we got job details or not
       await onRefreshImportJobs({ onlyActive: false });
       setIsImporting(false);
+      // Close dialog after successful import
+      setIsImportDialogOpen(false);
     } catch (error: any) {
       setIsImporting(false);
       // Only show error if it's not already handled above

@@ -100,17 +100,15 @@ const InventoryContent = () => {
   }, [canViewProducts, canViewWarehouses]);
   // Trigger data fetch when permissions are loaded (only once)
   useEffect(() => {
-    console.log('🎯 Initial load useEffect triggered:', { permissionsLoading, canViewProducts, isInitialLoadDone, currentSearchParams });
     if (!permissionsLoading && canViewProducts && !isInitialLoadDone) {
       loadData(currentSearchParams || undefined);
       setIsInitialLoadDone(true);
     }
   }, [permissionsLoading, canViewProducts, isInitialLoadDone]); // Removed currentSearchParams from deps
 
-  // Reload products when search params change (only when search params actually change)
+  // Reload products when search params change
   useEffect(() => {
-    console.log('🔍 Search params useEffect triggered:', { currentSearchParams, permissionsLoading, canViewProducts });
-    if (!permissionsLoading && canViewProducts && currentSearchParams !== null) {
+    if (!permissionsLoading && canViewProducts) {
       loadData(currentSearchParams || undefined);
     }
   }, [currentSearchParams]); // Only depends on currentSearchParams
@@ -398,11 +396,9 @@ const InventoryContent = () => {
   const canManageWarehouses = true; // Always allow warehouse management - backend will handle access control
   const canManageProducts = true; // Always allow product management - backend will handle access control
   const loadData = async (searchParams?: { keyword?: string; category?: string }) => {
-    console.log('🔍 loadData called with params:', searchParams);
     try {
       // Don't fetch data if permissions are still loading
       if (permissionsLoading) {
-        console.log('🚫 loadData skipped: permissions still loading');
         return;
       }
       const promises: Promise<any>[] = [];
@@ -563,8 +559,14 @@ const InventoryContent = () => {
   };
   // Function to handle product updates with search parameters
   const handleProductsUpdate = (searchParams?: { keyword?: string; category?: string }) => {
-    console.log('🔄 handleProductsUpdate called with:', searchParams);
-    setCurrentSearchParams(searchParams || null);
+    // Force a refresh by always updating the search params, even if they're the same
+    // This ensures the useEffect triggers and loadData is called
+    const newParams = searchParams || null;
+    setCurrentSearchParams(newParams);
+    // Also directly call loadData to ensure immediate refresh
+    if (!permissionsLoading && canViewProducts) {
+      loadData(newParams || undefined);
+    }
   };
 
   // Lazy loading configuration
@@ -803,6 +805,8 @@ const InventoryContent = () => {
       setIsEditingWarehouse(false);
       setEditingWarehouse(null);
       loadData(currentSearchParams || undefined);
+      // Close the warehouse creation form
+      setIsEditingWarehouse(false);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
@@ -872,6 +876,8 @@ const InventoryContent = () => {
       toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
       loadData(currentSearchParams || undefined);
+      // Ensure editing form is closed
+      setIsEditingWarehouse(false);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
