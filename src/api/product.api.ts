@@ -150,7 +150,7 @@ export const productApi = {
   getProducts: async (params?: {
     page?: number;
     limit?: number;
-    search?: string;
+    keyword?: string;
     category?: string;
     warehouse?: string;
     hasStock?: boolean;
@@ -158,7 +158,7 @@ export const productApi = {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.search) queryParams.append('search', params.search);
+    if (params?.keyword) queryParams.append('keyword', params.keyword);
     if (params?.category) queryParams.append('category', params.category);
     if (params?.warehouse) queryParams.append('warehouse', params.warehouse);
     if (params?.hasStock) queryParams.append('hasStock', params.hasStock.toString());
@@ -317,7 +317,13 @@ export const productApi = {
   // Request cancel for import job
   cancelImportJob: async (jobId: string): Promise<ProductImportJobSnapshot> => {
     const response = await api.delete<any>(API_ENDPOINTS.PRODUCTS.IMPORT_STATUS(jobId));
-    return normalizeImportJobResponse(response);
+    // Handle case where response might not have jobId - merge with original jobId
+    const responseData = response?.data || response;
+    if (responseData && typeof responseData === 'object') {
+      // Ensure jobId is present in the response
+      responseData.jobId = responseData.jobId || responseData.id || responseData.job_id || jobId;
+    }
+    return normalizeImportJobResponse(responseData);
   },
   // Get import job status
   getImportStatus: async (jobId: string): Promise<ProductImportJobSnapshot> => {

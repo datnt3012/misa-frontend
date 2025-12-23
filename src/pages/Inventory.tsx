@@ -37,6 +37,10 @@ const InventoryContent = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [productFilterCategory, setProductFilterCategory] = useState("all");
+  const [currentSearchParams, setCurrentSearchParams] = useState<{ keyword?: string; category?: string } | null>(null);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [warehouseSortConfig, setWarehouseSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -94,12 +98,23 @@ const InventoryContent = () => {
       setErrorStates(prev => ({ ...prev, products: null, warehouses: null }));
     }
   }, [canViewProducts, canViewWarehouses]);
-  // Trigger data fetch when permissions are loaded
+  // Trigger data fetch when permissions are loaded (only once)
   useEffect(() => {
-    if (!permissionsLoading) {
-      loadData();
+    console.log('🎯 Initial load useEffect triggered:', { permissionsLoading, canViewProducts, isInitialLoadDone, currentSearchParams });
+    if (!permissionsLoading && canViewProducts && !isInitialLoadDone) {
+      loadData(currentSearchParams || undefined);
+      setIsInitialLoadDone(true);
     }
-  }, [permissionsLoading, canViewProducts, canViewWarehouses]);
+  }, [permissionsLoading, canViewProducts, isInitialLoadDone]); // Removed currentSearchParams from deps
+
+  // Reload products when search params change (only when search params actually change)
+  useEffect(() => {
+    console.log('🔍 Search params useEffect triggered:', { currentSearchParams, permissionsLoading, canViewProducts });
+    if (!permissionsLoading && canViewProducts && currentSearchParams !== null) {
+      loadData(currentSearchParams || undefined);
+    }
+  }, [currentSearchParams]); // Only depends on currentSearchParams
+
   // Load warehouses when warehouses tab is active
   useEffect(() => {
     if (activeTab === 'warehouses' && canViewWarehouses && !permissionsLoading) {
@@ -118,7 +133,7 @@ const InventoryContent = () => {
     if (status === 'completed') {
       // Refresh product list after successful import
       try {
-        await loadData();
+        await loadData(currentSearchParams || undefined);
       } catch (error) {
       }
       if (job.errors && job.errors.length > 0) {
@@ -273,13 +288,12 @@ const InventoryContent = () => {
     const activeJobs = importJobs.filter(job => {
       const isActiveStatus = job.status === 'queued' || job.status === 'processing';
       const isNotTerminal = job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled';
-      const isNotCancelled = !job.cancelRequested;
       // Continue polling if job is still processing and hasn't completed all rows
       const isIncomplete = job.status === 'processing' &&
                           job.totalRows &&
                           job.processedRows !== undefined &&
                           job.processedRows < job.totalRows;
-      return (isActiveStatus && isNotTerminal && isNotCancelled) || isIncomplete;
+      return (isActiveStatus && isNotTerminal) || isIncomplete;
     });
     const shouldPoll = activeJobs.length > 0;
     if (shouldPoll !== isPollingActive) {
@@ -383,27 +397,36 @@ const InventoryContent = () => {
   const canViewCostPrice = true; // Always show cost price - backend will handle access control
   const canManageWarehouses = true; // Always allow warehouse management - backend will handle access control
   const canManageProducts = true; // Always allow product management - backend will handle access control
-  const loadData = async () => {
+  const loadData = async (searchParams?: { keyword?: string; category?: string }) => {
+    console.log('🔍 loadData called with params:', searchParams);
     try {
       // Don't fetch data if permissions are still loading
       if (permissionsLoading) {
+        console.log('🚫 loadData skipped: permissions still loading');
         return;
       }
       const promises: Promise<any>[] = [];
       const promiseLabels: string[] = [];
       // Check permissions and set error states if no permissions
       if (!canViewProducts) {
-        setErrorStates(prev => ({ 
-          ...prev, 
-          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)' 
+        setErrorStates(prev => ({
+          ...prev,
+          products: 'Không có quyền xem dữ liệu sản phẩm (cần Read Products)'
         }));
       } else {
+        const productParams: any = { page: 1, limit: 1000 };
+        if (searchParams?.keyword) {
+          productParams.keyword = searchParams.keyword;
+        }
+        if (searchParams?.category && searchParams.category !== 'all') {
+          productParams.category = searchParams.category;
+        }
         promises.push(
-          productApi.getProducts({ page: 1, limit: 1000 }).catch(error => {
+          productApi.getProducts(productParams).catch(error => {
             if (error?.response?.status === 403) {
-              setErrorStates(prev => ({ 
-                ...prev, 
-                products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)' 
+              setErrorStates(prev => ({
+                ...prev,
+                products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)'
               }));
             }
             return { products: [] };
@@ -538,10 +561,20 @@ const InventoryContent = () => {
       throw error; // Re-throw for lazy loading error handling
     }
   };
+  // Function to handle product updates with search parameters
+  const handleProductsUpdate = (searchParams?: { keyword?: string; category?: string }) => {
+    console.log('🔄 handleProductsUpdate called with:', searchParams);
+    setCurrentSearchParams(searchParams || null);
+  };
+
   // Lazy loading configuration
   const lazyData = useRouteBasedLazyData({
     inventory: {
-      loadFunction: loadData
+      loadFunction: () => {
+        if (!permissionsLoading && canViewProducts) {
+          return loadData(currentSearchParams || undefined);
+        }
+      }
     }
   });
   const getStatusBadge = (stock: number) => {
@@ -753,10 +786,10 @@ const InventoryContent = () => {
         }
       });
       toast({ title: "Thành công", description: "Đã tạo kho mới" });
-      setNewWarehouse({ 
-        name: "", 
-        code: "", 
-        description: "", 
+      setNewWarehouse({
+        name: "",
+        code: "",
+        description: "",
         address: "",
         addressInfo: {
           provinceCode: undefined,
@@ -769,7 +802,7 @@ const InventoryContent = () => {
       });
       setIsEditingWarehouse(false);
       setEditingWarehouse(null);
-      loadData();
+      loadData(currentSearchParams || undefined);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
@@ -778,7 +811,7 @@ const InventoryContent = () => {
     try {
       const resp = await warehouseApi.deleteWarehouse(id);
       toast({ title: "Thành công", description: resp.message || "Đã xóa kho" });
-      loadData(); // Reload data
+      loadData(currentSearchParams || undefined); // Reload data
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể xóa kho"), variant: "destructive" });
     }
@@ -838,13 +871,13 @@ const InventoryContent = () => {
       });
       toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
-      loadData();
+      loadData(currentSearchParams || undefined);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
   };
   const handleImportComplete = async (importedData: any[]) => {
-    loadData();
+    loadData(currentSearchParams || undefined);
   };
   const addProduct = async () => {
     if (!newProduct.name) {
@@ -866,7 +899,7 @@ const InventoryContent = () => {
         ...(newProduct.costPrice && { costPrice: newProduct.costPrice }) // Include costPrice if provided
       });
       toast({ title: "Thành công", description: createProductResp?.message || 'Đã thêm sản phẩm vào danh mục!' });
-      loadData(); // Refresh data
+      loadData(currentSearchParams || undefined); // Refresh data
       setNewProduct({
         name: '',
         code: '',
@@ -979,7 +1012,11 @@ const InventoryContent = () => {
     return (
       <Loading 
         error={inventoryState.error}
-        onRetry={() => lazyData.reloadData('inventory')}
+        onRetry={() => {
+          if (!permissionsLoading && canViewProducts) {
+            loadData(currentSearchParams || undefined);
+          }
+        }}
         isUnauthorized={inventoryState.error.includes('403') || inventoryState.error.includes('401')}
       />
     );
@@ -1125,7 +1162,7 @@ const InventoryContent = () => {
                 warehouses={warehouses}
                 canViewCostPrice={canViewCostPrice}
                 canManageProducts={canManageProducts}
-                onProductsUpdate={loadData}
+                onProductsUpdate={handleProductsUpdate}
                 importJobs={importJobs}
                 activeJobId={activeJobId}
                 onActiveJobIdChange={setActiveJobId}
@@ -1340,4 +1377,4 @@ const InventoryContent = () => {
 const Inventory = () => {
   return <InventoryContent />;
 };
-export default Inventory;
+export default Inventory;

@@ -28,7 +28,7 @@ interface ProductListProps {
   warehouses: any[];
   canViewCostPrice: boolean;
   canManageProducts: boolean;
-  onProductsUpdate: () => void;
+  onProductsUpdate: (searchParams?: { keyword?: string; category?: string }) => void;
   importJobs: ProductImportJobSnapshot[];
   activeJobId: string | null;
   onActiveJobIdChange: (jobId: string | null) => void;
@@ -47,6 +47,26 @@ const IMPORT_STATUS_LABELS: Record<string, string> = {
   completed: 'Hoàn thành',
   failed: 'Thất bại',
   cancelled: 'Đã hủy',
+};
+
+// Helper function to get display status for a job
+const getJobDisplayStatus = (job: ProductImportJobSnapshot): string => {
+  // If job has processed all rows, determine final status based on results
+  if (job.processedRows >= job.totalRows) {
+    if (job.failed > 0) {
+      return 'failed'; // Has errors, so failed
+    } else if (job.imported > 0) {
+      return 'completed'; // No errors and has successful imports
+    }
+  }
+  // Otherwise return the actual status from backend
+  return job.status;
+};
+
+// Helper function to get display status label for a job
+const getJobDisplayStatusLabel = (job: ProductImportJobSnapshot): string => {
+  const displayStatus = getJobDisplayStatus(job);
+  return IMPORT_STATUS_LABELS[displayStatus] ?? displayStatus;
 };
 const ProductList: React.FC<ProductListProps> = ({
   products,
@@ -67,6 +87,8 @@ const ProductList: React.FC<ProductListProps> = ({
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [categoryComboOpen, setCategoryComboOpen] = useState(false);
   const [editCategoryComboOpen, setEditCategoryComboOpen] = useState(false);
@@ -187,13 +209,13 @@ const ProductList: React.FC<ProductListProps> = ({
       setDialogKey(prev => prev + 1);
     }
   }, [editingProduct, findCategoryByValue]);
+  // When searching via API, we don't need frontend filtering for search term
+  // Only apply category filtering on frontend
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.code.toLowerCase().includes(searchTerm.toLowerCase());
     const productCategory = findCategoryByValue(product.category);
-    const matchesCategory = filterCategory === "all" || 
-                           (productCategory?.id && productCategory.id === filterCategory);
-    return matchesSearch && matchesCategory;
+    const matchesCategory = filterCategory === "all" ||
+                        (productCategory?.id && productCategory.id === filterCategory);
+    return matchesCategory;
   });
   // Load categories from categories API
   const loadCategories = React.useCallback(async () => {
@@ -315,11 +337,19 @@ const ProductList: React.FC<ProductListProps> = ({
   const endIndex = startIndex + itemsPerPage;
   const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
   const runningJobs = React.useMemo(
-    () => importJobs.filter(job => job.status === 'queued' || job.status === 'processing'),
+    () => importJobs.filter(job => {
+      const displayStatus = getJobDisplayStatus(job);
+      // Only show as running if backend status is queued/processing AND display status is still queued/processing
+      return (job.status === 'queued' || job.status === 'processing') && (displayStatus === 'queued' || displayStatus === 'processing');
+    }),
     [importJobs]
   );
   const completedJobs = React.useMemo(() => {
-    return importJobs.filter(job => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled');
+    return importJobs.filter(job => {
+      const displayStatus = getJobDisplayStatus(job);
+      // Include jobs that are completed, failed, cancelled, or have finished processing (completed/failed based on results)
+      return displayStatus === 'completed' || displayStatus === 'failed' || displayStatus === 'cancelled';
+    });
   }, [importJobs]);
   const activeImportJob = React.useMemo(() => {
     if (activeJobId) {
@@ -335,6 +365,46 @@ const ProductList: React.FC<ProductListProps> = ({
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
+  };
+
+  // Handle search with debouncing and API calls
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page when searching
+
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+
+    // Set new timeout for debounced search
+    const timeout = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        // Trigger parent component to reload products with search parameter
+        onProductsUpdate({
+          keyword: value.trim() || undefined,
+          category: filterCategory !== 'all' ? filterCategory : undefined
+        });
+      } catch (error) {
+        console.error('Search error:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // 500ms debounce
+
+    setSearchTimeout(timeout);
+  };
+
+  // Handle category filter change
+  const handleCategoryChange = (value: string) => {
+    setFilterCategory(value);
+    setCurrentPage(1); // Reset to first page when filtering
+    // Trigger parent component to reload products with category filter
+    onProductsUpdate({
+      keyword: searchTerm.trim() || undefined,
+      category: value !== 'all' ? value : undefined
+    });
   };
   const resetImportState = React.useCallback(() => {
     setImportFile(null);
@@ -730,12 +800,13 @@ const ProductList: React.FC<ProductListProps> = ({
             <Input
               placeholder="Tìm kiếm theo tên hoặc mã sản phẩm..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
+              disabled={isSearching}
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <Select value={filterCategory} onValueChange={handleCategoryChange}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Lọc theo loại" />
               </SelectTrigger>
@@ -1062,7 +1133,7 @@ const ProductList: React.FC<ProductListProps> = ({
                         </ul>
                         {importErrors.length > 5 && (
                           <p className="text-xs text-destructive/80">
-                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra file để xem đầy đủ.
+                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra lịch sử để xem đầy đủ.
                           </p>
                         )}
                       </div>
@@ -1115,10 +1186,10 @@ const ProductList: React.FC<ProductListProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between text-sm font-medium">
-                          <span>Job #{job.jobId.slice(-6)}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{IMPORT_STATUS_LABELS[job.status] ?? job.status}</Badge>
-                            {(job.status === 'queued' || job.status === 'processing') && (
+                           <span>Job #{job.jobId.slice(-6)}</span>
+                           <div className="flex items-center gap-2">
+                             <Badge variant="secondary">{getJobDisplayStatusLabel(job)}</Badge>
+                             {(job.status === 'queued' || job.status === 'processing') && getJobDisplayStatus(job) !== 'completed' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1221,8 +1292,8 @@ const ProductList: React.FC<ProductListProps> = ({
                           >
                             <div className="flex items-center justify-between">
                               <span>Job #{job.jobId.slice(-6)}</span>
-                              <Badge variant={job.status === 'completed' ? 'secondary' : 'destructive'}>
-                                {IMPORT_STATUS_LABELS[job.status] ?? job.status}
+                              <Badge variant={getJobDisplayStatus(job) === 'completed' ? 'secondary' : getJobDisplayStatus(job) === 'failed' ? 'destructive' : 'outline'}>
+                                {getJobDisplayStatusLabel(job)}
                               </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground">
