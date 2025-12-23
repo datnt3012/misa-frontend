@@ -77,6 +77,7 @@ const InventoryContent = () => {
   // Import job state and polling logic (moved from ProductList to persist across tab switches)
   const [importJobs, setImportJobs] = useState<ProductImportJobSnapshot[]>([]);
   const [activeJobs, setActiveJobs] = useState<ProductImportJobSnapshot[]>([]);
+  const [activeJobsLoaded, setActiveJobsLoaded] = useState(false);
   const [jobHistoryPagination, setJobHistoryPagination] = useState<{
     total: number;
     page: number;
@@ -186,21 +187,10 @@ const InventoryContent = () => {
         });
         setImportJobs(prev => {
           const jobMap = new Map<string, ProductImportJobSnapshot>();
-          prev.forEach(job => {
-            jobMap.set(job.jobId, job);
-          });
+          prev.forEach(job => jobMap.set(job.jobId, job));
           allJobsResponse.jobs.forEach(job => {
             const previous = jobMap.get(job.jobId);
             const mergedJob = { ...previous, ...job };
-            // For completed, failed, or cancelled jobs, ensure percent is 100%
-            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
-                (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
-              mergedJob.percent = 100;
-            }
-            // Ensure percent never exceeds 100
-            if (mergedJob.percent && mergedJob.percent > 100) {
-              mergedJob.percent = 100;
-            }
             const prevStatus = previousJobStatusesRef.current[job.jobId];
             if (showNotifications && prevStatus && prevStatus !== job.status) {
               handleJobStatusNotification(mergedJob);
@@ -208,34 +198,12 @@ const InventoryContent = () => {
             previousJobStatusesRef.current[job.jobId] = job.status;
             jobMap.set(job.jobId, mergedJob);
           });
-          const mergedList = Array.from(jobMap.values());
-          return mergedList;
+          return Array.from(jobMap.values());
         });
         return;
       }
-      // Process jobs to update status based on completion
-      const processedJobs = response.jobs.map(job => {
-        let updatedJob = { ...job };
-        // Check if job has finished processing all rows
-        if (job.totalRows === job.processedRows) {
-          // Determine final status based on errors
-          const finalStatus: ProductImportJobStatus = job.errors && job.errors.length > 0 ? 'failed' : 'completed';
-          // If status needs to be updated, create a new job object with updated status
-          if (job.status !== finalStatus) {
-            updatedJob.status = finalStatus;
-          }
-        }
-        // Ensure percent is 100% for completed/failed/cancelled jobs
-        if ((updatedJob.status === 'completed' || updatedJob.status === 'failed' || updatedJob.status === 'cancelled') &&
-            (updatedJob.percent === undefined || updatedJob.percent === null || updatedJob.percent < 100)) {
-          updatedJob.percent = 100;
-        }
-        // Ensure percent never exceeds 100
-        if (updatedJob.percent && updatedJob.percent > 100) {
-          updatedJob.percent = 100;
-        }
-        return updatedJob;
-      });
+      // Use backend status directly (do not infer status from processedRows/totalRows)
+      const processedJobs = response.jobs;
 
       // Update appropriate state based on call type
       const isActiveCall = options?.onlyActive === true;
@@ -276,19 +244,8 @@ const InventoryContent = () => {
         sortOrder: 'DESC'
       });
 
-      // Process jobs to update status based on completion
-      const processedJobs = response.jobs.map(job => {
-        // Check if job has finished processing all rows
-        if (job.totalRows === job.processedRows) {
-          // Determine final status based on errors
-          const finalStatus: ProductImportJobStatus = job.errors && job.errors.length > 0 ? 'failed' : 'completed';
-          // If status needs to be updated, create a new job object with updated status
-          if (job.status !== finalStatus) {
-            return { ...job, status: finalStatus };
-          }
-        }
-        return job;
-      });
+      // Use backend status directly (do not infer status from processedRows/totalRows)
+      const processedJobs = response.jobs;
 
       // Update active jobs state
       setActiveJobs(processedJobs);
@@ -316,8 +273,16 @@ const InventoryContent = () => {
     } catch (error) {
       // On error, stop polling to avoid infinite retries
       setIsPollingActive(false);
+    } finally {
+      setActiveJobsLoaded(true);
     }
   }, [handleJobStatusNotification]);
+
+  // Ensure active jobs are fetched at least once on page load.
+  // If backend already has a running job (status: queued/processing), we should show the progress bar immediately.
+  React.useEffect(() => {
+    pollActiveJobs();
+  }, [pollActiveJobs]);
 
   // Start/stop polling based on isPollingActive state
   React.useEffect(() => {
@@ -1188,6 +1153,7 @@ const InventoryContent = () => {
                 onProductsUpdate={handleProductsUpdate}
                 importJobs={importJobs}
                 activeJobs={activeJobs}
+                activeJobsLoaded={activeJobsLoaded}
                 activeJobId={activeJobId}
                 onActiveJobIdChange={setActiveJobId}
                 onImportJobsChange={setImportJobs}

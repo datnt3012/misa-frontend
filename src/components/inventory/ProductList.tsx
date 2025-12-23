@@ -31,6 +31,8 @@ interface ProductListProps {
   onProductsUpdate: (searchParams?: { keyword?: string; category?: string }) => void;
   importJobs: ProductImportJobSnapshot[];
   activeJobs?: ProductImportJobSnapshot[];
+  /** True once the app has checked `/products/import/status?onlyActive=true` at least once. */
+  activeJobsLoaded?: boolean;
   activeJobId: string | null;
   onActiveJobIdChange: (jobId: string | null) => void;
   onImportJobsChange: React.Dispatch<React.SetStateAction<ProductImportJobSnapshot[]>>;
@@ -51,24 +53,9 @@ const IMPORT_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Đã hủy',
 };
 
-// Helper function to get display status for a job
-const getJobDisplayStatus = (job: ProductImportJobSnapshot): string => {
-  // If job has processed all rows, determine final status based on results
-  if (job.processedRows >= job.totalRows) {
-    if (job.failed > 0) {
-      return 'failed'; // Has errors, so failed
-    } else if (job.imported > 0) {
-      return 'completed'; // No errors and has successful imports
-    }
-  }
-  // Otherwise return the actual status from backend
-  return job.status;
-};
-
-// Helper function to get display status label for a job
-const getJobDisplayStatusLabel = (job: ProductImportJobSnapshot): string => {
-  const displayStatus = getJobDisplayStatus(job);
-  return IMPORT_STATUS_LABELS[displayStatus] ?? displayStatus;
+// Always use backend job.status directly (do not infer status from processedRows/totalRows).
+const getJobStatusLabel = (job: ProductImportJobSnapshot): string => {
+  return IMPORT_STATUS_LABELS[job.status] ?? job.status;
 };
 const ProductList: React.FC<ProductListProps> = ({
   products,
@@ -78,6 +65,7 @@ const ProductList: React.FC<ProductListProps> = ({
   onProductsUpdate,
   importJobs,
   activeJobs = [],
+  activeJobsLoaded = false,
   activeJobId,
   onActiveJobIdChange,
   onImportJobsChange,
@@ -344,27 +332,35 @@ const ProductList: React.FC<ProductListProps> = ({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
-  const runningJobs = React.useMemo(
-    () => activeJobs.filter(job => {
-      const displayStatus = getJobDisplayStatus(job);
-      // Only show as running if backend status is queued/processing AND display status is still queued/processing
-      return (job.status === 'queued' || job.status === 'processing') && (displayStatus === 'queued' || displayStatus === 'processing');
-    }),
-    [activeJobs]
-  );
-  const completedJobs = React.useMemo(() => {
-    return importJobs.filter(job => {
-      const displayStatus = getJobDisplayStatus(job);
-      // Include jobs that are completed, failed, cancelled, or have finished processing (completed/failed based on results)
-      return displayStatus === 'completed' || displayStatus === 'failed' || displayStatus === 'cancelled';
+  // Merge activeJobs + importJobs so the UI still shows progress even if the backend/endpoint doesn't support `onlyActive=true`
+  // or if polling hasn't started yet (e.g., user refreshes page while a job is already processing).
+  const mergedJobs = React.useMemo(() => {
+    const jobMap = new Map<string, ProductImportJobSnapshot>();
+    [...importJobs, ...activeJobs].forEach(job => {
+      jobMap.set(job.jobId, job);
     });
-  }, [importJobs]);
+    return Array.from(jobMap.values());
+  }, [activeJobs, importJobs]);
+
+  // If we have already queried the active-jobs endpoint and it returned empty,
+  // we should not “revive” running jobs from importJobs (history) and must hide the loading bar.
+  const runningJobs = React.useMemo(() => {
+    const source = activeJobsLoaded ? activeJobs : mergedJobs;
+    return source.filter(job => job.status === 'queued' || job.status === 'processing');
+  }, [activeJobsLoaded, activeJobs, mergedJobs]);
+
+  const completedJobs = React.useMemo(() => {
+    return mergedJobs.filter(job => {
+      return job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled';
+    });
+  }, [mergedJobs]);
+
   const activeImportJob = React.useMemo(() => {
     if (activeJobId) {
-      return activeJobs.find(job => job.jobId === activeJobId) ?? null;
+      return mergedJobs.find(job => job.jobId === activeJobId) ?? null;
     }
     return runningJobs[0] ?? null;
-  }, [activeJobId, activeJobs, runningJobs]);
+  }, [activeJobId, mergedJobs, runningJobs]);
   const isJobActive = runningJobs.length > 0;
   const isImportActionDisabled = !importFile || isImporting || isJobActive;
   const handlePageChange = (page: number) => {
@@ -1135,7 +1131,7 @@ const ProductList: React.FC<ProductListProps> = ({
                     {activeImportJob && (
                       <div className="rounded-md border border-border/60 bg-muted/10 p-3 space-y-2">
                         <div className="flex items-center justify-between text-sm font-medium">
-                          <span>Trạng thái: {IMPORT_STATUS_LABELS[activeImportJob.status] ?? activeImportJob.status}</span>
+                           <span>Trạng thái: {getJobStatusLabel(activeImportJob)}</span>
                           <span>{Math.round(activeImportJob.percent ?? 0)}%</span>
                         </div>
                         <Progress value={activeImportJob.percent ?? 0} />
@@ -1201,10 +1197,12 @@ const ProductList: React.FC<ProductListProps> = ({
                 </TabsList>
                 <TabsContent value="running" className="mt-4 space-y-3">
                   {runningJobs.length === 0 ? (
+                    console.log('No running jobs'),
                     <p className="text-sm text-muted-foreground">
                       Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
                     </p>
                   ) : (
+                    console.log('Running jobs:', runningJobs),
                     runningJobs.map((job) => (
                       <div
                         key={job.jobId}
@@ -1216,12 +1214,12 @@ const ProductList: React.FC<ProductListProps> = ({
                         <div className="flex items-center justify-between text-sm font-medium">
                            <span>Job #{job.jobId.slice(-6)}</span>
                            <div className="flex items-center gap-2">
-                             <Badge variant="secondary">{getJobDisplayStatusLabel(job)}</Badge>
-                             {(job.status === 'queued' || job.status === 'processing') && getJobDisplayStatus(job) !== 'completed' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
+                             <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
+                             {(job.status === 'queued' || job.status === 'processing') && (
+                               <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleCancelJob(job.jobId);
                                 }}
@@ -1320,8 +1318,8 @@ const ProductList: React.FC<ProductListProps> = ({
                           >
                             <div className="flex items-center justify-between">
                               <span>Job #{job.jobId.slice(-6)}</span>
-                              <Badge variant={getJobDisplayStatus(job) === 'completed' ? 'secondary' : getJobDisplayStatus(job) === 'failed' ? 'destructive' : 'outline'}>
-                                {getJobDisplayStatusLabel(job)}
+                              <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
+                                {getJobStatusLabel(job)}
                               </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground">
