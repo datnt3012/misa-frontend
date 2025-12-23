@@ -6,6 +6,7 @@ export interface OrderItem {
   product_id: string;
   product_name: string;
   product_code: string;
+  warehouse_id?: string;
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -212,11 +213,12 @@ export interface UpdateOrderRequest {
   paymentDeadline?: string; // YYYY-MM-DD
 }
 export interface CreateOrderItemRequest {
-  product_id: string;
-  product_name: string;
-  product_code: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  warehouseId: string;
   quantity: number;
-  unit_price: number;
+  unitPrice: number;
 }
 export const orderApi = {
   // Get all orders
@@ -326,8 +328,7 @@ export const orderApi = {
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
       // category helpers for dashboard aggregations
-      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
-      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
+      category_id: it.product?.category ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
@@ -500,6 +501,7 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      warehouse_id: it.warehouse?.id ?? it.warehouseId ?? it.warehouse_id ?? undefined,
       category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
       category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
       quantity: Number(it.quantity ?? 0),
@@ -633,6 +635,14 @@ export const orderApi = {
         name: row.customer.name,
         email: row.customer.email,
         phone: row.customer.phoneNumber ?? row.customer.phone,
+      } : undefined,
+      creator: row.creator ? {
+        id: row.creator.id,
+        email: row.creator.email,
+        firstName: row.creator.firstName,
+        lastName: row.creator.lastName,
+        phoneNumber: row.creator.phoneNumber,
+        avatarUrl: row.creator.avatarUrl,
       } : undefined,
     });
     const normalizedOrder = normalizeOrder(data);
@@ -875,7 +885,7 @@ export const orderApi = {
   },
   // Add item to order
   addOrderItem: async (orderId: string, data: CreateOrderItemRequest): Promise<OrderItem> => {
-    return api.post<OrderItem>(API_ENDPOINTS.ORDERS.ITEMS(orderId), {
+    return api.post<OrderItem>(API_ENDPOINTS.ORDERS.DETAILS(orderId), {
       ...data,
       order_id: orderId
     });
@@ -883,16 +893,12 @@ export const orderApi = {
   // Update order item
   updateOrderItem: async (orderId: string, itemId: string, data: Partial<CreateOrderItemRequest>): Promise<OrderItem> => {
     // Use /orders/{orderId}/details/{itemId} endpoint with camelCase body
-    return api.patch<OrderItem>(API_ENDPOINTS.ORDERS.DETAILS(orderId, itemId), {
-      productId: data.product_id,
-      quantity: data.quantity,
-      unitPrice: data.unit_price
-    });
+    return api.patch<OrderItem>(API_ENDPOINTS.ORDERS.DETAIL(orderId, itemId), data);
   },
   // Delete order item
   deleteOrderItem: async (orderId: string, itemId: string): Promise<{ message: string }> => {
     // Use /orders/{orderId}/details/{itemId} endpoint
-    return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DETAILS(orderId, itemId));
+    return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DETAIL(orderId, itemId));
   },
   // Get order history
   getOrderHistory: async (orderId: string): Promise<{

@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Trash2, Plus } from "lucide-react";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { customerApi, VatInfo, Customer } from "@/api/customer.api";
@@ -27,6 +26,7 @@ interface CreateOrderFormProps {
   onOrderCreated: () => void;
 }
 interface OrderItem {
+  id: string;
   product_id: string;
   product_code: string;
   product_name: string;
@@ -268,9 +268,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     }
   };
   const addItem = () => {
+    const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setNewOrder(prev => ({
       ...prev,
       items: [...prev.items, {
+        id: newItemId,
         product_id: "",
         product_code: "",
         product_name: "",
@@ -917,11 +919,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 <TableBody>
                   {newOrder.items.map((item, index) => (
                     <TableRow
-                      key={index}
+                      key={item.id}
                       className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                     >
                       <TableCell className="border-r border-slate-100 align-top pt-4">
                         <Select
+                          key={`product-select-${item.id}`}
                           value={item.product_id}
                           onValueChange={(value) => updateItem(index, "product_id", value)}
                         >
@@ -929,8 +932,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             <SelectValue placeholder="Chọn sản phẩm" />
                           </SelectTrigger>
                           <SelectContent>
-                            {products.map((product) => (
-                              <SelectItem key={product.id} value={product.id}>
+                            {products
+                              .filter(product => {
+                                // Loại bỏ sản phẩm đã được chọn trong các item khác
+                                const isAlreadySelected = newOrder.items.some((otherItem, otherIndex) => 
+                                  otherItem.product_id === product.id && otherIndex !== index
+                                );
+                                return !isAlreadySelected;
+                              })
+                              .map((product) => (
+                              <SelectItem key={`${item.id}-${product.id}`} value={product.id}>
                                 {product.name} ({product.code})
                               </SelectItem>
                             ))}

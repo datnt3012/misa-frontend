@@ -152,14 +152,16 @@ export const productApi = {
     limit?: number;
     search?: string;
     category?: string;
-    warehouse_id?: string;
+    warehouse?: string;
+    hasStock?: boolean;
   }): Promise<{ products: Product[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search);
     if (params?.category) queryParams.append('category', params.category);
-    if (params?.warehouse_id) queryParams.append('warehouse_id', params.warehouse_id);
+    if (params?.warehouse) queryParams.append('warehouse', params.warehouse);
+    if (params?.hasStock) queryParams.append('hasStock', params.hasStock.toString());
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.PRODUCTS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.PRODUCTS.LIST;
@@ -365,4 +367,4 @@ export const productApi = {
     const blob = await response.blob();
     return { blob, filename };
   }
-};
+};

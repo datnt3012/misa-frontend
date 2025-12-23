@@ -21,6 +21,7 @@ interface CreateQuotationFormProps {
   initialQuotation?: Quotation | null; // For edit mode
 }
 interface QuotationDetail {
+  id: string;
   product_id: string;
   product_code: string;
   product_name: string;
@@ -60,7 +61,8 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
           customer_id: initialQuotation.customer_id,
           note: initialQuotation.note || "",
           status: initialQuotation.status,
-          details: initialQuotation.details?.map(d => ({
+          details: initialQuotation.details?.map((d, index) => ({
+            id: `edit-detail-${index}`,
             product_id: d.product_id,
             product_code: d.product_code || "",
             product_name: d.product_name || "",
@@ -94,9 +96,11 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
     }
   };
   const addDetail = () => {
+    const newDetailId = `detail-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setQuotation(prev => ({
       ...prev,
       details: [...prev.details, {
+        id: newDetailId,
         product_id: "",
         product_code: "",
         product_name: "",
@@ -291,7 +295,7 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                     </TableHeader>
                     <TableBody>
                       {quotation.details.map((detail, index) => (
-                        <TableRow key={index}>
+                        <TableRow key={detail.id}>
                           <TableCell>
                             <Select
                               value={detail.product_id}
@@ -301,7 +305,15 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                                 <SelectValue placeholder="Chọn sản phẩm" />
                               </SelectTrigger>
                               <SelectContent>
-                                {products.map((product) => (
+                                {products
+                                  .filter(product => {
+                                    // Loại bỏ sản phẩm đã được chọn trong các detail khác
+                                    const isAlreadySelected = quotation.details.some((otherDetail, otherIndex) => 
+                                      otherDetail.product_id === product.id && otherIndex !== index
+                                    );
+                                    return !isAlreadySelected;
+                                  })
+                                  .map((product) => (
                                   <SelectItem key={product.id} value={product.id}>
                                     {product.name} ({product.code})
                                   </SelectItem>
@@ -371,4 +383,4 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
     </Dialog>
   );
 };
-export default CreateQuotationForm;
+export default CreateQuotationForm;
