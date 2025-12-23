@@ -30,10 +30,12 @@ interface ProductListProps {
   canManageProducts: boolean;
   onProductsUpdate: (searchParams?: { keyword?: string; category?: string }) => void;
   importJobs: ProductImportJobSnapshot[];
+  activeJobs?: ProductImportJobSnapshot[];
   activeJobId: string | null;
   onActiveJobIdChange: (jobId: string | null) => void;
   onImportJobsChange: React.Dispatch<React.SetStateAction<ProductImportJobSnapshot[]>>;
   onRefreshImportJobs: (options?: { onlyActive?: boolean; showNotifications?: boolean; sortBy?: string; sortOrder?: string; page?: number; limit?: number }) => Promise<void>;
+  onStartPollingActiveJobs?: () => void;
   jobHistoryPagination?: {
     total: number;
     page: number;
@@ -75,10 +77,12 @@ const ProductList: React.FC<ProductListProps> = ({
   canManageProducts,
   onProductsUpdate,
   importJobs,
+  activeJobs = [],
   activeJobId,
   onActiveJobIdChange,
   onImportJobsChange,
   onRefreshImportJobs,
+  onStartPollingActiveJobs,
   jobHistoryPagination
 }) => {
   const { toast } = useToast();
@@ -155,7 +159,7 @@ const ProductList: React.FC<ProductListProps> = ({
   }, [jobStatusTab, jobHistorySort, jobHistoryPage, jobHistoryItemsPerPage, onRefreshImportJobs]);
   // Refresh product list when import jobs complete successfully
   React.useEffect(() => {
-    const completedJobsWithSuccess = importJobs.filter(job =>
+    const completedJobsWithSuccess = activeJobs.filter(job =>
       (job.status === 'completed' && job.imported > 0) ||
       (job.status === 'completed' && job.failed === 0 && job.totalRows > 0)
     );
@@ -167,7 +171,7 @@ const ProductList: React.FC<ProductListProps> = ({
         setIsImportDialogOpen(false);
       }
     }
-  }, [importJobs, isImportDialogOpen]);
+  }, [activeJobs, isImportDialogOpen]);
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
@@ -341,12 +345,12 @@ const ProductList: React.FC<ProductListProps> = ({
   const endIndex = startIndex + itemsPerPage;
   const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
   const runningJobs = React.useMemo(
-    () => importJobs.filter(job => {
+    () => activeJobs.filter(job => {
       const displayStatus = getJobDisplayStatus(job);
       // Only show as running if backend status is queued/processing AND display status is still queued/processing
       return (job.status === 'queued' || job.status === 'processing') && (displayStatus === 'queued' || displayStatus === 'processing');
     }),
-    [importJobs]
+    [activeJobs]
   );
   const completedJobs = React.useMemo(() => {
     return importJobs.filter(job => {
@@ -357,10 +361,10 @@ const ProductList: React.FC<ProductListProps> = ({
   }, [importJobs]);
   const activeImportJob = React.useMemo(() => {
     if (activeJobId) {
-      return importJobs.find(job => job.jobId === activeJobId) ?? null;
+      return activeJobs.find(job => job.jobId === activeJobId) ?? null;
     }
     return runningJobs[0] ?? null;
-  }, [activeJobId, importJobs, runningJobs]);
+  }, [activeJobId, activeJobs, runningJobs]);
   const isJobActive = runningJobs.length > 0;
   const isImportActionDisabled = !importFile || isImporting || isJobActive;
   const handlePageChange = (page: number) => {
@@ -426,7 +430,7 @@ const ProductList: React.FC<ProductListProps> = ({
 
   // Close import dialog after successful import completion
   React.useEffect(() => {
-    const completedJobsWithSuccess = importJobs.filter(job =>
+    const completedJobsWithSuccess = activeJobs.filter(job =>
       (job.status === 'completed' && job.imported > 0) ||
       (job.status === 'completed' && job.failed === 0 && job.totalRows > 0)
     );
@@ -434,7 +438,7 @@ const ProductList: React.FC<ProductListProps> = ({
       // Close import dialog when import completes successfully
       setIsImportDialogOpen(false);
     }
-  }, [importJobs, isImportDialogOpen]);
+  }, [activeJobs, isImportDialogOpen]);
   React.useEffect(() => {
     if (activeImportJob) {
       setImportSummary({
@@ -709,6 +713,11 @@ const ProductList: React.FC<ProductListProps> = ({
     try {
       if (isImporting) return;
       setIsImporting(true);
+      // Start polling immediately when import starts (don't wait for API response)
+      // This ensures the loading bar shows even if the job takes time to appear in active jobs
+      if (onStartPollingActiveJobs) {
+        onStartPollingActiveJobs();
+      }
       // Try to get job details from the import response
       let jobSnapshot: ProductImportJobSnapshot | null = null;
       try {

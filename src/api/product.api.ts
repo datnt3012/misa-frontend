@@ -248,7 +248,7 @@ export const productApi = {
     sortOrder?: string;
     page?: number;
     limit?: number;
-  }): Promise<{ jobs: ProductImportJobSnapshot[]; total: number; page: number; limit: number }> => {
+  }): Promise<{ jobs: ProductImportJobSnapshot[]; total: number; page: number; limit: number; totalPages: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.onlyActive === true) {
       queryParams.append('onlyActive', 'true');
@@ -270,7 +270,8 @@ export const productApi = {
           jobs,
           total: payload.data.pagination?.total || payload.data.rows.length,
           page: payload.data.pagination?.page || params?.page || 1,
-          limit: payload.data.pagination?.limit || params?.limit || 10
+          limit: payload.data.pagination?.limit || params?.limit || 10,
+          totalPages: payload.data.pagination?.totalPages || Math.ceil((payload.data.pagination?.total || payload.data.rows.length) / (payload.data.pagination?.limit || params?.limit || 10))
         };
       } catch (error) {
         throw error;
@@ -284,7 +285,8 @@ export const productApi = {
           jobs,
           total: payload.pagination?.total || payload.rows.length,
           page: payload.pagination?.page || params?.page || 1,
-          limit: payload.pagination?.limit || params?.limit || 10
+          limit: payload.pagination?.limit || params?.limit || 10,
+          totalPages: payload.pagination?.totalPages || Math.ceil((payload.pagination?.total || payload.rows.length) / (payload.pagination?.limit || params?.limit || 10))
         };
       } catch (error) {
         throw error;
@@ -296,7 +298,8 @@ export const productApi = {
         jobs: (payload.jobs || []).map(normalizeImportJobResponse),
         total: payload.total || 0,
         page: payload.page || params?.page || 1,
-        limit: payload.limit || params?.limit || 10
+        limit: payload.limit || params?.limit || 10,
+        totalPages: payload.totalPages || Math.ceil((payload.total || 0) / (payload.limit || params?.limit || 10))
       };
     }
     // Handle non-paginated response (backward compatibility)
@@ -311,7 +314,8 @@ export const productApi = {
       jobs: jobArray.map(normalizeImportJobResponse),
       total: jobArray.length,
       page: params?.page || 1,
-      limit: params?.limit || jobArray.length
+      limit: params?.limit || jobArray.length,
+      totalPages: Math.ceil(jobArray.length / (params?.limit || jobArray.length))
     };
   },
   // Request cancel for import job

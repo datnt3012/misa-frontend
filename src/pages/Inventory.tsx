@@ -76,6 +76,7 @@ const InventoryContent = () => {
   });
   // Import job state and polling logic (moved from ProductList to persist across tab switches)
   const [importJobs, setImportJobs] = useState<ProductImportJobSnapshot[]>([]);
+  const [activeJobs, setActiveJobs] = useState<ProductImportJobSnapshot[]>([]);
   const [jobHistoryPagination, setJobHistoryPagination] = useState<{
     total: number;
     page: number;
@@ -212,59 +213,46 @@ const InventoryContent = () => {
         });
         return;
       }
-      setImportJobs(prev => {
-        // For history calls (onlyActive = false), replace all jobs with new results
-        // For polling calls (onlyActive = true), merge with existing jobs
-        const isHistoryCall = options?.onlyActive === false;
-        if (isHistoryCall) {
-          // Replace jobs for history pagination
-          setJobHistoryPagination({
-            total: response.total,
-            page: response.page,
-            limit: response.limit,
-            totalPages: Math.ceil(response.total / response.limit)
-          });
-          return response.jobs.map(job => {
-            // Ensure percent is 100% for completed/failed/cancelled jobs
-            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
-                (job.percent === undefined || job.percent === null || job.percent < 100)) {
-              job.percent = 100;
-            }
-            // Ensure percent never exceeds 100
-            if (job.percent && job.percent > 100) {
-              job.percent = 100;
-            }
-            return job;
-          });
-        } else {
-          // Merge jobs for polling updates
-          const jobMap = new Map<string, ProductImportJobSnapshot>();
-          prev.forEach(job => {
-            jobMap.set(job.jobId, job);
-          });
-          response.jobs.forEach(job => {
-            const previous = jobMap.get(job.jobId);
-            const mergedJob = { ...previous, ...job };
-            // For completed, failed, or cancelled jobs, ensure percent is 100%
-            if ((job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
-                (mergedJob.percent === undefined || mergedJob.percent === null || mergedJob.percent < 100)) {
-              mergedJob.percent = 100;
-            }
-            // Ensure percent never exceeds 100
-            if (mergedJob.percent && mergedJob.percent > 100) {
-              mergedJob.percent = 100;
-            }
-            const prevStatus = previousJobStatusesRef.current[job.jobId];
-            if (showNotifications && prevStatus && prevStatus !== job.status) {
-              handleJobStatusNotification(mergedJob);
-            }
-            previousJobStatusesRef.current[job.jobId] = job.status;
-            jobMap.set(job.jobId, mergedJob);
-          });
-          const mergedList = Array.from(jobMap.values());
-          return mergedList;
+      // Process jobs to update status based on completion
+      const processedJobs = response.jobs.map(job => {
+        let updatedJob = { ...job };
+        // Check if job has finished processing all rows
+        if (job.totalRows === job.processedRows) {
+          // Determine final status based on errors
+          const finalStatus: ProductImportJobStatus = job.errors && job.errors.length > 0 ? 'failed' : 'completed';
+          // If status needs to be updated, create a new job object with updated status
+          if (job.status !== finalStatus) {
+            updatedJob.status = finalStatus;
+          }
         }
+        // Ensure percent is 100% for completed/failed/cancelled jobs
+        if ((updatedJob.status === 'completed' || updatedJob.status === 'failed' || updatedJob.status === 'cancelled') &&
+            (updatedJob.percent === undefined || updatedJob.percent === null || updatedJob.percent < 100)) {
+          updatedJob.percent = 100;
+        }
+        // Ensure percent never exceeds 100
+        if (updatedJob.percent && updatedJob.percent > 100) {
+          updatedJob.percent = 100;
+        }
+        return updatedJob;
       });
+
+      // Update appropriate state based on call type
+      const isActiveCall = options?.onlyActive === true;
+
+      if (isActiveCall) {
+        // Update active jobs state
+        setActiveJobs(processedJobs);
+      } else {
+        // Update history jobs state
+        setJobHistoryPagination({
+          total: response.total,
+          page: response.page,
+          limit: response.limit,
+          totalPages: response.totalPages
+        });
+        setImportJobs(processedJobs);
+      }
     } catch (error: any) {
       if (!onlyActive) {
         toast({
@@ -279,43 +267,72 @@ const InventoryContent = () => {
   React.useEffect(() => {
     refreshImportJobs();
   }, [refreshImportJobs]);
-  // Check for active jobs and update polling state
-  React.useEffect(() => {
-    // Only consider jobs that are truly active (not completed, failed, cancelled, or cancel requested)
-    // Also continue polling if job is processing but hasn't processed all rows yet
-    const activeJobs = importJobs.filter(job => {
-      const isActiveStatus = job.status === 'queued' || job.status === 'processing';
-      const isNotTerminal = job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled';
-      // Continue polling if job is still processing and hasn't completed all rows
-      const isIncomplete = job.status === 'processing' &&
-                          job.totalRows &&
-                          job.processedRows !== undefined &&
-                          job.processedRows < job.totalRows;
-      return (isActiveStatus && isNotTerminal) || isIncomplete;
-    });
-    const shouldPoll = activeJobs.length > 0;
-    if (shouldPoll !== isPollingActive) {
-      setIsPollingActive(shouldPoll);
+  // Polling function for active jobs - calls API directly every 3 seconds
+  const pollActiveJobs = React.useCallback(async () => {
+    try {
+      const response = await productApi.listImportJobs({
+        onlyActive: true,
+        sortBy: 'createdAt',
+        sortOrder: 'DESC'
+      });
+
+      // Process jobs to update status based on completion
+      const processedJobs = response.jobs.map(job => {
+        // Check if job has finished processing all rows
+        if (job.totalRows === job.processedRows) {
+          // Determine final status based on errors
+          const finalStatus: ProductImportJobStatus = job.errors && job.errors.length > 0 ? 'failed' : 'completed';
+          // If status needs to be updated, create a new job object with updated status
+          if (job.status !== finalStatus) {
+            return { ...job, status: finalStatus };
+          }
+        }
+        return job;
+      });
+
+      // Update active jobs state
+      setActiveJobs(processedJobs);
+
+      // Check pagination total to decide whether to continue polling
+      const hasActiveJobs = response.total > 0;
+
+      if (hasActiveJobs) {
+        // Continue polling in next 3 seconds
+        setIsPollingActive(true);
+      } else {
+        // Stop polling if no active jobs
+        setIsPollingActive(false);
+      }
+
+      // Show notifications for status changes
+      processedJobs.forEach(job => {
+        const prevStatus = previousJobStatusesRef.current[job.jobId];
+        if (prevStatus && prevStatus !== job.status) {
+          handleJobStatusNotification(job);
+        }
+        previousJobStatusesRef.current[job.jobId] = job.status;
+      });
+
+    } catch (error) {
+      // On error, stop polling to avoid infinite retries
+      setIsPollingActive(false);
     }
-  }, [importJobs, isPollingActive]);
-  // Separate effect for starting/stopping polling
+  }, [handleJobStatusNotification]);
+
+  // Start/stop polling based on isPollingActive state
   React.useEffect(() => {
     if (isPollingActive) {
       if (!pollingRef.current) {
-        // Fetch active jobs initially
-        refreshImportJobs({ onlyActive: true });
-        pollingRef.current = setInterval(() => {
-          refreshImportJobs({ onlyActive: true, showNotifications: true });
-        }, 3000);
+        // Start polling immediately
+        pollActiveJobs();
+        pollingRef.current = setInterval(pollActiveJobs, 3000);
       }
     } else {
       if (pollingRef.current) {
-        // When stopping polling, fetch all jobs once to ensure history is updated
-        refreshImportJobs({ onlyActive: false });
         stopImportPolling();
       }
     }
-  }, [isPollingActive, refreshImportJobs, stopImportPolling]);
+  }, [isPollingActive, pollActiveJobs, stopImportPolling]);
   // Cleanup polling on unmount
   React.useEffect(() => {
     return () => {
@@ -1170,10 +1187,12 @@ const InventoryContent = () => {
                 canManageProducts={canManageProducts}
                 onProductsUpdate={handleProductsUpdate}
                 importJobs={importJobs}
+                activeJobs={activeJobs}
                 activeJobId={activeJobId}
                 onActiveJobIdChange={setActiveJobId}
                 onImportJobsChange={setImportJobs}
                 onRefreshImportJobs={refreshImportJobs}
+                onStartPollingActiveJobs={() => setIsPollingActive(true)}
                 jobHistoryPagination={jobHistoryPagination}
               />
             </PermissionGuard>
