@@ -29,8 +29,10 @@ export interface User {
   roleId: string;
   role?: {
     id: string;
-    name: string;
-    description?: string;
+    name: string; // Original English
+    description?: string; // Original English
+    nameTranslated: string; // Translated Vietnamese
+    descriptionTranslated: string; // Translated Vietnamese
     permissions?: string[];
   };
   createdAt: string;
@@ -63,19 +65,25 @@ export interface UpdateUserRequest {
 
 export interface UserRole {
   id: string;
-  name: string;
+  name: string; // Original English
   code?: string;
-  description?: string;
+  description?: string; // Original English
+  nameTranslated: string; // Translated Vietnamese
+  descriptionTranslated: string; // Translated Vietnamese
   permissions?: string[];
 }
 
 export interface Permission {
   id: string;
-  name: string;
+  name: string; // Translated Vietnamese
   code: string;
-  description: string;
-  resource: string;
+  description: string; // Original English
+  resource: string; // Original English
   action: string;
+  nameEn: string; // Original English
+  translatedName: string; // Translated Vietnamese
+  resourceLabelTranslated: string; // Translated Vietnamese
+  descriptionTranslated: string; // Translated Vietnamese
   isActive: boolean;
   isDeleted: boolean;
   createdAt: string;
@@ -121,6 +129,8 @@ export const usersApi = {
         id: row.role.id,
         name: row.role.name,
         description: row.role.description,
+        nameTranslated: row.role.nameTranslated,
+        descriptionTranslated: row.role.descriptionTranslated,
       } : undefined,
       createdAt: row.createdAt ?? row.created_at ?? '',
       updatedAt: row.updatedAt ?? row.updated_at ?? '',
@@ -166,6 +176,8 @@ export const usersApi = {
         id: row.role.id,
         name: row.role.name,
         description: row.role.description,
+        nameTranslated: row.role.nameTranslated,
+        descriptionTranslated: row.role.descriptionTranslated,
         permissions: row.role.permissions || [], // Include permissions if available
       } : undefined,
       createdAt: row.createdAt ?? row.created_at ?? '',
@@ -204,6 +216,8 @@ export const usersApi = {
         name: row.name,
         code: row.code,
         description: row.description,
+        nameTranslated: row.nameTranslated,
+        descriptionTranslated: row.descriptionTranslated,
         permissions: permissions,
       };
     };
@@ -240,6 +254,8 @@ export const usersApi = {
         id: data.role.id,
         name: data.role.name,
         description: data.role.description,
+        nameTranslated: data.role.nameTranslated,
+        descriptionTranslated: data.role.descriptionTranslated,
       } : undefined,
       createdAt: data.createdAt ?? data.created_at ?? '',
       updatedAt: data.updatedAt ?? data.updated_at ?? '',
@@ -268,6 +284,8 @@ export const usersApi = {
         id: data.role.id,
         name: data.role.name,
         description: data.role.description,
+        nameTranslated: data.role.nameTranslated,
+        descriptionTranslated: data.role.descriptionTranslated,
       } : undefined,
       createdAt: data.createdAt ?? data.created_at ?? '',
       updatedAt: data.updatedAt ?? data.updated_at ?? '',
@@ -300,6 +318,8 @@ export const usersApi = {
       name: data.name,
       code: data.code,
       description: data.description,
+      nameTranslated: data.nameTranslated,
+      descriptionTranslated: data.descriptionTranslated,
       permissions: roleData.permissions, // Return frontend format
     };
   },
@@ -322,6 +342,8 @@ export const usersApi = {
       name: data.name,
       code: data.code,
       description: data.description,
+      nameTranslated: data.nameTranslated,
+      descriptionTranslated: data.descriptionTranslated,
       permissions: roleData.permissions || [], // Return frontend format
     };
   },

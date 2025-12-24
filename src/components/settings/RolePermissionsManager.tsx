@@ -17,24 +17,46 @@ import { LoadingWrapper } from '@/components/LoadingWrapper';
 // Icon mapping for different modules
 const getResourceIcon = (module: string) => {
   const iconMap: Record<string, any> = {
-    // Core Business Modules
+    // Core Business Modules - Vietnamese
+    'Bảng điều khiển': TrendingUp,
+    'Đơn hàng': ShoppingCart,
+    'Khách hàng': Users,
+    'Nhà cung cấp': Building2,
+    // Product & Inventory Management - Vietnamese
+    'Sản phẩm': Package,
+    'Loại sản phẩm': Package,
+    'Kho': Package,
+    'Mức tồn kho': Package,
+    'Kho hàng': Building2,
+    'Phiếu nhập kho': Package,
+    'Phiếu xuất kho': Package,
+    // Reports & Analytics - Vietnamese
+    'Báo cáo': TrendingUp,
+    'Doanh thu': TrendingUp,
+    // System Administration - Vietnamese
+    'Người dùng': Users,
+    'Vai trò': Shield,
+    'Quyền': Shield,
+    'Đơn vị hành chính': Building2,
+    'Cài đặt': Settings,
+    'Thông báo': FileText,
+    // New resources from API - Vietnamese
+    'Lịch sử': FileText,
+    'Báo giá': FileText,
+    'Ngân hàng': Building2,
+    // English fallbacks
     'Dashboard': TrendingUp,
     'Orders': ShoppingCart,
     'Customers': Users,
     'Suppliers': Building2,
-    // Product & Inventory Management
     'Products': Package,
     'Categories': Package,
     'Inventory': Package,
-    'Stock': Package,
     'Stock Levels': Package,
     'Warehouses': Building2,
-    'Warehouse': Building2,
     'Warehouse Receipts': Package,
-    // Reports & Analytics
     'Reports': TrendingUp,
     'Revenue': TrendingUp,
-    // System Administration
     'Users': Users,
     'Roles': Shield,
     'Permissions': Shield,
@@ -46,6 +68,8 @@ const getResourceIcon = (module: string) => {
   return iconMap[module] || Shield;
 };
 const getModuleDisplayName = (module: string) => {
+  // Since category keys are now translated, just return the module name
+  // Fallback to hardcoded mappings for any remaining untranslated categories
   const displayNameMap: Record<string, string> = {
     // Core Business Modules
     'Dashboard': 'Tổng quan',
@@ -344,6 +368,10 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         // Normalize module name one more time to ensure grouping
         // This handles cases where extractModuleFromCode might return variants
         module = normalizeModuleName(module);
+
+        // Use resource field as category key (already translated in API)
+        const translatedModule = permission.resource || module;
+
         // Skip hidden permissions
         if (module === 'HIDDEN') {
           return;
@@ -356,24 +384,29 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         if (module === 'Profiles') {
           return;
         }
-        if (!categories[module]) {
-          categories[module] = [];
+        if (!categories[translatedModule]) {
+          categories[translatedModule] = [];
         }
-        categories[module].push(permission);
+        categories[translatedModule].push(permission);
       }
     });
     // Sort categories with warehouse-related groups together
+    // For translated categories, we need to map back to English for sorting
     const sortedCategories: Record<string, Permission[]> = {};
     const categoryKeys = Object.keys(categories);
-    // Define warehouse-related groups in order
-    const warehouseGroups = ['Warehouses', 'Warehouse Receipts', 'Export Slips'];
+
+    // Define warehouse-related groups in Vietnamese for sorting
+    const warehouseGroupsVietnamese = ['Kho hàng', 'Phiếu nhập kho', 'Phiếu xuất kho'];
+
     // Separate warehouse groups from other groups
-    const warehouseKeys = categoryKeys.filter(key => warehouseGroups.includes(key));
-    const otherKeys = categoryKeys.filter(key => !warehouseGroups.includes(key));
+    const warehouseKeys = categoryKeys.filter(key => warehouseGroupsVietnamese.includes(key));
+    const otherKeys = categoryKeys.filter(key => !warehouseKeys.includes(key));
+
     // Sort warehouse keys according to defined order
-    const sortedWarehouseKeys = warehouseGroups.filter(key => warehouseKeys.includes(key));
+    const sortedWarehouseKeys = warehouseGroupsVietnamese.filter(key => warehouseKeys.includes(key));
     // Sort other keys alphabetically
     const sortedOtherKeys = otherKeys.sort();
+
     // Combine: warehouse groups first, then others
     const finalOrder = [...sortedWarehouseKeys, ...sortedOtherKeys];
     finalOrder.forEach(key => {
@@ -907,7 +940,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
               <div className="space-y-4 mt-4">
                 {Object.entries(getPermissionCategories()).map(([category, categoryPermissions]) => {
                   const rolePermissions = selectedRoleForDetails?.permissions || [];
-                  const roleCategoryPermissions = categoryPermissions.filter(p => 
+                  const roleCategoryPermissions = categoryPermissions.filter(p =>
                     rolePermissions.includes(convertBackendToFrontend(p))
                   );
                   if (roleCategoryPermissions.length === 0) return null;

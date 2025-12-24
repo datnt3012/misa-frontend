@@ -6,14 +6,21 @@ import { getPermissionDisplayName as getPermissionNameFromCache, initializePermi
 interface Permission {
   id: string;
   code: string;
-  name: string;
-  description: string;
+  name: string; // Translated Vietnamese
+  description: string; // Original English
+  nameEn: string; // Original English
+  translatedName: string; // Translated Vietnamese
+  resource: string; // Original English
+  resourceLabelTranslated: string; // Translated Vietnamese
+  descriptionTranslated: string; // Translated Vietnamese
 }
 interface UserRole {
   id: string;
-  name: string;
+  name: string; // Original English
   code?: string;
-  description?: string;
+  description?: string; // Original English
+  nameTranslated: string; // Translated Vietnamese
+  descriptionTranslated: string; // Translated Vietnamese
   permissions?: string[];
 }
 export function usePermissions() {
@@ -265,6 +272,9 @@ export function usePermissions() {
               id: user.roleId,
               name: roleName,
               code: roleName.toUpperCase(),
+              description: '',
+              nameTranslated: roleName, // Fallback: use English as translated
+              descriptionTranslated: '',
               permissions: rolePermissions
             };
             setUserRole(fallbackRole);
@@ -274,6 +284,9 @@ export function usePermissions() {
               id: user.roleId,
               name: 'Unknown Role',
               code: 'UNKNOWN',
+              description: '',
+              nameTranslated: 'Vai trò không xác định',
+              descriptionTranslated: '',
               permissions: ['DASHBOARD_VIEW', 'NOTIFICATIONS_VIEW', 'NOTIFICATIONS_READ']
             };
             setUserRole(fallbackRole);
