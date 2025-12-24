@@ -39,6 +39,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
   const [customerDetails, setCustomerDetails] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -56,6 +57,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     if (open && order) {
       // Clear pending items when opening dialog for a new order
       setPendingNewItems([]);
+      setError(null);
       loadOrderDetails();
       loadTags();
       loadWarehouses();
@@ -115,6 +117,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const orderData = await orderApi.getOrder(order.id);
       setOrderDetails(orderData);
@@ -135,9 +138,11 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       // Load products after order details are loaded (to get warehouse info)
       await loadProducts(orderData);
     } catch (error) {
+      const errorMessage = getErrorMessage(error, "Không thể tải chi tiết đơn hàng");
+      setError(errorMessage);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -706,8 +711,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   // Show loading wrapper for the entire dialog
   return (
     <LoadingWrapper
-      isLoading={loading || !orderDetails}
-      error={null}
+      isLoading={loading}
+      error={error}
       onRetry={() => {
         loadOrderDetails();
       }}
