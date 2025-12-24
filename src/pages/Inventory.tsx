@@ -17,6 +17,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useRouteBasedLazyData } from "@/hooks/useLazyData";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { Loading } from "@/components/ui/loading";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";

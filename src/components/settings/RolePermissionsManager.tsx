@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Shield, Plus, Edit, Trash2, Save, X, Users, Settings, Package, ShoppingCart, TrendingUp, Building2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usersApi, UserRole, Permission } from '@/api/users.api';
+import { LoadingWrapper } from '@/components/LoadingWrapper';
 // Icon mapping for different modules
 const getResourceIcon = (module: string) => {
   const iconMap: Record<string, any> = {
@@ -511,7 +512,13 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
     return frontendPermission;
   };
   return (
-    <div className="space-y-6">
+    <LoadingWrapper
+      isLoading={loading}
+      error={null}
+      onRetry={loadData}
+      loadingMessage="Đang tải dữ liệu quản lý quyền vai trò..."
+    >
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -958,6 +965,7 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
         </DialogContent>
       </Dialog>
     </div>
+      </LoadingWrapper>
   );
 };
 export default RolePermissionsManager;

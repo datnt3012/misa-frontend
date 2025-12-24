@@ -13,6 +13,7 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 interface OrderViewDialogProps {
   order: any;
   open: boolean;
@@ -329,467 +330,477 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     ? paymentHistory.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
     : (orderDetails.paid_amount || 0);
   const debtAmount = Math.max(0, totalAmount - paidAmount);
+  // Show loading wrapper for the entire dialog
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
-          <DialogTitle className="flex items-center justify-between">
-            <span>Chi tiết đơn hàng</span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="space-y-6">
-            {/* Order Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Thông tin đơn hàng</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Mã đơn hàng:</label>
-                    <div className="text-base font-semibold">{orderDetails.order_number}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Trạng thái:</label>
-                    <div>{getStatusBadge(orderDetails.status)}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Ngày tạo:</label>
-                    <div className="text-base">{formatDateTime(orderDetails.created_at)}</div>
-                  </div>
-                  {orderDetails.completed_at && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Ngày hoàn thành:</label>
-                      <div className="text-base">{formatDateTime(orderDetails.completed_at)}</div>
-                    </div>
-                  )}
-                  {orderDetails.contract_number && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Số hợp đồng:</label>
-                      <div className="text-base">{orderDetails.contract_number}</div>
-                    </div>
-                  )}
-                  {orderDetails.purchase_order_number && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Số PO:</label>
-                      <div className="text-base">{orderDetails.purchase_order_number}</div>
-                    </div>
-                  )}
-                  {(orderDetails as any).paymentDeadline && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Hạn thanh toán:</label>
-                      <div className="text-base">
-                        {new Date((orderDetails as any).paymentDeadline).toLocaleDateString('vi-VN')}
-                      </div>
-                    </div>
-                  )}
-                  {orderDetails.notes && (
-                    <div className="md:col-span-2">
-                      <label className="text-sm font-medium text-muted-foreground">Ghi chú:</label>
-                      <div className="text-base">{orderDetails.notes}</div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            {/* Customer Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Thông tin khách hàng</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Tên khách hàng:</label>
-                    <div className="text-base font-semibold">{orderDetails.customer_name}</div>
-                  </div>
-                  {orderDetails.customer_code && (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
-                      <div className="text-base">{orderDetails.customer_code}</div>
-                    </div>
-                  )}
-                  {orderDetails.customer_phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
-                        <div className="text-base">{orderDetails.customer_phone}</div>
-                      </div>
-                    </div>
-                  )}
-                  {orderDetails.customer_address && (
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground mt-1" />
-                      <div className="flex-1">
-                        <label className="text-sm font-medium text-muted-foreground">Địa chỉ:</label>
-                        <div className="text-base">{orderDetails.customer_address}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            {/* VAT Company Information */}
-            {(orderDetails.taxCode || orderDetails.companyName || orderDetails.vatEmail || orderDetails.companyPhone || orderDetails.companyAddress) && (
+    <LoadingWrapper
+      isLoading={loading}
+      error={null}
+      onRetry={() => {
+        loadOrderDetails(order?.id);
+      }}
+      loadingMessage="Đang tải chi tiết đơn hàng..."
+    >
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+            <DialogTitle className="flex items-center justify-between">
+              <span>Chi tiết đơn hàng</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="space-y-6">
+              {/* Order Information */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Building2 className="w-5 h-5" />
-                    Thông tin VAT
-                  </CardTitle>
+                  <CardTitle className="text-lg">Thông tin đơn hàng</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {orderDetails.taxCode && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Mã đơn hàng:</label>
+                      <div className="text-base font-semibold">{orderDetails.order_number}</div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Trạng thái:</label>
+                      <div>{getStatusBadge(orderDetails.status)}</div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Ngày tạo:</label>
+                      <div className="text-base">{formatDateTime(orderDetails.created_at)}</div>
+                    </div>
+                    {orderDetails.completed_at && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Mã số thuế:</label>
-                        <div className="text-base">{orderDetails.taxCode}</div>
+                        <label className="text-sm font-medium text-muted-foreground">Ngày hoàn thành:</label>
+                        <div className="text-base">{formatDateTime(orderDetails.completed_at)}</div>
                       </div>
                     )}
-                    {orderDetails.companyName && (
+                    {orderDetails.contract_number && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Tên công ty:</label>
-                        <div className="text-base">{orderDetails.companyName}</div>
+                        <label className="text-sm font-medium text-muted-foreground">Số hợp đồng:</label>
+                        <div className="text-base">{orderDetails.contract_number}</div>
                       </div>
                     )}
-                    {orderDetails.companyPhone && (
+                    {orderDetails.purchase_order_number && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Số PO:</label>
+                        <div className="text-base">{orderDetails.purchase_order_number}</div>
+                      </div>
+                    )}
+                    {(orderDetails as any).paymentDeadline && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Hạn thanh toán:</label>
+                        <div className="text-base">
+                          {new Date((orderDetails as any).paymentDeadline).toLocaleDateString('vi-VN')}
+                        </div>
+                      </div>
+                    )}
+                    {orderDetails.notes && (
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-medium text-muted-foreground">Ghi chú:</label>
+                        <div className="text-base">{orderDetails.notes}</div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Customer Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Thông tin khách hàng</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Tên khách hàng:</label>
+                      <div className="text-base font-semibold">{orderDetails.customer_name}</div>
+                    </div>
+                    {orderDetails.customer_code && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
+                        <div className="text-base">{orderDetails.customer_code}</div>
+                      </div>
+                    )}
+                    {orderDetails.customer_phone && (
                       <div className="flex items-center gap-2">
                         <Phone className="w-4 h-4 text-muted-foreground" />
                         <div>
-                          <label className="text-sm font-medium text-muted-foreground">Điện thoại công ty:</label>
-                          <div className="text-base">{orderDetails.companyPhone}</div>
+                          <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
+                          <div className="text-base">{orderDetails.customer_phone}</div>
                         </div>
                       </div>
                     )}
-                    {orderDetails.vatEmail && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Email nhận hóa đơn VAT:</label>
-                          <div className="text-base">{orderDetails.vatEmail}</div>
-                        </div>
-                      </div>
-                    )}
-                    {orderDetails.companyAddress && (
-                      <div className="md:col-span-2 flex items-start gap-2">
+                    {orderDetails.customer_address && (
+                      <div className="flex items-start gap-2">
                         <MapPin className="w-4 h-4 text-muted-foreground mt-1" />
                         <div className="flex-1">
-                          <label className="text-sm font-medium text-muted-foreground">Địa chỉ công ty:</label>
-                          <div className="text-base">{orderDetails.companyAddress}</div>
+                          <label className="text-sm font-medium text-muted-foreground">Địa chỉ:</label>
+                          <div className="text-base">{orderDetails.customer_address}</div>
                         </div>
                       </div>
                     )}
                   </div>
                 </CardContent>
               </Card>
-            )}
-            {/* Receiver Information */}
-            {(orderDetails.receiverName || orderDetails.receiverPhone || orderDetails.receiverAddress) && (
+              {/* VAT Company Information */}
+              {(orderDetails.taxCode || orderDetails.companyName || orderDetails.vatEmail || orderDetails.companyPhone || orderDetails.companyAddress) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      Thông tin VAT
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {orderDetails.taxCode && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Mã số thuế:</label>
+                          <div className="text-base">{orderDetails.taxCode}</div>
+                        </div>
+                      )}
+                      {orderDetails.companyName && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Tên công ty:</label>
+                          <div className="text-base">{orderDetails.companyName}</div>
+                        </div>
+                      )}
+                      {orderDetails.companyPhone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4 text-muted-foreground" />
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Điện thoại công ty:</label>
+                            <div className="text-base">{orderDetails.companyPhone}</div>
+                          </div>
+                        </div>
+                      )}
+                      {orderDetails.vatEmail && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Email nhận hóa đơn VAT:</label>
+                            <div className="text-base">{orderDetails.vatEmail}</div>
+                          </div>
+                        </div>
+                      )}
+                      {orderDetails.companyAddress && (
+                        <div className="md:col-span-2 flex items-start gap-2">
+                          <MapPin className="w-4 h-4 text-muted-foreground mt-1" />
+                          <div className="flex-1">
+                            <label className="text-sm font-medium text-muted-foreground">Địa chỉ công ty:</label>
+                            <div className="text-base">{orderDetails.companyAddress}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {/* Receiver Information */}
+              {(orderDetails.receiverName || orderDetails.receiverPhone || orderDetails.receiverAddress) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Thông tin người nhận</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {orderDetails.receiverName && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Tên người nhận:</label>
+                          <div className="text-base">{orderDetails.receiverName}</div>
+                        </div>
+                      )}
+                      {orderDetails.receiverPhone && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
+                          <div className="text-base">{orderDetails.receiverPhone}</div>
+                        </div>
+                      )}
+                      {orderDetails.receiverAddress && (
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-medium text-muted-foreground">Địa chỉ giao hàng:</label>
+                          <div className="text-base">{orderDetails.receiverAddress}</div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {/* Products */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Thông tin người nhận</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    Sản phẩm
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {orderDetails.receiverName && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Tên người nhận:</label>
-                        <div className="text-base">{orderDetails.receiverName}</div>
-                      </div>
-                    )}
-                    {orderDetails.receiverPhone && (
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Điện thoại:</label>
-                        <div className="text-base">{orderDetails.receiverPhone}</div>
-                      </div>
-                    )}
-                    {orderDetails.receiverAddress && (
-                      <div className="md:col-span-2">
-                        <label className="text-sm font-medium text-muted-foreground">Địa chỉ giao hàng:</label>
-                        <div className="text-base">{orderDetails.receiverAddress}</div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {/* Products */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  Sản phẩm
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-8">#</TableHead>
-                      <TableHead>Tên SP</TableHead>
-                      <TableHead className="text-center">SL</TableHead>
-                      <TableHead className="text-right">Giá</TableHead>
-                      <TableHead className="text-right">Tổng</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orderDetails.items && orderDetails.items.length > 0 ? (
-                      orderDetails.items.map((item, index) => (
-                        <TableRow key={item.id || index}>
-                          <TableCell className="font-medium">{index + 1}</TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <div className="font-medium">{item.product_code || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          Không có sản phẩm nào trong đơn hàng
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-                <div className="mt-4 flex justify-end">
-                  <div className="w-96 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Tổng tiền sản phẩm:</span>
-                      <span>
-                        {formatCurrency(
-                          orderDetails.items?.reduce(
-                            (sum, item) => sum + (Number(item.total_price) || 0),
-                            0
-                          ) || 0
-                        )}
-                      </span>
-                    </div>
-                    {expensesTotal > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span>Chi phí:</span>
-                        <span>{formatCurrency(expensesTotal)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-lg font-semibold pt-1">
-                      <span>Tổng tiền đơn hàng:</span>
-                      <span>{formatCurrency(totalAmount)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span>Đã thanh toán:</span>
-                      <span className="text-green-600">{formatCurrency(paidAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Còn nợ:</span>
-                      <span className={debtAmount > 0 ? "text-red-600" : "text-green-600"}>
-                        {formatCurrency(debtAmount)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            {/* Additional Expenses */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Chi phí</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {expenses.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-8">#</TableHead>
-                        <TableHead>Tên chi phí</TableHead>
-                        <TableHead className="text-right">Số tiền</TableHead>
-                        <TableHead>Ghi chú</TableHead>
+                        <TableHead>Tên SP</TableHead>
+                        <TableHead className="text-center">SL</TableHead>
+                        <TableHead className="text-right">Giá</TableHead>
+                        <TableHead className="text-right">Tổng</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {expenses.map((exp, index) => (
-                        <TableRow key={`${exp.name}-${index}`}>
-                          <TableCell className="font-medium">{index + 1}</TableCell>
-                          <TableCell>{exp.name}</TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(Number(exp.amount) || 0)}
+                      {orderDetails.items && orderDetails.items.length > 0 ? (
+                        orderDetails.items.map((item, index) => (
+                          <TableRow key={item.id || index}>
+                            <TableCell className="font-medium">{index + 1}</TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="font-medium">{item.product_code || 'N/A'}</div>
+                                <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">{item.quantity}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            Không có sản phẩm nào trong đơn hàng
                           </TableCell>
-                          <TableCell>{exp.note || '-'}</TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Không có chi phí nào
+                  <div className="mt-4 flex justify-end">
+                    <div className="w-96 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Tổng tiền sản phẩm:</span>
+                        <span>
+                          {formatCurrency(
+                            orderDetails.items?.reduce(
+                              (sum, item) => sum + (Number(item.total_price) || 0),
+                              0
+                            ) || 0
+                          )}
+                        </span>
+                      </div>
+                      {expensesTotal > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span>Chi phí:</span>
+                          <span>{formatCurrency(expensesTotal)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-lg font-semibold pt-1">
+                        <span>Tổng tiền đơn hàng:</span>
+                        <span>{formatCurrency(totalAmount)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between">
+                        <span>Đã thanh toán:</span>
+                        <span className="text-green-600">{formatCurrency(paidAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Còn nợ:</span>
+                        <span className={debtAmount > 0 ? "text-red-600" : "text-green-600"}>
+                          {formatCurrency(debtAmount)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-            {/* Payment History */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Lịch sử thanh toán
-                </CardTitle>
-                <CardDescription>
-                  Tổng đã thanh toán: <span className="font-semibold text-green-600">{formatCurrency(paidAmount)}</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {paymentHistory.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Chưa có lịch sử thanh toán
-                  </div>
-                ) : (
-                  <div className="border rounded-md overflow-hidden">
+                </CardContent>
+              </Card>
+              {/* Additional Expenses */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Chi phí</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {expenses.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[120px]">Ngày giờ</TableHead>
+                          <TableHead className="w-8">#</TableHead>
+                          <TableHead>Tên chi phí</TableHead>
                           <TableHead className="text-right">Số tiền</TableHead>
-                          <TableHead className="text-center">Phương thức</TableHead>
-                          <TableHead>Ngân hàng</TableHead>
                           <TableHead>Ghi chú</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {paymentHistory.map((payment) => (
-                          <TableRow key={payment.id}>
-                            <TableCell className="text-sm">
-                              <div>
-                                <div>{formatDateTime(payment.payment_date)}</div>
-                              </div>
-                            </TableCell>
+                        {expenses.map((exp, index) => (
+                          <TableRow key={`${exp.name}-${index}`}>
+                            <TableCell className="font-medium">{index + 1}</TableCell>
+                            <TableCell>{exp.name}</TableCell>
                             <TableCell className="text-right">
-                              <span className={`font-medium ${payment.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {payment.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(payment.amount))}
-                              </span>
+                              {formatCurrency(Number(exp.amount) || 0)}
                             </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline" className="mx-auto">
-                                {getPaymentMethodLabel(payment.payment_method)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {payment.payment_method === 'bank_transfer' && payment.bank ? (
-                                <span>{getBankName(payment.bank)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {payment.notes || payment.note || '-'}
-                            </TableCell>
+                            <TableCell>{exp.note || '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            {/* Activity History */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
-                  Lịch sử hoạt động
-                </CardTitle>
-                <CardDescription>
-                  Theo dõi các thay đổi của đơn hàng
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {activityHistory.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Chưa có lịch sử hoạt động
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {activityHistory.map((item, index) => (
-                      <div key={item.id} className="relative">
-                        {index < activityHistory.length - 1 && (
-                          <div className="absolute left-5 top-12 w-0.5 h-full bg-gray-200" />
-                        )}
-                        <div className="flex gap-4">
-                          <Avatar className="w-10 h-10 border-2 border-background">
-                            <AvatarFallback className="text-xs">
-                              {getUserInitials(item.user_profile?.full_name || 'Unknown')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <User className="w-4 h-4" />
-                              <span>{item.user_profile?.full_name || 'Hệ thống'}</span>
-                              <span>•</span>
-                              <span>{formatDateTime(item.changed_at)}</span>
-                            </div>
-                            <div className="space-y-2">
-                              {/* Show status change if old_status and new_status are different */}
-                              {item.old_status && item.new_status && item.old_status !== item.new_status && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm">Thay đổi trạng thái:</span>
-                                  {getStatusBadge(item.old_status)}
-                                  <span>→</span>
-                                  {getStatusBadge(item.new_status)}
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Không có chi phí nào
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              {/* Payment History */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <DollarSign className="w-5 h-5" />
+                    Lịch sử thanh toán
+                  </CardTitle>
+                  <CardDescription>
+                    Tổng đã thanh toán: <span className="font-semibold text-green-600">{formatCurrency(paidAmount)}</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {paymentHistory.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Chưa có lịch sử thanh toán
+                    </div>
+                  ) : (
+                    <div className="border rounded-md overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[120px]">Ngày giờ</TableHead>
+                            <TableHead className="text-right">Số tiền</TableHead>
+                            <TableHead className="text-center">Phương thức</TableHead>
+                            <TableHead>Ngân hàng</TableHead>
+                            <TableHead>Ghi chú</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paymentHistory.map((payment) => (
+                            <TableRow key={payment.id}>
+                              <TableCell className="text-sm">
+                                <div>
+                                  <div>{formatDateTime(payment.payment_date)}</div>
                                 </div>
-                              )}
-                              {/* Show status if only new_status exists and no old_status */}
-                              {item.new_status && !item.old_status && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm">Trạng thái:</span>
-                                  {getStatusBadge(item.new_status)}
-                                </div>
-                              )}
-                              {/* Show payment amount change */}
-                              {item.old_paid_amount !== undefined && item.new_paid_amount !== undefined && item.old_paid_amount !== item.new_paid_amount && (
-                                <div className="flex items-center gap-2">
-                                  <DollarSign className="w-4 h-4 text-green-600" />
-                                  <span className="text-sm">Thanh toán:</span>
-                                  <span className="text-green-600 font-medium">
-                                    +{formatCurrency(item.new_paid_amount - (item.old_paid_amount || 0))}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    ({formatCurrency(item.old_paid_amount || 0)} → {formatCurrency(item.new_paid_amount)})
-                                  </span>
-                                </div>
-                              )}
-                              {/* Show payment amount if only new_paid_amount exists */}
-                              {item.new_paid_amount && item.old_paid_amount === undefined && (
-                                <div className="flex items-center gap-2">
-                                  <DollarSign className="w-4 h-4 text-green-600" />
-                                  <span className="text-sm font-medium text-green-600">
-                                    {formatCurrency(item.new_paid_amount)}
-                                  </span>
-                                </div>
-                              )}
-                              {item.notes && (
-                                <div className="bg-gray-50 rounded-md p-3">
-                                  <p className="text-sm text-gray-700">{item.notes}</p>
-                                </div>
-                              )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={`font-medium ${payment.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {payment.amount >= 0 ? '+' : ''}{formatCurrency(Math.abs(payment.amount))}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="outline" className="mx-auto">
+                                  {getPaymentMethodLabel(payment.payment_method)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {payment.payment_method === 'bank_transfer' && payment.bank ? (
+                                  <span>{getBankName(payment.bank)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {payment.notes || payment.note || '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              {/* Activity History */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Lịch sử hoạt động
+                  </CardTitle>
+                  <CardDescription>
+                    Theo dõi các thay đổi của đơn hàng
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {activityHistory.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Chưa có lịch sử hoạt động
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {activityHistory.map((item, index) => (
+                        <div key={item.id} className="relative">
+                          {index < activityHistory.length - 1 && (
+                            <div className="absolute left-5 top-12 w-0.5 h-full bg-gray-200" />
+                          )}
+                          <div className="flex gap-4">
+                            <Avatar className="w-10 h-10 border-2 border-background">
+                              <AvatarFallback className="text-xs">
+                                {getUserInitials(item.user_profile?.full_name || 'Unknown')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <User className="w-4 h-4" />
+                                <span>{item.user_profile?.full_name || 'Hệ thống'}</span>
+                                <span>•</span>
+                                <span>{formatDateTime(item.changed_at)}</span>
+                              </div>
+                              <div className="space-y-2">
+                                {/* Show status change if old_status and new_status are different */}
+                                {item.old_status && item.new_status && item.old_status !== item.new_status && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm">Thay đổi trạng thái:</span>
+                                    {getStatusBadge(item.old_status)}
+                                    <span>→</span>
+                                    {getStatusBadge(item.new_status)}
+                                  </div>
+                                )}
+                                {/* Show status if only new_status exists and no old_status */}
+                                {item.new_status && !item.old_status && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm">Trạng thái:</span>
+                                    {getStatusBadge(item.new_status)}
+                                  </div>
+                                )}
+                                {/* Show payment amount change */}
+                                {item.old_paid_amount !== undefined && item.new_paid_amount !== undefined && item.old_paid_amount !== item.new_paid_amount && (
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="w-4 h-4 text-green-600" />
+                                    <span className="text-sm">Thanh toán:</span>
+                                    <span className="text-green-600 font-medium">
+                                      +{formatCurrency(item.new_paid_amount - (item.old_paid_amount || 0))}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      ({formatCurrency(item.old_paid_amount || 0)} → {formatCurrency(item.new_paid_amount)})
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Show payment amount if only new_paid_amount exists */}
+                                {item.new_paid_amount && item.old_paid_amount === undefined && (
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="w-4 h-4 text-green-600" />
+                                    <span className="text-sm font-medium text-green-600">
+                                      {formatCurrency(item.new_paid_amount)}
+                                    </span>
+                                  </div>
+                                )}
+                                {item.notes && (
+                                  <div className="bg-gray-50 rounded-md p-3">
+                                    <p className="text-sm text-gray-700">{item.notes}</p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
+                          {index < activityHistory.length - 1 && <Separator className="mt-4" />}
                         </div>
-                        {index < activityHistory.length - 1 && <Separator className="mt-4" />}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </LoadingWrapper>
   );
-};
+};

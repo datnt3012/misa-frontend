@@ -16,6 +16,7 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { DollarSign, Package, X, Upload, FileText } from "lucide-react";
 import BankSelector from "@/components/orders/BankSelector";
 import { format } from "date-fns";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 interface MultiplePaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,7 +51,7 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
       totalPaid: number;
       willPay: number;
       currentDebt: number;
-      remainingDebtAfter: number;
+      remainingDebt: number;
       percentage: number;
     }>;
     totalBulkAmount: number;
@@ -223,7 +224,13 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
     return methods[method] || method;
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <LoadingWrapper
+      isLoading={false}
+      error={null}
+      onRetry={() => {}}
+      loadingMessage="Đang tải dữ liệu thanh toán gộp..."
+    >
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Thanh Toán Gộp</DialogTitle>
@@ -445,7 +452,7 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
                                   <TableCell className="font-medium">{previewOrder.orderCode}</TableCell>
                                   <TableCell className="text-center text-red-600">{formatCurrency(previewOrder.currentDebt)}</TableCell>
                                   <TableCell className="text-center font-medium text-blue-600">{formatCurrency(previewOrder.willPay)}</TableCell>
-                                  <TableCell className="text-center font-medium text-orange-600">{formatCurrency(previewOrder.remainingDebtAfter)}</TableCell>
+                                  <TableCell className="text-center font-medium text-orange-600">{formatCurrency(previewOrder.remainingDebt)}</TableCell>
                                 </TableRow>
                               );
                             })}
@@ -577,5 +584,6 @@ export const MultiplePaymentDialog: React.FC<MultiplePaymentDialogProps> = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+      </LoadingWrapper>
   );
-};
+};
