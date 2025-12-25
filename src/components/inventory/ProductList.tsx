@@ -101,7 +101,6 @@ const ProductList: React.FC<ProductListProps> = ({
     exchangeRate: 1
   });
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [dialogKey, setDialogKey] = useState(0); // Force dialog re-render
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
@@ -202,7 +201,6 @@ const ProductList: React.FC<ProductListProps> = ({
         isForeignCurrency: Boolean(editingProduct.isForeignCurrency),
         exchangeRate: editingProduct.exchangeRate || 1
       });
-      setDialogKey(prev => prev + 1);
     }
   }, [editingProduct, findCategoryByValue]);
   // When searching via API, we don't need frontend filtering for search term
@@ -1440,7 +1438,7 @@ const ProductList: React.FC<ProductListProps> = ({
         )}
         {/* Edit Product Dialog */}
         {canManageProducts && (
-          <Dialog key={dialogKey} open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
+          <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Chỉnh Sửa Sản Phẩm</DialogTitle>
