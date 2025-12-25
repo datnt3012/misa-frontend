@@ -109,6 +109,15 @@ const InventoryContent = () => {
     }
   }, [permissionsLoading, canViewProducts, isInitialLoadDone]); // Removed currentSearchParams from deps
 
+  // Retry loading data after import completion when permissions become available
+  const [pendingReloadAfterImport, setPendingReloadAfterImport] = useState(false);
+  useEffect(() => {
+    if (pendingReloadAfterImport && !permissionsLoading && canViewProducts) {
+      loadData(currentSearchParams || undefined);
+      setPendingReloadAfterImport(false);
+    }
+  }, [pendingReloadAfterImport, permissionsLoading, canViewProducts]);
+
   // Reload products when search params change
   useEffect(() => {
     if (!permissionsLoading && canViewProducts) {
@@ -131,12 +140,10 @@ const InventoryContent = () => {
   }, []);
   const handleJobStatusNotification = React.useCallback(async (job: ProductImportJobSnapshot) => {
     const status = job.status as ProductImportJobStatus;
+    // Job status notification
+    
+    // Show appropriate toast notifications based on status
     if (status === 'completed') {
-      // Refresh product list after successful import
-      try {
-        await loadData(currentSearchParams || undefined);
-      } catch (error) {
-      }
       if (job.errors && job.errors.length > 0) {
         toast({
           title: 'Hoàn thành với cảnh báo',
@@ -160,7 +167,30 @@ const InventoryContent = () => {
         description: job.message || 'Tiến trình nhập đã được hủy theo yêu cầu',
       });
     }
-  }, [toast]);
+    
+    // Reload interface and log for finished jobs
+    try {
+      // Reload interface after job completion
+      
+      // If permissions are still loading, set flag to reload when they're ready
+      if (permissionsLoading) {
+        // Permissions still loading, will retry after permissions are ready
+        setPendingReloadAfterImport(true);
+        return;
+      }
+      
+      // Only reload if we have permissions
+      if (canViewProducts) {
+        // Call loadData to reload products
+        loadData(currentSearchParams || undefined);
+      } else {
+        // Cannot reload: no permission to view products
+      }
+      
+    } catch (error) {
+      // Error reloading interface after job completion
+    }
+  }, [toast, permissionsLoading, canViewProducts]);
   const refreshImportJobs = React.useCallback(async (options?: {
     onlyActive?: boolean;
     showNotifications?: boolean;
@@ -193,7 +223,7 @@ const InventoryContent = () => {
             const previous = jobMap.get(job.jobId);
             const mergedJob = { ...previous, ...job };
             const prevStatus = previousJobStatusesRef.current[job.jobId];
-            if (showNotifications && prevStatus && prevStatus !== job.status) {
+            if (prevStatus && prevStatus !== job.status || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
               handleJobStatusNotification(mergedJob);
             }
             previousJobStatusesRef.current[job.jobId] = job.status;
@@ -260,12 +290,29 @@ const InventoryContent = () => {
       } else {
         // Stop polling if no active jobs
         setIsPollingActive(false);
+        
+        // When active jobs become empty, check if any jobs just completed
+        // by fetching all jobs and finding those that were previously active
+        const allJobsResponse = await productApi.listImportJobs({
+          onlyActive: false,
+          sortBy: 'createdAt',
+          sortOrder: 'DESC',
+          limit: 10
+        });
+        
+        // Find jobs that were previously active but are now completed/failed/cancelled
+        allJobsResponse.jobs.forEach(job => {
+          const prevStatus = previousJobStatusesRef.current[job.jobId];
+          if (prevStatus && (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')) {
+            handleJobStatusNotification(job);
+          }
+        });
       }
 
-      // Show notifications for status changes
+      // Show notifications for status changes in current active jobs
       processedJobs.forEach(job => {
         const prevStatus = previousJobStatusesRef.current[job.jobId];
-        if (prevStatus && prevStatus !== job.status) {
+        if (prevStatus && prevStatus !== job.status || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
           handleJobStatusNotification(job);
         }
         previousJobStatusesRef.current[job.jobId] = job.status;
