@@ -344,10 +344,31 @@ const ProductList: React.FC<ProductListProps> = ({
 
   // If we have already queried the active-jobs endpoint and it returned empty,
   // we should not “revive” running jobs from importJobs (history) and must hide the loading bar.
+  // However, if we just started an import and activeJobs is empty but we're still importing,
+  // we should show the progress bar to indicate the import is in progress.
   const runningJobs = React.useMemo(() => {
     const source = activeJobsLoaded ? activeJobs : mergedJobs;
-    return source.filter(job => job.status === 'queued' || job.status === 'processing');
-  }, [activeJobsLoaded, activeJobs, mergedJobs]);
+    const jobs = source.filter(job => job.status === 'queued' || job.status === 'processing');
+    
+    // If we're currently importing but no active jobs are found yet,
+    // show a temporary progress indicator
+    if (isImporting && jobs.length === 0 && activeJobsLoaded) {
+      // Create a temporary job indicator
+      return [{
+        jobId: 'temp-import',
+        status: 'processing' as ProductImportJobStatus,
+        totalRows: 0,
+        processedRows: 0,
+        imported: 0,
+        failed: 0,
+        percent: 0,
+        errors: [],
+        message: 'Đang tải lên và bắt đầu xử lý...'
+      }];
+    }
+    
+    return jobs;
+  }, [activeJobsLoaded, activeJobs, mergedJobs, isImporting]);
 
   const completedJobs = React.useMemo(() => {
     return mergedJobs.filter(job => {
@@ -714,6 +735,10 @@ const ProductList: React.FC<ProductListProps> = ({
       if (onStartPollingActiveJobs) {
         onStartPollingActiveJobs();
       }
+      
+      // Set a flag to indicate we're in the middle of an import process
+      // This helps with showing progress even when backend hasn't created the job yet
+      setIsImporting(true);
       // Try to get job details from the import response
       let jobSnapshot: ProductImportJobSnapshot | null = null;
       try {
