@@ -206,31 +206,63 @@ const InventoryContent = () => {
         page,
         limit
       });
-      // If we're fetching active jobs and get empty result, it means all jobs are completed
-      // Stop polling and fetch all jobs to update history
+      // If we're fetching active jobs and get empty result, check if we should continue polling
       if (onlyActive && response.jobs.length === 0 && isPollingActive) {
-        setIsPollingActive(false);
-        // Fetch all jobs to update history
+        // Check if we have any recent jobs that might still be processing
         const allJobsResponse = await productApi.listImportJobs({
           onlyActive: false,
           sortBy: 'createdAt',
-          sortOrder: 'DESC'
+          sortOrder: 'DESC',
+          limit: 5
         });
-        setImportJobs(prev => {
-          const jobMap = new Map<string, ProductImportJobSnapshot>();
-          prev.forEach(job => jobMap.set(job.jobId, job));
-          allJobsResponse.jobs.forEach(job => {
-            const previous = jobMap.get(job.jobId);
-            const mergedJob = { ...previous, ...job };
-            const prevStatus = previousJobStatusesRef.current[job.jobId];
-            if (prevStatus && prevStatus !== job.status || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
-              handleJobStatusNotification(mergedJob);
-            }
-            previousJobStatusesRef.current[job.jobId] = job.status;
-            jobMap.set(job.jobId, mergedJob);
+        
+        // Find recent jobs (created in last 60 seconds) that might still be processing
+        const recentJobs = allJobsResponse.jobs.filter(job => {
+          if (!job.startedAt) return false;
+          const jobStartTime = new Date(job.startedAt).getTime();
+          const currentTime = Date.now();
+          return (currentTime - jobStartTime) < 60000; // 60 seconds
+        });
+        
+        if (recentJobs.length === 0) {
+          // No recent jobs, stop polling
+          setIsPollingActive(false);
+          // Update history
+          setImportJobs(prev => {
+            const jobMap = new Map<string, ProductImportJobSnapshot>();
+            prev.forEach(job => jobMap.set(job.jobId, job));
+            allJobsResponse.jobs.forEach(job => {
+              const previous = jobMap.get(job.jobId);
+              const mergedJob = { ...previous, ...job };
+              const prevStatus = previousJobStatusesRef.current[job.jobId];
+              if (prevStatus && prevStatus !== job.status || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+                handleJobStatusNotification(mergedJob);
+              }
+              previousJobStatusesRef.current[job.jobId] = job.status;
+              jobMap.set(job.jobId, mergedJob);
+            });
+            return Array.from(jobMap.values());
           });
-          return Array.from(jobMap.values());
-        });
+        } else {
+          // Continue polling to catch status changes on recent jobs
+          setIsPollingActive(true);
+          // Update history with recent jobs
+          setImportJobs(prev => {
+            const jobMap = new Map<string, ProductImportJobSnapshot>();
+            prev.forEach(job => jobMap.set(job.jobId, job));
+            allJobsResponse.jobs.forEach(job => {
+              const previous = jobMap.get(job.jobId);
+              const mergedJob = { ...previous, ...job };
+              const prevStatus = previousJobStatusesRef.current[job.jobId];
+              if (prevStatus && prevStatus !== job.status || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+                handleJobStatusNotification(mergedJob);
+              }
+              previousJobStatusesRef.current[job.jobId] = job.status;
+              jobMap.set(job.jobId, mergedJob);
+            });
+            return Array.from(jobMap.values());
+          });
+        }
         return;
       }
       // Use backend status directly (do not infer status from processedRows/totalRows)
@@ -288,8 +320,33 @@ const InventoryContent = () => {
         // Continue polling in next 3 seconds
         setIsPollingActive(true);
       } else {
-        // Stop polling if no active jobs
-        setIsPollingActive(false);
+        // If there are no active jobs, we should continue polling for a short time
+        // to catch newly created jobs that might not be immediately visible
+        // This is especially important for the first import when the database was empty
+        
+        // Check if we have any jobs in the history that just completed
+        const recentJobsResponse = await productApi.listImportJobs({
+          onlyActive: false,
+          sortBy: 'createdAt',
+          sortOrder: 'DESC',
+          limit: 1
+        });
+        
+        // If we have recent jobs (created in last 30 seconds), continue polling
+        const recentJobs = recentJobsResponse.jobs.filter(job => {
+          if (!job.startedAt) return false;
+          const jobStartTime = new Date(job.startedAt).getTime();
+          const currentTime = Date.now();
+          return (currentTime - jobStartTime) < 30000; // 30 seconds
+        });
+        
+        if (recentJobs.length > 0) {
+          // Continue polling to catch any status changes
+          setIsPollingActive(true);
+        } else {
+          // Stop polling if no active jobs and no recent jobs
+          setIsPollingActive(false);
+        }
         
         // When active jobs become empty, check if any jobs just completed
         // by fetching all jobs and finding those that were previously active
