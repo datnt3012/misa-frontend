@@ -20,6 +20,7 @@ import { stockLevelsApi } from "@/api/stockLevels.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import BankSelector from "./BankSelector";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 interface CreateOrderFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -639,8 +640,17 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     }
   };
   const { subtotal, debt } = calculateTotals();
+  // Show loading wrapper for the entire dialog
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <LoadingWrapper
+      isLoading={loading}
+      error={null}
+      onRetry={() => {
+        loadData();
+      }}
+      loadingMessage="Đang tải dữ liệu tạo đơn hàng..."
+    >
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tạo đơn hàng mới</DialogTitle>
@@ -1185,6 +1195,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         </div>
       </DialogContent>
     </Dialog>
+      </LoadingWrapper>
   );
 };
 export default CreateOrderForm;

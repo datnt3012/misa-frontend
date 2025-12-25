@@ -27,6 +27,7 @@ import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpe
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
+import { Loading } from "@/components/ui/loading";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import apiClient from "@/lib/api";
@@ -636,24 +637,28 @@ const OrdersContent: React.FC = () => {
     },
     { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
   );
+  // Show loading if loading
+  if (loading) {
+    return <Loading message="Đang tải danh sách đơn hàng..." />;
+  }
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
-      <div className="w-full mx-auto space-y-3 sm:space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Danh Sách Đơn Hàng</h1>
-        </div>
-        <Button 
-          onClick={() => setShowCreateDialog(true)}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          THÊM MỚI
-        </Button>
-      </div>
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
+        <div className="w-full mx-auto space-y-3 sm:space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Danh Sách Đơn Hàng</h1>
+            </div>
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              THÊM MỚI
+            </Button>
+          </div>
+          {/* Filters */}
+          <Card>
+            <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4" />
@@ -733,7 +738,7 @@ const OrdersContent: React.FC = () => {
             </Button>
           </div>
         </CardContent>
-      </Card>
+          </Card>
       {/* Summary Row */}
       <Card>
         <CardContent className="pt-6">
@@ -1440,11 +1445,13 @@ const OrdersContent: React.FC = () => {
      </div>
    );
  };
-const Orders: React.FC = () => {
-  return (
-    <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>
-      <OrdersContent />
-    </PermissionGuard>
-  );
-};
-export default Orders;
+
+ const Orders: React.FC = () => {
+   return (
+     <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>
+       <OrdersContent />
+     </PermissionGuard>
+   );
+ };
+
+ export default Orders;

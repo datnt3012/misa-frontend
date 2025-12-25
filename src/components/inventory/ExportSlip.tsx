@@ -11,11 +11,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
 import { Package, CheckCircle, XCircle, Clock, FileText, Upload } from "lucide-react";
 import { ExportSlipQuantityDialog } from "@/components/inventory/ExportSlipQuantityDialog";
-interface ExportSlipProps {
+import { LoadingWrapper } from "@/components/LoadingWrapper";
+interface ExportSlipComponentProps {
   orderId: string;
   onUpdate?: () => void;
 }
-export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => {
+export const ExportSlipComponent: React.FC<ExportSlipComponentProps> = ({ orderId, onUpdate }) => {
   const [exportSlip, setExportSlip] = useState<ExportSlip | null>(null);
   const [loading, setLoading] = useState(true);
   const [approvalDialog, setApprovalDialog] = useState(false);
@@ -191,7 +192,13 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
     );
   }
   return (
-    <>
+    <LoadingWrapper
+      isLoading={loading}
+      error={null}
+      onRetry={loadExportSlip}
+      loadingMessage="Đang tải thông tin phiếu xuất kho..."
+    >
+      <>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -515,5 +522,6 @@ export const ExportSlip: React.FC<ExportSlipProps> = ({ orderId, onUpdate }) => 
         />
       )}
     </>
+      </LoadingWrapper>
   );
 };

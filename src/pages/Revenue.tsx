@@ -1069,15 +1069,15 @@ function RevenueContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Mã đơn hàng</TableHead>
-                    <TableHead>Khách hàng</TableHead>
-                    <TableHead>Ngày tạo</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead>Phương thức TT</TableHead>
+                    <TableHead className="text-center">Mã đơn hàng</TableHead>
+                    <TableHead className="text-center">Khách hàng</TableHead>
+                    <TableHead className="text-center">Ngày tạo</TableHead>
+                    <TableHead className="text-center">Trạng thái</TableHead>
+                    <TableHead className="text-center">Phương thức TT</TableHead>
                     <TableHead className="text-center">Ngày hoàn thành</TableHead>
-                    <TableHead>Tổng tiền</TableHead>
-                    <TableHead>Công nợ</TableHead>
-                    <TableHead>Người tạo</TableHead>
+                    <TableHead className="text-center">Tổng tiền</TableHead>
+                    <TableHead className="text-center">Công nợ</TableHead>
+                    <TableHead className="text-center">Người tạo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1131,19 +1131,19 @@ function RevenueContent() {
                       };
                     return (
                       <TableRow key={order.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="text-center font-medium">
                           {order.order_number || `#${order.id.slice(-8)}`}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {customer ? `${customer.customer_code} - ${customer.name}` : 'Không xác định'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {format(new Date(order.created_at), 'dd/MM/yyyy HH:mm', { locale: vi })}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {getStatusBadge(order.status)}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {getPaymentMethodLabel(order.payment_method)}
                         </TableCell>
                         <TableCell className="text-center">
@@ -1155,15 +1155,15 @@ function RevenueContent() {
                               : '-';
                           })()}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-center">
                           {formatCurrency(order.total_amount || 0)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-center">
                           <span className={order.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
                             {formatCurrency(order.debt_amount || 0)}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           {getCreatorName()}
                         </TableCell>
                       </TableRow>

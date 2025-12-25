@@ -5,44 +5,44 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
 } from '@/components/ui/dialog';
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
-  AlertDialogFooter, 
-  AlertDialogHeader, 
-  AlertDialogTitle 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
 } from '@/components/ui/alert-dialog';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
   Package,
   MoreHorizontal,
   CheckCircle,
@@ -54,6 +54,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UnauthorizedPage } from '@/components/UnauthorizedPage';
+import { LoadingWrapper } from '@/components/LoadingWrapper';
 interface CategoriesContentProps {
   embedded?: boolean;
 }
@@ -118,7 +119,7 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       const response = await categoriesApi.createCategory(newCategory);
       toast({
         title: "Thành công",
-        description: response.message || "Đã thêm loại sản phẩm mới",
+        description: "Đã thêm loại sản phẩm mới",
       });
       setNewCategory({ name: '', description: '' });
       setIsAddDialogOpen(false);
@@ -144,7 +145,7 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       const response = await categoriesApi.updateCategory(editingCategory.id, editCategory);
       toast({
         title: "Thành công",
-        description: response.message || "Đã cập nhật loại sản phẩm",
+        description: "Đã cập nhật loại sản phẩm",
       });
       setEditingCategory(null);
       setEditCategory({ name: '', description: '' });
@@ -161,10 +162,10 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
   const handleDeleteCategory = async () => {
     if (!categoryToDelete) return;
     try {
-      const response = await categoriesApi.deleteCategory(categoryToDelete.id);
+      await categoriesApi.deleteCategory(categoryToDelete.id);
       toast({
         title: "Thành công",
-        description: response.message || "Đã xóa loại sản phẩm",
+        description: "Đã xóa loại sản phẩm",
       });
       setCategoryToDelete(null);
       setIsDeleteDialogOpen(false);
@@ -232,7 +233,13 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
     );
   }
   return (
-    <div className={embedded ? "space-y-6" : "container mx-auto px-4 py-6 space-y-6"}>
+    <LoadingWrapper
+      isLoading={loading}
+      error={null}
+      onRetry={fetchCategories}
+      loadingMessage="Đang tải danh sách loại sản phẩm..."
+    >
+      <div className={embedded ? "space-y-6" : "container mx-auto px-4 py-6 space-y-6"}>
       {/* Header */}
       {!embedded && (
       <div className="flex items-center justify-between">
@@ -520,6 +527,7 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
         </AlertDialogContent>
       </AlertDialog>
     </div>
+      </LoadingWrapper>
   );
 };
 export { CategoriesContent };

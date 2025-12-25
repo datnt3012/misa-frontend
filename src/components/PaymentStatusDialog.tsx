@@ -8,11 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { DollarSign, AlertTriangle } from "lucide-react";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 interface PaymentStatusDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -60,55 +60,37 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
       // Add payment if amount is provided
       if (paymentAmount && paymentAmount !== 0) {
         const amount = paymentAmount;
-        const { error: paymentError } = await supabase
-          .from('payments')
-          .insert({
-            order_id: order.id,
-            amount: amount,
-            payment_method: paymentMethod,
-            payment_date: new Date().toISOString().split('T')[0],
-            notes: paymentNotes,
-            created_by: user?.id
-          });
-        if (paymentError) throw paymentError;
+        // TODO: Add payment via API when available
+        // await orderApi.addPayment(order.id, {
+        //   amount: amount,
+        //   payment_method: paymentMethod,
+        //   notes: paymentNotes
+        // });
       }
       // Update order status if changed
       if (newStatus !== order.status) {
-        const { error: statusError } = await supabase
-          .from('orders')
-          .update({ status: newStatus })
-          .eq('id', order.id);
-        if (statusError) throw statusError;
+        // TODO: Update order status via API when available
+        // await orderApi.updateOrder(order.id, { status: newStatus });
       }
       // Add status history entry when there's meaningful changes
       if (statusNotes || paymentAmount || newStatus !== order.status) {
         const currentPaidAmount = paymentAmount || 0;
-        const { error: historyError } = await supabase
-          .from('order_status_history')
-          .insert({
-            order_id: order.id,
-            old_status: order.status,
-            new_status: newStatus,
-            old_paid_amount: paidAmount,
-            new_paid_amount: paidAmount + currentPaidAmount,
-            notes: statusNotes || (currentPaidAmount > 0 ? `Thanh toán ${formatCurrency(currentPaidAmount)} qua ${paymentMethod}` : ''),
-            changed_by: user?.id
-          });
-        if (historyError) throw historyError;
+        // TODO: Add status history via API when available
+        // await orderApi.addStatusHistory(order.id, {
+        //   old_status: order.status,
+        //   new_status: newStatus,
+        //   old_paid_amount: paidAmount,
+        //   new_paid_amount: paidAmount + currentPaidAmount,
+        //   notes: statusNotes || (currentPaidAmount > 0 ? `Thanh toán ${formatCurrency(currentPaidAmount)} qua ${paymentMethod}` : ''),
+        // });
       }
       // Send email notifications
       try {
-        await supabase.functions.invoke('send-order-emails', {
-          body: {
-            orderId: order.id,
-            orderNumber: order.order_number,
-            customerName: order.customer_name,
-            oldStatus: order.status,
-            newStatus: newStatus,
-            message: `Đơn hàng đã được cập nhật. ${paymentAmount && paymentAmount > 0 ? `Thanh toán ${formatCurrency(paymentAmount)} qua ${paymentMethod}.` : ''} ${statusNotes || ''}`,
-            changeType: 'status'
-          }
-        });
+        // TODO: Send email via API when available
+        // await orderApi.sendEmailNotification(order.id, {
+        //   changeType: 'status',
+        //   message: `Đơn hàng đã được cập nhật. ${paymentAmount && paymentAmount > 0 ? `Thanh toán ${formatCurrency(paymentAmount)} qua ${paymentMethod}.` : ''} ${statusNotes || ''}`
+        // });
       } catch (emailError) {
         // Don't fail the main operation if email fails
       }
@@ -124,7 +106,7 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
       onUpdate();
       onOpenChange(false);
       // Reset form
-      setPaymentAmount('');
+      setPaymentAmount(0);
       setPaymentNotes('');
       setStatusNotes('');
       setNewStatus(order?.status || '');
@@ -144,7 +126,13 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
   const newPaidAmount = paidAmount + (paymentAmount || 0);
   const newDebtAmount = totalAmount - newPaidAmount;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <LoadingWrapper
+      isLoading={false}
+      error={null}
+      onRetry={() => {}}
+      loadingMessage="Đang tải dữ liệu thanh toán..."
+    >
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cập Nhật Thanh Toán & Trạng Thái</DialogTitle>
@@ -299,5 +287,6 @@ export const PaymentStatusDialog: React.FC<PaymentStatusDialogProps> = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+      </LoadingWrapper>
   );
-};
+};

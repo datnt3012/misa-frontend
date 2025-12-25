@@ -20,13 +20,16 @@ import { warehouseApi } from "@/api/warehouse.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PaymentDialog } from '@/components/PaymentDialog';
+import { LoadingWrapper } from '@/components/LoadingWrapper';
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
+
 interface OrderDetailDialogProps {
   order: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOrderUpdated?: () => void;
 }
+
 export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   order,
   open,
@@ -36,6 +39,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
   const [customerDetails, setCustomerDetails] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -48,20 +52,23 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [pendingNewItems, setPendingNewItems] = useState<Partial<OrderItem>[]>([]);
   // Tags are display-only here
   const { toast } = useToast();
+
   useEffect(() => {
     if (open && order) {
       // Clear pending items when opening dialog for a new order
       setPendingNewItems([]);
+      setError(null);
       loadOrderDetails();
       loadTags();
       loadWarehouses();
     }
   }, [open, order]);
+
   const loadProducts = async (orderData?: any) => {
     try {
       // Use provided orderData or fall back to state
       const currentOrderData = orderData || orderDetails;
-console.log('Current order data:', currentOrderData); // Debug log
+
       // Determine warehouse from existing order items
       let warehouseFilter = undefined;
       if (currentOrderData?.items && currentOrderData.items.length > 0) {
@@ -72,20 +79,18 @@ console.log('Current order data:', currentOrderData); // Debug log
         }
       }
 
-      console.log('Loading products with warehouse filter:', warehouseFilter); // Debug log
-
       const response = await productApi.getProducts({
         page: 1,
         limit: 1000,
         warehouse: warehouseFilter,
         hasStock: true
       });
-      console.log('Loaded products:', response.products?.length || 0); // Debug log
       setProducts(response.products || []);
     } catch (error) {
-      console.error('Error loading products:', error); // Debug log
+      console.error('Error loading products:', error);
     }
   };
+
   const loadTags = async () => {
     try {
       // Only load tags with type 'order'
@@ -106,11 +111,13 @@ console.log('Current order data:', currentOrderData); // Debug log
       setWarehouses([]);
     }
   };
+
   const loadOrderDetails = async () => {
     if (!order?.id) {
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const orderData = await orderApi.getOrder(order.id);
       setOrderDetails(orderData);
@@ -131,15 +138,18 @@ console.log('Current order data:', currentOrderData); // Debug log
       // Load products after order details are loaded (to get warehouse info)
       await loadProducts(orderData);
     } catch (error) {
+      const errorMessage = getErrorMessage(error, "Không thể tải chi tiết đơn hàng");
+      setError(errorMessage);
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể tải chi tiết đơn hàng"),
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
   const handleUpdateStatusDirect = async (newStatus: string) => {
     if (!orderDetails) return;
     setLoading(true);
@@ -168,7 +178,9 @@ console.log('Current order data:', currentOrderData); // Debug log
       setLoading(false);
     }
   };
+
   // Removed tag update logic
+
   const startEditing = (field: string, currentValue: any, addressInfo?: any) => {
     setEditingFields(prev => ({ ...prev, [field]: true }));
     setEditValues(prev => ({ 
@@ -177,6 +189,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       ...(addressInfo && { [`${field}_addressInfo`]: addressInfo })
     }));
   };
+
   const cancelEditing = (field: string) => {
     setEditingFields(prev => ({ ...prev, [field]: false }));
     setEditValues(prev => {
@@ -186,6 +199,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       return newValues;
     });
   };
+
   const saveField = async (field: string) => {
     if (!orderDetails) return;
     setLoading(true);
@@ -193,6 +207,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       const updateData: any = {};
       const value = editValues[field];
       const addressInfo = editValues[`${field}_addressInfo`];
+
       // Translate UI snake_case to API camelCase for updates
       // Only allow editing receiver fields if they are empty originally
       const original = orderDetails as any;
@@ -207,6 +222,7 @@ console.log('Current order data:', currentOrderData); // Debug log
         });
         return;
       }
+
       // Map UI field names to BE expectations (camelCase per BE)
       if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
         updateData[field] = value;
@@ -223,6 +239,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       } else {
         updateData[field] = value;
       }
+
       // Add addressInfo if it exists (align with BE expects snake_case *_address_info)
       if (addressInfo) {
         const normalizedInfo = {
@@ -234,6 +251,7 @@ console.log('Current order data:', currentOrderData); // Debug log
           updateData['addressInfo'] = normalizedInfo; // BE expects addressInfo for receiver
         }
       }
+
       await orderApi.updateOrder(orderDetails.id, updateData);
       // Refresh order details from API
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
@@ -262,16 +280,19 @@ console.log('Current order data:', currentOrderData); // Debug log
       setLoading(false);
     }
   };
+
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
       maximumFractionDigits: 0
     }).format(numAmount);
   };
+
   const renderEditableAddressField = (field: string, label: string, value: any, addressInfo?: any) => {
     const isEditing = editingFields[field];
     const editValue = editValues[field] ?? value;
     const editAddressInfo = editValues[`${field}_addressInfo`] ?? addressInfo;
+
     const formatFullAddress = (addr: string, ai: any) => {
       const wardName = ai?.ward?.name || ai?.wardName;
       const districtName = ai?.district?.name || ai?.districtName;
@@ -283,6 +304,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       if (provinceName) parts.push(provinceName);
       return parts.join(', ');
     };
+
     return (
       <div>
         <label className="text-sm font-medium text-muted-foreground">{label}:</label>
@@ -336,6 +358,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       </div>
     );
   };
+
   const renderEditableField = (field: string, label: string, value: any, type: 'text' | 'textarea' = 'text') => {
     const isEditing = editingFields[field];
     const editValue = editValues[field] ?? value;
@@ -382,6 +405,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       </div>
     );
   };
+
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     return (
@@ -390,6 +414,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       </Badge>
     );
   };
+
   const getPaymentStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: any }> = {
       'unpaid': { label: 'Chưa thanh toán', variant: 'destructive' },
@@ -400,16 +425,19 @@ console.log('Current order data:', currentOrderData); // Debug log
     const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
+
   // Calculate payment status based on paid amount vs total amount
   const calculatePaymentStatus = (paidAmount: number, totalAmount: number): string => {
     if (paidAmount <= 0) return 'unpaid';
     if (paidAmount >= totalAmount) return 'paid';
     return 'partially_paid';
   };
+
   // Helper function to get display name for tag
   const getTagDisplayName = (tag: OrderTag) => {
     return tag.display_name || tag.name || tag.raw_name || tag.id;
   };
+
   // Convert tags from string array to OrderTag objects for display
   const getTagsForDisplay = () => {
     if (!orderDetails?.tags || !Array.isArray(orderDetails.tags)) return [];
@@ -431,6 +459,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       };
     });
   };
+
   // Show all tags in this dialog, with reconciliation tags first
   const getOtherTags = () => {
     const allTags = getTagsForDisplay();
@@ -438,6 +467,7 @@ console.log('Current order data:', currentOrderData); // Debug log
     const otherTags = allTags.filter((t: any) => t.name !== 'Đã đối soát' && t.name !== 'Chưa đối soát');
     return [...reconciliationTags, ...otherTags];
   };
+
   // Product editing functions
   const startEditingItem = (itemId: string, item: OrderItem) => {
     setEditingItems(prev => ({
@@ -452,6 +482,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       }
     }));
   };
+
   const cancelEditingItem = (itemId: string) => {
     setEditingItems(prev => {
       const newItems = { ...prev };
@@ -459,6 +490,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       return newItems;
     });
   };
+
   const updateEditingItem = (itemId: string, field: keyof OrderItem, value: any) => {
     setEditingItems(prev => {
       const current = prev[itemId] || {};
@@ -483,6 +515,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       return { ...prev, [itemId]: updated };
     });
   };
+
   const saveItem = async (itemId: string) => {
     if (!orderDetails) return;
     const editedItem = editingItems[itemId];
@@ -520,6 +553,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       setLoading(false);
     }
   };
+
   const deleteItem = async (itemId: string) => {
     if (!orderDetails) return;
     if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi đơn hàng?')) {
@@ -548,6 +582,7 @@ console.log('Current order data:', currentOrderData); // Debug log
       setLoading(false);
     }
   };
+
   const addNewItem = () => {
     if (!orderDetails) return;
     if (products.length === 0) {
@@ -612,7 +647,6 @@ console.log('Current order data:', currentOrderData); // Debug log
     );
   };
 
-
   const cancelPendingNewItem = (itemId: string) => {
     setPendingNewItems(prev => prev.filter(item => item.id !== itemId));
   };
@@ -673,763 +707,769 @@ console.log('Current order data:', currentOrderData); // Debug log
       setLoading(false);
     }
   };
-  
-  if (!orderDetails) {
-    return (
+
+  // Show loading wrapper for the entire dialog
+  return (
+    <LoadingWrapper
+      isLoading={loading}
+      error={error}
+      onRetry={() => {
+        loadOrderDetails();
+      }}
+      loadingMessage="Đang tải chi tiết đơn hàng..."
+    >
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Chi tiết đơn hàng</DialogTitle>
+            <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails?.order_number}</DialogTitle>
           </DialogHeader>
-          <div className="text-center py-8">
-            {loading ? "Đang tải..." : "Không có dữ liệu"}
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails.order_number}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-6">
-          {/* Customer Information */}
-          <div className="space-y-4">
-            {renderEditableField('customer_name', 'Họ tên', customerDetails?.name || orderDetails.customer_name)}
-            {renderEditableField('customer_phone', 'Điện thoại', orderDetails.customer_phone)}
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
-              <div className="text-base">{orderDetails.customer?.code || orderDetails.customer_code || 'Chưa có mã'}</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Email:</label>
-              <div className="text-base">{orderDetails.customer?.email || 'Chưa có email'}</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
-              <div className="flex gap-2 flex-wrap mt-1">
-                {getOtherTags().length > 0 ? (
-                  getOtherTags().map((tag: any) => (
-                    <Badge
-                      key={tag.id}
-                      style={{ backgroundColor: tag.color, color: 'white' }}
-                    >
-                      {getTagDisplayName(tag)}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="secondary">Không có nhãn khác</Badge>
-                )}
+          <div className="space-y-6">
+            {/* Customer Information */}
+            <div className="space-y-4">
+              {renderEditableField('customer_name', 'Họ tên', customerDetails?.name || orderDetails?.customer_name || '')}
+              {renderEditableField('customer_phone', 'Điện thoại', orderDetails?.customer_phone || '')}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
+                <div className="text-base">{orderDetails?.customer?.code || orderDetails?.customer_code || 'Chưa có mã'}</div>
               </div>
-            </div>
-            {renderEditableField('notes', 'Ghi chú', orderDetails.notes, 'textarea')}
-          </div>
-          {/* Shipping Information */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🚚</span>
-              <h3 className="text-lg font-semibold">Vận chuyển</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              {renderEditableField('receiverName', 'Tên người nhận hàng', (orderDetails as any).receiverName || customerDetails?.name)}
-              {renderEditableField('receiverPhone', 'SĐT người nhận hàng', (orderDetails as any).receiverPhone)}
-            </div>
-            <div className="mt-4">
-              {renderEditableAddressField(
-                'receiverAddress',
-                'Địa chỉ giao hàng',
-                (orderDetails as any).receiverAddress || customerDetails?.address,
-                (orderDetails as any).addressInfo || (orderDetails as any).receiverAddressInfo
-              )}
-            </div>
-          </div>
-          <Separator />
-          {/* VAT Company Information */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🧾</span>
-              <h3 className="text-lg font-semibold">Thông tin VAT</h3>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {renderEditableField('taxCode', 'Mã số thuế', orderDetails.taxCode || (orderDetails as any).vat_tax_code)}
-              {renderEditableField('vatEmail', 'Email nhận hóa đơn VAT', orderDetails.vatEmail || (orderDetails as any).vat_invoice_email)}
-              {renderEditableField('companyName', 'Tên công ty', orderDetails.companyName || (orderDetails as any).vat_company_name)}
-              {renderEditableField('companyPhone', 'Điện thoại công ty', orderDetails.companyPhone || (orderDetails as any).vat_company_phone)}
-              <div className="lg:col-span-2">
-                {renderEditableField('companyAddress', 'Địa chỉ công ty', orderDetails.companyAddress || (orderDetails as any).vat_company_address)}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Email:</label>
+                <div className="text-base">{orderDetails?.customer?.email || 'Chưa có email'}</div>
               </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
+                <div className="flex gap-2 flex-wrap mt-1">
+                  {getOtherTags().length > 0 ? (
+                    getOtherTags().map((tag: any) => (
+                      <Badge
+                        key={tag.id}
+                        style={{ backgroundColor: tag.color, color: 'white' }}
+                      >
+                        {getTagDisplayName(tag)}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Badge variant="secondary">Không có nhãn khác</Badge>
+                  )}
+                </div>
+              </div>
+              {renderEditableField('notes', 'Ghi chú', orderDetails?.notes, 'textarea')}
             </div>
-          </div>
-          <Separator />
-          {/* Products */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+
+            {/* Shipping Information */}
+            <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <span className="text-lg">📦</span>
-                <h3 className="text-lg font-semibold">Sản phẩm</h3>
+                <span className="text-lg">🚚</span>
+                <h3 className="text-lg font-semibold">Vận chuyển</h3>
               </div>
-              <div className="flex gap-2">
-                {pendingNewItems.length > 0 && (
-                  <Button
-                    size="sm"
-                    onClick={saveAllPendingItems}
-                    disabled={loading || pendingNewItems.some(item => !item.product_id)}
-                  >
-                    <Check className="w-4 h-4 mr-1" />
-                    Lưu tất cả ({pendingNewItems.length})
-                  </Button>
+              <div className="grid grid-cols-2 gap-6">
+                {renderEditableField('receiverName', 'Tên người nhận hàng', (orderDetails as any)?.receiverName || customerDetails?.name)}
+                {renderEditableField('receiverPhone', 'SĐT người nhận hàng', (orderDetails as any)?.receiverPhone)}
+              </div>
+              <div className="mt-4">
+                {renderEditableAddressField(
+                  'receiverAddress',
+                  'Địa chỉ giao hàng',
+                  (orderDetails as any)?.receiverAddress || customerDetails?.address,
+                  (orderDetails as any)?.addressInfo || (orderDetails as any)?.receiverAddressInfo
                 )}
-                <Button size="sm" onClick={addNewItem} disabled={loading}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Thêm sản phẩm
-                </Button>
               </div>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8">#</TableHead>
-                  <TableHead>Tên SP</TableHead>
-                  <TableHead className="text-center">KL</TableHead>
-                  <TableHead className="text-center">SL</TableHead>
-                  <TableHead className="text-right">Giá</TableHead>
-                  <TableHead className="text-right">Tổng</TableHead>
-                  <TableHead className="w-24">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orderDetails.items && orderDetails.items.length > 0 ? (
-                  <>
-                    {orderDetails.items.map((item: OrderItem, index: number) => {
-                      const isEditing = !!editingItems[item.id || ''];
-                      const editedItem = editingItems[item.id || ''] || item;
-                      return (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{index + 1}</TableCell>
+
+            <Separator />
+
+            {/* VAT Company Information */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🧾</span>
+                <h3 className="text-lg font-semibold">Thông tin VAT</h3>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {renderEditableField('taxCode', 'Mã số thuế', orderDetails?.taxCode || (orderDetails as any)?.vat_tax_code)}
+                {renderEditableField('vatEmail', 'Email nhận hóa đơn VAT', orderDetails?.vatEmail || (orderDetails as any)?.vat_invoice_email)}
+                {renderEditableField('companyName', 'Tên công ty', orderDetails?.companyName || (orderDetails as any)?.vat_company_name)}
+                {renderEditableField('companyPhone', 'Điện thoại công ty', orderDetails?.companyPhone || (orderDetails as any)?.vat_company_phone)}
+                <div className="lg:col-span-2">
+                  {renderEditableField('companyAddress', 'Địa chỉ công ty', orderDetails?.companyAddress || (orderDetails as any)?.vat_company_address)}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Products */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📦</span>
+                  <h3 className="text-lg font-semibold">Sản phẩm</h3>
+                </div>
+                <div className="flex gap-2">
+                  {pendingNewItems.length > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={saveAllPendingItems}
+                      disabled={loading || pendingNewItems.some(item => !item.product_id)}
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Lưu tất cả ({pendingNewItems.length})
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={addNewItem} disabled={loading}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Thêm sản phẩm
+                  </Button>
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8">#</TableHead>
+                    <TableHead>Tên SP</TableHead>
+                    <TableHead className="text-center">KL</TableHead>
+                    <TableHead className="text-center">SL</TableHead>
+                    <TableHead className="text-right">Giá</TableHead>
+                    <TableHead className="text-right">Tổng</TableHead>
+                    <TableHead className="w-24">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orderDetails?.items && orderDetails.items.length > 0 ? (
+                    <>
+                      {orderDetails.items.map((item: OrderItem, index: number) => {
+                        const isEditing = !!editingItems[item.id || ''];
+                        const editedItem = editingItems[item.id || ''] || item;
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{index + 1}</TableCell>
+                            <TableCell>
+                              {isEditing ? (
+                                <Select
+                                  value={editedItem.product_id || ''}
+                                  onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Chọn sản phẩm" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {products.map((product) => {
+                                      const isProductAlreadyUsed = orderDetails.items.some(
+                                        (existingItem: OrderItem) =>
+                                          existingItem.product_id === product.id && existingItem.id !== item.id
+                                      );
+                                      return (
+                                        <SelectItem
+                                          key={product.id}
+                                          value={product.id}
+                                          disabled={isProductAlreadyUsed}
+                                        >
+                                          {product.code} - {product.name}
+                                          {isProductAlreadyUsed && ' (đã có)'}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="font-medium">{item.product_code || 'N/A'}</div>
+                                  <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">-</TableCell>
+                            <TableCell className="text-center">
+                              {isEditing ? (
+                                <NumberInput
+                                  min={1}
+                                  value={editedItem.quantity || 0}
+                                  onChange={(value) => updateEditingItem(item.id || '', 'quantity', value)}
+                                  className="w-20 text-center"
+                                />
+                              ) : (
+                                item.quantity
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isEditing ? (
+                                <CurrencyInput
+                                  value={editedItem.unit_price || 0}
+                                  onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
+                                  className="w-24 text-right"
+                                />
+                              ) : (
+                                formatCurrency(item.unit_price)
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                            </TableCell>
+                            <TableCell>
+                              {isEditing ? (
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => saveItem(item.id || '')}
+                                    disabled={loading}
+                                  >
+                                    <Check className="w-4 h-4 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => cancelEditingItem(item.id || '')}
+                                  >
+                                    <X className="w-4 h-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => startEditingItem(item.id || '', item)}
+                                    disabled={loading}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => deleteItem(item.id || '')}
+                                    disabled={loading}
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+
+                      {/* Pending new item rows */}
+                      {pendingNewItems.map((pendingItem, index) => (
+                        <TableRow key={pendingItem.id} className="bg-blue-50/50 border-t-2 border-blue-200">
+                          <TableCell className="font-medium text-blue-600">{(orderDetails.items?.length || 0) + index + 1}</TableCell>
                           <TableCell>
-                            {isEditing ? (
-                              <Select
-                                value={editedItem.product_id || ''}
-                                onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Chọn sản phẩm" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {products.map((product) => {
-                                    const isProductAlreadyUsed = orderDetails.items.some(
-                                      (existingItem: OrderItem) => 
-                                        existingItem.product_id === product.id && existingItem.id !== item.id
-                                    );
-                                    return (
-                                      <SelectItem 
-                                        key={product.id} 
-                                        value={product.id}
-                                        disabled={isProductAlreadyUsed}
-                                      >
-                                        {product.code} - {product.name}
-                                        {isProductAlreadyUsed && ' (đã có)'}
-                                      </SelectItem>
-                                    );
-                                  })}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <div className="space-y-1">
-                                <div className="font-medium">{item.product_code || 'N/A'}</div>
-                                <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
-                              </div>
-                            )}
+                            <Select
+                              value={pendingItem.product_id || ''}
+                              onValueChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'product_id', value)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Chọn sản phẩm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products
+                                  .filter(product =>
+                                    !orderDetails.items.some(
+                                      (existingItem: OrderItem) => existingItem.product_id === product.id
+                                    ) &&
+                                    !pendingNewItems.some(
+                                      (otherPending: any) => otherPending.id !== pendingItem.id && otherPending.product_id === product.id
+                                    )
+                                  )
+                                  .map((product) => (
+                                  <SelectItem key={product.id} value={product.id}>
+                                    {product.code} - {product.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell className="text-center">-</TableCell>
                           <TableCell className="text-center">
-                            {isEditing ? (
-                              <NumberInput
-                                min={1}
-                                value={editedItem.quantity || 0}
-                                onChange={(value) => updateEditingItem(item.id || '', 'quantity', value)}
-                                className="w-20 text-center"
-                              />
-                            ) : (
-                              item.quantity
-                            )}
+                            <NumberInput
+                              min={1}
+                              value={pendingItem.quantity || 1}
+                              onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'quantity', value)}
+                              className="w-20 text-center"
+                            />
                           </TableCell>
                           <TableCell className="text-right">
-                            {isEditing ? (
-                              <CurrencyInput
-                                value={editedItem.unit_price || 0}
-                                onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
-                                className="w-24 text-right"
-                              />
-                            ) : (
-                              formatCurrency(item.unit_price)
-                            )}
+                            <CurrencyInput
+                              value={pendingItem.unit_price || 0}
+                              onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'unit_price', value)}
+                              className="w-24 text-right"
+                            />
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                            {formatCurrency(pendingItem.total_price || 0)}
                           </TableCell>
                           <TableCell>
-                            {isEditing ? (
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => saveItem(item.id || '')}
-                                  disabled={loading}
-                                >
-                                  <Check className="w-4 h-4 text-green-600" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => cancelEditingItem(item.id || '')}
-                                >
-                                  <X className="w-4 h-4 text-red-600" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => startEditingItem(item.id || '', item)}
-                                  disabled={loading}
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => deleteItem(item.id || '')}
-                                  disabled={loading}
-                                >
-                                  <Trash2 className="w-4 h-4 text-red-600" />
-                                </Button>
-                              </div>
-                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => cancelPendingNewItem(pendingItem.id!)}
+                              disabled={loading}
+                            >
+                              <X className="w-4 h-4 text-red-600" />
+                            </Button>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-
-                    {/* Pending new item rows */}
-                    {pendingNewItems.map((pendingItem, index) => (
-                      <TableRow key={pendingItem.id} className="bg-blue-50/50 border-t-2 border-blue-200">
-                        <TableCell className="font-medium text-blue-600">{(orderDetails.items?.length || 0) + index + 1}</TableCell>
-                        <TableCell>
-                          <Select
-                            value={pendingItem.product_id || ''}
-                            onValueChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'product_id', value)}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Chọn sản phẩm" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products
-                                .filter(product =>
-                                  !orderDetails.items.some(
-                                    (existingItem: OrderItem) => existingItem.product_id === product.id
-                                  ) &&
-                                  !pendingNewItems.some(
-                                    (otherPending: any) => otherPending.id !== pendingItem.id && otherPending.product_id === product.id
-                                  )
-                                )
-                                .map((product) => (
-                                <SelectItem key={product.id} value={product.id}>
-                                  {product.code} - {product.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="text-center">-</TableCell>
-                        <TableCell className="text-center">
-                          <NumberInput
-                            min={1}
-                            value={pendingItem.quantity || 1}
-                            onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'quantity', value)}
-                            className="w-20 text-center"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <CurrencyInput
-                            value={pendingItem.unit_price || 0}
-                            onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'unit_price', value)}
-                            className="w-24 text-right"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(pendingItem.total_price || 0)}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => cancelPendingNewItem(pendingItem.id!)}
-                            disabled={loading}
-                          >
-                            <X className="w-4 h-4 text-red-600" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </>
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Không có sản phẩm nào trong đơn hàng
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-            <div className="flex justify-end">
-              <div className="w-96 space-y-3">
-                {/* Summary Section */}
-                <div className="space-y-2">
-                  {(() => {
-                    // Calculate totals including pending items
-                    const existingItems = orderDetails.items || [];
-                    const allItems = [...existingItems, ...pendingNewItems];
-
-                    const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
-                    const totalProductAmount = allItems.reduce((sum: number, item: any) => sum + ((item.total_price || 0)), 0);
-
-                    const expensesTotal = (orderDetails.expenses || []).reduce(
-                      (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
-                      0
-                    );
-
-                    const grandTotal = totalProductAmount + expensesTotal;
-
-                    return (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
-                          <span className="font-medium">{totalQuantity}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Tổng tiền sản phẩm:</span>
-                          <span>{formatCurrency(totalProductAmount)}</span>
-                        </div>
-                        {expensesTotal > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Chi phí:</span>
-                            <span>{formatCurrency(expensesTotal)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-lg font-bold border-t pt-2">
-                          <span>Tổng tiền:</span>
-                          <span className="text-xl">{formatCurrency(grandTotal)}</span>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          </div>
-          <Separator />
-          {/* Additional Expenses */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">💰</span>
-                <h3 className="text-lg font-semibold">Chi phí</h3>
-              </div>
-              {!isEditingExpenses && (
-                <Button size="sm" variant="outline" onClick={() => setIsEditingExpenses(true)}>
-                  <Edit2 className="w-4 h-4 mr-1" />
-                  Sửa chi phí
-                </Button>
-              )}
-            </div>
-            {isEditingExpenses ? (
-              <div className="space-y-4">
-                <Table className="border border-border/30 rounded-lg overflow-hidden">
-                  <TableHeader>
-                    <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Tên chi phí</TableHead>
-                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số tiền</TableHead>
-                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Ghi chú</TableHead>
-                      <TableHead className="font-semibold text-slate-700"></TableHead>
+                      ))}
+                    </>
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        Không có sản phẩm nào trong đơn hàng
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {editingExpenses.map((expense, index) => (
-                      <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <TableCell className="border-r border-slate-100 align-top pt-4">
-                          <Input
-                            value={expense.name}
-                            onChange={(e) => {
-                              const updated = [...editingExpenses];
-                              updated[index] = { ...updated[index], name: e.target.value };
-                              setEditingExpenses(updated);
-                            }}
-                            placeholder="Ví dụ: Phí vận chuyển"
-                          />
-                        </TableCell>
-                        <TableCell className="border-r border-slate-100 align-top pt-4">
-                          <CurrencyInput
-                            value={expense.amount}
-                            onChange={(value) => {
-                              const updated = [...editingExpenses];
-                              updated[index] = { ...updated[index], amount: value };
-                              setEditingExpenses(updated);
-                            }}
-                            className="w-32"
-                          />
-                        </TableCell>
-                        <TableCell className="border-r border-slate-100 align-top pt-4">
-                          <Input
-                            value={expense.note || ""}
-                            onChange={(e) => {
-                              const updated = [...editingExpenses];
-                              updated[index] = { ...updated[index], note: e.target.value };
-                              setEditingExpenses(updated);
-                            }}
-                            placeholder="Ghi chú (không bắt buộc)"
-                          />
-                        </TableCell>
-                        <TableCell className="align-top pt-4">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const updated = editingExpenses.filter((_, i) => i !== index);
-                              setEditingExpenses(updated);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="flex justify-between items-center">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingExpenses([...editingExpenses, { name: "", amount: 0, note: "" }]);
-                    }}
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Thêm chi phí
-                  </Button>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingExpenses(orderDetails.expenses || []);
-                        setIsEditingExpenses(false);
-                      }}
-                    >
-                      Hủy
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        if (!orderDetails) return;
-                        setLoading(true);
-                        try {
-                          const filteredExpenses = editingExpenses
-                            .filter(exp => (exp.name && exp.name.trim().length > 0) || exp.amount)
-                            .map(exp => ({
-                              name: exp.name.trim(),
-                              amount: exp.amount || 0,
-                              note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
-                            }));
-                          await orderApi.updateOrder(orderDetails.id, {
-                            expenses: filteredExpenses,
-                          });
-                          const updatedOrder = await orderApi.getOrder(orderDetails.id);
-                          setOrderDetails(updatedOrder);
-                          setEditingExpenses(updatedOrder.expenses || []);
-                          setIsEditingExpenses(false);
-                          if (onOrderUpdated) {
-                            onOrderUpdated();
-                          }
-                          toast({
-                            title: "Thành công",
-                            description: "Đã cập nhật chi phí",
-                          });
-                        } catch (error) {
-                          toast({
-                            title: "Lỗi",
-                            description: getErrorMessage(error, "Không thể cập nhật chi phí"),
-                            variant: "destructive",
-                          });
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      disabled={loading}
-                    >
-                      Lưu
-                    </Button>
+                  )}
+                </TableBody>
+              </Table>
+              <div className="flex justify-end">
+                <div className="w-96 space-y-3">
+                  {/* Summary Section */}
+                  <div className="space-y-2">
+                    {(() => {
+                      // Calculate totals including pending items
+                      const existingItems = orderDetails?.items || [];
+                      const allItems = [...existingItems, ...pendingNewItems];
+
+                      const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+                      const totalProductAmount = allItems.reduce((sum: number, item: any) => sum + ((item.total_price || 0)), 0);
+
+                      const expensesTotal = (orderDetails?.expenses || []).reduce(
+                        (sum: number, exp: any) => sum + (Number(exp.amount) || 0),
+                        0
+                      );
+
+                      const grandTotal = totalProductAmount + expensesTotal;
+
+                      return (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Tổng số lượng:</span>
+                            <span className="font-medium">{totalQuantity}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Tổng tiền sản phẩm:</span>
+                            <span>{formatCurrency(totalProductAmount)}</span>
+                          </div>
+                          {expensesTotal > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Chi phí:</span>
+                              <span>{formatCurrency(expensesTotal)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-lg font-bold border-t pt-2">
+                            <span>Tổng tiền:</span>
+                            <span className="text-xl">{formatCurrency(grandTotal)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
-                <div className="text-sm font-medium text-right">
-                  Tổng chi phí:{" "}
-                  <span className="font-semibold text-blue-600">
-                    {editingExpenses
-                      .reduce((sum, exp) => sum + (exp.amount || 0), 0)
-                      .toLocaleString("vi-VN")}{" "}
-                    đ
-                  </span>
-                </div>
               </div>
-            ) : (
-              <div>
-                {orderDetails.expenses && orderDetails.expenses.length > 0 ? (
+            </div>
+
+            <Separator />
+
+            {/* Additional Expenses */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💰</span>
+                  <h3 className="text-lg font-semibold">Chi phí</h3>
+                </div>
+                {!isEditingExpenses && (
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingExpenses(true)}>
+                    <Edit2 className="w-4 h-4 mr-1" />
+                    Sửa chi phí
+                  </Button>
+                )}
+              </div>
+              {isEditingExpenses ? (
+                <div className="space-y-4">
                   <Table className="border border-border/30 rounded-lg overflow-hidden">
                     <TableHeader>
                       <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">#</TableHead>
                         <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Tên chi phí</TableHead>
-                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700 text-right">Số tiền</TableHead>
-                        <TableHead className="font-semibold text-slate-700">Ghi chú</TableHead>
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Số tiền</TableHead>
+                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Ghi chú</TableHead>
+                        <TableHead className="font-semibold text-slate-700"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {orderDetails.expenses.map((expense: any, index: number) => (
+                      {editingExpenses.map((expense, index) => (
                         <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
-                          <TableCell className="border-r border-slate-100 font-medium">{index + 1}</TableCell>
-                          <TableCell className="border-r border-slate-100">{expense.name}</TableCell>
-                          <TableCell className="border-r border-slate-100 text-right">
-                            {formatCurrency(Number(expense.amount) || 0)}
+                          <TableCell className="border-r border-slate-100 align-top pt-4">
+                            <Input
+                              value={expense.name}
+                              onChange={(e) => {
+                                const updated = [...editingExpenses];
+                                updated[index] = { ...updated[index], name: e.target.value };
+                                setEditingExpenses(updated);
+                              }}
+                              placeholder="Ví dụ: Phí vận chuyển"
+                            />
                           </TableCell>
-                          <TableCell>{expense.note || '-'}</TableCell>
+                          <TableCell className="border-r border-slate-100 align-top pt-4">
+                            <CurrencyInput
+                              value={expense.amount}
+                              onChange={(value) => {
+                                const updated = [...editingExpenses];
+                                updated[index] = { ...updated[index], amount: value };
+                                setEditingExpenses(updated);
+                              }}
+                              className="w-32"
+                            />
+                          </TableCell>
+                          <TableCell className="border-r border-slate-100 align-top pt-4">
+                            <Input
+                              value={expense.note || ""}
+                              onChange={(e) => {
+                                const updated = [...editingExpenses];
+                                updated[index] = { ...updated[index], note: e.target.value };
+                                setEditingExpenses(updated);
+                              }}
+                              placeholder="Ghi chú (không bắt buộc)"
+                            />
+                          </TableCell>
+                          <TableCell className="align-top pt-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const updated = editingExpenses.filter((_, i) => i !== index);
+                                setEditingExpenses(updated);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                ) : (
-                  <div className="text-sm text-muted-foreground py-4">
-                    Chưa có chi phí nào
+                  <div className="flex justify-between items-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingExpenses([...editingExpenses, { name: "", amount: 0, note: "" }]);
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Thêm chi phí
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingExpenses(orderDetails?.expenses || []);
+                          setIsEditingExpenses(false);
+                        }}
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          if (!orderDetails) return;
+                          setLoading(true);
+                          try {
+                            const filteredExpenses = editingExpenses
+                              .filter(exp => (exp.name && exp.name.trim().length > 0) || exp.amount)
+                              .map(exp => ({
+                                name: exp.name.trim(),
+                                amount: exp.amount || 0,
+                                note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
+                              }));
+                            await orderApi.updateOrder(orderDetails.id, {
+                              expenses: filteredExpenses,
+                            });
+                            const updatedOrder = await orderApi.getOrder(orderDetails.id);
+                            setOrderDetails(updatedOrder);
+                            setEditingExpenses(updatedOrder.expenses || []);
+                            setIsEditingExpenses(false);
+                            if (onOrderUpdated) {
+                              onOrderUpdated();
+                            }
+                            toast({
+                              title: "Thành công",
+                              description: "Đã cập nhật chi phí",
+                            });
+                          } catch (error) {
+                            toast({
+                              title: "Lỗi",
+                              description: getErrorMessage(error, "Không thể cập nhật chi phí"),
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        Lưu
+                      </Button>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-          <Separator />
-          {/* Order Status and Info */}
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-               <div className="flex justify-between items-center">
-                 <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
-                <Select 
-                  value={(orderDetails as any).order_status || orderDetails.status || 'pending'}
-                   onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
-                >
-                   <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
-                     <div className="cursor-pointer">
-                      {getStatusBadge((orderDetails as any).order_status || orderDetails.status)}
-                     </div>
-                   </SelectTrigger>
-                   <SelectContent>
-                     {ORDER_STATUSES.map((status) => (
-                       <SelectItem key={status} value={status}>
-                         {ORDER_STATUS_LABELS_VI[status]}
-                       </SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
+                  <div className="text-sm font-medium text-right">
+                    Tổng chi phí:{" "}
+                    <span className="font-semibold text-blue-600">
+                      {editingExpenses
+                        .reduce((sum, exp) => sum + (exp.amount || 0), 0)
+                        .toLocaleString("vi-VN")}{" "}
+                      đ
+                    </span>
+                  </div>
                 </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
-                {getPaymentStatusBadge(
-                  (orderDetails as any).payment_status || 
-                  calculatePaymentStatus(
-                    orderDetails.paid_amount || orderDetails.initial_payment || 0,
-                    orderDetails.total_amount || 0
-                  )
-                )}
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
-                <span>{orderDetails.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng'}</span>
-              </div>
-              {orderDetails.vat_type && orderDetails.vat_type !== 'none' && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Loại VAT:</span>
-                  <Badge variant="outline" className="text-xs">
-                    {orderDetails.vat_type === 'total' ? 'Tính trên tổng' : 
-                     orderDetails.vat_type === 'per_line' ? 'Tính theo dòng' : 
-                     'Không có'}
-                  </Badge>
+              ) : (
+                <div>
+                  {orderDetails?.expenses && orderDetails.expenses.length > 0 ? (
+                    <Table className="border border-border/30 rounded-lg overflow-hidden">
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">#</TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">Tên chi phí</TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700 text-right">Số tiền</TableHead>
+                          <TableHead className="font-semibold text-slate-700">Ghi chú</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orderDetails.expenses.map((expense: any, index: number) => (
+                          <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                            <TableCell className="border-r border-slate-100 font-medium">{index + 1}</TableCell>
+                            <TableCell className="border-r border-slate-100">{expense.name}</TableCell>
+                            <TableCell className="border-r border-slate-100 text-right">
+                              {formatCurrency(Number(expense.amount) || 0)}
+                            </TableCell>
+                            <TableCell>{expense.note || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="text-sm text-muted-foreground py-4">
+                      Chưa có chi phí nào
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Người tạo đơn:</span>
-                <span>{(orderDetails as any).profiles?.full_name || 'Hệ thống'}</span>
-              </div>
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Số đơn hàng:</span>
-                <span className="font-mono">{orderDetails.order_number || 'N/A'}</span>
+
+            <Separator />
+
+            {/* Order Status and Info */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                 <div className="flex justify-between items-center">
+                   <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
+                  <Select
+                    value={(orderDetails as any)?.order_status || orderDetails?.status || 'pending'}
+                     onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
+                  >
+                     <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
+                       <div className="cursor-pointer">
+                        {getStatusBadge((orderDetails as any)?.order_status || orderDetails?.status)}
+                       </div>
+                     </SelectTrigger>
+                     <SelectContent>
+                       {ORDER_STATUSES.map((status) => (
+                         <SelectItem key={status} value={status}>
+                           {ORDER_STATUS_LABELS_VI[status]}
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                  </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
+                  {getPaymentStatusBadge(
+                    (orderDetails as any)?.payment_status ||
+                    calculatePaymentStatus(
+                      orderDetails?.paid_amount || orderDetails?.initial_payment || 0,
+                      orderDetails?.total_amount || 0
+                    )
+                  )}
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
+                  <span>{orderDetails?.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng'}</span>
+                </div>
+                {orderDetails?.vat_type && orderDetails.vat_type !== 'none' && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Loại VAT:</span>
+                    <Badge variant="outline" className="text-xs">
+                      {orderDetails.vat_type === 'total' ? 'Tính trên tổng' :
+                       orderDetails.vat_type === 'per_line' ? 'Tính theo dòng' :
+                       'Không có'}
+                    </Badge>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Người tạo đơn:</span>
+                  <span>{(orderDetails as any)?.profiles?.full_name || 'Hệ thống'}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Ngày tạo:</span>
-                <span>{orderDetails.created_at ? new Date(orderDetails.created_at).toLocaleDateString('vi-VN') : 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Tổng tiền:</span>
-                <span className="font-medium">{formatCurrency(orderDetails.total_amount)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Hạn thanh toán:</span>
-                <div className="flex items-center gap-2">
-                  {editingFields['paymentDeadline'] ? (
-                    <>
-                      <Input
-                        type="date"
-                        value={
-                          editValues['paymentDeadline'] ??
-                          (orderDetails.paymentDeadline && /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
-                            ? orderDetails.paymentDeadline
-                            : orderDetails.paymentDeadline
-                            ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
-                            : '')
-                        }
-                        onChange={(e) =>
-                          setEditValues((prev) => ({
-                            ...prev,
-                            paymentDeadline: e.target.value,
-                          }))
-                        }
-                        className="w-40"
-                      />
-                      <Button size="sm" onClick={() => saveField('paymentDeadline')} disabled={loading}>
-                        Lưu
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => cancelEditing('paymentDeadline')}
-                      >
-                        Hủy
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        {orderDetails.paymentDeadline
-                          ? new Date(orderDetails.paymentDeadline).toLocaleDateString('vi-VN')
-                          : 'Chưa đặt'}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          startEditing(
-                            'paymentDeadline',
-                            orderDetails.paymentDeadline &&
-                            /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Số đơn hàng:</span>
+                  <span className="font-mono">{orderDetails?.order_number || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Ngày tạo:</span>
+                  <span>{orderDetails?.created_at ? new Date(orderDetails.created_at).toLocaleDateString('vi-VN') : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Tổng tiền:</span>
+                  <span className="font-medium">{formatCurrency(orderDetails?.total_amount)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Hạn thanh toán:</span>
+                  <div className="flex items-center gap-2">
+                    {editingFields['paymentDeadline'] ? (
+                      <>
+                        <Input
+                          type="date"
+                          value={
+                            editValues['paymentDeadline'] ??
+                            (orderDetails?.paymentDeadline && /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
                               ? orderDetails.paymentDeadline
-                              : orderDetails.paymentDeadline
+                              : orderDetails?.paymentDeadline
                               ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
-                              : ''
-                          )
-                        }
-                      >
-                        Sửa
-                      </Button>
-                    </>
-                  )}
+                              : '')
+                          }
+                          onChange={(e) =>
+                            setEditValues((prev) => ({
+                              ...prev,
+                              paymentDeadline: e.target.value,
+                            }))
+                          }
+                          className="w-40"
+                        />
+                        <Button size="sm" onClick={() => saveField('paymentDeadline')} disabled={loading}>
+                          Lưu
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => cancelEditing('paymentDeadline')}
+                        >
+                          Hủy
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {orderDetails?.paymentDeadline
+                            ? new Date(orderDetails.paymentDeadline).toLocaleDateString('vi-VN')
+                            : 'Chưa đặt'}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            startEditing(
+                              'paymentDeadline',
+                              orderDetails?.paymentDeadline &&
+                              /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
+                                ? orderDetails.paymentDeadline
+                                : orderDetails?.paymentDeadline
+                                ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
+                                : ''
+                            )
+                          }
+                        >
+                          Sửa
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">{formatCurrency(orderDetails?.paid_amount || orderDetails?.initial_payment)}</span>
+                    <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
+                      Thanh toán
+                    </Button>
+                  </div>
+                </div>
+                {/* Reconciliation tags are not shown in this dialog */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
+                  <div className="flex items-center gap-2">
+                    {editingFields['contract_number'] ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editValues['contract_number'] ?? (orderDetails?.contract_number || '')}
+                          onChange={(e) => setEditValues(prev => ({ ...prev, contract_number: e.target.value }))}
+                          className="w-40"
+                          placeholder="Nhập số hợp đồng"
+                        />
+                        <Button size="sm" onClick={() => saveField('contract_number')} disabled={loading}>
+                          Lưu
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_number')}>
+                          Hủy
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{orderDetails?.contract_number || 'Chưa có'}</span>
+                        <Button size="sm" variant="outline" onClick={() => startEditing('contract_number', orderDetails?.contract_number || '')}>
+                          Sửa
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Số PO:</span>
+                  <div className="flex items-center gap-2">
+                    {editingFields['purchase_order_number'] ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editValues['purchase_order_number'] ?? (orderDetails?.purchase_order_number || '')}
+                          onChange={(e) => setEditValues(prev => ({ ...prev, purchase_order_number: e.target.value }))}
+                          className="w-40"
+                          placeholder="Nhập số PO"
+                        />
+                        <Button size="sm" onClick={() => saveField('purchase_order_number')} disabled={loading}>
+                          Lưu
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => cancelEditing('purchase_order_number')}>
+                          Hủy
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{orderDetails?.purchase_order_number || 'Chưa có'}</span>
+                        <Button size="sm" variant="outline" onClick={() => startEditing('purchase_order_number', orderDetails?.purchase_order_number || '')}>
+                          Sửa
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600">{formatCurrency(orderDetails.paid_amount || orderDetails.initial_payment)}</span>
-                  <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
-                    Thanh toán
-                  </Button>
-                </div>
-              </div>
-              {/* Reconciliation tags are not shown in this dialog */}
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
-                <div className="flex items-center gap-2">
-                  {editingFields['contract_number'] ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={editValues['contract_number'] ?? (orderDetails.contract_number || '')}
-                        onChange={(e) => setEditValues(prev => ({ ...prev, contract_number: e.target.value }))}
-                        className="w-40"
-                        placeholder="Nhập số hợp đồng"
-                      />
-                      <Button size="sm" onClick={() => saveField('contract_number')} disabled={loading}>
-                        Lưu
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_number')}>
-                        Hủy
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono">{orderDetails.contract_number || 'Chưa có'}</span>
-                      <Button size="sm" variant="outline" onClick={() => startEditing('contract_number', orderDetails.contract_number || '')}>
-                        Sửa
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Số PO:</span>
-                <div className="flex items-center gap-2">
-                  {editingFields['purchase_order_number'] ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={editValues['purchase_order_number'] ?? (orderDetails.purchase_order_number || '')}
-                        onChange={(e) => setEditValues(prev => ({ ...prev, purchase_order_number: e.target.value }))}
-                        className="w-40"
-                        placeholder="Nhập số PO"
-                      />
-                      <Button size="sm" onClick={() => saveField('purchase_order_number')} disabled={loading}>
-                        Lưu
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => cancelEditing('purchase_order_number')}>
-                        Hủy
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono">{orderDetails.purchase_order_number || 'Chưa có'}</span>
-                      <Button size="sm" variant="outline" onClick={() => startEditing('purchase_order_number', orderDetails.purchase_order_number || '')}>
-                        Sửa
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-           </div>
-        </div>
-      </DialogContent>
-      {/* Payment Dialog */}
-      {orderDetails && (
-        <PaymentDialog
-          open={showPaymentDialog}
-          onOpenChange={setShowPaymentDialog}
-          order={orderDetails}
-          onUpdate={() => {
-            // Refresh order details when payment is updated
-            loadOrderDetails();
-            if (onOrderUpdated) {
-              onOrderUpdated();
-            }
-          }}
-        />
-      )}
-    </Dialog>
+             </div>
+          </div>
+        </DialogContent>
+
+        {/* Payment Dialog */}
+        {orderDetails && (
+          <PaymentDialog
+            open={showPaymentDialog}
+            onOpenChange={setShowPaymentDialog}
+            order={orderDetails}
+            onUpdate={() => {
+              // Refresh order details when payment is updated
+              loadOrderDetails();
+              if (onOrderUpdated) {
+                onOrderUpdated();
+              }
+            }}
+          />
+        )}
+      </Dialog>
+    </LoadingWrapper>
   );
 };
