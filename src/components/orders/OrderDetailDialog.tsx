@@ -62,6 +62,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       loadOrderDetails();
       loadTags();
       loadWarehouses();
+    } else if (!open) {
+      // Reset loading and error when dialog closes to prevent UI blocking
+      setLoading(false);
+      setError(null);
     }
   }, [open, order]);
 
