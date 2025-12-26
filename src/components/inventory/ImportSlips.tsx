@@ -7,6 +7,7 @@ import { NumberInput } from '@/components/ui/number-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -562,12 +563,16 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="supplier">Nhà cung cấp <span className="text-red-500">*</span></Label>
-                        <Select 
-                          value={newSlip.supplier_id} 
+                        <Combobox
+                          options={suppliers.map((supplier, index) => ({
+                            label: `${supplier?.name} ${supplier?.contact_phone && `(${supplier.contact_phone})`}`,
+                            value: supplier?.id || ''
+                          }))}
+                          value={newSlip.supplier_id}
                           onValueChange={(value) => {
                             const supplier = suppliers.find(s => s?.id === value);
                             setNewSlip({
-                              ...newSlip, 
+                              ...newSlip,
                               supplier_id: value,
                               supplier_name: supplier?.name || '',
                               supplier_contact: supplier?.contact_phone || '',
@@ -583,18 +588,10 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               }
                             });
                           }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn nhà cung cấp hoặc nhập mới bên dưới" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {suppliers.map((supplier, index) => (
-                              <SelectItem key={supplier?.id || `supplier-${index}`} value={supplier?.id || ''}>
-                                {supplier?.name} {supplier?.contact_phone && `(${supplier.contact_phone})`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Chọn nhà cung cấp hoặc nhập mới bên dưới"
+                          searchPlaceholder="Tìm nhà cung cấp..."
+                          emptyMessage="Không có nhà cung cấp nào"
+                        />
                       </div>
                       <div>
                         <Label htmlFor="supplier_name">Hoặc nhập tên mới</Label>
@@ -725,21 +722,17 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="warehouse">Kho nhập <span className="text-red-500">*</span></Label>
-                        <Select
+                        <Combobox
+                          options={warehouses.map((warehouse) => ({
+                            label: `${warehouse.name} - ${warehouse.code}`,
+                            value: warehouse.id
+                          }))}
                           value={newSlip.warehouse_id}
                           onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn kho nhập" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background border border-border z-50">
-                            {warehouses.map((warehouse) => (
-                              <SelectItem key={warehouse.id} value={warehouse.id}>
-                                {warehouse.name} - {warehouse.code}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Chọn kho nhập"
+                          searchPlaceholder="Tìm kho..."
+                          emptyMessage="Không có kho nào"
+                        />
                       </div>
                       <div></div>
                     </div>
@@ -763,46 +756,40 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     <div className="grid grid-cols-6 gap-2">
                       <div>
                         <Label>Sản phẩm <span className="text-red-500">*</span></Label>
-                        <Select value={newItem.product_id} onValueChange={(value) => {
-                          const selectedProduct = products.find(p => p.id === value);
-                          if (selectedProduct) {
-                            // If product has foreign currency settings, populate accordingly
-                            if (selectedProduct.isForeignCurrency && selectedProduct.exchangeRate) {
-                              setNewItem({
-                                ...newItem,
-                                product_id: value,
-                                unit_price: selectedProduct.originalCostPrice || (selectedProduct.costPrice ? selectedProduct.costPrice / selectedProduct.exchangeRate : 0),
-                                isForeignCurrency: true,
-                                exchangeRate: selectedProduct.exchangeRate
-                              });
-                            } else {
-                              // Regular product without foreign currency
-                              setNewItem({
-                                ...newItem,
-                                product_id: value,
-                                unit_price: selectedProduct.costPrice || selectedProduct.unit_price || 0,
-                                isForeignCurrency: false,
-                                exchangeRate: 1
-                              });
+                        <Combobox
+                          options={getAvailableProductsForImport().map((product) => ({
+                            label: `${product.code} - ${product.name}`,
+                            value: product.id
+                          }))}
+                          value={newItem.product_id}
+                          onValueChange={(value) => {
+                            const selectedProduct = products.find(p => p.id === value);
+                            if (selectedProduct) {
+                              // If product has foreign currency settings, populate accordingly
+                              if (selectedProduct.isForeignCurrency && selectedProduct.exchangeRate) {
+                                setNewItem({
+                                  ...newItem,
+                                  product_id: value,
+                                  unit_price: selectedProduct.originalCostPrice || (selectedProduct.costPrice ? selectedProduct.costPrice / selectedProduct.exchangeRate : 0),
+                                  isForeignCurrency: true,
+                                  exchangeRate: selectedProduct.exchangeRate
+                                });
+                              } else {
+                                // Regular product without foreign currency
+                                setNewItem({
+                                  ...newItem,
+                                  product_id: value,
+                                  unit_price: selectedProduct.costPrice || selectedProduct.unit_price || 0,
+                                  isForeignCurrency: false,
+                                  exchangeRate: 1
+                                });
+                              }
                             }
-                          }
-                        }}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn sản phẩm" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getAvailableProductsForImport().map((product) => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.code} - {product.name}
-                              </SelectItem>
-                            ))}
-                            {getAvailableProductsForImport().length === 0 && (
-                              <SelectItem value="" disabled>
-                                Không còn sản phẩm nào để chọn
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
+                          }}
+                          placeholder="Chọn sản phẩm"
+                          searchPlaceholder="Tìm sản phẩm..."
+                          emptyMessage="Không có sản phẩm nào"
+                        />
                       </div>
                       <div>
                         <Label>Số lượng <span className="text-red-500">*</span></Label>
@@ -1189,4 +1176,4 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       </Dialog>
     </div>
   );
-}
+}

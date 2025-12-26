@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -719,7 +720,14 @@ function ExportSlipsContent() {
                               </Button>
                             )}
                           </div>
-                          <Select
+                          <Combobox
+                            options={[
+                              { label: "Chọn đơn hàng (tùy chọn)", value: "" },
+                              ...orders.map((order) => ({
+                                label: `${order.order_number} - ${order.customer_name || 'Không xác định'}`,
+                                value: order.id
+                              }))
+                            ]}
                             value={exportSlipForm.order_id}
                             onValueChange={(value) => {
                               // Auto-fill customer information from selected order
@@ -737,23 +745,22 @@ function ExportSlipsContent() {
                                 setExportSlipForm(prev => ({ ...prev, order_id: value }));
                               }
                             }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Chọn đơn hàng (tùy chọn)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {orders.map((order) => (
-                                <SelectItem key={order.id} value={order.id}>
-                                  {order.order_number} - {order.customer_name || 'Không xác định'}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="Chọn đơn hàng (tùy chọn)"
+                            searchPlaceholder="Tìm đơn hàng..."
+                            emptyMessage="Không có đơn hàng nào"
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="customer_id">Khách hàng</Label>
-                            <Select
+                            <Combobox
+                              options={[
+                                { label: "Chọn khách hàng", value: "" },
+                                ...customers.map((customer) => ({
+                                  label: `${customer.name} (${customer.customer_code})`,
+                                  value: customer.id
+                                }))
+                              ]}
                               value={exportSlipForm.customer_id}
                               onValueChange={(value) => {
                                 const customer = customers.find(c => c.id === value);
@@ -765,18 +772,10 @@ function ExportSlipsContent() {
                                   customer_email: customer?.email || "",
                                 }));
                               }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Chọn khách hàng" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {customers.map((customer) => (
-                                  <SelectItem key={customer.id} value={customer.id}>
-                                    {customer.name} ({customer.customer_code})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              placeholder="Chọn khách hàng"
+                              searchPlaceholder="Tìm khách hàng..."
+                              emptyMessage="Không có khách hàng nào"
+                            />
                           </div>
                           <div>
                             <Label htmlFor="customer_name">Tên khách hàng</Label>
@@ -827,7 +826,14 @@ function ExportSlipsContent() {
                           <Label>
                             Kho xuất hàng <span className="text-red-500">*</span>
                           </Label>
-                          <Select
+                          <Combobox
+                            options={[
+                              { label: "Chọn kho xuất hàng", value: "" },
+                              ...warehouses.map((warehouse) => ({
+                                label: `${warehouse.name} (${warehouse.code})`,
+                                value: warehouse.id
+                              }))
+                            ]}
                             value={exportSlipForm.warehouse_id}
                             onValueChange={(value) => {
                               setExportSlipForm((prev) => {
@@ -847,18 +853,10 @@ function ExportSlipsContent() {
                                 };
                               });
                             }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Chọn kho xuất hàng" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {warehouses.map((warehouse) => (
-                                <SelectItem key={warehouse.id} value={warehouse.id}>
-                                  {warehouse.name} ({warehouse.code})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="Chọn kho xuất hàng"
+                            searchPlaceholder="Tìm kho..."
+                            emptyMessage="Không có kho nào"
+                          />
                         </div>
                         <Table className="border border-border/30 rounded-lg overflow-hidden">
                           <TableHeader>
@@ -885,26 +883,18 @@ function ExportSlipsContent() {
                                 className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                               >
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
-                                  <Select
+                                  <Combobox
+                                    options={getAvailableProductsForRow(index).map((product) => ({
+                                      label: `${product.name} (${product.code})`,
+                                      value: product.id
+                                    }))}
                                     value={item.product_id}
                                     onValueChange={(value) => updateItem(index, "product_id", value)}
-                                  >
-                                    <SelectTrigger className="w-[200px]">
-                                      <SelectValue placeholder="Chọn sản phẩm" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {getAvailableProductsForRow(index).map((product) => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                          {product.name} ({product.code})
-                                        </SelectItem>
-                                      ))}
-                                      {getAvailableProductsForRow(index).length === 0 && (
-                                        <SelectItem value="" disabled>
-                                          Không còn sản phẩm nào để chọn
-                                        </SelectItem>
-                                      )}
-                                    </SelectContent>
-                                  </Select>
+                                    placeholder="Chọn sản phẩm"
+                                    searchPlaceholder="Tìm sản phẩm..."
+                                    emptyMessage={getAvailableProductsForRow(index).length === 0 ? "Không còn sản phẩm nào để chọn" : "Không có sản phẩm nào"}
+                                    className="w-[200px]"
+                                  />
                                 </TableCell>
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
                                   <div className="space-y-1">
@@ -1095,12 +1085,9 @@ function ExportSlipsContent() {
               <Label htmlFor="display-limit" className="text-sm font-medium">
                 Hiển thị:
               </Label>
-              <Select
-                value={displayLimit.toString()}
-                onValueChange={(value) => setDisplayLimit(parseInt(value))}
-              >
+              <Select value={displayLimit.toString()} onValueChange={(value) => setDisplayLimit(parseInt(value))}>
                 <SelectTrigger className="w-20">
-                  <SelectValue />
+                  <SelectValue placeholder="Số lượng" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="10">10</SelectItem>
@@ -1372,48 +1359,16 @@ function ExportSlipsContent() {
                       </Dialog>
                       {/* Status Update Dropdown - Only show when status can be updated */}
                       {getAvailableStatusOptions(slip.status).length > 0 && (
-                        <Select
-                          value=""
-                          onValueChange={(newStatus) => {
-                            handleStatusUpdateWithSelection(slip.id, newStatus, '');
-                          }}
-                        >
+                        <Select onValueChange={(newStatus) => {
+                          handleStatusUpdateWithSelection(slip.id, newStatus, '');
+                        }}>
                           <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
-                            <div className="flex items-center space-x-2">
-                              <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
-                                <ArrowRight className="w-2 h-2 text-white" />
-                              </div>
-                              <SelectValue placeholder="Cập nhật trạng thái" />
-                            </div>
+                            <SelectValue placeholder="Cập nhật trạng thái" />
                           </SelectTrigger>
-                          <SelectContent className="min-w-[220px] p-1">
+                          <SelectContent>
                             {getAvailableStatusOptions(slip.status).map((option) => (
-                              <SelectItem 
-                                key={option.value} 
-                                value={option.value}
-                                className="cursor-pointer hover:bg-blue-50 focus:bg-blue-50 rounded-md p-2"
-                              >
-                                <div className="flex items-center space-x-3 w-full">
-                                  <div className="flex-shrink-0">
-                                    {option.value === 'picked' ? (
-                                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                                        <Package className="w-3 h-3 text-blue-600" />
-                                      </div>
-                                    ) : option.value === 'cancelled' ? (
-                                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                                        <XCircle className="w-3 h-3 text-red-600" />
-                                      </div>
-                                    ) : (
-                                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                                        <CheckCircle className="w-3 h-3 text-green-600" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="font-medium text-gray-900">{option.label}</div>
-                                    <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
-                                  </div>
-                                </div>
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
                               </SelectItem>
                             ))}
                           </SelectContent>

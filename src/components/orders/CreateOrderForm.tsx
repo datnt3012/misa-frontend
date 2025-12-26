@@ -5,6 +5,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -668,8 +669,15 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="customer">Khách hàng <span className="text-red-500">*</span></Label>
-                  <Select 
-                    value={newOrder.customer_id} 
+                  <Combobox
+                    options={[
+                      { label: "+ Khách hàng mới", value: "__new__" },
+                      ...customers.map(customer => ({
+                        label: `${customer.name} (${customer.customer_code})`,
+                        value: customer.id
+                      }))
+                    ]}
+                    value={newOrder.customer_id}
                     onValueChange={(value) => {
                       // Handle "Create new customer" option - just set the value, don't create yet
                       if (value === "__new__") {
@@ -695,21 +703,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       }));
                       setShippingAddressVersion((v) => v + 1);
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn khách hàng hoặc nhập mới" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__new__" className="font-medium text-blue-600">
-                        + Khách hàng mới
-                      </SelectItem>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name} ({customer.customer_code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Chọn khách hàng hoặc nhập mới"
+                    searchPlaceholder="Tìm khách hàng..."
+                    emptyMessage="Không có khách hàng nào"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="customer_name">Tên khách hàng <span className="text-red-500">*</span></Label>
@@ -874,7 +871,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 <Label>
                   Kho xuất hàng <span className="text-red-500">*</span>
                 </Label>
-                <Select
+                <Combobox
+                  options={warehouses.map(warehouse => ({
+                    label: `${warehouse.name} (${warehouse.code})`,
+                    value: warehouse.id
+                  }))}
                   value={newOrder.order_warehouse_id}
                   onValueChange={(value) => {
                     setNewOrder((prev) => {
@@ -895,18 +896,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       };
                     });
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn kho xuất hàng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name} ({warehouse.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Chọn kho xuất hàng"
+                  searchPlaceholder="Tìm kho..."
+                  emptyMessage="Không có kho nào"
+                />
               </div>
               <Table className="border border-border/30 rounded-lg overflow-hidden">
                 <TableHeader>
@@ -933,30 +926,26 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                     >
                       <TableCell className="border-r border-slate-100 align-top pt-4">
-                        <Select
+                        <Combobox
                           key={`product-select-${item.id}`}
+                          options={products
+                            .filter(product => {
+                              // Loại bỏ sản phẩm đã được chọn trong các item khác
+                              const isAlreadySelected = newOrder.items.some((otherItem, otherIndex) =>
+                                otherItem.product_id === product.id && otherIndex !== index
+                              );
+                              return !isAlreadySelected;
+                            })
+                            .map(product => ({
+                              label: `${product.name} (${product.code})`,
+                              value: product.id
+                            }))}
                           value={item.product_id}
                           onValueChange={(value) => updateItem(index, "product_id", value)}
-                        >
-                          <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Chọn sản phẩm" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products
-                              .filter(product => {
-                                // Loại bỏ sản phẩm đã được chọn trong các item khác
-                                const isAlreadySelected = newOrder.items.some((otherItem, otherIndex) => 
-                                  otherItem.product_id === product.id && otherIndex !== index
-                                );
-                                return !isAlreadySelected;
-                              })
-                              .map((product) => (
-                              <SelectItem key={`${item.id}-${product.id}`} value={product.id}>
-                                {product.name} ({product.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Chọn sản phẩm"
+                          searchPlaceholder="Tìm sản phẩm..."
+                          emptyMessage="Không có sản phẩm nào"
+                        />
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-4">
                         <div className="space-y-1">
@@ -1112,15 +1101,12 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </div>
                 <div>
                   <Label htmlFor="initial_payment_method">Phương thức thanh toán <span className="text-red-500">*</span></Label>
-                  <Select 
-                    value={newOrder.initial_payment_method} 
-                    onValueChange={(value) => setNewOrder(prev => ({ 
-                      ...prev, 
-                      initial_payment_method: value,
-                      // Reset bank when payment method is not bank_transfer
-                      initial_payment_bank: value === "bank_transfer" ? prev.initial_payment_bank : ""
-                    }))}
-                  >
+                  <Select value={newOrder.initial_payment_method} onValueChange={(value) => setNewOrder(prev => ({
+                    ...prev,
+                    initial_payment_method: value,
+                    // Reset bank when payment method is not bank_transfer
+                    initial_payment_bank: value === "bank_transfer" ? prev.initial_payment_bank : ""
+                  }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn phương thức" />
                     </SelectTrigger>

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Search, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
@@ -327,7 +328,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-48">
+              <SelectTrigger>
                 <SelectValue placeholder="Lọc theo trạng thái" />
               </SelectTrigger>
               <SelectContent>
@@ -337,32 +338,34 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                 <SelectItem value="out-of-stock">Hết hàng</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Lọc theo loại" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả loại</SelectItem>
-                {uniqueCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterWarehouse} onValueChange={setFilterWarehouse}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Lọc theo kho" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả kho</SelectItem>
-                {usedWarehouses.map((warehouse) => (
-                  <SelectItem key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { label: "Tất cả loại", value: "all" },
+                ...uniqueCategories.map((category) => ({
+                  label: category.name,
+                  value: category.id
+                }))
+              ]}
+              value={filterCategory}
+              onValueChange={setFilterCategory}
+              placeholder="Lọc theo loại"
+              searchPlaceholder="Tìm loại sản phẩm..."
+              emptyMessage="Không có loại sản phẩm nào"
+            />
+            <Combobox
+              options={[
+                { label: "Tất cả kho", value: "all" },
+                ...usedWarehouses.map((warehouse) => ({
+                  label: warehouse.name,
+                  value: warehouse.id
+                }))
+              ]}
+              value={filterWarehouse}
+              onValueChange={setFilterWarehouse}
+              placeholder="Lọc theo kho"
+              searchPlaceholder="Tìm kho..."
+              emptyMessage="Không có kho nào"
+            />
             <Button 
               variant="outline" 
               onClick={exportToExcel}
@@ -378,8 +381,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Hiển thị:</span>
             <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-              <SelectTrigger className="w-20">
-                <SelectValue />
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn số lượng" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10</SelectItem>

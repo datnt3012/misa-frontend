@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -350,7 +351,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <div>
           <Label htmlFor="warehouse-select">Chọn kho xuất hàng <span className="text-red-500">*</span></Label>
           <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger>
               <SelectValue placeholder="Chọn kho xuất hàng" />
             </SelectTrigger>
             <SelectContent>
@@ -366,7 +367,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <div>
           <Label htmlFor="supplier-select">Chọn nhà cung cấp <span className="text-red-500">*</span></Label>
           <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger>
               <SelectValue placeholder="Chọn nhà cung cấp" />
             </SelectTrigger>
             <SelectContent>
@@ -521,4 +522,4 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       </CardContent>
     </Card>
   );
-};
+};

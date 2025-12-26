@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 // // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
@@ -196,7 +197,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
                     <Label htmlFor="document-type">Loại tài liệu</Label>
                     <Select value={documentType} onValueChange={setDocumentType}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Chọn loại tài liệu" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="contract">Hợp đồng</SelectItem>
@@ -321,4 +322,4 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ orderId, onUpd
       </Card>
     </>
   );
-};
+};

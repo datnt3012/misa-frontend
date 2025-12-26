@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Check, ChevronsUpDown, ChevronDown, ChevronRight } from "lucide-react";
@@ -853,19 +854,20 @@ const ProductList: React.FC<ProductListProps> = ({
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={filterCategory} onValueChange={handleCategoryChange}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Lọc theo loại" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả loại</SelectItem>
-                {sortedCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { label: "Tất cả loại", value: "all" },
+                ...sortedCategories.map((category) => ({
+                  label: category.name,
+                  value: category.id
+                }))
+              ]}
+              value={filterCategory}
+              onValueChange={handleCategoryChange}
+              placeholder="Lọc theo loại"
+              searchPlaceholder="Tìm loại sản phẩm..."
+              emptyMessage="Không có loại sản phẩm nào"
+            />
             <div className="flex gap-2 sm:ml-auto">
               {canManageProducts && (
                 <Dialog open={isAddProductDialogOpen} onOpenChange={setIsAddProductDialogOpen}>
@@ -1291,8 +1293,8 @@ const ProductList: React.FC<ProductListProps> = ({
                           limit: jobHistoryItemsPerPage
                         });
                       }}>
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn sắp xếp" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="newest">Mới nhất</SelectItem>
@@ -1302,27 +1304,29 @@ const ProductList: React.FC<ProductListProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">Hiển thị:</span>
-                      <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
-                        const newLimit = parseInt(value);
-                        setJobHistoryItemsPerPage(newLimit);
-                        setJobHistoryPage(1); // Reset to first page when limit changes
-                        onRefreshImportJobs({
-                          onlyActive: false,
-                          sortBy: 'createdAt',
-                          sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                          page: 1,
-                          limit: newLimit
-                        });
-                      }}>
-                        <SelectTrigger className="w-20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="3">3</SelectItem>
-                          <SelectItem value="5">5</SelectItem>
-                          <SelectItem value="10">10</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        options={[
+                          { label: "3", value: "3" },
+                          { label: "5", value: "5" },
+                          { label: "10", value: "10" }
+                        ]}
+                        value={jobHistoryItemsPerPage.toString()}
+                        onValueChange={(value) => {
+                          const newLimit = parseInt(value);
+                          setJobHistoryItemsPerPage(newLimit);
+                          setJobHistoryPage(1); // Reset to first page when limit changes
+                          onRefreshImportJobs({
+                            onlyActive: false,
+                            sortBy: 'createdAt',
+                            sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                            page: 1,
+                            limit: newLimit
+                          });
+                        }}
+                        placeholder="Chọn số lượng"
+                        searchPlaceholder="Tìm số lượng..."
+                        emptyMessage="Không có tùy chọn nào"
+                      />
                     </div>
                   </div>
                   {completedJobs.length === 0 ? (
@@ -1685,8 +1689,8 @@ const ProductList: React.FC<ProductListProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Hiển thị:</span>
             <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-              <SelectTrigger className="w-20">
-                <SelectValue />
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn số lượng" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10</SelectItem>

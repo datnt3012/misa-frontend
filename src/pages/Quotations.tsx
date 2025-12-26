@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Search, Plus, Eye, Edit, Trash2, MoreHorizontal, FileText, Calendar, Download, FileDown } from "lucide-react";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
@@ -508,19 +509,20 @@ const QuotationsContent: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Người tạo</label>
-              <Select value={creatorFilter} onValueChange={setCreatorFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tất cả người tạo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả người tạo</SelectItem>
-                  {creators.map((creator) => (
-                    <SelectItem key={creator.id} value={creator.id}>
-                      {creator.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={[
+                  { label: "Tất cả người tạo", value: "all" },
+                  ...creators.map((creator) => ({
+                    label: creator.email,
+                    value: creator.id
+                  }))
+                ]}
+                value={creatorFilter}
+                onValueChange={setCreatorFilter}
+                placeholder="Tất cả người tạo"
+                searchPlaceholder="Tìm người tạo..."
+                emptyMessage="Không có người tạo nào"
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Từ ngày</label>
@@ -671,22 +673,27 @@ const QuotationsContent: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-center">
                           <Select
-                              value={quotation.status || 'pending'}
-                              onValueChange={(newStatus) => handleUpdateQuotationStatus(quotation.id, newStatus)}
-                              disabled={!hasPermission('QUOTATIONS_UPDATE_STATUS')}
-                            >
-                              <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
-                                <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
-                                  {getStatusBadge(quotation.status || 'pending')}
-                                </div>
-                              </SelectTrigger>
-                              <SelectContent className="min-w-[128px] sm:min-w-[144px]">
-                                {(['pending', 'completed', 'cancelled'] as const).map((status) => (
-                                  <SelectItem key={status} value={status}>
-                                    {ORDER_STATUS_LABELS_VI[status] || status}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
+                            value={quotation.status || 'pending'}
+                            onValueChange={(newStatus) => handleUpdateQuotationStatus(quotation.id, newStatus)}
+                            disabled={!hasPermission('QUOTATIONS_UPDATE_STATUS')}
+                          >
+                            <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
+                              <SelectValue>
+                                {(() => {
+                                  const statusConfig: Record<string, string> = {
+                                    'pending': 'Chờ xử lý',
+                                    'completed': 'Hoàn thành',
+                                    'cancelled': 'Đã hủy',
+                                  };
+                                  return statusConfig[quotation.status || 'pending'] || quotation.status;
+                                })()}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Chờ xử lý</SelectItem>
+                              <SelectItem value="completed">Hoàn thành</SelectItem>
+                              <SelectItem value="cancelled">Đã hủy</SelectItem>
+                            </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell className="text-center">
@@ -1010,4 +1017,4 @@ const QuotationsContent: React.FC = () => {
     </div>
   );
 };
-export default QuotationsContent;
+export default QuotationsContent;

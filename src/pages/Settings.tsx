@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
@@ -575,29 +576,20 @@ const SettingsContent = () => {
                         <div className="grid grid-cols-1 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="target-user">Chọn nhân viên</Label>
-                            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Chọn nhân viên cần đổi mật khẩu" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {users.length === 0 ? (
-                                  <div className="p-2 text-sm text-muted-foreground text-center">
-                                    Đang tải danh sách nhân viên...
-                                  </div>
-                                ) : (
-                                  users
-                                    .filter(u => {
-                                      // Không cho đổi mật khẩu chính mình
-                                      return u.id !== user?.id;
-                                    })
-                                    .map((u) => (
-                                      <SelectItem key={u.id} value={u.id}>
-                                        {u.firstName || ''} {u.lastName || ''} ({u.role?.name || 'Chưa phân quyền'})
-                                      </SelectItem>
-                                    ))
-                                )}
-                              </SelectContent>
-                            </Select>
+                            <Combobox
+                              options={users
+                                .filter(u => u.id !== user?.id)
+                                .map(u => ({
+                                  label: `${u.firstName || ''} ${u.lastName || ''} (${u.role?.name || 'Chưa phân quyền'})`,
+                                  value: u.id
+                                }))}
+                              value={selectedUserId}
+                              onValueChange={setSelectedUserId}
+                              placeholder="Chọn nhân viên cần đổi mật khẩu"
+                              searchPlaceholder="Tìm nhân viên..."
+                              emptyMessage={users.length === 0 ? "Đang tải danh sách nhân viên..." : "Không tìm thấy nhân viên"}
+                              disabled={users.length === 0}
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="new-user-password">Mật khẩu mới</Label>
@@ -758,18 +750,17 @@ const SettingsContent = () => {
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="user-role">Vai trò <span className="text-red-500">*</span></Label>
-                            <Select value={newUserRole} onValueChange={setNewUserRole}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {userRoles.map((role) => (
-                                  <SelectItem key={role.id} value={role.id}>
-                                    {role.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Combobox
+                              options={userRoles.map((role) => ({
+                                label: role.name,
+                                value: role.name
+                              }))}
+                              value={newUserRole}
+                              onValueChange={setNewUserRole}
+                              placeholder="Chọn vai trò"
+                              searchPlaceholder="Tìm vai trò..."
+                              emptyMessage="Không có vai trò nào"
+                            />
                           </div>
                         </div>
                         <div className="flex gap-2 justify-end">
@@ -845,26 +836,23 @@ const SettingsContent = () => {
                                 <TableCell className="text-center">
                                   {editingRole === userItem.id ? (
                                      <div className="flex items-center justify-center gap-2">
-                                        <Select 
-                                          value={tempRoleValues[userItem.id] || userItem.role?.id || userItem.roleId} 
+                                        <Combobox
+                                          options={userRoles.map((role) => ({
+                                            label: role.name,
+                                            value: role.id
+                                          }))}
+                                          value={tempRoleValues[userItem.id] || userItem.role?.id || userItem.roleId}
                                           onValueChange={(newRole) => {
                                             setTempRoleValues(prev => ({
                                               ...prev,
                                               [userItem.id]: newRole
                                             }));
                                           }}
-                                        >
-                                         <SelectTrigger className="w-40">
-                                           <SelectValue placeholder={userItem.role?.name || "Chọn vai trò"} />
-                                         </SelectTrigger>
-                                         <SelectContent>
-                                           {userRoles.map((role) => (
-                                             <SelectItem key={role.id} value={role.id}>
-                                               {role.name}
-                                             </SelectItem>
-                                           ))}
-                                         </SelectContent>
-                                       </Select>
+                                          placeholder={userItem.role?.name || "Chọn vai trò"}
+                                          searchPlaceholder="Tìm vai trò..."
+                                          emptyMessage="Không có vai trò nào"
+                                          className="w-40"
+                                        />
                                        <Button
                                          variant="outline"
                                          size="sm"
