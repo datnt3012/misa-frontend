@@ -722,18 +722,17 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="warehouse">Kho nhập <span className="text-red-500">*</span></Label>
-                        <Select value={newSlip.warehouse_id} onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn kho nhập" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses.map((warehouse) => (
-                              <SelectItem key={warehouse.id} value={warehouse.id}>
-                                {warehouse.name} - {warehouse.code}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Combobox
+                          options={warehouses.map((warehouse) => ({
+                            label: `${warehouse.name} - ${warehouse.code}`,
+                            value: warehouse.id
+                          }))}
+                          value={newSlip.warehouse_id}
+                          onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}
+                          placeholder="Chọn kho nhập"
+                          searchPlaceholder="Tìm kho..."
+                          emptyMessage="Không có kho nào"
+                        />
                       </div>
                       <div></div>
                     </div>

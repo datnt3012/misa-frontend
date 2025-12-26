@@ -255,19 +255,20 @@ const InventoryHistory = () => {
               <SelectItem value="out">Xuất kho</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filterWarehouse} onValueChange={setFilterWarehouse}>
-            <SelectTrigger>
-              <SelectValue placeholder="Lọc theo kho" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả kho</SelectItem>
-              {warehouses.map((warehouse) => (
-                <SelectItem key={warehouse.id} value={warehouse.id}>
-                  {warehouse.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            options={[
+              { label: "Tất cả kho", value: "all" },
+              ...warehouses.map((warehouse) => ({
+                label: warehouse.name,
+                value: warehouse.id
+              }))
+            ]}
+            value={filterWarehouse}
+            onValueChange={setFilterWarehouse}
+            placeholder="Lọc theo kho"
+            searchPlaceholder="Tìm kho..."
+            emptyMessage="Không có kho nào"
+          />
         </div>
         <div className="border rounded-lg">
           <Table>
