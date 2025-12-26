@@ -20,22 +20,22 @@ import { orderTagsApi, OrderTag } from "@/api/orderTags.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
-import { PaymentDialog } from '@/components/PaymentDialog';
-import { LoadingWrapper } from '@/components/LoadingWrapper';
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
 interface OrderDetailDialogProps {
-  order: any;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onOrderUpdated?: () => void;
+   order: any;
+   open: boolean;
+   onOpenChange: (open: boolean) => void;
+   onOrderUpdated?: () => void;
+   onOpenPaymentDialog?: () => void;
 }
 
 export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
-  order,
-  open,
-  onOpenChange,
-  onOrderUpdated,
+   order,
+   open,
+   onOpenChange,
+   onOrderUpdated,
+   onOpenPaymentDialog,
 }) => {
   const [orderDetails, setOrderDetails] = useState<Order | null>(null);
   const [customerDetails, setCustomerDetails] = useState<any | null>(null);
@@ -43,7 +43,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
@@ -56,6 +55,20 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
   useEffect(() => {
     if (open && order) {
+      // Reset all state when opening dialog for a new order
+      setOrderDetails(null);
+      setCustomerDetails(null);
+      setLoading(false);
+      setError(null);
+      setEditingFields({});
+      setEditValues({});
+      setProducts([]);
+      setWarehouses([]);
+      setEditingItems({});
+      setAvailableTags([]);
+      setEditingExpenses([]);
+      setIsEditingExpenses(false);
+      setPendingNewItems([]);
       // Clear pending items when opening dialog for a new order
       setPendingNewItems([]);
       setError(null);
@@ -713,21 +726,32 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     }
   };
 
-  // Show loading wrapper for the entire dialog
+  // Don't render if no order is selected
+  if (!order) return null;
+
   return (
-    <LoadingWrapper
-      isLoading={loading}
-      error={error}
-      onRetry={() => {
-        loadOrderDetails();
-      }}
-      loadingMessage="Đang tải chi tiết đơn hàng..."
-    >
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails?.order_number}</DialogTitle>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Chỉnh sửa đơn hàng #{orderDetails?.order_number}</DialogTitle>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-sm text-muted-foreground">Đang tải chi tiết đơn hàng...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-sm text-red-600 mb-4">{error}</p>
+              <Button onClick={() => loadOrderDetails()} variant="outline" size="sm">
+                Thử lại
+              </Button>
+            </div>
+          </div>
+        ) : (
           <div className="space-y-6">
             {/* Customer Information */}
             <div className="space-y-4">
@@ -1252,21 +1276,25 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             {/* Order Status and Info */}
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
-                 <div className="flex justify-between items-center">
-                   <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
-                  <Select value={(orderDetails as any)?.order_status || orderDetails?.status || 'pending'} onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn trạng thái" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ORDER_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {ORDER_STATUS_LABELS_VI[status]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Trạng thái xử lý:</span>
+                  <div className="ml-auto">
+                    <Select value={(orderDetails as any)?.order_status || orderDetails?.status || 'pending'} onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}>
+                      <SelectTrigger className="w-auto min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
+                        <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
+                          {getStatusBadge((orderDetails as any)?.order_status || orderDetails?.status || 'pending')}
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ORDER_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {ORDER_STATUS_LABELS_VI[status]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
                   {getPaymentStatusBadge(
@@ -1318,11 +1346,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                           type="date"
                           value={
                             editValues['paymentDeadline'] ??
-                            (orderDetails?.paymentDeadline && /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
-                              ? orderDetails.paymentDeadline
-                              : orderDetails?.paymentDeadline
-                              ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
-                              : '')
+                            (orderDetails?.paymentDeadline ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10) : '')
                           }
                           onChange={(e) =>
                             setEditValues((prev) => ({
@@ -1356,10 +1380,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                           onClick={() =>
                             startEditing(
                               'paymentDeadline',
-                              orderDetails?.paymentDeadline &&
-                              /^\d{4}-\d{2}-\d{2}$/.test(orderDetails.paymentDeadline)
-                                ? orderDetails.paymentDeadline
-                                : orderDetails?.paymentDeadline
+                              orderDetails?.paymentDeadline
                                 ? new Date(orderDetails.paymentDeadline).toISOString().slice(0, 10)
                                 : ''
                             )
@@ -1375,7 +1396,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
                   <div className="flex items-center gap-2">
                     <span className="text-green-600">{formatCurrency(orderDetails?.paid_amount || orderDetails?.initial_payment)}</span>
-                    <Button size="sm" variant="outline" onClick={() => setShowPaymentDialog(true)}>
+                    <Button size="sm" variant="outline" onClick={() => onOpenPaymentDialog?.()}>
                       Thanh toán
                     </Button>
                   </div>
@@ -1438,47 +1459,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   </div>
                 </div>
               </div>
-             </div>
+            </div>
           </div>
-        </DialogContent>
-
-        {/* Payment Dialog */}
-        {orderDetails && (
-          <PaymentDialog
-            open={showPaymentDialog}
-            onOpenChange={setShowPaymentDialog}
-            order={orderDetails}
-            onUpdate={() => {
-              // Refresh order details when payment is updated
-              loadOrderDetails();
-              if (onOrderUpdated) {
-                onOrderUpdated();
-              }
-            }}
-          />
         )}
+        </DialogContent>
       </Dialog>
-    </LoadingWrapper>
-  );
-};
-
-// Export a separate component for PaymentDialog to avoid modal conflicts
-export const OrderPaymentDialog: React.FC<{
-  order: any;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onUpdate?: () => void;
-}> = ({ order, open, onOpenChange, onUpdate }) => {
-  return (
-    <PaymentDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      order={order}
-      onUpdate={() => {
-        if (onUpdate) {
-          onUpdate();
-        }
-      }}
-    />
-  );
-};
+    );
+  };

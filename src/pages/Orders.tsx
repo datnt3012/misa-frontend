@@ -1250,12 +1250,20 @@ const OrdersContent: React.FC = () => {
       <OrderDetailDialog
         order={selectedOrder}
         open={showOrderDetailDialog}
-        onOpenChange={setShowOrderDetailDialog}
+        onOpenChange={(open) => {
+          setShowOrderDetailDialog(open);
+          if (!open) {
+            setSelectedOrder(null);
+          }
+        }}
         onOrderUpdated={() => {
           fetchOrders();
           if (selectedOrder) {
             orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
           }
+        }}
+        onOpenPaymentDialog={() => {
+          setShowPaymentDialog(true);
         }}
       />
       {/* Order Tags Manager */}
