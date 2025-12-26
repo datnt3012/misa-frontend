@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Search, TrendingUp, TrendingDown, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -245,7 +246,7 @@ const InventoryHistory = () => {
             />
           </div>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger>
               <SelectValue placeholder="Lọc theo loại" />
             </SelectTrigger>
             <SelectContent>
@@ -255,7 +256,7 @@ const InventoryHistory = () => {
             </SelectContent>
           </Select>
           <Select value={filterWarehouse} onValueChange={setFilterWarehouse}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger>
               <SelectValue placeholder="Lọc theo kho" />
             </SelectTrigger>
             <SelectContent>

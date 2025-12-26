@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -559,8 +560,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </div>
               <div>
                 <Label htmlFor="payment-method">Phương thức <span className="text-red-500">*</span></Label>
-                <Select 
-                  value={paymentMethod} 
+                <Combobox
+                  options={[
+                    { label: "Tiền mặt", value: "cash" },
+                    { label: "Chuyển khoản", value: "bank_transfer" },
+                    { label: "Thẻ", value: "card" },
+                    { label: "Khác", value: "other" }
+                  ]}
+                  value={paymentMethod}
                   onValueChange={(value) => {
                     setPaymentMethod(value);
                     // Reset bank when payment method is not bank_transfer
@@ -568,17 +575,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                       setBankAccount('');
                     }
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Tiền mặt</SelectItem>
-                    <SelectItem value="bank_transfer">Chuyển khoản</SelectItem>
-                    <SelectItem value="card">Thẻ</SelectItem>
-                    <SelectItem value="other">Khác</SelectItem>
-                  </SelectContent>
-                </Select>
+                  placeholder="Chọn phương thức thanh toán"
+                  searchPlaceholder="Tìm phương thức..."
+                  emptyMessage="Không có phương thức thanh toán nào"
+                />
               </div>
             </div>
             {/* Bank Account Selection for Bank Transfer */}
@@ -899,4 +899,4 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-};
+};

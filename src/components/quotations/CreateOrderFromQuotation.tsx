@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -209,21 +210,17 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
                         {new Intl.NumberFormat('vi-VN').format(item.unit_price * item.quantity)}
                       </TableCell>
                       <TableCell>
-                        <Select
+                        <Combobox
+                          options={warehouses.map(warehouse => ({
+                            label: `${warehouse.name} (${warehouse.code})`,
+                            value: warehouse.id
+                          }))}
                           value={item.warehouse_id}
                           onValueChange={(value) => updateItemWarehouse(index, value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn kho" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses.map((warehouse) => (
-                              <SelectItem key={warehouse.id} value={warehouse.id}>
-                                {warehouse.name} ({warehouse.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Chọn kho"
+                          searchPlaceholder="Tìm kho..."
+                          emptyMessage="Không có kho nào"
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -240,16 +237,18 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="paymentMethod">Phương thức thanh toán</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Tiền mặt</SelectItem>
-                  <SelectItem value="bank_transfer">Chuyển khoản</SelectItem>
-                  <SelectItem value="credit_card">Thẻ tín dụng</SelectItem>
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={[
+                  { label: "Tiền mặt", value: "cash" },
+                  { label: "Chuyển khoản", value: "bank_transfer" },
+                  { label: "Thẻ tín dụng", value: "credit_card" }
+                ]}
+                value={paymentMethod}
+                onValueChange={setPaymentMethod}
+                placeholder="Chọn phương thức thanh toán"
+                searchPlaceholder="Tìm phương thức..."
+                emptyMessage="Không có phương thức thanh toán nào"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="initialPayment">Thanh toán trước</Label>
@@ -288,4 +287,4 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
     </Dialog>
   );
 };
-export default CreateOrderFromQuotation;
+export default CreateOrderFromQuotation;

@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Line, Legend } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Package, TrendingUp, ShoppingCart, AlertTriangle, Wallet, Boxes, Lock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { dashboardApi } from "@/api/dashboard.api";
@@ -316,7 +317,7 @@ const DashboardContent = () => {
               <CardTitle className="text-sm font-medium">Tổng doanh thu</CardTitle>
               <Select value={revenuePeriod} onValueChange={(v) => setRevenuePeriod(v as 'month' | 'year')}>
                 <SelectTrigger className="h-7 w-auto px-2 text-xs">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn khoảng thời gian" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="month">Tháng</SelectItem>
@@ -346,15 +347,18 @@ const DashboardContent = () => {
           <Card className="flex-1 min-w-0 md:flex-[1_1_calc(25%-12px)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Lợi nhuận</CardTitle>
-              <Select value={profitPeriod} onValueChange={(v) => setProfitPeriod(v as 'month' | 'year')}>
-                <SelectTrigger className="h-7 w-auto px-2 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month">Tháng</SelectItem>
-                  <SelectItem value="year">Năm</SelectItem>
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={[
+                  { label: "Tháng", value: "month" },
+                  { label: "Năm", value: "year" }
+                ]}
+                value={profitPeriod}
+                onValueChange={(v) => setProfitPeriod(v as 'month' | 'year')}
+                placeholder="Chọn khoảng thời gian"
+                searchPlaceholder="Tìm khoảng thời gian..."
+                emptyMessage="Không có khoảng thời gian nào"
+                className="h-7 w-auto px-2 text-xs"
+              />
             </CardHeader>
             <CardContent>
               {(() => {
@@ -1020,16 +1024,19 @@ const DashboardContent = () => {
               <CardTitle>Đơn hàng gần đây</CardTitle>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Hiển thị</span>
-                <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
-                  <SelectTrigger className="h-8 w-20">
-                    <SelectValue placeholder="Số lượng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">3</SelectItem>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  options={[
+                    { label: "3", value: "3" },
+                    { label: "5", value: "5" },
+                    { label: "10", value: "10" }
+                  ]}
+                  value={String(recentOrdersLimit)}
+                  onValueChange={(v) => setRecentOrdersLimit(Number(v))}
+                  placeholder="Số lượng"
+                  searchPlaceholder="Tìm số lượng..."
+                  emptyMessage="Không có số lượng nào"
+                  className="h-8 w-20"
+                />
               </div>
             </div>
           </CardHeader>

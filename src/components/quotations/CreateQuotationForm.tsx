@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -38,7 +39,7 @@ interface QuotationFormState {
 const createInitialQuotationState = (): QuotationFormState => ({
   customer_id: "",
   note: "",
-  status: "draft",
+  status: "pending",
   details: []
 });
 const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({ 
@@ -56,11 +57,11 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
   useEffect(() => {
     if (open) {
       if (isEditMode && initialQuotation) {
-        // Load quotation data for edit
+        // Load quotation data for edit, but set status to pending by default
         setQuotation({
           customer_id: initialQuotation.customer_id,
           note: initialQuotation.note || "",
-          status: initialQuotation.status,
+          status: "pending", // Mặc định chọn "pending" khi chỉnh sửa
           details: initialQuotation.details?.map((d, index) => ({
             id: `edit-detail-${index}`,
             product_id: d.product_id,
@@ -218,32 +219,25 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
           {/* Customer Selection */}
           <div className="space-y-2">
             <Label htmlFor="customer">Khách hàng *</Label>
-            <Select
+            <Combobox
+              options={customers.map(customer => ({
+                label: `${customer.name} ${customer.phoneNumber ? `(${customer.phoneNumber})` : ""}`,
+                value: customer.id
+              }))}
               value={quotation.customer_id}
               onValueChange={(value) => setQuotation(prev => ({ ...prev, customer_id: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn khách hàng" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name} {customer.phoneNumber ? `(${customer.phoneNumber})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Chọn khách hàng"
+              searchPlaceholder="Tìm khách hàng..."
+              emptyMessage="Không có khách hàng nào"
+            />
           </div>
           {/* Status and Type */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="status">Trạng thái</Label>
-              <Select
-                value={quotation.status}
-                onValueChange={(value) => setQuotation(prev => ({ ...prev, status: value }))}
-              >
+              <Select value={quotation.status} onValueChange={(value) => setQuotation(prev => ({ ...prev, status: value }))}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Chờ xử lý</SelectItem>
@@ -297,29 +291,25 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                       {quotation.details.map((detail, index) => (
                         <TableRow key={detail.id}>
                           <TableCell>
-                            <Select
+                            <Combobox
+                              options={products
+                                .filter(product => {
+                                  // Loại bỏ sản phẩm đã được chọn trong các detail khác
+                                  const isAlreadySelected = quotation.details.some((otherDetail, otherIndex) =>
+                                    otherDetail.product_id === product.id && otherIndex !== index
+                                  );
+                                  return !isAlreadySelected;
+                                })
+                                .map(product => ({
+                                  label: `${product.name} (${product.code})`,
+                                  value: product.id
+                                }))}
                               value={detail.product_id}
                               onValueChange={(value) => updateDetail(index, 'product_id', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Chọn sản phẩm" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {products
-                                  .filter(product => {
-                                    // Loại bỏ sản phẩm đã được chọn trong các detail khác
-                                    const isAlreadySelected = quotation.details.some((otherDetail, otherIndex) => 
-                                      otherDetail.product_id === product.id && otherIndex !== index
-                                    );
-                                    return !isAlreadySelected;
-                                  })
-                                  .map((product) => (
-                                  <SelectItem key={product.id} value={product.id}>
-                                    {product.name} ({product.code})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              placeholder="Chọn sản phẩm"
+                              searchPlaceholder="Tìm sản phẩm..."
+                              emptyMessage="Không có sản phẩm nào"
+                            />
                           </TableCell>
                           <TableCell>
                             <NumberInput

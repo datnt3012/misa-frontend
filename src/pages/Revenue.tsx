@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { AdvancedCalendar } from '@/components/ui/advanced-calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Combobox } from '@/components/ui/combobox';
 import { Badge } from '@/components/ui/badge';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
@@ -726,22 +727,23 @@ function RevenueContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Sản phẩm</Label>
-                  <Select value={selectedProduct} onValueChange={(value) => {
-                    console.log('Product dropdown changed to:', value);
-                    setSelectedProduct(value);
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn sản phẩm" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả sản phẩm</SelectItem>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.code} - {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={[
+                      { label: "Tất cả sản phẩm", value: "all" },
+                      ...products.map((product) => ({
+                        label: `${product.code} - ${product.name}`,
+                        value: product.name
+                      }))
+                    ]}
+                    value={selectedProduct}
+                    onValueChange={(value) => {
+                      console.log('Product dropdown changed to:', value);
+                      setSelectedProduct(value);
+                    }}
+                    placeholder="Chọn sản phẩm"
+                    searchPlaceholder="Tìm sản phẩm..."
+                    emptyMessage="Không có sản phẩm nào"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Trạng thái đơn hàng</Label>
@@ -767,39 +769,41 @@ function RevenueContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Người tạo đơn</Label>
-                  <Select value={selectedOrderCreator} onValueChange={setSelectedOrderCreator}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn nhân viên" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả nhân viên</SelectItem>
-                      {users.map((user) => {
+                  <Combobox
+                    options={[
+                      { label: "Tất cả nhân viên", value: "all" },
+                      ...users.map((user) => {
                         const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
                         const label = fullName || user.email || 'Không xác định';
-                        return (
-                          <SelectItem key={user.id} value={user.id}>
-                            {label}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                        return {
+                          label: label,
+                          value: user.id
+                        };
+                      })
+                    ]}
+                    value={selectedOrderCreator}
+                    onValueChange={setSelectedOrderCreator}
+                    placeholder="Chọn nhân viên"
+                    searchPlaceholder="Tìm nhân viên..."
+                    emptyMessage="Không có nhân viên nào"
+                  />
                 </div>
             <div className="space-y-2">
               <Label>Khách hàng</Label>
-              <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn khách hàng" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả khách hàng</SelectItem>
-                  {customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.customer_code} - {customer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={[
+                  { label: "Tất cả khách hàng", value: "all" },
+                  ...customers.map((customer) => ({
+                    label: `${customer.customer_code} - ${customer.name}`,
+                    value: customer.id
+                  }))
+                ]}
+                value={selectedCustomer}
+                onValueChange={setSelectedCustomer}
+                placeholder="Chọn khách hàng"
+                searchPlaceholder="Tìm khách hàng..."
+                emptyMessage="Không có khách hàng nào"
+              />
                 </div>
             </div>
               {/* Payment Method and Area */}
@@ -810,12 +814,12 @@ function RevenueContent() {
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn phương thức" />
                     </SelectTrigger>
-                                          <SelectContent>
-                        <SelectItem value="all">Tất cả phương thức</SelectItem>
-                        <SelectItem value="cash">Tiền mặt</SelectItem>
-                        <SelectItem value="transfer">Chuyển khoản</SelectItem>
-                        <SelectItem value="card">Thẻ</SelectItem>
-                      </SelectContent>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả phương thức</SelectItem>
+                      <SelectItem value="cash">Tiền mặt</SelectItem>
+                      <SelectItem value="transfer">Chuyển khoản</SelectItem>
+                      <SelectItem value="card">Thẻ</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -836,19 +840,20 @@ function RevenueContent() {
               {/* Product Group */}
               <div className="space-y-2">
                 <Label>Nhóm sản phẩm</Label>
-                <Select value={selectedProductGroup} onValueChange={setSelectedProductGroup}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn nhóm sản phẩm" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả nhóm</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <Combobox
+                  options={[
+                    { label: "Tất cả nhóm", value: "all" },
+                    ...categories.map((category) => ({
+                      label: category.name,
+                      value: category.id
+                    }))
+                  ]}
+                  value={selectedProductGroup}
+                  onValueChange={setSelectedProductGroup}
+                  placeholder="Chọn nhóm sản phẩm"
+                  searchPlaceholder="Tìm nhóm sản phẩm..."
+                  emptyMessage="Không có nhóm sản phẩm nào"
+                />
             </div>
             {/* Filter Actions */}
               <div className="flex gap-2 pt-4">

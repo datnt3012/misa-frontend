@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import {
   Plus,
   Search,
@@ -297,7 +298,7 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
               <Label htmlFor="status" className="text-sm font-medium mb-2 block">Trạng thái</Label>
               <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả</SelectItem>

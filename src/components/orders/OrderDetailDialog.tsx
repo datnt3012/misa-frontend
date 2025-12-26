@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -844,32 +845,24 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                             <TableCell className="font-medium">{index + 1}</TableCell>
                             <TableCell>
                               {isEditing ? (
-                                <Select
+                                <Combobox
+                                  options={products.map((product) => {
+                                    const isProductAlreadyUsed = orderDetails.items.some(
+                                      (existingItem: OrderItem) =>
+                                        existingItem.product_id === product.id && existingItem.id !== item.id
+                                    );
+                                    return {
+                                      label: `${product.code} - ${product.name}${isProductAlreadyUsed ? ' (đã có)' : ''}`,
+                                      value: product.id,
+                                      disabled: isProductAlreadyUsed
+                                    };
+                                  })}
                                   value={editedItem.product_id || ''}
                                   onValueChange={(value) => updateEditingItem(item.id || '', 'product_id', value)}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Chọn sản phẩm" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {products.map((product) => {
-                                      const isProductAlreadyUsed = orderDetails.items.some(
-                                        (existingItem: OrderItem) =>
-                                          existingItem.product_id === product.id && existingItem.id !== item.id
-                                      );
-                                      return (
-                                        <SelectItem
-                                          key={product.id}
-                                          value={product.id}
-                                          disabled={isProductAlreadyUsed}
-                                        >
-                                          {product.code} - {product.name}
-                                          {isProductAlreadyUsed && ' (đã có)'}
-                                        </SelectItem>
-                                      );
-                                    })}
-                                  </SelectContent>
-                                </Select>
+                                  placeholder="Chọn sản phẩm"
+                                  searchPlaceholder="Tìm sản phẩm..."
+                                  emptyMessage="Không có sản phẩm nào"
+                                />
                               ) : (
                                 <div className="space-y-1">
                                   <div className="font-medium">{item.product_code || 'N/A'}</div>
@@ -953,30 +946,26 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                         <TableRow key={pendingItem.id} className="bg-blue-50/50 border-t-2 border-blue-200">
                           <TableCell className="font-medium text-blue-600">{(orderDetails.items?.length || 0) + index + 1}</TableCell>
                           <TableCell>
-                            <Select
+                            <Combobox
+                              options={products
+                                .filter(product =>
+                                  !orderDetails.items.some(
+                                    (existingItem: OrderItem) => existingItem.product_id === product.id
+                                  ) &&
+                                  !pendingNewItems.some(
+                                    (otherPending: any) => otherPending.id !== pendingItem.id && otherPending.product_id === product.id
+                                  )
+                                )
+                                .map((product) => ({
+                                  label: `${product.code} - ${product.name}`,
+                                  value: product.id
+                                }))}
                               value={pendingItem.product_id || ''}
                               onValueChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'product_id', value)}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Chọn sản phẩm" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {products
-                                  .filter(product =>
-                                    !orderDetails.items.some(
-                                      (existingItem: OrderItem) => existingItem.product_id === product.id
-                                    ) &&
-                                    !pendingNewItems.some(
-                                      (otherPending: any) => otherPending.id !== pendingItem.id && otherPending.product_id === product.id
-                                    )
-                                  )
-                                  .map((product) => (
-                                  <SelectItem key={product.id} value={product.id}>
-                                    {product.code} - {product.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              placeholder="Chọn sản phẩm"
+                              searchPlaceholder="Tìm sản phẩm..."
+                              emptyMessage="Không có sản phẩm nào"
+                            />
                           </TableCell>
                           <TableCell className="text-center">-</TableCell>
                           <TableCell className="text-center">
@@ -1261,23 +1250,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <div className="space-y-2">
                  <div className="flex justify-between items-center">
                    <span className="text-sm text-muted-foreground">Trạng thái xử lý:</span>
-                  <Select
-                    value={(orderDetails as any)?.order_status || orderDetails?.status || 'pending'}
-                     onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}
-                  >
-                     <SelectTrigger className="w-auto h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
-                       <div className="cursor-pointer">
-                        {getStatusBadge((orderDetails as any)?.order_status || orderDetails?.status)}
-                       </div>
-                     </SelectTrigger>
-                     <SelectContent>
-                       {ORDER_STATUSES.map((status) => (
-                         <SelectItem key={status} value={status}>
-                           {ORDER_STATUS_LABELS_VI[status]}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
+                  <Select value={(orderDetails as any)?.order_status || orderDetails?.status || 'pending'} onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn trạng thái" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ORDER_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {ORDER_STATUS_LABELS_VI[status]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Trạng thái thanh toán:</span>
@@ -1471,5 +1455,26 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
         )}
       </Dialog>
     </LoadingWrapper>
+  );
+};
+
+// Export a separate component for PaymentDialog to avoid modal conflicts
+export const OrderPaymentDialog: React.FC<{
+  order: any;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpdate?: () => void;
+}> = ({ order, open, onOpenChange, onUpdate }) => {
+  return (
+    <PaymentDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      order={order}
+      onUpdate={() => {
+        if (onUpdate) {
+          onUpdate();
+        }
+      }}
+    />
   );
 };

@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
-import { PaymentDialog } from "@/components/PaymentDialog";
 import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
 import { paymentsApi } from "@/api/payments.api";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +19,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
+import { PaymentDialog } from "@/components/PaymentDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -682,19 +683,21 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Chọn loại sản phẩm" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả loại</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { label: "Tất cả loại", value: "all" },
+                ...categories.map((category) => ({
+                  label: category.name,
+                  value: category.id
+                }))
+              ]}
+              value={categoryFilter}
+              onValueChange={setCategoryFilter}
+              placeholder="Chọn loại sản phẩm"
+              searchPlaceholder="Tìm loại sản phẩm..."
+              emptyMessage="Không có loại sản phẩm nào"
+              className="w-40"
+            />
             {/* Date Filter */}
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Từ ngày:</label>
@@ -715,19 +718,21 @@ const OrdersContent: React.FC = () => {
               />
             </div>
             {/* Creator Filter */}
-            <Select value={creatorFilter} onValueChange={setCreatorFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Người tạo đơn" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả người tạo</SelectItem>
-                {creators.map((creator) => (
-                  <SelectItem key={creator.id} value={creator.id}>
-                    {creator.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={[
+                { label: "Tất cả người tạo", value: "all" },
+                ...creators.map((creator) => ({
+                  label: creator.full_name,
+                  value: creator.id
+                }))
+              ]}
+              value={creatorFilter}
+              onValueChange={setCreatorFilter}
+              placeholder="Người tạo đơn"
+              searchPlaceholder="Tìm người tạo..."
+              emptyMessage="Không có người tạo nào"
+              className="w-48"
+            />
             {/* Reset Filters Button */}
             <Button
               onClick={handleResetFilters}
@@ -1183,16 +1188,13 @@ const OrdersContent: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Hiển thị</span>
-              <Select 
-                value={itemsPerPage.toString()} 
-                onValueChange={(value) => {
-                  setCurrentPage(1);
-                  setItemsPerPage(Number(value));
-                  // Will auto-fetch via useEffect below
-                }}
-              >
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                setCurrentPage(1);
+                setItemsPerPage(Number(value));
+                // Will auto-fetch via useEffect below
+              }}>
                 <SelectTrigger className="h-8 w-[70px]">
-                  <SelectValue />
+                  <SelectValue placeholder="Số lượng" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="25">25</SelectItem>
