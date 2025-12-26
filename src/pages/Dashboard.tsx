@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Line, Legend } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Package, TrendingUp, ShoppingCart, AlertTriangle, Wallet, Boxes, Lock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { dashboardApi } from "@/api/dashboard.api";
@@ -98,6 +99,9 @@ const DashboardContent = () => {
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [recentOrdersLimit, setRecentOrdersLimit] = useState<number>(5);
   const [newCustomers, setNewCustomers] = useState<number>(0);
+  // Pagination state for inventory table
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
   // Period toggle: 'month' or 'year'
   const [revenuePeriod, setRevenuePeriod] = useState<'month' | 'year'>('month');
   const [profitPeriod, setProfitPeriod] = useState<'month' | 'year'>('month');
@@ -773,43 +777,122 @@ const DashboardContent = () => {
                     </AlertDescription>
                   </Alert>
                 ) : productStockData.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-center p-2">Sản phẩm</th>
-                          <th className="text-center p-2">Tồn kho</th>
-                          <th className="text-center p-2">Tồn tối thiểu</th>
-                          <th className="text-center p-2">Trạng thái</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {productStockData.map((product, index) => (
-                          <tr key={index} className="border-b hover:bg-gray-50">
-                            <td className="p-2">
-                              <div>
-                                <div className="font-medium">{product.name}</div>
-                                <div className="text-xs text-gray-500">{product.code}</div>
-                              </div>
-                            </td>
-                            <td className="text-right p-2 font-medium">{product.stock}</td>
-                            <td className="text-right p-2 text-gray-500">{product.minStock}</td>
-                            <td className="text-center p-2">
-                              <span 
-                                className="px-2 py-1 rounded-full text-xs font-medium"
-                                style={{ 
-                                  backgroundColor: `${product.color}20`,
-                                  color: product.color
-                                }}
-                              >
-                                {product.status}
-                              </span>
-                            </td>
+                  <>
+                    {/* Pagination controls */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Hiển thị</span>
+                        <Combobox
+                          options={[
+                            { label: "5", value: "5" },
+                            { label: "10", value: "10" },
+                            { label: "20", value: "20" },
+                            { label: "50", value: "50" }
+                          ]}
+                          value={String(pageSize)}
+                          onValueChange={(v) => {
+                            setPageSize(Number(v));
+                            setCurrentPage(1); // Reset to first page when changing page size
+                          }}
+                          placeholder="Số lượng"
+                          searchPlaceholder="Tìm số lượng..."
+                          emptyMessage="Không có số lượng nào"
+                          className="h-8 w-20"
+                        />
+                        <span className="text-sm text-muted-foreground">mỗi trang</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Hiển thị {Math.min((currentPage - 1) * pageSize + 1, productStockData.length)} - {Math.min(currentPage * pageSize, productStockData.length)} của {productStockData.length} sản phẩm
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-center p-2">Sản phẩm</th>
+                            <th className="text-center p-2">Tồn kho</th>
+                            <th className="text-center p-2">Tồn tối thiểu</th>
+                            <th className="text-center p-2">Trạng thái</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const startIndex = (currentPage - 1) * pageSize;
+                            const endIndex = startIndex + pageSize;
+                            const paginatedData = productStockData.slice(startIndex, endIndex);
+                            return paginatedData.map((product, index) => (
+                              <tr key={startIndex + index} className="border-b hover:bg-gray-50">
+                                <td className="p-2">
+                                  <div>
+                                    <div className="font-medium">{product.name}</div>
+                                    <div className="text-xs text-gray-500">{product.code}</div>
+                                  </div>
+                                </td>
+                                <td className="text-right p-2 font-medium">{product.stock}</td>
+                                <td className="text-right p-2 text-gray-500">{product.minStock}</td>
+                                <td className="text-center p-2">
+                                  <span
+                                    className="px-2 py-1 rounded-full text-xs font-medium"
+                                    style={{
+                                      backgroundColor: `${product.color}20`,
+                                      color: product.color
+                                    }}
+                                  >
+                                    {product.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Pagination */}
+                    <div className="mt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          {(() => {
+                            const totalPages = Math.ceil(productStockData.length / pageSize);
+                            const pages = [];
+                            const maxVisiblePages = 5;
+                            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                            if (endPage - startPage + 1 < maxVisiblePages) {
+                              startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                            }
+
+                            for (let i = startPage; i <= endPage; i++) {
+                              pages.push(
+                                <PaginationItem key={i}>
+                                  <PaginationLink
+                                    onClick={() => setCurrentPage(i)}
+                                    isActive={currentPage === i}
+                                    className="cursor-pointer"
+                                  >
+                                    {i}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              );
+                            }
+                            return pages;
+                          })()}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setCurrentPage(Math.min(Math.ceil(productStockData.length / pageSize), currentPage + 1))}
+                              className={currentPage === Math.ceil(productStockData.length / pageSize) ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  </>
                 ) : (
                   <p className="text-muted-foreground text-center py-4">Chưa có dữ liệu sản phẩm</p>
                 )}
