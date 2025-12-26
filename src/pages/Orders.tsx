@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
+import { usersApi } from "@/api/users.api";
 import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
 import { paymentsApi } from "@/api/payments.api";
 import { useAuth } from "@/hooks/useAuth";
@@ -328,10 +329,19 @@ const OrdersContent: React.FC = () => {
   useEffect(() => {
     loadOrderTagsCatalog();
   }, [loadOrderTagsCatalog]);
-  // Removed automatic refresh - only reload on user actions
+  // Fetch creators for filter
   const fetchCreators = async () => {
-    setCreators([]); // Not implemented on BE yet
+    try {
+      const usersResp = await usersApi.getUsers({ page: 1, limit: 1000 });
+      setCreators(usersResp.users || []);
+    } catch (error) {
+      console.error('Error fetching creators:', error);
+      setCreators([]);
+    }
   };
+  useEffect(() => {
+    fetchCreators();
+  }, []);
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
@@ -721,10 +731,14 @@ const OrdersContent: React.FC = () => {
             <Combobox
               options={[
                 { label: "Tất cả người tạo", value: "all" },
-                ...creators.map((creator) => ({
-                  label: creator.full_name,
-                  value: creator.id
-                }))
+                ...creators.map((creator) => {
+                  const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+                  const displayName = fullName || creator.email || creator.username || 'Không xác định';
+                  return {
+                    label: displayName,
+                    value: creator.id
+                  };
+                })
               ]}
               value={creatorFilter}
               onValueChange={setCreatorFilter}

@@ -512,10 +512,14 @@ const QuotationsContent: React.FC = () => {
               <Combobox
                 options={[
                   { label: "Tất cả người tạo", value: "all" },
-                  ...creators.map((creator) => ({
-                    label: creator.email,
-                    value: creator.id
-                  }))
+                  ...creators.map((creator) => {
+                    const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+                    const displayName = fullName || creator.email || creator.username || 'Không xác định';
+                    return {
+                      label: displayName,
+                      value: creator.id
+                    };
+                  })
                 ]}
                 value={creatorFilter}
                 onValueChange={setCreatorFilter}
