@@ -678,7 +678,16 @@ const QuotationsContent: React.FC = () => {
                             disabled={!hasPermission('QUOTATIONS_UPDATE_STATUS')}
                           >
                             <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
-                              <SelectValue placeholder="Chọn trạng thái" />
+                              <SelectValue>
+                                {(() => {
+                                  const statusConfig: Record<string, string> = {
+                                    'pending': 'Chờ xử lý',
+                                    'completed': 'Hoàn thành',
+                                    'cancelled': 'Đã hủy',
+                                  };
+                                  return statusConfig[quotation.status || 'pending'] || quotation.status;
+                                })()}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="pending">Chờ xử lý</SelectItem>
