@@ -703,6 +703,7 @@ export const warehouseReceiptsApi = {
     sortOrder?: string;
     page?: number;
     limit?: number;
+    type?: 'import' | 'export';
   }): Promise<{ 
     jobs: WarehouseReceiptImportJobSnapshot[]; 
     total: number; 
@@ -719,6 +720,7 @@ export const warehouseReceiptsApi = {
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.type) queryParams.append('type', params.type);
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.IMPORT_STATUS_LIST}${query}`;
@@ -755,12 +757,16 @@ export const warehouseReceiptsApi = {
       try {
         const allJobs = (payload.data.rows || []).map(normalizeImportJobResponse);
         const jobs = filterJobsByType(allJobs);
+        // Use total and totalPages from API response, not from filtered jobs length
+        const apiTotal = payload.data.pagination?.total || payload.data.rows.length;
+        const apiLimit = payload.data.pagination?.limit || params?.limit || 10;
+        const apiTotalPages = payload.data.pagination?.totalPages || Math.ceil(apiTotal / apiLimit);
         return {
           jobs,
-          total: params?.type ? jobs.length : (payload.data.pagination?.total || payload.data.rows.length),
+          total: apiTotal,
           page: payload.data.pagination?.page || params?.page || 1,
-          limit: payload.data.pagination?.limit || params?.limit || 10,
-          totalPages: params?.type ? Math.ceil(jobs.length / (payload.data.pagination?.limit || params?.limit || 10)) : (payload.data.pagination?.totalPages || Math.ceil((payload.data.pagination?.total || payload.data.rows.length) / (payload.data.pagination?.limit || params?.limit || 10)))
+          limit: apiLimit,
+          totalPages: apiTotalPages
         };
       } catch (error) {
         throw error;
@@ -772,12 +778,16 @@ export const warehouseReceiptsApi = {
       try {
         const allJobs = (payload.rows || []).map(normalizeImportJobResponse);
         const jobs = filterJobsByType(allJobs);
+        // Use total and totalPages from API response, not from filtered jobs length
+        const apiTotal = payload.pagination?.total || payload.rows.length;
+        const apiLimit = payload.pagination?.limit || params?.limit || 10;
+        const apiTotalPages = payload.pagination?.totalPages || Math.ceil(apiTotal / apiLimit);
         return {
           jobs,
-          total: params?.type ? jobs.length : (payload.pagination?.total || payload.rows.length),
+          total: apiTotal,
           page: payload.pagination?.page || params?.page || 1,
-          limit: payload.pagination?.limit || params?.limit || 10,
-          totalPages: params?.type ? Math.ceil(jobs.length / (payload.pagination?.limit || params?.limit || 10)) : (payload.pagination?.totalPages || Math.ceil((payload.pagination?.total || payload.rows.length) / (payload.pagination?.limit || params?.limit || 10)))
+          limit: apiLimit,
+          totalPages: apiTotalPages
         };
       } catch (error) {
         throw error;
@@ -788,12 +798,16 @@ export const warehouseReceiptsApi = {
     if (payload && typeof payload === 'object' && 'jobs' in payload) {
       const allJobs = (payload.jobs || []).map(normalizeImportJobResponse);
       const jobs = filterJobsByType(allJobs);
+      // Use total and totalPages from API response, not from filtered jobs length
+      const apiTotal = payload.total || 0;
+      const apiLimit = payload.limit || params?.limit || 10;
+      const apiTotalPages = payload.totalPages || Math.ceil(apiTotal / apiLimit);
       return {
         jobs,
-        total: params?.type ? jobs.length : (payload.total || 0),
+        total: apiTotal,
         page: payload.page || params?.page || 1,
-        limit: payload.limit || params?.limit || 10,
-        totalPages: params?.type ? Math.ceil(jobs.length / (payload.limit || params?.limit || 10)) : (payload.totalPages || Math.ceil((payload.total || 0) / (payload.limit || params?.limit || 10)))
+        limit: apiLimit,
+        totalPages: apiTotalPages
       };
     }
     
@@ -809,12 +823,17 @@ export const warehouseReceiptsApi = {
     const allJobs = jobArray.map(normalizeImportJobResponse);
     const jobs = filterJobsByType(allJobs);
     
+    // For non-paginated response, use the array length as total
+    const apiTotal = jobArray.length;
+    const apiLimit = params?.limit || jobArray.length || 1;
+    const apiTotalPages = Math.ceil(apiTotal / apiLimit);
+    
     return {
       jobs,
-      total: params?.type ? jobs.length : jobArray.length,
+      total: apiTotal,
       page: params?.page || 1,
-      limit: params?.limit || jobArray.length,
-      totalPages: Math.ceil((params?.type ? jobs.length : jobArray.length) / (params?.limit || jobArray.length))
+      limit: apiLimit,
+      totalPages: apiTotalPages
     };
   },
 };

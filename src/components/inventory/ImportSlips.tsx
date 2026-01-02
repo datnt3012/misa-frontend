@@ -715,11 +715,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         const filteredJobs = processedJobs.filter(job => 
           job.type === 'import' || !job.type // Include jobs without type for backward compatibility
         );
+        // Use total and totalPages from API response, not from filtered jobs length
         setJobHistoryPagination({
-          total: filteredJobs.length,
+          total: response.total,
           page: response.page,
           limit: response.limit,
-          totalPages: Math.ceil(filteredJobs.length / (response.limit || 10))
+          totalPages: response.totalPages
         });
         setImportJobs(filteredJobs);
       }
