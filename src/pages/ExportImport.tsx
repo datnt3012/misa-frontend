@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Package, TrendingDown, TrendingUp, History, ArrowUpDown } from "lucide-react";
+import { TrendingDown, TrendingUp, History } from "lucide-react";
 import ExportSlips from "@/pages/ExportSlips";
 import ImportSlips from "@/components/inventory/ImportSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
@@ -10,9 +10,33 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const ExportImportContent = () => {
-  const [activeTab, setActiveTab] = useState("exports");
-  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Initialize tab from URL or default to 'exports'
+  const getTabFromUrl = () => {
+    const tab = searchParams.get('tab');
+    return tab && ['exports', 'imports', 'history'].includes(tab) ? tab : 'exports';
+  };
+  
+  const [activeTab, setActiveTab] = useState(() => getTabFromUrl());
   const { hasPermission } = usePermissions();
+
+  // Handle tab change from user interaction
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('tab', value);
+    setSearchParams(newSearchParams, { replace: true });
+  };
+
+  // Update activeTab when URL changes (e.g., browser back/forward)
+  useEffect(() => {
+    const tabFromUrl = getTabFromUrl();
+    if (tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Permission checks
   const canManageImports = hasPermission('WAREHOUSE_RECEIPTS_CREATE');
@@ -28,7 +52,7 @@ const ExportImportContent = () => {
         </div>
 
         {/* Tabs for different sections */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="exports" className="flex items-center gap-2">
               <TrendingDown className="w-4 h-4" />

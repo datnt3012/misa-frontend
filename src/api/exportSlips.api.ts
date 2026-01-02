@@ -201,6 +201,12 @@ export const exportSlipsApi = {
       limit: Number(response?.limit ?? params?.limit ?? slips.length ?? 0),
     };
   },
+  // Get a single export slip by ID
+  getSlip: async (id: string): Promise<ExportSlip> => {
+    const response = await api.get<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id));
+    const data = response?.data || response;
+    return normalize(data);
+  },
   getSlipByOrderId: async (orderId: string): Promise<ExportSlip | null> => {
     try {
       // Try to get all export slips with pagination

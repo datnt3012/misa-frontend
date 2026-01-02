@@ -192,6 +192,21 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/warehouse-receipts/${id}`,
     DELETE: (id: string) => `/warehouse-receipts/${id}`,
     APPROVE: (id: string) => `/warehouse-receipts/${id}/approve`,
+    // Deprecated - Use IMPORT_IMPORT or IMPORT_EXPORT instead
+    IMPORT_TEMPLATE: '/warehouse-receipts/import/template',
+    IMPORT_EXCEL: '/warehouse-receipts/import/excel',
+    // New APIs - Separated by type
+    IMPORT_IMPORT: '/warehouse-receipts/import/import',
+    IMPORT_EXPORT: '/warehouse-receipts/import/export',
+    IMPORT_IMPORT_TEMPLATE: '/warehouse-receipts/import/import/template',
+    IMPORT_EXPORT_TEMPLATE: '/warehouse-receipts/import/export/template',
+    // Async APIs
+    IMPORT_EXCEL_ASYNC: '/warehouse-receipts/import/excel/async', // Deprecated - backward compatible
+    IMPORT_IMPORT_ASYNC: '/warehouse-receipts/import/import/async',
+    IMPORT_EXPORT_ASYNC: '/warehouse-receipts/import/export/async',
+    // Job Status APIs (shared for both import and export)
+    IMPORT_STATUS_LIST: '/warehouse-receipts/import/status',
+    IMPORT_STATUS: (jobId: string) => `/warehouse-receipts/import/status/${jobId}`,
   },
   
   // Payments
