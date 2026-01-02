@@ -18,9 +18,10 @@ import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
 import { warehouseReceiptsApi, type WarehouseReceiptImportJobSnapshot, type WarehouseReceiptImportJobStatus } from '@/api/warehouseReceipts.api';
-import { orderApi } from '@/api/order.api';
+import { orderApi, type Order } from '@/api/order.api';
 import { customerApi, type Customer } from '@/api/customer.api';
 import { productApi } from '@/api/product.api';
 import { warehouseApi } from '@/api/warehouse.api';
@@ -30,15 +31,18 @@ import { useToast } from '@/hooks/use-toast';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
-import BankSelector from './BankSelector';
 function ExportSlipsContent() {
   const navigate = useNavigate();
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [addressCache, setAddressCache] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [total, setTotal] = useState<number>(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -128,6 +132,15 @@ function ExportSlipsContent() {
     // No options for 'exported' or 'cancelled' status - they are final
     return options;
   };
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     fetchExportSlips();
     loadOrders();
@@ -141,7 +154,7 @@ function ExportSlipsContent() {
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, [displayLimit]);
+  }, [displayLimit, currentPage, debouncedSearchTerm, sortField, sortDirection]);
   
   // Load job history when tab is activated or parameters change
   useEffect(() => {
@@ -163,7 +176,11 @@ function ExportSlipsContent() {
   }, [showCreateDialog]);
   const fetchExportSlips = async () => {
     try {
-      const resp = await exportSlipsApi.getSlips({ page: 1, limit: displayLimit });
+      const resp = await exportSlipsApi.getSlips({ 
+        page: currentPage, 
+        limit: displayLimit,
+        search: debouncedSearchTerm || undefined
+      });
       // If order data is missing, we'll need to fetch it separately
       const slips = await Promise.all((resp.slips || []).map(async (s) => {
         let orderData = s.order;
@@ -207,6 +224,9 @@ function ExportSlipsContent() {
         };
       }));
       setExportSlips(slips);
+      // Update pagination state
+      setTotal(resp.total || 0);
+      setTotalPages(Math.ceil((resp.total || 0) / displayLimit));
       // Update address cache for slips that now have addressInfo
       const newCache: Record<string, string> = {};
       for (const slip of slips) {
@@ -574,6 +594,7 @@ function ExportSlipsContent() {
       setSortField(field);
       setSortDirection('asc');
     }
+    setCurrentPage(1); // Reset to first page when sorting changes
   };
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -680,8 +701,7 @@ function ExportSlipsContent() {
         sortBy: options?.sortBy || 'createdAt',
         sortOrder: options?.sortOrder || 'DESC',
         page,
-        limit,
-        type: 'export' // Always filter for export receipts only
+        limit
       });
 
       const processedJobs = response.jobs;
@@ -799,12 +819,14 @@ function ExportSlipsContent() {
       const response = await warehouseReceiptsApi.listImportJobs({
         onlyActive: true,
         sortBy: 'createdAt',
-        sortOrder: 'DESC',
-        type: 'export' // Filter for export receipts only
+        sortOrder: 'DESC'
       });
 
       // Use backend status directly (do not infer status from processedRows/totalRows)
-      const processedJobs = response.jobs;
+      // Filter jobs by type to ensure only export jobs are shown
+      const processedJobs = response.jobs.filter(job => 
+        job.type === 'export' || !job.type // Include jobs without type for backward compatibility
+      );
 
       // Update active jobs state
       setActiveJobs(processedJobs);
@@ -822,12 +844,16 @@ function ExportSlipsContent() {
           onlyActive: false,
           sortBy: 'createdAt',
           sortOrder: 'DESC',
-          limit: 10,
-          type: 'export' // Filter for export receipts only
+          limit: 10
         });
         
+        // Filter jobs by type to ensure only export jobs are shown
+        const filteredJobs = allJobsResponse.jobs.filter(job => 
+          job.type === 'export' || !job.type // Include jobs without type for backward compatibility
+        );
+        
         // Find jobs that were previously active but are now completed/failed/cancelled
-        allJobsResponse.jobs.forEach(job => {
+        filteredJobs.forEach(job => {
           const prevStatus = previousJobStatusesRef.current[job.jobId];
           if (prevStatus && (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')) {
             handleJobStatusNotification(job);
@@ -1018,17 +1044,8 @@ function ExportSlipsContent() {
       description: `Đã xuất ${exportData.length} phiếu xuất kho ra file Excel`,
     });
   };
-  // Filter and sort export slips
+  // Filter and sort export slips (client-side sorting since API doesn't support it yet)
   const filteredAndSortedSlips = exportSlips
-    .filter(slip => {
-      if (!searchTerm) return true;
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        slip.code.toLowerCase().includes(searchLower) ||
-        slip.order?.order_number.toLowerCase().includes(searchLower) ||
-        slip.order?.customer_name.toLowerCase().includes(searchLower)
-      );
-    })
     .sort((a, b) => {
       let aValue: any, bValue: any;
       switch (sortField) {
@@ -1151,7 +1168,7 @@ function ExportSlipsContent() {
                                   order_id: value,
                                   customer_id: selectedOrder.customer_id || selectedOrder.customer?.id || '',
                                   customer_name: selectedOrder.customer_name || selectedOrder.customer?.name || '',
-                                  customer_phone: selectedOrder.customer_phone || selectedOrder.customer?.phone || selectedOrder.customer?.phoneNumber || '',
+                                  customer_phone: selectedOrder.customer_phone || selectedOrder.customer?.phone || '',
                                   customer_email: selectedOrder.customer_email || selectedOrder.customer?.email || '',
                                 }));
                               } else {
@@ -1666,48 +1683,145 @@ function ExportSlipsContent() {
                   </div>
                   {/* Job History Pagination */}
                   {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
-                    <div className="flex items-center justify-center pt-4 border-t">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newPage = Math.max(1, jobHistoryPage - 1);
-                            setJobHistoryPage(newPage);
-                            refreshImportJobs({
-                              onlyActive: false,
-                              sortBy: 'createdAt',
-                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                              page: newPage,
-                              limit: jobHistoryItemsPerPage
-                            });
-                          }}
-                          disabled={jobHistoryPage === 1}
-                        >
-                          Trước
-                        </Button>
-                        <span className="text-sm text-muted-foreground">
-                          Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newPage = jobHistoryPage + 1;
-                            setJobHistoryPage(newPage);
-                            refreshImportJobs({
-                              onlyActive: false,
-                              sortBy: 'createdAt',
-                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                              page: newPage,
-                              limit: jobHistoryItemsPerPage
-                            });
-                          }}
-                          disabled={jobHistoryPage >= jobHistoryPagination.totalPages}
-                        >
-                          Sau
-                        </Button>
+                    <div className="flex flex-col items-center pt-4 border-t">
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
                       </div>
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious 
+                              href="#" 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (jobHistoryPage > 1) {
+                                  const newPage = jobHistoryPage - 1;
+                                  setJobHistoryPage(newPage);
+                                  refreshImportJobs({
+                                    onlyActive: false,
+                                    sortBy: 'createdAt',
+                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                    page: newPage,
+                                    limit: jobHistoryItemsPerPage
+                                  });
+                                }
+                              }}
+                              className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
+                            />
+                          </PaginationItem>
+                          {/* Show first page */}
+                          {jobHistoryPage > 3 && (
+                            <>
+                              <PaginationItem>
+                                <PaginationLink 
+                                  href="#" 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setJobHistoryPage(1);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: 1,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}
+                                >
+                                  1
+                                </PaginationLink>
+                              </PaginationItem>
+                              {jobHistoryPage > 4 && (
+                                <PaginationItem>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              )}
+                            </>
+                          )}
+                          {/* Show pages around current page */}
+                          {Array.from({ length: Math.min(5, jobHistoryPagination.totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (jobHistoryPagination.totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (jobHistoryPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (jobHistoryPage >= jobHistoryPagination.totalPages - 2) {
+                              pageNum = jobHistoryPagination.totalPages - 4 + i;
+                            } else {
+                              pageNum = jobHistoryPage - 2 + i;
+                            }
+                            if (pageNum < 1 || pageNum > jobHistoryPagination.totalPages) return null;
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink 
+                                  href="#" 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setJobHistoryPage(pageNum);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: pageNum,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}
+                                  isActive={jobHistoryPage === pageNum}
+                                >
+                                  {pageNum}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          {/* Show last page */}
+                          {jobHistoryPage < jobHistoryPagination.totalPages - 2 && (
+                            <>
+                              {jobHistoryPage < jobHistoryPagination.totalPages - 3 && (
+                                <PaginationItem>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              )}
+                              <PaginationItem>
+                                <PaginationLink 
+                                  href="#" 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setJobHistoryPage(jobHistoryPagination.totalPages);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: jobHistoryPagination.totalPages,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}
+                                >
+                                  {jobHistoryPagination.totalPages}
+                                </PaginationLink>
+                              </PaginationItem>
+                            </>
+                          )}
+                          <PaginationItem>
+                            <PaginationNext 
+                              href="#" 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (jobHistoryPage < jobHistoryPagination.totalPages) {
+                                  const newPage = jobHistoryPage + 1;
+                                  setJobHistoryPage(newPage);
+                                  refreshImportJobs({
+                                    onlyActive: false,
+                                    sortBy: 'createdAt',
+                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                    page: newPage,
+                                    limit: jobHistoryItemsPerPage
+                                  });
+                                }
+                              }}
+                              className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
                     </div>
                   )}
                 </>
@@ -1840,7 +1954,10 @@ function ExportSlipsContent() {
               <Label htmlFor="display-limit" className="text-sm font-medium">
                 Hiển thị:
               </Label>
-              <Select value={displayLimit.toString()} onValueChange={(value) => setDisplayLimit(parseInt(value))}>
+              <Select value={displayLimit.toString()} onValueChange={(value) => {
+                setDisplayLimit(parseInt(value));
+                setCurrentPage(1); // Reset to first page when limit changes
+              }}>
                 <SelectTrigger className="w-20">
                   <SelectValue placeholder="Số lượng" />
                 </SelectTrigger>
@@ -2137,6 +2254,108 @@ function ExportSlipsContent() {
             </TableBody>
             </Table>
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center mt-4 pt-4 border-t">
+              <div className="text-sm text-muted-foreground mb-4">
+                Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} phiếu xuất kho
+              </div>
+              <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) setCurrentPage(currentPage - 1);
+                        }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {/* Show first page */}
+                    {currentPage > 3 && (
+                      <>
+                        <PaginationItem>
+                          <PaginationLink 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(1);
+                            }}
+                          >
+                            1
+                          </PaginationLink>
+                        </PaginationItem>
+                        {currentPage > 4 && (
+                          <PaginationItem>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )}
+                      </>
+                    )}
+                    {/* Show pages around current page */}
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      if (pageNum < 1 || pageNum > totalPages) return null;
+                      return (
+                        <PaginationItem key={pageNum}>
+                          <PaginationLink 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(pageNum);
+                            }}
+                            isActive={currentPage === pageNum}
+                          >
+                            {pageNum}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    {/* Show last page */}
+                    {currentPage < totalPages - 2 && (
+                      <>
+                        {currentPage < totalPages - 3 && (
+                          <PaginationItem>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )}
+                        <PaginationItem>
+                          <PaginationLink 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(totalPages);
+                            }}
+                          >
+                            {totalPages}
+                          </PaginationLink>
+                        </PaginationItem>
+                      </>
+                    )}
+                    <PaginationItem>
+                      <PaginationNext 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                        }}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

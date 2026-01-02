@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 // // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
@@ -88,8 +89,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const [loading, setLoading] = useState(true);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [total, setTotal] = useState<number>(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState<ImportSlip | null>(null);
   const [slipItems, setSlipItems] = useState<ImportSlipItem[]>([]);
@@ -152,6 +157,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     if (!id) return undefined;
     return warehouses.find(w => w.id === id);
   };
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     loadImportSlips();
     loadProducts();
@@ -167,7 +181,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, [displayLimit]);
+  }, [displayLimit, currentPage, debouncedSearchTerm, sortField, sortDirection]);
   
   // Load job history when tab is activated or parameters change
   useEffect(() => {
@@ -217,7 +231,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const loadImportSlips = async () => {
     try {
       setLoading(true);
-      const resp = await warehouseReceiptsApi.getReceipts({ page: 1, limit: displayLimit, type: 'import' });
+      const resp = await warehouseReceiptsApi.getReceipts({ 
+        page: currentPage, 
+        limit: displayLimit, 
+        type: 'import',
+        search: debouncedSearchTerm || undefined
+      });
       const list = (resp.receipts || []).map((r: any) => ({
         id: r.id,
         slip_number: r.code,
@@ -235,6 +254,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         warehouses: undefined,
       }));
       setImportSlips(list);
+      // Update pagination state
+      setTotal(resp.total || 0);
+      setTotalPages(Math.ceil((resp.total || 0) / displayLimit));
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách phiếu nhập kho';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
@@ -293,14 +315,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   };
   const loadSlipItems = async (slipId: string) => {
     try {
-      // Get the specific receipt with details
-      const response = await warehouseReceiptsApi.getReceipts({ 
-        page: 1, 
-        limit: 1000,
-        type: 'import'
-      });
-      // Find the specific receipt by ID
-      const receipt = response.receipts.find(r => r.id === slipId);
+      // Get the specific receipt with details by ID
+      const receipt = await warehouseReceiptsApi.getReceipt(slipId);
       if (receipt && receipt.items) {
         // Transform items to match ImportSlipItem interface
         const transformedItems = receipt.items.map(item => ({
@@ -447,12 +463,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const approveImportSlip = async (slipId: string) => {
     try {
       // First, get the warehouse receipt details to check items
-      const receiptDetails = await warehouseReceiptsApi.getReceipts({ 
-        page: 1, 
-        limit: 1000,
-        type: 'import'
-      });
-      const receipt = receiptDetails.receipts.find(r => r.id === slipId);
+      const receipt = await warehouseReceiptsApi.getReceipt(slipId);
       if (!receipt) {
         toast({ title: 'Lỗi', description: 'Không tìm thấy phiếu nhập kho', variant: 'destructive' });
         return;
@@ -536,20 +547,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       return `${amount.toLocaleString('vi-VN')}`;
     }
   };
-  // Filter and sort import slips
-  const filteredAndSortedSlips = importSlips
-    .filter(slip => {
-      if (!searchTerm) return true;
-      const searchLower = searchTerm.toLowerCase();
-      const warehouseName = getWarehouseById(slip.warehouse_id)?.name || '';
-      return (
-        slip.slip_number.toLowerCase().includes(searchLower) ||
-        slip.supplier_name.toLowerCase().includes(searchLower) ||
-        warehouseName.toLowerCase().includes(searchLower) ||
-        (slip.notes || '').toLowerCase().includes(searchLower)
-      );
-    })
-    .sort((a, b) => {
+  // Sort import slips (client-side sorting since API doesn't support it yet, but filtering is done by API via search parameter)
+  const filteredAndSortedSlips = importSlips.sort((a, b) => {
       let aValue: any, bValue: any;
       switch (sortField) {
         case 'slip_number':
@@ -589,6 +588,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       setSortField(field);
       setSortDirection('desc');
     }
+    setCurrentPage(1); // Reset to first page when sorting changes
   };
   const getSortIcon = (field: string) => {
     if (sortField !== field) return null;
@@ -1575,48 +1575,145 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   </div>
                   {/* Job History Pagination */}
                   {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
-                    <div className="flex items-center justify-center pt-4 border-t">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newPage = Math.max(1, jobHistoryPage - 1);
-                            setJobHistoryPage(newPage);
-                            refreshImportJobs({
-                              onlyActive: false,
-                              sortBy: 'createdAt',
-                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                              page: newPage,
-                              limit: jobHistoryItemsPerPage
-                            });
-                          }}
-                          disabled={jobHistoryPage === 1}
-                        >
-                          Trước
-                        </Button>
-                        <span className="text-sm text-muted-foreground">
-                          Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newPage = jobHistoryPage + 1;
-                            setJobHistoryPage(newPage);
-                            refreshImportJobs({
-                              onlyActive: false,
-                              sortBy: 'createdAt',
-                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                              page: newPage,
-                              limit: jobHistoryItemsPerPage
-                            });
-                          }}
-                          disabled={jobHistoryPage >= jobHistoryPagination.totalPages}
-                        >
-                          Sau
-                        </Button>
+                    <div className="flex flex-col items-center pt-4 border-t">
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
                       </div>
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious 
+                              href="#" 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (jobHistoryPage > 1) {
+                                  const newPage = jobHistoryPage - 1;
+                                  setJobHistoryPage(newPage);
+                                  refreshImportJobs({
+                                    onlyActive: false,
+                                    sortBy: 'createdAt',
+                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                    page: newPage,
+                                    limit: jobHistoryItemsPerPage
+                                  });
+                                }
+                              }}
+                              className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
+                            />
+                          </PaginationItem>
+                          {/* Show first page */}
+                          {jobHistoryPage > 3 && (
+                            <>
+                              <PaginationItem>
+                                <PaginationLink 
+                                  href="#" 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setJobHistoryPage(1);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: 1,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}
+                                >
+                                  1
+                                </PaginationLink>
+                              </PaginationItem>
+                              {jobHistoryPage > 4 && (
+                                <PaginationItem>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              )}
+                            </>
+                          )}
+                          {/* Show pages around current page */}
+                          {Array.from({ length: Math.min(5, jobHistoryPagination.totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (jobHistoryPagination.totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (jobHistoryPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (jobHistoryPage >= jobHistoryPagination.totalPages - 2) {
+                              pageNum = jobHistoryPagination.totalPages - 4 + i;
+                            } else {
+                              pageNum = jobHistoryPage - 2 + i;
+                            }
+                            if (pageNum < 1 || pageNum > jobHistoryPagination.totalPages) return null;
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink 
+                                  href="#" 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setJobHistoryPage(pageNum);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: pageNum,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}
+                                  isActive={jobHistoryPage === pageNum}
+                                >
+                                  {pageNum}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          {/* Show last page */}
+                          {jobHistoryPage < jobHistoryPagination.totalPages - 2 && (
+                            <>
+                              {jobHistoryPage < jobHistoryPagination.totalPages - 3 && (
+                                <PaginationItem>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              )}
+                              <PaginationItem>
+                                <PaginationLink 
+                                  href="#" 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setJobHistoryPage(jobHistoryPagination.totalPages);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: jobHistoryPagination.totalPages,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}
+                                >
+                                  {jobHistoryPagination.totalPages}
+                                </PaginationLink>
+                              </PaginationItem>
+                            </>
+                          )}
+                          <PaginationItem>
+                            <PaginationNext 
+                              href="#" 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (jobHistoryPage < jobHistoryPagination.totalPages) {
+                                  const newPage = jobHistoryPage + 1;
+                                  setJobHistoryPage(newPage);
+                                  refreshImportJobs({
+                                    onlyActive: false,
+                                    sortBy: 'createdAt',
+                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                    page: newPage,
+                                    limit: jobHistoryItemsPerPage
+                                  });
+                                }
+                              }}
+                              className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
                     </div>
                   )}
                 </>
@@ -1749,7 +1846,10 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               <Label htmlFor="display-limit" className="text-sm font-medium">
                 Hiển thị:
               </Label>
-              <Select value={displayLimit.toString()} onValueChange={(value) => setDisplayLimit(parseInt(value))}>
+              <Select value={displayLimit.toString()} onValueChange={(value) => {
+                setDisplayLimit(parseInt(value));
+                setCurrentPage(1); // Reset to first page when limit changes
+              }}>
                 <SelectTrigger className="w-20">
                   <SelectValue placeholder="Số lượng" />
                 </SelectTrigger>
@@ -1921,6 +2021,108 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               </TableBody>
             </Table>
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center mt-4 pt-4 border-t px-4">
+              <div className="text-sm text-muted-foreground mb-4">
+                Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} phiếu nhập kho
+              </div>
+              <Pagination>
+                <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) setCurrentPage(currentPage - 1);
+                        }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {/* Show first page */}
+                    {currentPage > 3 && (
+                      <>
+                        <PaginationItem>
+                          <PaginationLink 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(1);
+                            }}
+                          >
+                            1
+                          </PaginationLink>
+                        </PaginationItem>
+                        {currentPage > 4 && (
+                          <PaginationItem>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )}
+                      </>
+                    )}
+                    {/* Show pages around current page */}
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      if (pageNum < 1 || pageNum > totalPages) return null;
+                      return (
+                        <PaginationItem key={pageNum}>
+                          <PaginationLink 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(pageNum);
+                            }}
+                            isActive={currentPage === pageNum}
+                          >
+                            {pageNum}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    {/* Show last page */}
+                    {currentPage < totalPages - 2 && (
+                      <>
+                        {currentPage < totalPages - 3 && (
+                          <PaginationItem>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )}
+                        <PaginationItem>
+                          <PaginationLink 
+                            href="#" 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(totalPages);
+                            }}
+                          >
+                            {totalPages}
+                          </PaginationLink>
+                        </PaginationItem>
+                      </>
+                    )}
+                    <PaginationItem>
+                      <PaginationNext 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                        }}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
       {loading && (
