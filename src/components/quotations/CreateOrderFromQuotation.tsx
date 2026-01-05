@@ -209,7 +209,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
                       <TableCell>
                         {new Intl.NumberFormat('vi-VN').format(item.unit_price * item.quantity)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="max-w-[300px]">
                         <Combobox
                           options={warehouses.map(warehouse => ({
                             label: `${warehouse.name} (${warehouse.code})`,
@@ -220,6 +220,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
                           placeholder="Chọn kho"
                           searchPlaceholder="Tìm kho..."
                           emptyMessage="Không có kho nào"
+                          className="w-full"
                         />
                       </TableCell>
                     </TableRow>

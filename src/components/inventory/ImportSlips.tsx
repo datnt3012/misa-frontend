@@ -1360,8 +1360,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         <TableBody>
                           {currentItems.map((item, index) => (
                             <TableRow key={item.id || `item-${index}`}>
-                              <TableCell className="text-center">{item.product_code}</TableCell>
-                              <TableCell className="text-center">{item.product_name}</TableCell>
+                              <TableCell className="text-center">
+                                <div className="truncate" title={item.product_code}>{item.product_code}</div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="truncate" title={item.product_name}>{item.product_name}</div>
+                              </TableCell>
                               <TableCell className="text-center">{item.quantity}</TableCell>
                               <TableCell className="text-center">{formatCurrency(item.unit_price)}</TableCell>
                               <TableCell className="text-center">{formatCurrency(item.total_price)}</TableCell>
@@ -1941,8 +1945,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 ) : (
                   filteredAndSortedSlips.map((slip) => (
                     <TableRow key={slip.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="font-medium text-primary text-center">{slip.slip_number}</TableCell>
-                    <TableCell className="font-medium text-center">{slip.supplier_name}</TableCell>
+                    <TableCell className="font-medium text-primary text-center">
+                      <div className="truncate" title={slip.slip_number}>{slip.slip_number}</div>
+                    </TableCell>
+                    <TableCell className="font-medium text-center">
+                      <div className="truncate" title={slip.supplier_name || ''}>{slip.supplier_name || '-'}</div>
+                    </TableCell>
                     <TableCell className="text-center">
                       <span className="inline-flex items-center px-2 py-1 rounded-md bg-secondary/50 text-secondary-foreground text-xs font-medium">
                         {getWarehouseById(slip.warehouse_id)?.name || 'N/A'}
@@ -2211,8 +2219,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               <TableBody>
                 {slipItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="text-center">{item.product_code}</TableCell>
-                    <TableCell className="text-center">{item.product_name}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="truncate" title={item.product_code}>{item.product_code}</div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="truncate" title={item.product_name}>{item.product_name}</div>
+                    </TableCell>
                     <TableCell className="text-center">{item.quantity}</TableCell>
                     <TableCell className="text-center">{formatCurrency(item.unit_price)}</TableCell>
                     <TableCell className="text-center">{formatCurrency(item.total_price)}</TableCell>

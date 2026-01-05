@@ -871,7 +871,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="font-medium">{index + 1}</TableCell>
-                            <TableCell>
+                            <TableCell className="max-w-[300px]">
                               {isEditing ? (
                                 <Combobox
                                   options={products.map((product) => {
@@ -890,6 +890,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                                   placeholder="Chọn sản phẩm"
                                   searchPlaceholder="Tìm sản phẩm..."
                                   emptyMessage="Không có sản phẩm nào"
+                                  className="w-full"
                                 />
                               ) : (
                                 <div className="space-y-1">
@@ -973,7 +974,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                       {pendingNewItems.map((pendingItem, index) => (
                         <TableRow key={pendingItem.id} className="bg-blue-50/50 border-t-2 border-blue-200">
                           <TableCell className="font-medium text-blue-600">{(orderDetails.items?.length || 0) + index + 1}</TableCell>
-                          <TableCell>
+                          <TableCell className="max-w-[300px]">
                             <Combobox
                               options={products
                                 .filter(product =>
@@ -993,6 +994,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                               placeholder="Chọn sản phẩm"
                               searchPlaceholder="Tìm sản phẩm..."
                               emptyMessage="Không có sản phẩm nào"
+                              className="w-full"
                             />
                           </TableCell>
                           <TableCell className="text-center">-</TableCell>

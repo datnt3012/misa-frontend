@@ -863,7 +863,9 @@ const QuotationsContent: React.FC = () => {
                   <TableBody>
                     {selectedQuotation.details?.map((detail) => (
                       <TableRow key={detail.id}>
-                        <TableCell className="text-left">{detail.product_name || 'N/A'}</TableCell>
+                        <TableCell className="text-left">
+                          <div className="truncate" title={detail.product_name || 'N/A'}>{detail.product_name || 'N/A'}</div>
+                        </TableCell>
                         <TableCell className="text-center">{formatCurrency(detail.price)}</TableCell>
                         <TableCell className="text-center">{detail.quantity}</TableCell>
                         <TableCell className="text-center">{formatCurrency(detail.price * detail.quantity)}</TableCell>
