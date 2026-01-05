@@ -2079,9 +2079,15 @@ function ExportSlipsContent() {
               ) : (
                 filteredAndSortedSlips.map((slip) => (
                 <TableRow key={slip.id}>
-                  <TableCell className="font-medium text-center min-w-[120px]">{slip.code}</TableCell>
-                  <TableCell className="text-center min-w-[120px]">{slip.order?.order_number}</TableCell>
-                  <TableCell className="text-center min-w-[180px]">{slip.order?.customer_name}</TableCell>
+                  <TableCell className="font-medium text-center min-w-[120px]">
+                    <div className="truncate" title={slip.code}>{slip.code}</div>
+                  </TableCell>
+                  <TableCell className="text-center min-w-[120px]">
+                    <div className="truncate" title={slip.order?.order_number || ''}>{slip.order?.order_number || '-'}</div>
+                  </TableCell>
+                  <TableCell className="text-center min-w-[180px]">
+                    <div className="truncate" title={slip.order?.customer_name || ''}>{slip.order?.customer_name || '-'}</div>
+                  </TableCell>
                   <TableCell className="text-center min-w-[130px] font-semibold">
                     <div className="relative group">
                       <span className="cursor-help">
@@ -2218,8 +2224,12 @@ function ExportSlipsContent() {
                                             const actualQuantity = exportItem?.actual_quantity || 0;
                                             return (
                                               <TableRow key={index}>
-                                                <TableCell className="text-center font-medium">{orderItem.product_name}</TableCell>
-                                                <TableCell className="text-center">{orderItem.product_code}</TableCell>
+                                                <TableCell className="text-center font-medium">
+                                                  <div className="truncate" title={orderItem.product_name}>{orderItem.product_name}</div>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                  <div className="truncate" title={orderItem.product_code}>{orderItem.product_code}</div>
+                                                </TableCell>
                                                 <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
                                                 <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
                                                 <TableCell className="text-center">{formatCurrency(orderItem.unit_price)}</TableCell>
@@ -2233,8 +2243,12 @@ function ExportSlipsContent() {
                                           // Show export slip items directly (no order)
                                           (slipDetail?.export_slip_items || slip.export_slip_items || []).map((exportItem, index) => (
                                             <TableRow key={index}>
-                                              <TableCell className="text-center font-medium">{exportItem.product_name}</TableCell>
-                                              <TableCell className="text-center">{exportItem.product_code}</TableCell>
+                                              <TableCell className="text-center font-medium">
+                                                <div className="truncate" title={exportItem.product_name}>{exportItem.product_name}</div>
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                <div className="truncate" title={exportItem.product_code}>{exportItem.product_code}</div>
+                                              </TableCell>
                                               <TableCell className="text-center font-medium text-green-600">{exportItem.requested_quantity || exportItem.actual_quantity}</TableCell>
                                               <TableCell className="text-center font-medium text-blue-600">{exportItem.actual_quantity}</TableCell>
                                             <TableCell className="text-center">{formatCurrency(exportItem.unit_price)}</TableCell>

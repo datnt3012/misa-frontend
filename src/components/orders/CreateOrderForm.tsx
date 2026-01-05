@@ -925,7 +925,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       key={item.id}
                       className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                     >
-                      <TableCell className="border-r border-slate-100 align-top pt-4">
+                      <TableCell className="border-r border-slate-100 align-top pt-4 max-w-[300px]">
                         <Combobox
                           key={`product-select-${item.id}`}
                           options={products
@@ -945,6 +945,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           placeholder="Chọn sản phẩm"
                           searchPlaceholder="Tìm sản phẩm..."
                           emptyMessage="Không có sản phẩm nào"
+                          className="w-full"
                         />
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-4">

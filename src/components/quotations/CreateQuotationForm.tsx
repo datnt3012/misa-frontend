@@ -290,7 +290,7 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                     <TableBody>
                       {quotation.details.map((detail, index) => (
                         <TableRow key={detail.id}>
-                          <TableCell>
+                          <TableCell className="max-w-[300px]">
                             <Combobox
                               options={products
                                 .filter(product => {
@@ -309,6 +309,7 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                               placeholder="Chọn sản phẩm"
                               searchPlaceholder="Tìm sản phẩm..."
                               emptyMessage="Không có sản phẩm nào"
+                              className="w-full"
                             />
                           </TableCell>
                           <TableCell>
