@@ -1622,29 +1622,27 @@ function ExportSlipsContent() {
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="text-sm font-medium whitespace-nowrap">Hiển thị:</span>
-                  <Combobox
-                    options={[
-                      { label: "3", value: "3" },
-                      { label: "5", value: "5" },
-                      { label: "10", value: "10" }
-                    ]}
-                    value={jobHistoryItemsPerPage.toString()}
-                    onValueChange={(value) => {
-                      const newLimit = parseInt(value);
-                      setJobHistoryItemsPerPage(newLimit);
-                      setJobHistoryPage(1);
-                      refreshImportJobs({
-                        onlyActive: false,
-                        sortBy: 'createdAt',
-                        sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                        page: 1,
-                        limit: newLimit
-                      });
-                    }}
-                    placeholder="Chọn số lượng"
-                    searchPlaceholder="Tìm số lượng..."
-                    emptyMessage="Không có tùy chọn nào"
-                  />
+                  <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
+                    const newLimit = parseInt(value);
+                    setJobHistoryItemsPerPage(newLimit);
+                    setJobHistoryPage(1);
+                    refreshImportJobs({
+                      onlyActive: false,
+                      sortBy: 'createdAt',
+                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                      page: 1,
+                      limit: newLimit
+                    });
+                  }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue placeholder="Số lượng" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3">3</SelectItem>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               {completedJobs.length === 0 ? (

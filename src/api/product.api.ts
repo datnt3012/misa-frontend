@@ -1,5 +1,29 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
+
+export interface ProductStockLevel {
+  id: string;
+  quantity: number;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  warehouse: {
+    id: string;
+    code: string | null;
+    name: string;
+    address: string;
+    description: string | null;
+    organizationCode: string | null;
+    addressDetail: string | null;
+    isActive: boolean;
+    isDeleted: boolean;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+  } | null;
+}
+
 export interface Product {
    id: string;
    code: string;
@@ -19,6 +43,7 @@ export interface Product {
    isForeignCurrency?: boolean;
    exchangeRate?: number;
    originalCostPrice?: number;
+   stockLevel?: ProductStockLevel[]; // New field from API
 }
 export interface ProductWithStock extends Product {
   current_stock: number;
@@ -94,8 +119,34 @@ export interface ProductImportJobSnapshot {
   startedAt?: string;
   completedAt?: string;
   result?: ProductImportResponse;
-  message?: string;
+   message?: string;
 }
+// Helper function to normalize product stock level from API response
+const normalizeProductStockLevel = (row: any): ProductStockLevel => {
+  return {
+    id: row.id,
+    quantity: Number(row.quantity ?? 0),
+    isDeleted: row.isDeleted ?? false,
+    createdAt: row.createdAt ?? row.created_at ?? '',
+    updatedAt: row.updatedAt ?? row.updated_at ?? '',
+    deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+    warehouse: row.warehouse ? {
+      id: row.warehouse.id,
+      code: row.warehouse.code ?? null,
+      name: row.warehouse.name,
+      address: row.warehouse.address ?? '',
+      description: row.warehouse.description ?? null,
+      organizationCode: row.warehouse.organizationCode ?? null,
+      addressDetail: row.warehouse.addressDetail ?? null,
+      isActive: row.warehouse.isActive ?? true,
+      isDeleted: row.warehouse.isDeleted ?? false,
+      createdAt: row.warehouse.createdAt ?? row.warehouse.created_at ?? '',
+      updatedAt: row.warehouse.updatedAt ?? row.warehouse.updated_at ?? '',
+      deletedAt: row.warehouse.deletedAt ?? row.warehouse.deleted_at ?? null,
+    } : null,
+  };
+};
+
 // Helper function to normalize product data from API response
 const normalizeProduct = (row: any): Product => {
    const price = parseFloat(row.price ?? '0');
@@ -119,6 +170,9 @@ const normalizeProduct = (row: any): Product => {
      isForeignCurrency: row.isForeignCurrency ?? false,
      exchangeRate: row.exchangeRate ? parseFloat(row.exchangeRate) : undefined,
      originalCostPrice: row.originalCostPrice ? parseFloat(row.originalCostPrice) : undefined,
+     stockLevel: row.stockLevel && Array.isArray(row.stockLevel) 
+       ? row.stockLevel.map(normalizeProductStockLevel)
+       : [],
    };
 };
 const normalizeImportJobResponse = (job: any): ProductImportJobSnapshot => {
@@ -154,6 +208,7 @@ export const productApi = {
     category?: string;
     warehouse?: string;
     hasStock?: boolean;
+    stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
   }): Promise<{ products: Product[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
@@ -162,6 +217,7 @@ export const productApi = {
     if (params?.category) queryParams.append('category', params.category);
     if (params?.warehouse) queryParams.append('warehouse', params.warehouse);
     if (params?.hasStock) queryParams.append('hasStock', params.hasStock.toString());
+    if (params?.stockStatus) queryParams.append('stockStatus', params.stockStatus);
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.PRODUCTS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.PRODUCTS.LIST;

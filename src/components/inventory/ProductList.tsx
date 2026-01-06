@@ -25,11 +25,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 interface ProductListProps {
-  products: any[];
   warehouses: any[];
   canViewCostPrice: boolean;
   canManageProducts: boolean;
-  onProductsUpdate: (searchParams?: { keyword?: string; category?: string }) => void;
+  onProductsUpdate?: (searchParams?: { keyword?: string; category?: string }) => void;
   importJobs: ProductImportJobSnapshot[];
   activeJobs?: ProductImportJobSnapshot[];
   /** True once the app has checked `/products/import/status?onlyActive=true` at least once. */
@@ -59,7 +58,6 @@ const getJobStatusLabel = (job: ProductImportJobSnapshot): string => {
   return IMPORT_STATUS_LABELS[job.status] ?? job.status;
 };
 const ProductList: React.FC<ProductListProps> = ({
-  products,
   warehouses,
   canViewCostPrice,
   canManageProducts,
@@ -75,7 +73,11 @@ const ProductList: React.FC<ProductListProps> = ({
   jobHistoryPagination
 }) => {
   const { toast } = useToast();
+  const [products, setProducts] = useState<any[]>([]);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,6 +119,51 @@ const ProductList: React.FC<ProductListProps> = ({
   const [jobHistoryItemsPerPage, setJobHistoryItemsPerPage] = useState(3);
   const [jobHistorySort, setJobHistorySort] = useState<'newest' | 'oldest'>('newest');
   const [expandedJobErrors, setExpandedJobErrors] = useState<Set<string>>(new Set());
+  // Load products from API with pagination
+  const loadProducts = React.useCallback(async () => {
+    try {
+      setLoadingProducts(true);
+      const params: any = {
+        page: currentPage,
+        limit: itemsPerPage,
+      };
+      if (debouncedSearchTerm) {
+        params.keyword = debouncedSearchTerm;
+      }
+      if (filterCategory !== 'all') {
+        params.category = filterCategory;
+      }
+      const response = await productApi.getProducts(params);
+      setProducts(response.products || []);
+      setTotalProducts(response.total || 0);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách sản phẩm';
+      toast({
+        title: "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: "destructive",
+      });
+      setProducts([]);
+      setTotalProducts(0);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, toast]);
+
+  // Debounce search term
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Load products when pagination or filters change
+  React.useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
   // Use ref to store onProductsUpdate to prevent infinite loop when parent re-renders
   const onProductsUpdateRef = React.useRef(onProductsUpdate);
   // Keep ref updated when prop changes
@@ -153,13 +200,16 @@ const ProductList: React.FC<ProductListProps> = ({
     );
     if (completedJobsWithSuccess.length > 0) {
       // Refresh product list when there are successfully completed import jobs
-      onProductsUpdateRef.current();
+      loadProducts();
+      if (onProductsUpdateRef.current) {
+        onProductsUpdateRef.current();
+      }
       // Close import dialog if it's still open
       if (isImportDialogOpen) {
         setIsImportDialogOpen(false);
       }
     }
-  }, [activeJobs, isImportDialogOpen]);
+  }, [activeJobs, isImportDialogOpen, loadProducts]);
   const sortedCategories = React.useMemo(() => {
     return [...categories].sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
@@ -204,14 +254,8 @@ const ProductList: React.FC<ProductListProps> = ({
       });
     }
   }, [editingProduct, findCategoryByValue]);
-  // When searching via API, we don't need frontend filtering for search term
-  // Only apply category filtering on frontend
-  const filteredProducts = products.filter(product => {
-    const productCategory = findCategoryByValue(product.category);
-    const matchesCategory = filterCategory === "all" ||
-                        (productCategory?.id && productCategory.id === filterCategory);
-    return matchesCategory;
-  });
+  // Products are already filtered by API, no need for additional filtering
+  const filteredProducts = products;
   // Load categories from categories API
   const loadCategories = React.useCallback(async () => {
     try {
@@ -220,11 +264,10 @@ const ProductList: React.FC<ProductListProps> = ({
       const activeCategories = response.categories.filter(cat => cat.isActive);
       setCategories(activeCategories);
     } catch (error) {
-      // Fallback: extract unique categories from products
-      const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
-      setCategories(uniqueCategories.map(name => ({ id: name, name })));
+      // If categories API fails, set empty array
+      setCategories([]);
     }
-  }, [products]);
+  }, []);
   React.useEffect(() => {
     loadCategories();
   }, [loadCategories]);
@@ -326,11 +369,11 @@ const ProductList: React.FC<ProductListProps> = ({
       return 0;
     });
   }, [filteredProducts, sortConfig, getCategoryNameFromValue]);
-  // Pagination logic
-  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+  // Pagination logic - products are already paginated by API
+  const totalPages = Math.ceil(totalProducts / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + itemsPerPage, totalProducts);
+  const paginatedProducts = sortedProducts;
   // Merge activeJobs + importJobs so the UI still shows progress even if the backend/endpoint doesn't support `onlyActive=true`
   // or if polling hasn't started yet (e.g., user refreshes page while a job is already processing).
   const mergedJobs = React.useMemo(() => {
@@ -391,44 +434,15 @@ const ProductList: React.FC<ProductListProps> = ({
     setCurrentPage(1);
   };
 
-  // Handle search with debouncing and API calls
+  // Handle search change - debounced in useEffect
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Reset to first page when searching
-
-    // Clear existing timeout
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    // Set new timeout for debounced search
-    const timeout = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        // Trigger parent component to reload products with search parameter
-        onProductsUpdate({
-          keyword: value.trim() || undefined,
-          category: filterCategory !== 'all' ? filterCategory : undefined
-        });
-      } catch (error) {
-        console.error('Search error:', error);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 500); // 500ms debounce
-
-    setSearchTimeout(timeout);
   };
 
   // Handle category filter change
   const handleCategoryChange = (value: string) => {
     setFilterCategory(value);
     setCurrentPage(1); // Reset to first page when filtering
-    // Trigger parent component to reload products with category filter
-    onProductsUpdate({
-      keyword: searchTerm.trim() || undefined,
-      category: value !== 'all' ? value : undefined
-    });
   };
   const resetImportState = React.useCallback(() => {
     setImportFile(null);
@@ -573,7 +587,10 @@ const ProductList: React.FC<ProductListProps> = ({
       }
       const response = await productApi.createProduct(productData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
-      onProductsUpdate();
+      loadProducts();
+      if (onProductsUpdate) {
+        onProductsUpdate();
+      }
       // Close dialog and clear form
       setIsAddProductDialogOpen(false);
       setNewProduct({
@@ -661,7 +678,10 @@ const ProductList: React.FC<ProductListProps> = ({
       }
       const response = await productApi.updateProduct(editingProduct.id, updateData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
-      onProductsUpdate();
+      loadProducts();
+      if (onProductsUpdate) {
+        onProductsUpdate();
+      }
       setEditingProduct(null);
       setNewProduct({
         name: '',
@@ -692,7 +712,10 @@ const ProductList: React.FC<ProductListProps> = ({
     try {
       const response = await productApi.deleteProduct(productId);
       toast({ title: 'Thành công', description: response.message || 'Đã xóa sản phẩm!' });
-      onProductsUpdate();
+      loadProducts();
+      if (onProductsUpdate) {
+        onProductsUpdate();
+      }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi xóa sản phẩm';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
@@ -1304,29 +1327,27 @@ const ProductList: React.FC<ProductListProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">Hiển thị:</span>
-                      <Combobox
-                        options={[
-                          { label: "3", value: "3" },
-                          { label: "5", value: "5" },
-                          { label: "10", value: "10" }
-                        ]}
-                        value={jobHistoryItemsPerPage.toString()}
-                        onValueChange={(value) => {
-                          const newLimit = parseInt(value);
-                          setJobHistoryItemsPerPage(newLimit);
-                          setJobHistoryPage(1); // Reset to first page when limit changes
-                          onRefreshImportJobs({
-                            onlyActive: false,
-                            sortBy: 'createdAt',
-                            sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                            page: 1,
-                            limit: newLimit
-                          });
-                        }}
-                        placeholder="Chọn số lượng"
-                        searchPlaceholder="Tìm số lượng..."
-                        emptyMessage="Không có tùy chọn nào"
-                      />
+                      <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
+                        const newLimit = parseInt(value);
+                        setJobHistoryItemsPerPage(newLimit);
+                        setJobHistoryPage(1); // Reset to first page when limit changes
+                        onRefreshImportJobs({
+                          onlyActive: false,
+                          sortBy: 'createdAt',
+                          sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                          page: 1,
+                          limit: newLimit
+                        });
+                      }}>
+                        <SelectTrigger className="w-20">
+                          <SelectValue placeholder="Số lượng" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3</SelectItem>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="10">10</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   {completedJobs.length === 0 ? (
@@ -1687,7 +1708,7 @@ const ProductList: React.FC<ProductListProps> = ({
         {/* Pagination and items per page controls */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Hiển thị:</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">Hiển thị:</span>
             <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Chọn số lượng" />
@@ -1699,10 +1720,10 @@ const ProductList: React.FC<ProductListProps> = ({
                 <SelectItem value="100">100</SelectItem>
               </SelectContent>
             </Select>
-            <span className="text-sm text-muted-foreground">/ trang</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">/ trang</span>
           </div>
           <div className="text-sm text-muted-foreground">
-            Hiển thị {startIndex + 1}-{Math.min(endIndex, sortedProducts.length)} trong tổng số {sortedProducts.length} sản phẩm
+            Hiển thị {startIndex + 1}-{Math.min(endIndex, totalProducts)} trong tổng số {totalProducts} sản phẩm
           </div>
         </div>
         <div className="rounded-md border overflow-x-auto">
@@ -1778,7 +1799,7 @@ const ProductList: React.FC<ProductListProps> = ({
               {paginatedProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canManageProducts ? (canViewCostPrice ? 11 : 10) : (canViewCostPrice ? 10 : 9)} className="text-center py-8 text-muted-foreground">
-                    {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
+                    {totalProducts === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
                   </TableCell>
                 </TableRow>
               ) : (
