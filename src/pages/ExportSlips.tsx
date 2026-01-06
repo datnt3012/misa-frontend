@@ -2068,7 +2068,16 @@ function ExportSlipsContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedSlips.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : filteredAndSortedSlips.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8">
                     {searchTerm ? 'Không tìm thấy phiếu xuất kho nào' : 'Chưa có phiếu xuất kho nào'}

@@ -650,7 +650,16 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedProducts.length === 0 ? (
+              {loadingProducts ? (
+                <TableRow>
+                  <TableCell colSpan={canViewCostPrice ? 9 : 8} className="text-center py-8">
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canViewCostPrice ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}

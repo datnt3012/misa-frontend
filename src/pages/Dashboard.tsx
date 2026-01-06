@@ -588,7 +588,12 @@ const DashboardContent = () => {
                   <CardTitle>Doanh thu theo khu vực</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {regionRevenue.length === 0 ? (
+                  {loadingStates.revenue ? (
+                    <div className="flex items-center justify-center space-x-2 py-4">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                    </div>
+                  ) : regionRevenue.length === 0 ? (
                     <p className="text-muted-foreground">Chưa có dữ liệu</p>
                   ) : (
                     <div className="space-y-3">
@@ -612,7 +617,12 @@ const DashboardContent = () => {
                   <CardTitle>Lợi nhuận theo danh mục</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {categoryProfit.length === 0 ? (
+                  {loadingStates.revenue ? (
+                    <div className="flex items-center justify-center space-x-2 py-4">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                    </div>
+                  ) : categoryProfit.length === 0 ? (
                     <p className="text-muted-foreground">Chưa có dữ liệu</p>
                   ) : (
                     <>

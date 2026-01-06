@@ -734,7 +734,16 @@ const CustomersContent = () => {
             </Card>
           ))}
         </div>
-        {filteredCustomers.length === 0 && (
+        {isLoading ? (
+          <Card>
+            <CardContent className="py-10 text-center">
+              <div className="flex items-center justify-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                <p className="text-muted-foreground">Đang tải dữ liệu...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : filteredCustomers.length === 0 && (
           <Card>
             <CardContent className="py-10 text-center">
               <p className="text-muted-foreground">
