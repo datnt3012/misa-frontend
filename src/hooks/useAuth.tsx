@@ -45,16 +45,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedSession = localStorage.getItem('user-session');
     if (storedSession) {
       try {
-        const { user: storedUser, session: storedSessionData, userRole: storedRole } = JSON.parse(storedSession);
-        // Check if session is still valid (not expired)
-        if (storedSessionData && storedSessionData.expires_at > Math.floor(Date.now() / 1000)) {
+        const { user: storedUser, session: storedSessionData, userRole: storedRole, rememberMe } = JSON.parse(storedSession);
+        // Check if session is still valid (not expired) or if rememberMe is enabled
+        // If rememberMe is true, skip expiration check
+        const isSessionValid = rememberMe || (storedSessionData && storedSessionData.expires_at > Math.floor(Date.now() / 1000));
+        if (isSessionValid && storedSessionData) {
           setUser(storedUser);
           setSession(storedSessionData);
           setUserRole(storedRole);
           setLoading(false);
           return;
         } else {
-          // Session expired, remove it
+          // Session expired and rememberMe is false, remove it
           localStorage.removeItem('user-session');
         }
       } catch (error) {
@@ -83,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
   // User role is now included in the user object from API
   // No need for separate fetchUserRole function
-  const signIn = async (emailOrUsername: string, password: string) => {
+  const signIn = async (emailOrUsername: string, password: string, rememberMe: boolean = false) => {
     try {
       // Clear any existing invalid sessions locally (don't call logout API)
       localStorage.removeItem('user-session');
@@ -94,7 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setUserRole(null);
       // Try real backend authentication first
-      const response = await authApi.login({ username: emailOrUsername, password });
+      // Send rememberMe flag to backend so it can set appropriate token expiration
+      const response = await authApi.login({ 
+        username: emailOrUsername, 
+        password,
+        rememberMe: rememberMe 
+      });
       // Handle both API response format and direct response
       // api.post() already unwraps response.data, so response should be the data directly
       const result = (response as any).data || response;
@@ -153,11 +160,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           updatedAt: userData.updatedAt || userData.updated_at || '',
         };
         // Create session from API response
+        // Use expires_in from backend response (backend handles rememberMe logic)
+        // Backend returns: 31536000 (1 year) if rememberMe=true, 86400 (24h) if rememberMe=false
+        const expiresIn = result.expires_in || 86400; // Default to 24h if backend doesn't provide
+        const expiresAt = result.expires_in 
+          ? Math.floor(Date.now() / 1000) + result.expires_in 
+          : Math.floor(Date.now() / 1000) + 86400; // Default to 24h
+        
         const sessionData = {
           access_token: result.access_token,
           refresh_token: result.refresh_token,
-          expires_in: 3600, // Default 1 hour
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          expires_in: expiresIn,
+          expires_at: expiresAt,
           token_type: 'bearer',
           user: normalizedUser
         };
@@ -174,7 +188,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('user-session', JSON.stringify({
           user: normalizedUser,
           session: sessionData,
-          userRole: roleName // Store role name instead of roleId
+          userRole: roleName, // Store role name instead of roleId
+          rememberMe: rememberMe // Store rememberMe flag
         }));
       } else {
         return { error: { message: 'Unexpected response format from server' } };
@@ -278,25 +293,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const updatedSession = { ...session, user: normalizedUser };
         setSession(updatedSession);
         // Update localStorage with normalized user data
+        // Preserve rememberMe flag if it exists
+        const storedSession = localStorage.getItem('user-session');
+        let rememberMe = false;
+        if (storedSession) {
+          try {
+            const parsed = JSON.parse(storedSession);
+            rememberMe = parsed.rememberMe || false;
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
         localStorage.setItem('user-session', JSON.stringify({
           user: normalizedUser,
           session: updatedSession,
-          userRole: roleName
+          userRole: roleName,
+          rememberMe: rememberMe
         }));
       } else {
         // Even if no session exists, update localStorage to persist user data
+        // Check if rememberMe is enabled from stored session
+        const storedSession = localStorage.getItem('user-session');
+        let rememberMe = false;
+        if (storedSession) {
+          try {
+            const parsed = JSON.parse(storedSession);
+            rememberMe = parsed.rememberMe || false;
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+        // Use expires_in from stored session if available (from backend response)
+        // Backend: 31536000 (1 year) if rememberMe=true, 86400 (24h) if false
+        const storedExpiresIn = storedSessionData?.expires_in || (rememberMe ? 31536000 : 86400);
         const sessionData = {
           access_token: localStorage.getItem('access_token') || '',
           refresh_token: localStorage.getItem('refresh_token') || '',
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          expires_in: storedExpiresIn,
+          expires_at: storedSessionData?.expires_at || (rememberMe ? Math.floor(Date.now() / 1000) + 31536000 : Math.floor(Date.now() / 1000) + 86400),
           token_type: 'bearer',
           user: normalizedUser
         };
         localStorage.setItem('user-session', JSON.stringify({
           user: normalizedUser,
           session: sessionData,
-          userRole: roleName
+          userRole: roleName,
+          rememberMe: rememberMe
         }));
       }
     } catch (error) {
