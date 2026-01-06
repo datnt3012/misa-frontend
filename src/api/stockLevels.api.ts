@@ -25,6 +25,7 @@ export interface StockLevel {
     unit: string;
     price: number;
     costPrice?: number;
+    lowStockThreshold?: number | null;
   };
 }
 
@@ -66,6 +67,7 @@ const normalize = (row: any): StockLevel => ({
     unit: row.product.unit,
     price: Number(row.product.price || 0),
     costPrice: Number(row.product.costPrice || row.product.cost_price || 0),
+    lowStockThreshold: row.product.lowStockThreshold != null ? Number(row.product.lowStockThreshold) : null,
   } : undefined,
 });
 
@@ -80,6 +82,7 @@ export const stockLevelsApi = {
     minQuantity?: number;
     maxQuantity?: number;
     includeDeleted?: boolean;
+    stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
   }): Promise<{ stockLevels: StockLevel[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
@@ -90,6 +93,7 @@ export const stockLevelsApi = {
     if (params?.minQuantity) queryParams.append('minQuantity', String(params.minQuantity));
     if (params?.maxQuantity) queryParams.append('maxQuantity', String(params.maxQuantity));
     if (params?.includeDeleted) queryParams.append('includeDeleted', String(params.includeDeleted));
+    if (params?.stockStatus) queryParams.append('stockStatus', params.stockStatus);
 
     const url = queryParams.toString()
       ? `${API_ENDPOINTS.STOCK_LEVELS.LIST}?${queryParams.toString()}`

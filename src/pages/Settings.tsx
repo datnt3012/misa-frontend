@@ -753,7 +753,7 @@ const SettingsContent = () => {
                             <Combobox
                               options={userRoles.map((role) => ({
                                 label: role.name,
-                                value: role.name
+                                value: role.id
                               }))}
                               value={newUserRole}
                               onValueChange={setNewUserRole}

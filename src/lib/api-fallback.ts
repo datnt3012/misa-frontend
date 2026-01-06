@@ -124,5 +124,5 @@ export const mockLoginResponse = {
   access_token: 'mock-access-token-' + Date.now(),
   refresh_token: 'mock-refresh-token-' + Date.now(),
   user: mockUsers[0],
-  expires_in: 3600
+  expires_in: 31536000 // 1 year for mock (matches backend when rememberMe=true)
 };

@@ -588,7 +588,12 @@ const DashboardContent = () => {
                   <CardTitle>Doanh thu theo khu vực</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {regionRevenue.length === 0 ? (
+                  {loadingStates.revenue ? (
+                    <div className="flex items-center justify-center space-x-2 py-4">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                    </div>
+                  ) : regionRevenue.length === 0 ? (
                     <p className="text-muted-foreground">Chưa có dữ liệu</p>
                   ) : (
                     <div className="space-y-3">
@@ -612,7 +617,12 @@ const DashboardContent = () => {
                   <CardTitle>Lợi nhuận theo danh mục</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {categoryProfit.length === 0 ? (
+                  {loadingStates.revenue ? (
+                    <div className="flex items-center justify-center space-x-2 py-4">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                    </div>
+                  ) : categoryProfit.length === 0 ? (
                     <p className="text-muted-foreground">Chưa có dữ liệu</p>
                   ) : (
                     <>
@@ -781,25 +791,22 @@ const DashboardContent = () => {
                     {/* Pagination controls */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Hiển thị</span>
-                        <Combobox
-                          options={[
-                            { label: "5", value: "5" },
-                            { label: "10", value: "10" },
-                            { label: "20", value: "20" },
-                            { label: "50", value: "50" }
-                          ]}
-                          value={String(pageSize)}
-                          onValueChange={(v) => {
-                            setPageSize(Number(v));
-                            setCurrentPage(1); // Reset to first page when changing page size
-                          }}
-                          placeholder="Số lượng"
-                          searchPlaceholder="Tìm số lượng..."
-                          emptyMessage="Không có số lượng nào"
-                          className="h-8 w-20"
-                        />
-                        <span className="text-sm text-muted-foreground">mỗi trang</span>
+                        <span className="text-sm text-muted-foreground whitespace-nowrap">Hiển thị</span>
+                        <Select value={String(pageSize)} onValueChange={(v) => {
+                          setPageSize(Number(v));
+                          setCurrentPage(1); // Reset to first page when changing page size
+                        }}>
+                          <SelectTrigger className="h-8 w-20">
+                            <SelectValue placeholder="Số lượng" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <span className="text-sm text-muted-foreground whitespace-nowrap">mỗi trang</span>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Hiển thị {Math.min((currentPage - 1) * pageSize + 1, productStockData.length)} - {Math.min(currentPage * pageSize, productStockData.length)} của {productStockData.length} sản phẩm
@@ -1107,19 +1114,16 @@ const DashboardContent = () => {
               <CardTitle>Đơn hàng gần đây</CardTitle>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Hiển thị</span>
-                <Combobox
-                  options={[
-                    { label: "3", value: "3" },
-                    { label: "5", value: "5" },
-                    { label: "10", value: "10" }
-                  ]}
-                  value={String(recentOrdersLimit)}
-                  onValueChange={(v) => setRecentOrdersLimit(Number(v))}
-                  placeholder="Số lượng"
-                  searchPlaceholder="Tìm số lượng..."
-                  emptyMessage="Không có số lượng nào"
-                  className="h-8 w-20"
-                />
+                <Select value={String(recentOrdersLimit)} onValueChange={(v) => setRecentOrdersLimit(Number(v))}>
+                  <SelectTrigger className="h-8 w-20">
+                    <SelectValue placeholder="Số lượng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>

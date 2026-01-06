@@ -20,6 +20,7 @@ export type UserRole =
 export interface LoginRequest {
   username: string;
   password: string;
+  rememberMe?: boolean; // Optional: if true, backend should return longer-lived tokens
 }
 
 export interface LoginResponse {
