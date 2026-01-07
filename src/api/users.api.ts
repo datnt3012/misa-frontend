@@ -97,13 +97,22 @@ export const usersApi = {
     page?: number;
     limit?: number;
     search?: string;
+    keyword?: string; // Backend uses 'keyword' instead of 'search'
     roleId?: string;
+    includeDeleted?: boolean; // Include soft deleted users
+    isDeleted?: boolean; // Filter by deleted status
+    isActive?: boolean; // Filter by active status
   }): Promise<{ users: User[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.search) queryParams.append('search', params.search);
+    // Use keyword if provided, otherwise fallback to search
+    if (params?.keyword) queryParams.append('keyword', params.keyword);
+    else if (params?.search) queryParams.append('keyword', params.search);
     if (params?.roleId) queryParams.append('roleId', params.roleId);
+    if (params?.includeDeleted !== undefined) queryParams.append('includeDeleted', params.includeDeleted.toString());
+    if (params?.isDeleted !== undefined) queryParams.append('isDeleted', params.isDeleted.toString());
+    if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.USERS.LIST}?${queryParams.toString()}`
@@ -179,6 +188,37 @@ export const usersApi = {
         nameTranslated: row.role.nameTranslated,
         descriptionTranslated: row.role.descriptionTranslated,
         permissions: row.role.permissions || [], // Include permissions if available
+      } : undefined,
+      createdAt: row.createdAt ?? row.created_at ?? '',
+      updatedAt: row.updatedAt ?? row.updated_at ?? '',
+      deletedAt: row.deletedAt ?? row.deleted_at,
+    });
+
+    return normalize(data);
+  },
+
+  getUserByEmail: async (email: string): Promise<User> => {
+    const response = await api.get<any>(`${API_ENDPOINTS.USERS.LIST}/email/${email}`);
+    const data = response?.data || response;
+
+    const normalize = (row: any): User => ({
+      id: row.id,
+      email: row.email ?? undefined,
+      username: row.username ?? row.user_name ?? '',
+      firstName: row.firstName ?? row.first_name,
+      lastName: row.lastName ?? row.last_name,
+      phoneNumber: row.phoneNumber ?? row.phone_number,
+      address: row.address,
+      avatarUrl: row.avatarUrl ?? row.avatar_url,
+      isActive: Boolean(row.isActive ?? row.is_active),
+      isDeleted: Boolean(row.isDeleted ?? row.is_deleted),
+      roleId: row.roleId ?? row.role_id ?? '',
+      role: row.role ? {
+        id: row.role.id,
+        name: row.role.name,
+        description: row.role.description,
+        nameTranslated: row.role.nameTranslated,
+        descriptionTranslated: row.role.descriptionTranslated,
       } : undefined,
       createdAt: row.createdAt ?? row.created_at ?? '',
       updatedAt: row.updatedAt ?? row.updated_at ?? '',
@@ -294,8 +334,40 @@ export const usersApi = {
   },
 
   // Delete user
-  deleteUser: async (id: string): Promise<{ message: string }> => {
-    return api.delete<{ message: string }>(API_ENDPOINTS.USERS.DELETE(id));
+  deleteUser: async (id: string, hard: boolean = false): Promise<{ message: string }> => {
+    const url = hard 
+      ? `${API_ENDPOINTS.USERS.DELETE(id)}?hard=true`
+      : API_ENDPOINTS.USERS.DELETE(id);
+    return api.delete<{ message: string }>(url);
+  },
+
+  // Restore user
+  restoreUser: async (id: string): Promise<User> => {
+    const response = await api.post<any>(`${API_ENDPOINTS.USERS.LIST}/${id}/restore`);
+    const data = response?.data || response;
+    return {
+      id: data.id,
+      email: data.email ?? undefined,
+      username: data.username ?? data.user_name ?? '',
+      firstName: data.firstName ?? data.first_name,
+      lastName: data.lastName ?? data.last_name,
+      phoneNumber: data.phoneNumber ?? data.phone_number,
+      address: data.address,
+      avatarUrl: data.avatarUrl ?? data.avatar_url,
+      isActive: Boolean(data.isActive ?? data.is_active),
+      isDeleted: Boolean(data.isDeleted ?? data.is_deleted),
+      roleId: data.roleId ?? data.role_id ?? '',
+      role: data.role ? {
+        id: data.role.id,
+        name: data.role.name,
+        description: data.role.description,
+        nameTranslated: data.role.nameTranslated,
+        descriptionTranslated: data.role.descriptionTranslated,
+      } : undefined,
+      createdAt: data.createdAt ?? data.created_at ?? '',
+      updatedAt: data.updatedAt ?? data.updated_at ?? '',
+      deletedAt: data.deletedAt ?? data.deleted_at,
+    };
   },
 
   // Role management

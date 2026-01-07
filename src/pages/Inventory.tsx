@@ -1235,16 +1235,16 @@ const InventoryContent = () => {
           </TabsList>
            {/* Inventory Stock Tab */}
            <TabsContent value="inventory" className="space-y-6">
-              <PermissionGuard 
-                requiredPermissions={['STOCK_LEVELS_VIEW', 'PRODUCTS_VIEW', 'WAREHOUSES_VIEW']}
-                requireAll={true}
-              >
-                <InventoryStock 
-                  warehouses={warehouses}
-                  categories={categories}
-                  canViewCostPrice={canViewCostPrice}
-                />
-              </PermissionGuard>
+             <PermissionGuard 
+               requiredPermissions={['STOCK_LEVELS_VIEW', 'PRODUCTS_VIEW', 'WAREHOUSES_VIEW']}
+               requireAll={true}
+             >
+               <InventoryStock 
+                 warehouses={warehouses}
+                 categories={categories}
+                 canViewCostPrice={canViewCostPrice}
+               />
+             </PermissionGuard>
            </TabsContent>
           {/* Products List Tab */}
           <TabsContent value="products" className="space-y-6">

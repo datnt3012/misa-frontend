@@ -1623,16 +1623,16 @@ function ExportSlipsContent() {
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="text-sm font-medium whitespace-nowrap">Hiển thị:</span>
                   <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
-                    const newLimit = parseInt(value);
-                    setJobHistoryItemsPerPage(newLimit);
-                    setJobHistoryPage(1);
-                    refreshImportJobs({
-                      onlyActive: false,
-                      sortBy: 'createdAt',
-                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                      page: 1,
-                      limit: newLimit
-                    });
+                      const newLimit = parseInt(value);
+                      setJobHistoryItemsPerPage(newLimit);
+                      setJobHistoryPage(1);
+                      refreshImportJobs({
+                        onlyActive: false,
+                        sortBy: 'createdAt',
+                        sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                        page: 1,
+                        limit: newLimit
+                      });
                   }}>
                     <SelectTrigger className="w-20">
                       <SelectValue placeholder="Số lượng" />
@@ -1718,16 +1718,16 @@ function ExportSlipsContent() {
                                 e.preventDefault();
                                 if (jobHistoryPage > 1) {
                                   const newPage = jobHistoryPage - 1;
-                                  setJobHistoryPage(newPage);
-                                  refreshImportJobs({
-                                    onlyActive: false,
-                                    sortBy: 'createdAt',
-                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                    page: newPage,
-                                    limit: jobHistoryItemsPerPage
-                                  });
+                            setJobHistoryPage(newPage);
+                            refreshImportJobs({
+                              onlyActive: false,
+                              sortBy: 'createdAt',
+                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                              page: newPage,
+                              limit: jobHistoryItemsPerPage
+                            });
                                 }
-                              }}
+                          }}
                               className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
                             />
                           </PaginationItem>
@@ -1828,17 +1828,17 @@ function ExportSlipsContent() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 if (jobHistoryPage < jobHistoryPagination.totalPages) {
-                                  const newPage = jobHistoryPage + 1;
-                                  setJobHistoryPage(newPage);
-                                  refreshImportJobs({
-                                    onlyActive: false,
-                                    sortBy: 'createdAt',
-                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                    page: newPage,
-                                    limit: jobHistoryItemsPerPage
-                                  });
+                            const newPage = jobHistoryPage + 1;
+                            setJobHistoryPage(newPage);
+                            refreshImportJobs({
+                              onlyActive: false,
+                              sortBy: 'createdAt',
+                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                              page: newPage,
+                              limit: jobHistoryItemsPerPage
+                            });
                                 }
-                              }}
+                          }}
                               className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
                             />
                           </PaginationItem>
@@ -2142,95 +2142,95 @@ function ExportSlipsContent() {
                               <p>Đang tải chi tiết phiếu xuất kho...</p>
                             </div>
                           ) : (
-                            <div className="space-y-6">
-                              {/* Basic Info */}
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label className="font-medium">Số phiếu:</Label>
+                          <div className="space-y-6">
+                            {/* Basic Info */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label className="font-medium">Số phiếu:</Label>
                                   <p className="text-sm">{slipDetail?.code || slip.code}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Đơn hàng:</Label>
+                              </div>
+                              <div>
+                                <Label className="font-medium">Đơn hàng:</Label>
                                   <p className="text-sm">{slipDetail?.order?.order_number || slip.order?.order_number}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Khách hàng:</Label>
+                              </div>
+                              <div>
+                                <Label className="font-medium">Khách hàng:</Label>
                                   <p className="text-sm">{slipDetail?.order?.customer_name || slip.order?.customer_name}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Trạng thái:</Label>
+                              </div>
+                              <div>
+                                <Label className="font-medium">Trạng thái:</Label>
                                   <div className="text-sm">{getStatusBadge(slipDetail?.status || slip.status)}</div>
-                                </div>
+                              </div>
                                 {(slipDetail?.order?.customer_address || slip.order?.customer_address) && (
-                                  <div className="col-span-2">
-                                    <Label className="font-medium">Địa chỉ giao hàng:</Label>
-                                    <p className="text-sm">
-                                      {(() => {
+                                <div className="col-span-2">
+                                  <Label className="font-medium">Địa chỉ giao hàng:</Label>
+                                  <p className="text-sm">
+                                    {(() => {
                                         const orderData = slipDetail?.order || slip.order;
                                         const slipId = slipDetail?.id || slip.id;
                                         if (orderData?.customer_address) {
                                           const cachedAddress = addressCache[slipId];
                                           const directAddress = formatFullAddress(orderData.customer_address, orderData.customer_addressInfo);
-                                          return cachedAddress || directAddress;
+                                      return cachedAddress || directAddress;
                                         }
                                         return '-';
-                                      })()}
-                                    </p>
-                                  </div>
-                                )}
+                                    })()}
+                                  </p>
+                                </div>
+                              )}
                                 {(slipDetail?.order?.customer_phone || slip.order?.customer_phone) && (
-                                  <div>
-                                    <Label className="font-medium">Số điện thoại:</Label>
+                                <div>
+                                  <Label className="font-medium">Số điện thoại:</Label>
                                     <p className="text-sm">{slipDetail?.order?.customer_phone || slip.order?.customer_phone}</p>
-                                  </div>
-                                )}
-                                <div>
-                                  <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
-                                  <p className="text-sm font-medium text-green-600">
+                                </div>
+                              )}
+                              <div>
+                                <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
+                                <p className="text-sm font-medium text-green-600">
                                     {formatCurrency((slipDetail?.order?.total_amount || slip.order?.total_amount) || 0)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Tổng giá trị thực xuất:</Label>
-                                  <p className="text-sm font-medium text-blue-600">
-                                    {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
-                                  </p>
-                                </div>
+                                </p>
                               </div>
-                              {/* Product List */}
+                              <div>
+                                <Label className="font-medium">Tổng giá trị thực xuất:</Label>
+                                <p className="text-sm font-medium text-blue-600">
+                                    {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                                </p>
+                              </div>
+                            </div>
+                            {/* Product List */}
                               {((slipDetail?.order?.order_items && slipDetail.order.order_items.length > 0) || (slipDetail?.export_slip_items && slipDetail.export_slip_items.length > 0) || 
                                 (slip.order?.order_items && slip.order.order_items.length > 0) || (slip.export_slip_items && slip.export_slip_items.length > 0)) && (
-                                <div>
-                                  <Label className="font-medium block mb-3">
+                              <div>
+                                <Label className="font-medium block mb-3">
                                     {(slipDetail?.order?.order_items || slip.order?.order_items) && (slipDetail?.order?.order_items?.length || slip.order?.order_items?.length) > 0
-                                      ? "Danh sách sản phẩm cần xuất:"
-                                      : "Danh sách sản phẩm đã xuất:"}
-                                  </Label>
-                                  <div className="border rounded-md overflow-hidden">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="text-center">Tên sản phẩm</TableHead>
-                                          <TableHead className="text-center">Mã SP</TableHead>
+                                    ? "Danh sách sản phẩm cần xuất:"
+                                    : "Danh sách sản phẩm đã xuất:"}
+                                </Label>
+                                <div className="border rounded-md overflow-hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="text-center">Tên sản phẩm</TableHead>
+                                        <TableHead className="text-center">Mã SP</TableHead>
                                           <TableHead className="text-center">Số lượng cần xuất</TableHead>
                                           <TableHead className="text-center">Số lượng thực xuất</TableHead>
-                                          <TableHead className="text-center">Đơn giá</TableHead>
-                                          <TableHead className="text-center">Thành tiền</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
+                                        <TableHead className="text-center">Đơn giá</TableHead>
+                                        <TableHead className="text-center">Thành tiền</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
                                         {(slipDetail?.order?.order_items || slip.order?.order_items) && (slipDetail?.order?.order_items?.length || slip.order?.order_items?.length) > 0 ? (
-                                          // Show order items with export quantities
+                                        // Show order items with export quantities
                                           (slipDetail?.order?.order_items || slip.order?.order_items || []).map((orderItem, index) => {
-                                            // Find corresponding export slip item
+                                          // Find corresponding export slip item
                                             const exportSlipItems = slipDetail?.export_slip_items || slip.export_slip_items || [];
                                             const exportItem = exportSlipItems.find(
-                                              item => item.product_code === orderItem.product_code
-                                            );
-                                            const requestedQuantity = orderItem.quantity;
-                                            const actualQuantity = exportItem?.actual_quantity || 0;
-                                            return (
-                                              <TableRow key={index}>
+                                            item => item.product_code === orderItem.product_code
+                                          );
+                                          const requestedQuantity = orderItem.quantity;
+                                          const actualQuantity = exportItem?.actual_quantity || 0;
+                                          return (
+                                            <TableRow key={index}>
                                                 <TableCell className="text-center font-medium">
                                                   <div className="truncate" title={orderItem.product_name}>{orderItem.product_name}</div>
                                                 </TableCell>
@@ -2238,18 +2238,18 @@ function ExportSlipsContent() {
                                                   <div className="truncate" title={orderItem.product_code}>{orderItem.product_code}</div>
                                                 </TableCell>
                                                 <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
-                                                <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
-                                                <TableCell className="text-center">{formatCurrency(orderItem.unit_price)}</TableCell>
-                                                <TableCell className="text-center font-medium">
-                                                  {formatCurrency(actualQuantity * orderItem.unit_price)}
-                                                </TableCell>
-                                              </TableRow>
-                                            );
-                                          })
-                                        ) : (
-                                          // Show export slip items directly (no order)
+                                              <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
+                                              <TableCell className="text-center">{formatCurrency(orderItem.unit_price)}</TableCell>
+                                              <TableCell className="text-center font-medium">
+                                                {formatCurrency(actualQuantity * orderItem.unit_price)}
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })
+                                      ) : (
+                                        // Show export slip items directly (no order)
                                           (slipDetail?.export_slip_items || slip.export_slip_items || []).map((exportItem, index) => (
-                                            <TableRow key={index}>
+                                          <TableRow key={index}>
                                               <TableCell className="text-center font-medium">
                                                 <div className="truncate" title={exportItem.product_name}>{exportItem.product_name}</div>
                                               </TableCell>
@@ -2257,7 +2257,7 @@ function ExportSlipsContent() {
                                                 <div className="truncate" title={exportItem.product_code}>{exportItem.product_code}</div>
                                               </TableCell>
                                               <TableCell className="text-center font-medium text-green-600">{exportItem.requested_quantity || exportItem.actual_quantity}</TableCell>
-                                              <TableCell className="text-center font-medium text-blue-600">{exportItem.actual_quantity}</TableCell>
+                                            <TableCell className="text-center font-medium text-blue-600">{exportItem.actual_quantity}</TableCell>
                                             <TableCell className="text-center">{formatCurrency(exportItem.unit_price)}</TableCell>
                                             <TableCell className="text-center font-medium">
                                               {formatCurrency(exportItem.actual_quantity * exportItem.unit_price)}
@@ -2329,7 +2329,7 @@ function ExportSlipsContent() {
               <div className="text-sm text-muted-foreground mb-4">
                 Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} phiếu xuất kho
               </div>
-              <Pagination>
+                <Pagination>
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious 

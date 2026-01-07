@@ -1328,16 +1328,16 @@ const ProductList: React.FC<ProductListProps> = ({
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">Hiển thị:</span>
                       <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
-                        const newLimit = parseInt(value);
-                        setJobHistoryItemsPerPage(newLimit);
-                        setJobHistoryPage(1); // Reset to first page when limit changes
-                        onRefreshImportJobs({
-                          onlyActive: false,
-                          sortBy: 'createdAt',
-                          sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                          page: 1,
-                          limit: newLimit
-                        });
+                          const newLimit = parseInt(value);
+                          setJobHistoryItemsPerPage(newLimit);
+                          setJobHistoryPage(1); // Reset to first page when limit changes
+                          onRefreshImportJobs({
+                            onlyActive: false,
+                            sortBy: 'createdAt',
+                            sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                            page: 1,
+                            limit: newLimit
+                          });
                       }}>
                         <SelectTrigger className="w-20">
                           <SelectValue placeholder="Số lượng" />

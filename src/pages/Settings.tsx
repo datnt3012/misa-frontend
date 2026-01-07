@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import UserSettings from "@/components/UserSettings";
 import RolePermissionsManager from "@/components/settings/RolePermissionsManager";
 import { usersApi, User, UserRole } from "@/api/users.api";
@@ -61,6 +62,28 @@ const SettingsContent = () => {
   const [activeTab, setActiveTab] = useState("password");
   const [usersLoaded, setUsersLoaded] = useState(false);
   const [rolesLoaded, setRolesLoaded] = useState(false);
+  // Dialog state for soft deleted user (delete flow)
+  const [showSoftDeletedDialog, setShowSoftDeletedDialog] = useState(false);
+  const [softDeletedUser, setSoftDeletedUser] = useState<User | null>(null);
+  const [pendingDeleteUserId, setPendingDeleteUserId] = useState<string | null>(null);
+  const [pendingDeleteUserIdentifier, setPendingDeleteUserIdentifier] = useState<string>("");
+  const [restoreUserLoading, setRestoreUserLoading] = useState(false);
+  const [hardDeleteUserLoading, setHardDeleteUserLoading] = useState(false);
+  // Dialog state for existing user (create flow)
+  const [showExistingUserDialog, setShowExistingUserDialog] = useState(false);
+  const [existingUser, setExistingUser] = useState<User | null>(null);
+  const [pendingCreateUserData, setPendingCreateUserData] = useState<{
+    email?: string;
+    username: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string;
+    address?: string;
+    roleId: string;
+  } | null>(null);
+  const [restoreAndUpdateUserLoading, setRestoreAndUpdateUserLoading] = useState(false);
+  const [hardDeleteAndCreateUserLoading, setHardDeleteAndCreateUserLoading] = useState(false);
   const { user } = useAuth();
   const { isAdmin } = usePermissions();
   const { toast } = useToast();
@@ -214,6 +237,72 @@ const SettingsContent = () => {
       if (!newUserRole) {
         throw new Error('Vai trò không hợp lệ');
       }
+
+      // Check if user with this email already exists and is soft deleted
+      // Only check if email is provided
+      if (newUserEmail.trim()) {
+        try {
+          // Use getUsers with includeDeleted to find soft deleted users
+          const usersResponse = await usersApi.getUsers({
+            keyword: newUserEmail.trim(),
+            includeDeleted: true,
+            limit: 100, // Get enough to find the user
+          });
+          
+          // Find user with matching email (case-insensitive)
+          const foundUser = usersResponse.users.find(
+            u => u.email && u.email.toLowerCase().trim() === newUserEmail.toLowerCase().trim()
+          );
+          
+          console.log('Found user by email:', foundUser);
+          // Check if user is soft deleted (either isDeleted is true or deletedAt exists)
+          const isSoftDeleted = foundUser && foundUser.id && (foundUser.isDeleted || foundUser.deletedAt);
+          console.log('Is soft deleted?', isSoftDeleted, 'isDeleted:', foundUser?.isDeleted, 'deletedAt:', foundUser?.deletedAt);
+          
+          if (isSoftDeleted) {
+            // Set state first
+            setExistingUser(foundUser);
+            setPendingCreateUserData({
+              email: newUserEmail.trim() || undefined,
+              username: newUserUsername.trim(),
+              password: newUserPassword,
+              firstName: newUserFirstName || undefined,
+              lastName: newUserLastName || undefined,
+              phoneNumber: newUserPhoneNumber || undefined,
+              address: newUserAddress || undefined,
+              roleId: newUserRole,
+            });
+            // Stop loading and show dialog
+            setCreateUserLoading(false);
+            setShowExistingUserDialog(true);
+            console.log('Showing dialog for soft deleted user');
+            // Exit early - don't create user
+            return;
+          }
+          // If user exists but is NOT soft deleted, continue to createUser
+          // Backend will return duplicate error
+        } catch (error: any) {
+          // Check if error is 404 (user not found) - that's fine, we'll create new user
+          const status = error.response?.status || error.status || error.code;
+          // 404 means user not found - continue to create new user
+          if (status === 404 || status === 'ECONNREFUSED') {
+            // User not found or connection error, continue to create new user
+            // Do nothing, just continue
+          } else {
+            // Other error (network, 500, etc.) - show error and exit
+            setCreateUserLoading(false);
+            const errorMessage = error.response?.data?.message || error.message || "Không thể kiểm tra email";
+            toast({
+              title: "Lỗi",
+              description: convertPermissionCodesInMessage(errorMessage),
+              variant: "destructive",
+            });
+            return; // Exit on error
+          }
+        }
+      }
+
+      // No existing user found, proceed with creating new user
       const newUser = await usersApi.createUser({
         email: newUserEmail.trim() || undefined,
         username: newUserUsername.trim(),
@@ -260,9 +349,37 @@ const SettingsContent = () => {
     if (!confirm(`Bạn có chắc muốn xóa tài khoản "${userIdentifier}"? Hành động này không thể hoàn tác.`)) {
       return;
     }
+    
     try {
       setDeleteUserLoading(userId);
-      // Call backend API - let backend handle authorization/permission check
+      
+      // Find user by email to check if there's a soft deleted user with the same email
+      const userToDelete = users.find(u => u.id === userId);
+      if (userToDelete?.email) {
+        // Search for users with the same email, including soft deleted ones
+        const searchResult = await usersApi.getUsers({
+          keyword: userToDelete.email,
+          includeDeleted: true,
+          limit: 100
+        });
+        
+        // Check if there's a soft deleted user with the same email (but different ID)
+        const softDeletedUserFound = searchResult.users.find(
+          u => u.email === userToDelete.email && u.isDeleted && u.id !== userId
+        );
+        
+        if (softDeletedUserFound) {
+          // Found a soft deleted user with the same email
+          setSoftDeletedUser(softDeletedUserFound);
+          setPendingDeleteUserId(userId);
+          setPendingDeleteUserIdentifier(userIdentifier);
+          setShowSoftDeletedDialog(true);
+          setDeleteUserLoading(null);
+          return;
+        }
+      }
+      
+      // No soft deleted user found, proceed with normal deletion
       const result = await usersApi.deleteUser(userId);
       toast({
         title: "Thành công",
@@ -281,6 +398,179 @@ const SettingsContent = () => {
       });
     } finally {
       setDeleteUserLoading(null);
+    }
+  };
+
+  const handleRestoreUser = async () => {
+    if (!softDeletedUser) return;
+    
+    try {
+      setRestoreUserLoading(true);
+      await usersApi.restoreUser(softDeletedUser.id);
+      toast({
+        title: "Thành công",
+        description: "Đã khôi phục tài khoản người dùng",
+      });
+      
+      // Close dialog and reload users
+      setShowSoftDeletedDialog(false);
+      setSoftDeletedUser(null);
+      setPendingDeleteUserId(null);
+      setPendingDeleteUserIdentifier("");
+      await loadUsers();
+      await loadUserRoles();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Không thể khôi phục tài khoản người dùng";
+      toast({
+        title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: "destructive",
+      });
+    } finally {
+      setRestoreUserLoading(false);
+    }
+  };
+
+  const handleHardDeleteAndProceed = async () => {
+    if (!softDeletedUser || !pendingDeleteUserId) return;
+    
+    try {
+      setHardDeleteUserLoading(true);
+      
+      // Hard delete the soft deleted user first
+      await usersApi.deleteUser(softDeletedUser.id, true);
+      
+      // Then proceed with normal deletion of the current user
+      const result = await usersApi.deleteUser(pendingDeleteUserId);
+      
+      toast({
+        title: "Thành công",
+        description: result?.message || "Đã xóa tài khoản người dùng và dữ liệu cũ",
+      });
+      
+      // Close dialog and reload users
+      setShowSoftDeletedDialog(false);
+      setSoftDeletedUser(null);
+      setPendingDeleteUserId(null);
+      setPendingDeleteUserIdentifier("");
+      await loadUsers();
+      await loadUserRoles();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Không thể xóa tài khoản người dùng";
+      toast({
+        title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: "destructive",
+      });
+    } finally {
+      setHardDeleteUserLoading(false);
+    }
+  };
+
+  const handleRestoreAndUpdateUser = async () => {
+    if (!existingUser || !pendingCreateUserData) return;
+    
+    try {
+      setRestoreAndUpdateUserLoading(true);
+      
+      // Restore user if soft deleted
+      let userToUpdate = existingUser;
+      if (existingUser.isDeleted) {
+        userToUpdate = await usersApi.restoreUser(existingUser.id);
+      }
+      
+      // Update user with new data
+      await usersApi.updateUser(userToUpdate.id, {
+        username: pendingCreateUserData.username,
+        password: pendingCreateUserData.password,
+        firstName: pendingCreateUserData.firstName,
+        lastName: pendingCreateUserData.lastName,
+        phoneNumber: pendingCreateUserData.phoneNumber,
+        address: pendingCreateUserData.address,
+        roleId: pendingCreateUserData.roleId,
+      });
+      
+      toast({
+        title: "Thành công",
+        description: "Đã khôi phục và cập nhật tài khoản người dùng",
+      });
+      
+      // Reset form and close dialog
+      setNewUserEmail("");
+      setNewUserUsername("");
+      setNewUserFirstName("");
+      setNewUserLastName("");
+      setNewUserAddress("");
+      setNewUserPhoneNumber("");
+      setNewUserPassword("");
+      setNewUserRole("");
+      setShowCreateUserForm(false);
+      setShowExistingUserDialog(false);
+      setExistingUser(null);
+      setPendingCreateUserData(null);
+      
+      // Reload users
+      await loadUsers();
+      await loadUserRoles();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Không thể khôi phục và cập nhật tài khoản người dùng";
+      toast({
+        title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: "destructive",
+      });
+    } finally {
+      setRestoreAndUpdateUserLoading(false);
+    }
+  };
+
+  const handleHardDeleteAndCreateUser = async () => {
+    if (!existingUser || !pendingCreateUserData) return;
+    
+    try {
+      setHardDeleteAndCreateUserLoading(true);
+      
+      // Hard delete the existing user first
+      await usersApi.deleteUser(existingUser.id, true);
+      
+      // Then create new user
+      const newUser = await usersApi.createUser(pendingCreateUserData);
+      
+      // Reset form and close dialog
+      setNewUserEmail("");
+      setNewUserUsername("");
+      setNewUserFirstName("");
+      setNewUserLastName("");
+      setNewUserAddress("");
+      setNewUserPhoneNumber("");
+      setNewUserPassword("");
+      setNewUserRole("");
+      setShowCreateUserForm(false);
+      setShowExistingUserDialog(false);
+      setExistingUser(null);
+      setPendingCreateUserData(null);
+      
+      // Reload users
+      await loadUsers();
+      await loadUserRoles();
+      
+      const userDisplayName = newUser.firstName || newUser.lastName 
+        ? `${newUser.firstName || ''} ${newUser.lastName || ''}`.trim()
+        : newUser.username;
+      const userIdentifier = newUser.email || newUser.username;
+      toast({
+        title: "Thành công",
+        description: `Đã xóa dữ liệu cũ và tạo tài khoản mới cho ${userDisplayName} (${userIdentifier})`,
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Không thể xóa và tạo tài khoản người dùng";
+      toast({
+        title: error.response?.status === 403 ? "Không có quyền" : "Lỗi",
+        description: convertPermissionCodesInMessage(errorMessage),
+        variant: "destructive",
+      });
+    } finally {
+      setHardDeleteAndCreateUserLoading(false);
     }
   };
   const handleResetUserPassword = async () => {
@@ -928,6 +1218,102 @@ const SettingsContent = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Dialog for soft deleted user */}
+      <AlertDialog open={showSoftDeletedDialog} onOpenChange={setShowSoftDeletedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tìm thấy dữ liệu cũ</AlertDialogTitle>
+            <AlertDialogDescription>
+              Đã tìm thấy tài khoản người dùng với email <strong>{softDeletedUser?.email}</strong> đã bị xóa trước đó.
+              <br />
+              <br />
+              Bạn muốn khôi phục tài khoản cũ hay xóa vĩnh viễn và tiếp tục xóa tài khoản hiện tại?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowSoftDeletedDialog(false);
+                setSoftDeletedUser(null);
+                setPendingDeleteUserId(null);
+                setPendingDeleteUserIdentifier("");
+              }}
+              disabled={restoreUserLoading || hardDeleteUserLoading}
+            >
+              Hủy
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleRestoreUser}
+              disabled={restoreUserLoading || hardDeleteUserLoading}
+              className="flex items-center gap-2"
+            >
+              {restoreUserLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              <RotateCcw className="h-4 w-4" />
+              Khôi phục
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleHardDeleteAndProceed}
+              disabled={restoreUserLoading || hardDeleteUserLoading}
+              className="flex items-center gap-2"
+            >
+              {hardDeleteUserLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Trash2 className="h-4 w-4" />
+              Xóa và tạo mới
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog for existing user when creating */}
+      <AlertDialog open={showExistingUserDialog} onOpenChange={setShowExistingUserDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tìm thấy dữ liệu cũ</AlertDialogTitle>
+            <AlertDialogDescription>
+              Đã tìm thấy tài khoản người dùng với email <strong>{existingUser?.email}</strong>
+              {existingUser?.isDeleted ? ' đã bị xóa trước đó' : ' đã tồn tại'}.
+              <br />
+              <br />
+              Bạn muốn khôi phục và cập nhật tài khoản cũ hay xóa vĩnh viễn và tạo tài khoản mới?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowExistingUserDialog(false);
+                setExistingUser(null);
+                setPendingCreateUserData(null);
+              }}
+              disabled={restoreAndUpdateUserLoading || hardDeleteAndCreateUserLoading}
+            >
+              Hủy
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleRestoreAndUpdateUser}
+              disabled={restoreAndUpdateUserLoading || hardDeleteAndCreateUserLoading}
+              className="flex items-center gap-2"
+            >
+              {restoreAndUpdateUserLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              <RotateCcw className="h-4 w-4" />
+              Khôi phục và cập nhật
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleHardDeleteAndCreateUser}
+              disabled={restoreAndUpdateUserLoading || hardDeleteAndCreateUserLoading}
+              className="flex items-center gap-2"
+            >
+              {hardDeleteAndCreateUserLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Trash2 className="h-4 w-4" />
+              Xóa và tạo mới
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
