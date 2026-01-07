@@ -793,8 +793,8 @@ const DashboardContent = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground whitespace-nowrap">Hiển thị</span>
                         <Select value={String(pageSize)} onValueChange={(v) => {
-                          setPageSize(Number(v));
-                          setCurrentPage(1); // Reset to first page when changing page size
+                            setPageSize(Number(v));
+                            setCurrentPage(1); // Reset to first page when changing page size
                         }}>
                           <SelectTrigger className="h-8 w-20">
                             <SelectValue placeholder="Số lượng" />

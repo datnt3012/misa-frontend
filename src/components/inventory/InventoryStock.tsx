@@ -159,8 +159,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     const hasActiveStockFilter = filterStatus !== 'all' || filterWarehouse !== 'all';
     
     return products.flatMap(product => {
-      const categoryId = getCategoryId(product.category);
-      const categoryName = getCategoryName(product.category);
+    const categoryId = getCategoryId(product.category);
+    const categoryName = getCategoryName(product.category);
       
       // Get stock levels from product.stockLevel (from API)
       let productStockLevels = product.stockLevel || [];
@@ -181,35 +181,35 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       }
       
       // If no stock levels after filtering, return empty array if filter is active
-      if (productStockLevels.length === 0) {
+    if (productStockLevels.length === 0) {
         // If stock filter is active, don't show products without matching stock
         if (hasActiveStockFilter) {
           return [];
         }
         // If no filter, show product with zero stock
-        return [{
-          ...product,
-          category: categoryId,
-          categoryName,
-          current_stock: 0,
-          location: 'Chưa có tồn kho',
-          updated_at: product.updatedAt,
-          warehouse_id: '',
-          warehouse_name: '',
-          warehouse_code: ''
-        }];
-      }
-      
-      // Create one row for each warehouse
-      return productStockLevels.map(stock => ({
+      return [{
         ...product,
         category: categoryId,
         categoryName,
-        current_stock: stock.quantity,
+        current_stock: 0,
+        location: 'Chưa có tồn kho',
+        updated_at: product.updatedAt,
+        warehouse_id: '',
+        warehouse_name: '',
+        warehouse_code: ''
+      }];
+    }
+      
+    // Create one row for each warehouse
+    return productStockLevels.map(stock => ({
+      ...product,
+      category: categoryId,
+      categoryName,
+      current_stock: stock.quantity,
         location: stock.warehouse ? `${stock.warehouse.name}${stock.warehouse.code ? ` (${stock.warehouse.code})` : ''}` : 'Không xác định',
-        updated_at: stock.updatedAt,
+      updated_at: stock.updatedAt,
         warehouse_id: stock.warehouse?.id || '',
-        warehouse_name: stock.warehouse?.name || '',
+      warehouse_name: stock.warehouse?.name || '',
         warehouse_code: stock.warehouse?.code || '',
         // Use lowStockThreshold from product
         lowStockThreshold: (() => {
@@ -218,8 +218,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           const num = Number(threshold);
           return isNaN(num) ? null : num;
         })()
-      }));
-    });
+    }));
+  });
   }, [products, categories, filterStatus, filterWarehouse]);
   const getStatusBadge = (stock: number, lowStockThreshold?: number | null) => {
     // out_of_stock: quantity = 0
@@ -234,7 +234,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     
     // in_stock: quantity > lowStockThreshold (nếu có threshold) hoặc quantity > 0 (nếu không có threshold)
     // If no threshold or stock > threshold, show "Còn hàng"
-    return <Badge variant="secondary" className="text-green-600 border-green-600 whitespace-nowrap">Còn hàng</Badge>;
+      return <Badge variant="secondary" className="text-green-600 border-green-600 whitespace-nowrap">Còn hàng</Badge>;
   };
   // Filter productsWithStock - status and warehouse are already filtered by API
   // Category is already filtered by products API
@@ -257,13 +257,13 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     // Fallback: extract from allProducts
     return Array.from(new Map(
       allProducts
-        .map(p => {
-          const id = p.category;
+      .map(p => {
+        const id = p.category;
           const name = findCategoryByValue(p.category)?.name || p.category || '';
-          return id ? [id, { id, name }] : null;
-        })
-        .filter(Boolean) as [string, { id: string; name: string }][]
-    ).values()).sort((a, b) => a.name.localeCompare(b.name));
+        return id ? [id, { id, name }] : null;
+      })
+      .filter(Boolean) as [string, { id: string; name: string }][]
+  ).values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, allProducts]);
 
   const usedWarehouses = React.useMemo(() => {
@@ -337,8 +337,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     // Client-side pagination: paginate sortedProducts
     totalItems = sortedProducts.length;
     totalPages = Math.ceil(totalItems / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
     paginatedProducts = sortedProducts.slice(startIndex, endIndex);
   } else {
     // API pagination: products are already paginated from API

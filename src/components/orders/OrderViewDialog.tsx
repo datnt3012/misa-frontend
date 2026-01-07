@@ -5,7 +5,8 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Clock, DollarSign, User, Package, FileText, Building2, Mail, Phone, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Clock, DollarSign, User, Package, FileText, Building2, Mail, Phone, MapPin, Eye } from "lucide-react";
 import { orderApi, Order } from "@/api/order.api";
 import { paymentsApi, Payment } from "@/api/payments.api";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +15,7 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { getOrderStatusConfig } from "@/constants/order-status.constants";
 import { LoadingWrapper } from "@/components/LoadingWrapper";
+import { API_CONFIG } from "@/config/api";
 interface OrderViewDialogProps {
   order: any;
   open: boolean;
@@ -133,6 +135,46 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
     if (bankByName) return bankByName.name;
     // If not found in banks list, return the value as-is (might be name from API)
     return bankIdOrName;
+  };
+
+  // Helpers for payment file display
+  const getFileDownloadUrl = (filePath: string): string => {
+    if (!filePath) return "";
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      return filePath;
+    }
+    const baseUrl =
+      API_CONFIG.BASE_URL ||
+      (import.meta as any).env?.VITE_API_BASE_URL ||
+      "http://localhost:3274/api/v0";
+    return `${baseUrl}/files/${encodeURIComponent(filePath)}`;
+  };
+
+  const getDisplayFileName = (filePath: string): string => {
+    if (!filePath || typeof filePath !== "string") return "Tệp tin";
+    let normalizedPath = filePath.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    const parts = normalizedPath.split("/").filter((p) => p && p.trim());
+    let rawName = parts.length > 0 ? parts[parts.length - 1] : normalizedPath;
+    try {
+      rawName = decodeURIComponent(rawName);
+    } catch {
+      // ignore decode error
+    }
+    if (!rawName) return "Tệp tin";
+    return rawName;
+  };
+
+  const handleViewFile = (filePath: string) => {
+    const url = getFileDownloadUrl(filePath);
+    if (!url) {
+      toast({
+        title: "Lỗi",
+        description: "Không tìm thấy đường dẫn tệp",
+        variant: "destructive",
+      });
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
   };
   const loadPaymentHistory = async (orderId: string) => {
     if (!orderId) {
@@ -669,6 +711,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                             <TableHead className="text-center">Phương thức</TableHead>
                             <TableHead>Ngân hàng</TableHead>
                             <TableHead>Ghi chú</TableHead>
+                            <TableHead className="w-[220px]">Tệp tin</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -698,6 +741,50 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground">
                                 {payment.notes || payment.note || '-'}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {(() => {
+                                  const filePathsRaw = Array.isArray(payment.filePaths)
+                                    ? payment.filePaths
+                                    : payment.filePaths
+                                    ? [payment.filePaths]
+                                    : [];
+                                  if (!filePathsRaw.length) {
+                                    return <span className="text-xs text-muted-foreground">-</span>;
+                                  }
+                                  return (
+                                    <div className="space-y-1">
+                                      {filePathsRaw.map((filePath: string, idx: number) => {
+                                        const displayName = getDisplayFileName(filePath);
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className="flex items-center gap-1 text-xs"
+                                          >
+                                            <FileText className="w-3 h-3 flex-shrink-0" />
+                                            <Button
+                                              type="button"
+                                              variant="link"
+                                              size="sm"
+                                              className="h-auto p-0 text-xs text-blue-600 hover:underline min-w-0"
+                                              onClick={() => handleViewFile(filePath)}
+                                            >
+                                              <span className="inline-flex items-center gap-1 min-w-0">
+                                                <Eye className="w-3 h-3 flex-shrink-0" />
+                                                <span
+                                                  className="truncate max-w-[140px] block"
+                                                  title={displayName}
+                                                >
+                                                  {displayName}
+                                                </span>
+                                              </span>
+                                            </Button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
                               </TableCell>
                             </TableRow>
                           ))}
