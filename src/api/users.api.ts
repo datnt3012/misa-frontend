@@ -91,6 +91,12 @@ export interface Permission {
   deletedAt?: string | null;
 }
 
+export interface EmailPreferences {
+  receive_order_notifications: boolean;
+  receive_status_updates: boolean;
+  receive_payment_updates: boolean;
+}
+
 export const usersApi = {
   // Get all users
   getUsers: async (params?: {
@@ -448,5 +454,41 @@ export const usersApi = {
     }
     
     return [];
+  },
+
+  // Get email preferences
+  getEmailPreferences: async (): Promise<EmailPreferences> => {
+    const response = await api.get<any>(`${API_ENDPOINTS.USERS.GET_PREFERENCES}?type=email`);
+    const data = response?.data || response;
+    
+    // Backend returns: { success: true, message: "...", data: { email: { ... } } }
+    if (data?.data?.email) {
+      return {
+        receive_order_notifications: data.data.email.receive_order_notifications ?? true,
+        receive_status_updates: data.data.email.receive_status_updates ?? true,
+        receive_payment_updates: data.data.email.receive_payment_updates ?? true,
+      };
+    }
+    
+    // Fallback: if response structure is different
+    if (data?.email) {
+      return {
+        receive_order_notifications: data.email.receive_order_notifications ?? true,
+        receive_status_updates: data.email.receive_status_updates ?? true,
+        receive_payment_updates: data.email.receive_payment_updates ?? true,
+      };
+    }
+    
+    // Default values if no preferences found
+    return {
+      receive_order_notifications: true,
+      receive_status_updates: true,
+      receive_payment_updates: true,
+    };
+  },
+
+  // Update email preferences
+  updateEmailPreferences: async (emailPreferences: EmailPreferences): Promise<{ message: string }> => {
+    return api.patch<{ message: string }>(API_ENDPOINTS.USERS.UPDATE_EMAIL_PREFERENCES, emailPreferences);
   },
 };

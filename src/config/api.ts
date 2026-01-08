@@ -49,6 +49,8 @@ export const API_ENDPOINTS = {
     CREATE: '/users',
     UPDATE: (id: string) => `/users/${id}`,
     DELETE: (id: string) => `/users/${id}`,
+    GET_PREFERENCES: '/users/get-preferences',
+    UPDATE_EMAIL_PREFERENCES: '/users/email-preferences',
   },
   
   // Roles

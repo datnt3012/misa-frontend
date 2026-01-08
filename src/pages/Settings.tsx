@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Mail, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { Settings as SettingsIcon, Shield, Users, Key, UserCheck, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import UserSettings from "@/components/UserSettings";
 import RolePermissionsManager from "@/components/settings/RolePermissionsManager";
@@ -22,11 +22,6 @@ import { usersApi, User, UserRole } from "@/api/users.api";
 import { authApi } from "@/api/auth.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 // UserRole interface imported from users.api.ts
-interface EmailPreferences {
-  receive_order_notifications: boolean;
-  receive_status_updates: boolean;
-  receive_payment_updates: boolean;
-}
 const SettingsContent = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -50,11 +45,6 @@ const SettingsContent = () => {
   // Permission checks removed - let backend handle authorization
   const [showCreateUserForm, setShowCreateUserForm] = useState(false);
   const [showResetPasswordForm, setShowResetPasswordForm] = useState(false);
-  const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
-    receive_order_notifications: true,
-    receive_status_updates: true,
-    receive_payment_updates: true,
-  });
   const [selectedUserId, setSelectedUserId] = useState("");
   const [newUserPasswordReset, setNewUserPasswordReset] = useState("");
   const [confirmUserPasswordReset, setConfirmUserPasswordReset] = useState("");
@@ -88,7 +78,6 @@ const SettingsContent = () => {
   const { isAdmin } = usePermissions();
   const { toast } = useToast();
   useEffect(() => {
-    loadEmailPreferences();
     loadCurrentUserRole();
   }, []);
   // Handle tab changes for lazy loading
@@ -152,18 +141,6 @@ const SettingsContent = () => {
       // Only use backend data - no fallback
       // Roles will be extracted from users data if available
     }
-  };
-  const loadEmailPreferences = async () => {
-    // Backend API call will be implemented later
-  };
-  const updateEmailPreferences = async (newPrefs: Partial<EmailPreferences>) => {
-    // Backend API call will be implemented later
-    const updatedPrefs = { ...emailPreferences, ...newPrefs };
-    setEmailPreferences(updatedPrefs);
-    toast({
-      title: "Thành công",
-      description: "Đã cập nhật cài đặt email (local only)",
-    });
   };
   const handlePasswordChange = async () => {
     if (!currentPassword) {
@@ -681,14 +658,10 @@ const SettingsContent = () => {
           <p className="text-muted-foreground">Quản lý tài khoản và phân quyền hệ thống</p>
         </div>
         <Tabs defaultValue="password" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="password" className="flex items-center gap-2">
               <Key className="w-4 h-4" />
               Đổi mật khẩu
-            </TabsTrigger>
-            <TabsTrigger value="email" className="flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              Cài đặt email
             </TabsTrigger>
             <TabsTrigger value="roles" className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
@@ -752,76 +725,6 @@ const SettingsContent = () => {
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {loading ? "Đang cập nhật..." : "Đổi mật khẩu"}
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          {/* Email Preferences Tab */}
-          <TabsContent value="email">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5" />
-                  Cài đặt nhận email
-                </CardTitle>
-                <CardDescription>
-                  Quản lý loại thông báo bạn muốn nhận qua email
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-base">Thông báo đơn hàng tổng quát</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Nhận email về các hoạt động chung liên quan đến đơn hàng
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={emailPreferences.receive_order_notifications}
-                      onChange={(e) => updateEmailPreferences({ receive_order_notifications: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-base">Thay đổi trạng thái đơn hàng</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Nhận email khi trạng thái đơn hàng được cập nhật
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={emailPreferences.receive_status_updates}
-                      onChange={(e) => updateEmailPreferences({ receive_status_updates: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-base">Cập nhật thanh toán</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Nhận email khi có thay đổi về thanh toán đơn hàng
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={emailPreferences.receive_payment_updates}
-                      onChange={(e) => updateEmailPreferences({ receive_payment_updates: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Lưu ý về email</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Email sẽ được gửi khi có thay đổi quan trọng về đơn hàng</li>
-                    <li>• Bạn có thể tắt bất kỳ loại thông báo nào bằng cách bỏ chọn</li>
-                    <li>• Cài đặt này chỉ áp dụng cho tài khoản của bạn</li>
-                  </ul>
                 </div>
               </CardContent>
             </Card>
