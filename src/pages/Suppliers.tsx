@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,6 +69,8 @@ const SuppliersContent: React.FC = () => {
     }
   });
   const { toast } = useToast();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('suppliers');
+  const isClosingDialogRef = useRef(false);
   // Format full address with ward/district/province names when available
   const formatAddress = (s: Supplier) => {
     const ai = s?.addressInfo || {};
@@ -85,6 +88,31 @@ const SuppliersContent: React.FC = () => {
   useEffect(() => {
     loadSuppliers();
   }, []);
+
+  // Read URL and auto-open dialog if present
+  useEffect(() => {
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      const isEditOpen = showEditDialog && editingSupplier?.id === dialogState.entityId && dialogState.dialogType === 'edit';
+      
+      if (isEditOpen) {
+        return;
+      }
+
+      const supplier = suppliers.find(s => s.id === dialogState.entityId);
+      if (supplier && dialogState.dialogType === 'edit') {
+        handleEditSupplier(supplier);
+      }
+    } else if (dialogState.isOpen && dialogState.dialogType === 'create') {
+      if (!showCreateDialog) {
+        setShowCreateDialog(true);
+      }
+    }
+  }, [getDialogState, suppliers, showEditDialog, editingSupplier, showCreateDialog, closeDialog]);
   const loadSuppliers = async () => {
     setLoading(true);
     try {
@@ -130,7 +158,12 @@ const SuppliersContent: React.FC = () => {
         title: "Thành công",
         description: "Tạo nhà cung cấp thành công",
       });
+      isClosingDialogRef.current = true;
+      closeDialog();
       setShowCreateDialog(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
       setNewSupplier({ 
         name: '', 
         code: '', 
@@ -188,7 +221,12 @@ const SuppliersContent: React.FC = () => {
         title: "Thành công",
         description: "Cập nhật nhà cung cấp thành công",
       });
+      isClosingDialogRef.current = true;
+      closeDialog();
       setShowEditDialog(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
       setEditingSupplier(null);
       loadSuppliers();
     } catch (error: any) {
@@ -218,8 +256,9 @@ const SuppliersContent: React.FC = () => {
       });
     }
   };
-  const openEditDialog = (supplier: Supplier) => {
+  const handleEditSupplier = (supplier: Supplier) => {
     setEditingSupplier({ ...supplier });
+    openDialog('edit', supplier.id);
     setShowEditDialog(true);
   };
   // Filter suppliers based on search term
@@ -239,7 +278,18 @@ const SuppliersContent: React.FC = () => {
             Quản lý thông tin các nhà cung cấp trong hệ thống
           </p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (open) {
+            openDialog('create');
+          } else {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
@@ -429,7 +479,7 @@ const SuppliersContent: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openEditDialog(supplier)}
+                            onClick={() => handleEditSupplier(supplier)}
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -452,7 +502,17 @@ const SuppliersContent: React.FC = () => {
         </CardContent>
       </Card>
       {/* Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open);
+        if (!open) {
+          isClosingDialogRef.current = true;
+          closeDialog();
+          setEditingSupplier(null);
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh sửa nhà cung cấp</DialogTitle>
@@ -549,4 +609,4 @@ const Suppliers: React.FC = () => {
     </PermissionGuard>
   );
 };
-export default Suppliers;
+export default Suppliers;

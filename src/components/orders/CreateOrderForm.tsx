@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -173,6 +174,7 @@ const createInitialOrderState = (): OrderFormState => ({
 const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -180,12 +182,36 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
   const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
+  const customerCardRef = useRef<HTMLDivElement>(null);
+  const vatCardRef = useRef<HTMLDivElement>(null);
+  const shippingCardRef = useRef<HTMLDivElement>(null);
+  const productsCardRef = useRef<HTMLDivElement>(null);
+  const paymentCardRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
     if (open) {
       setNewOrder(createInitialOrderState());
       setShippingAddressVersion((v) => v + 1);
+      
+      // Scroll to section based on tab param
+      const tab = searchParams.get('tab');
+      if (tab) {
+        setTimeout(() => {
+          const refs: Record<string, React.RefObject<HTMLDivElement>> = {
+            customer: customerCardRef,
+            vat: vatCardRef,
+            shipping: shippingCardRef,
+            products: productsCardRef,
+            payment: paymentCardRef,
+          };
+          const ref = refs[tab];
+          if (ref?.current) {
+            ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      }
     }
-  }, [open]);
+  }, [open, searchParams]);
   useEffect(() => {
     loadData();
   }, []);
@@ -743,7 +769,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             </CardContent>
           </Card>
           {/* VAT Information */}
-          <Card>
+          <Card ref={vatCardRef}>
             <CardHeader>
               <CardTitle>Thông tin VAT</CardTitle>
             </CardHeader>
@@ -799,7 +825,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             </CardContent>
           </Card>
           {/* Shipping Information */}
-          <Card>
+          <Card ref={shippingCardRef}>
             <CardHeader>
               <CardTitle>Thông tin vận chuyển</CardTitle>
             </CardHeader>
@@ -856,7 +882,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             </CardContent>
           </Card>
           {/* Order Items */}
-          <Card>
+          <Card ref={productsCardRef}>
             <CardHeader>
               <CardTitle className="flex justify-between items-center">
                 <span>Sản phẩm</span>
@@ -1085,7 +1111,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             </CardContent>
           </Card>
           {/* Payment & Summary */}
-          <Card>
+          <Card ref={paymentCardRef}>
             <CardHeader>
               <CardTitle>Thanh toán và Tổng kết</CardTitle>
             </CardHeader>

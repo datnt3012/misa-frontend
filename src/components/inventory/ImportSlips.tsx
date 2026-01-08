@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -82,6 +83,8 @@ interface ImportSlipsProps {
 }
 export default function ImportSlips({ canManageImports, canApproveImports }: ImportSlipsProps) {
   const { user } = useAuth();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('import-slips');
+  const isClosingDialogRef = useRef(false);
   const [importSlips, setImportSlips] = useState<ImportSlip[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -228,6 +231,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       setCurrentItems([]);
     }
   }, [showCreateDialog]);
+
   const loadImportSlips = async () => {
     try {
       setLoading(true);
@@ -347,6 +351,34 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       setInventoryHistory([]);
     }
   };
+
+  // Read URL and auto-open dialog if present
+  useEffect(() => {
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      const isDetailOpen = selectedSlip?.id === dialogState.entityId && dialogState.dialogType === 'view';
+      
+      if (isDetailOpen) {
+        return;
+      }
+
+      const slip = importSlips.find(s => s.id === dialogState.entityId);
+      if (slip && dialogState.dialogType === 'view') {
+        setSelectedSlip(slip);
+        loadSlipItems(slip.id);
+        loadInventoryHistory(slip.id);
+      }
+    } else if (dialogState.isOpen && dialogState.dialogType === 'create') {
+      if (!showCreateDialog) {
+        setShowCreateDialog(true);
+      }
+    }
+  }, [getDialogState, importSlips, selectedSlip, showCreateDialog, closeDialog]);
+
   const addItemToSlip = () => {
     if (!newItem.product_id || newItem.quantity <= 0) {
       toast({ title: 'Lỗi', description: 'Vui lòng chọn sản phẩm và nhập số lượng hợp lệ', variant: 'destructive' });
@@ -434,7 +466,17 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Call real API
       const newReceipt = await warehouseReceiptsApi.createReceipt(slipData);
       toast({ title: 'Thành công', description: `Tạo phiếu nhập kho ${newReceipt.code} thành công` });
+      isClosingDialogRef.current = true;
+      closeDialog();
+      isClosingDialogRef.current = true;
+      closeDialog();
       setShowCreateDialog(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
       setNewSlip({
         supplier_id: '',
         supplier_name: '',
@@ -1025,9 +1067,23 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
            <h1 className="text-3xl font-bold">Quản lý phiếu nhập kho</h1>
            <p className="mt-1 text-sm text-muted-foreground">Quản lý các phiếu nhập kho và phê duyệt</p>
          </div>
-         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+         <Dialog open={showCreateDialog} onOpenChange={(open) => {
+           setShowCreateDialog(open);
+           if (open) {
+             openDialog('create');
+           } else {
+             isClosingDialogRef.current = true;
+             closeDialog();
+             setTimeout(() => {
+               isClosingDialogRef.current = false;
+             }, 100);
+           }
+         }}>
            <DialogTrigger asChild>
-             <Button>
+             <Button onClick={() => {
+               openDialog('create');
+               setShowCreateDialog(true);
+             }}>
                <PlusCircle className="w-4 h-4 mr-2" />
                Tạo phiếu nhập
              </Button>
@@ -1978,6 +2034,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            openDialog('view', slip.id);
                             setSelectedSlip(slip);
                             loadSlipItems(slip.id);
                             loadInventoryHistory(slip.id);
@@ -2141,7 +2198,16 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         </div>
       )}
       {/* Slip Details Dialog */}
-      <Dialog open={!!selectedSlip} onOpenChange={() => setSelectedSlip(null)}>
+      <Dialog open={!!selectedSlip} onOpenChange={(open) => {
+        if (!open) {
+          isClosingDialogRef.current = true;
+          closeDialog();
+          setSelectedSlip(null);
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết phiếu nhập - {selectedSlip?.slip_number}</DialogTitle>

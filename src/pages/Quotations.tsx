@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useDialogUrl } from "@/hooks/useDialogUrl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,8 @@ const QuotationsContent: React.FC = () => {
   const { toast } = useToast();
   const { user, session } = useAuth();
   const { hasPermission } = usePermissions();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('quotations');
+  const isClosingDialogRef = useRef(false);
   // Fetch quotations function
   const fetchQuotations = useCallback(async () => {
     try {
@@ -118,6 +121,38 @@ const QuotationsContent: React.FC = () => {
   useEffect(() => {
     fetchQuotations();
   }, [currentPage, itemsPerPage, statusFilter, typeFilter, creatorFilter, debouncedSearchTerm, startDate, endDate, fetchQuotations]);
+
+  // Read URL and auto-open dialog if present
+  useEffect(() => {
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      const isDetailOpen = showDetailDialog && selectedQuotation?.id === dialogState.entityId && dialogState.dialogType === 'view';
+      const isEditOpen = showEditDialog && quotationToEdit?.id === dialogState.entityId && dialogState.dialogType === 'edit';
+      const isCreateOrderOpen = showCreateOrderDialog && quotationForOrder?.id === dialogState.entityId && dialogState.dialogType === 'create';
+      
+      if (isDetailOpen || isEditOpen || isCreateOrderOpen) {
+        return;
+      }
+
+      const quotation = quotations.find(q => q.id === dialogState.entityId);
+      if (quotation) {
+        if (dialogState.dialogType === 'view') {
+          setSelectedQuotation(quotation);
+          setShowDetailDialog(true);
+        } else if (dialogState.dialogType === 'edit') {
+          setQuotationToEdit(quotation);
+          setShowEditDialog(true);
+        } else if (dialogState.dialogType === 'create') {
+          setQuotationForOrder(quotation);
+          setShowCreateOrderDialog(true);
+        }
+      }
+    }
+  }, [getDialogState, quotations, showDetailDialog, showEditDialog, showCreateOrderDialog, selectedQuotation, quotationToEdit, quotationForOrder]);
   const handleDeleteQuotation = async () => {
     if (!quotationToDelete) return;
     try {
@@ -468,7 +503,10 @@ const QuotationsContent: React.FC = () => {
             <Download className="h-4 w-4 mr-2" />
             Xuất Excel
           </Button>
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button onClick={() => {
+            openDialog('create');
+            setShowCreateDialog(true);
+          }}>
             <Plus className="h-4 w-4 mr-2" />
             THÊM MỚI
           </Button>
@@ -710,6 +748,7 @@ const QuotationsContent: React.FC = () => {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => {
                                 setSelectedQuotation(quotation);
+                                openDialog('view', quotation.id);
                                 setShowDetailDialog(true);
                               }}>
                                 <Eye className="h-4 w-4 mr-2" />
@@ -726,6 +765,7 @@ const QuotationsContent: React.FC = () => {
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setQuotationToEdit(quotation);
+                                openDialog('edit', quotation.id);
                                 setShowEditDialog(true);
                               }}>
                                 <Edit className="h-4 w-4 mr-2" />
@@ -733,6 +773,7 @@ const QuotationsContent: React.FC = () => {
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setQuotationForOrder(quotation);
+                                openDialog('create', quotation.id); // Using 'create' type for create order from quotation
                                 setShowCreateOrderDialog(true);
                               }}>
                                 <Plus className="h-4 w-4 mr-2" />
@@ -816,7 +857,17 @@ const QuotationsContent: React.FC = () => {
         </DialogContent>
       </Dialog>
       {/* Detail Dialog */}
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+      <Dialog open={showDetailDialog} onOpenChange={(open) => {
+        setShowDetailDialog(open);
+        if (!open) {
+          isClosingDialogRef.current = true;
+          closeDialog();
+          setSelectedQuotation(null);
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết báo giá {selectedQuotation?.code}</DialogTitle>
@@ -905,10 +956,24 @@ const QuotationsContent: React.FC = () => {
       {/* Create Quotation Dialog */}
       <CreateQuotationForm
         open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
         onQuotationCreated={() => {
+          isClosingDialogRef.current = true;
+          closeDialog();
           setShowCreateDialog(false);
           fetchQuotations();
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
         }}
       />
       {/* Edit Quotation Dialog */}
@@ -916,7 +981,14 @@ const QuotationsContent: React.FC = () => {
         open={showEditDialog}
         onOpenChange={(open) => {
           setShowEditDialog(open);
-          if (!open) setQuotationToEdit(null);
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setQuotationToEdit(null);
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
         }}
         onQuotationCreated={() => {
           setShowEditDialog(false);
@@ -929,6 +1001,14 @@ const QuotationsContent: React.FC = () => {
       <CreateOrderFromQuotation
         open={showCreateOrderDialog}
         onOpenChange={(open) => {
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setQuotationForOrder(null);
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
           setShowCreateOrderDialog(open);
           if (!open) setQuotationForOrder(null);
         }}

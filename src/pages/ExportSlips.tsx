@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -100,6 +101,8 @@ function ExportSlipsContent() {
   });
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('export-slips');
+  const isClosingDialogRef = useRef(false);
   const canDirectExport = hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
   // Get available status options based on current status and role
   const getAvailableStatusOptions = (currentStatus: string) => {
@@ -158,6 +161,33 @@ function ExportSlipsContent() {
       limit: jobHistoryItemsPerPage
     });
   }, [displayLimit, currentPage, debouncedSearchTerm, sortField, sortDirection]);
+
+  // Read URL and auto-open dialog if present
+  useEffect(() => {
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      const isDetailOpen = selectedSlip?.id === dialogState.entityId && dialogState.dialogType === 'view';
+      
+      if (isDetailOpen) {
+        return;
+      }
+
+      const slip = exportSlips.find(s => s.id === dialogState.entityId);
+      if (slip && dialogState.dialogType === 'view') {
+        setSelectedSlip(slip);
+        loadSlipDetail(slip.id);
+      }
+    } else if (dialogState.isOpen && dialogState.dialogType === 'create') {
+      if (!showCreateDialog) {
+        openDialog('create');
+        setShowCreateDialog(true);
+      }
+    }
+  }, [getDialogState, exportSlips, selectedSlip, showCreateDialog, closeDialog]);
   
   // Load job history when tab is activated or parameters change
   useEffect(() => {
@@ -586,7 +616,12 @@ function ExportSlipsContent() {
         title: "Thành công",
         description: `Đã tạo phiếu xuất kho ${response.code || code} thành công`,
       });
+      isClosingDialogRef.current = true;
+      closeDialog();
       setShowCreateDialog(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
       setExportSlipForm({
         order_id: '',
         customer_id: '',
@@ -1116,9 +1151,23 @@ function ExportSlipsContent() {
             Danh sách và duyệt phiếu xuất kho hàng hóa
           </p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (open) {
+            openDialog('create');
+          } else {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => {
+              openDialog('create');
+              setShowCreateDialog(true);
+            }}>
               <PlusCircle className="w-4 h-4 mr-2" />
               Tạo phiếu xuất
             </Button>
@@ -1140,7 +1189,12 @@ function ExportSlipsContent() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              setShowCreateDialog(false);
+                              isClosingDialogRef.current = true;
+      closeDialog();
+      setShowCreateDialog(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
                               navigate('/orders');
                             }}
                             className="flex items-center gap-2"
@@ -2118,11 +2172,17 @@ function ExportSlipsContent() {
                     <div className="flex space-x-2 justify-center">
                       <Dialog open={selectedSlip?.id === slip.id} onOpenChange={(open) => {
                         if (open) {
+                          openDialog('view', slip.id);
                           setSelectedSlip(slip);
                           loadSlipDetail(slip.id);
                         } else {
+                          isClosingDialogRef.current = true;
+                          closeDialog();
                           setSelectedSlip(null);
                           setSlipDetail(null);
+                          setTimeout(() => {
+                            isClosingDialogRef.current = false;
+                          }, 100);
                         }
                       }}>
                         <DialogTrigger asChild>

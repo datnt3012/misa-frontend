@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useDialogUrl } from "@/hooks/useDialogUrl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -200,6 +201,8 @@ const CustomersContent = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('customers');
+  const isClosingDialogRef = useRef(false);
   // Format full address with ward/district/province names when available
   const formatAddress = (c: any) => {
     const ai = c?.addressInfo || {};
@@ -267,26 +270,35 @@ const CustomersContent = () => {
     loadCustomers();
     loadAdministrativeUnits();
   }, [canReadCustomers]);
-  // Restore form state from URL parameters after page reload
+  // Read URL and auto-open dialog if present
   useEffect(() => {
-    const action = searchParams.get('action');
-    const customerId = searchParams.get('customerId');
-    if (action === 'add') {
-      setIsAddDialogOpen(true);
-    } else if (action === 'edit' && customerId) {
-      // Find customer and open edit dialog
-      const customer = customers.find(c => c.id === customerId);
-      if (customer) {
-        handleEditCustomer(customer);
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      const isDetailOpen = isCustomerDetailOpen && selectedCustomer?.id === dialogState.entityId && dialogState.dialogType === 'view';
+      const isEditOpen = isEditDialogOpen && editingCustomer?.id === dialogState.entityId && dialogState.dialogType === 'edit';
+      
+      if (isDetailOpen || isEditOpen) {
+        return;
       }
-    } else if (action === 'view' && customerId) {
-      // Find customer and open detail dialog
-      const customer = customers.find(c => c.id === customerId);
+
+      const customer = customers.find(c => c.id === dialogState.entityId);
       if (customer) {
-        handleViewCustomerDetail(customer);
+        if (dialogState.dialogType === 'view') {
+          handleViewCustomerDetail(customer);
+        } else if (dialogState.dialogType === 'edit') {
+          handleEditCustomer(customer);
+        }
+      }
+    } else if (dialogState.isOpen && dialogState.dialogType === 'create') {
+      if (!isAddDialogOpen) {
+        setIsAddDialogOpen(true);
       }
     }
-  }, [customers, searchParams]);
+  }, [getDialogState, customers, isCustomerDetailOpen, isEditDialogOpen, selectedCustomer, editingCustomer, isAddDialogOpen, closeDialog]);
   const fetchCustomerOrders = async (customerId: string) => {
     try {
       // Use backend API to fetch customer orders
@@ -334,7 +346,12 @@ const CustomersContent = () => {
       const data = await customerApi.createCustomer(insertData);
       setCustomers([data, ...customers]);
       setNewCustomer(createEmptyCustomerFormState());
+      isClosingDialogRef.current = true;
+      closeDialog();
       setIsAddDialogOpen(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
       // Clear URL parameters
       setSearchParams({});
       toast({
@@ -362,9 +379,8 @@ const CustomersContent = () => {
       addressInfo: buildAddressInfoState(customer.addressInfo),
       vatInfo: populateVatInfoState(customer.vatInfo),
     });
+    openDialog('edit', customer.id);
     setIsEditDialogOpen(true);
-    // Save state to URL
-    setSearchParams({ action: 'edit', customerId: customer.id });
   };
   const handleUpdateCustomer = async () => {
     if (!editingCustomer) return;
@@ -388,7 +404,12 @@ const CustomersContent = () => {
       await customerApi.updateCustomer(editingCustomer.id, updatePayload);
       // Reload customers to get updated data
       await loadCustomers();
+      isClosingDialogRef.current = true;
+      closeDialog();
       setIsEditDialogOpen(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
       setEditingCustomer(null);
       setEditCustomer(createEmptyCustomerFormState());
       // Clear URL parameters
@@ -427,9 +448,8 @@ const CustomersContent = () => {
   const handleViewCustomerDetail = (customer: Customer) => {
     setSelectedCustomer(customer);
     fetchCustomerOrders(customer.id);
+    openDialog('view', customer.id);
     setIsCustomerDetailOpen(true);
-    // Save state to URL
-    setSearchParams({ action: 'view', customerId: customer.id });
   };
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
@@ -477,10 +497,14 @@ const CustomersContent = () => {
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open);
             if (open) {
-              setSearchParams({ action: 'add' });
+              openDialog('create');
             } else {
-              setSearchParams({});
+              isClosingDialogRef.current = true;
+              closeDialog();
               setNewCustomer(createEmptyCustomerFormState());
+              setTimeout(() => {
+                isClosingDialogRef.current = false;
+              }, 100);
             }
           }}>
             <DialogTrigger asChild>
@@ -651,7 +675,12 @@ const CustomersContent = () => {
               </div>
               <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
-                setIsAddDialogOpen(false);
+                isClosingDialogRef.current = true;
+      closeDialog();
+      setIsAddDialogOpen(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
                 setSearchParams({});
                 setNewCustomer(createEmptyCustomerFormState());
               }}>
@@ -756,9 +785,13 @@ const CustomersContent = () => {
         <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
           setIsEditDialogOpen(open);
           if (!open) {
-            setSearchParams({});
+            isClosingDialogRef.current = true;
+            closeDialog();
             setEditingCustomer(null);
             setEditCustomer(createEmptyCustomerFormState());
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
           }
         }}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -920,7 +953,12 @@ const CustomersContent = () => {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
-                setIsEditDialogOpen(false);
+                isClosingDialogRef.current = true;
+      closeDialog();
+      setIsEditDialogOpen(false);
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
                 setSearchParams({});
                 setEditingCustomer(null);
                 setEditCustomer(createEmptyCustomerFormState());
@@ -936,6 +974,14 @@ const CustomersContent = () => {
         {/* Customer Detail Dialog */}
         <Dialog open={isCustomerDetailOpen} onOpenChange={(open) => {
           setIsCustomerDetailOpen(open);
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setSelectedCustomer(null);
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
           if (!open) {
             setSearchParams({});
             setSelectedCustomer(null);
