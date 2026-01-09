@@ -32,7 +32,7 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
   });
   const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
     receive_order_notifications: true,
-    receive_status_updates: true,
+    receive_order_status_updates: true,
     receive_payment_updates: true,
   });
   const { toast } = useToast();
@@ -385,8 +385,8 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
               </div>
               <input
                 type="checkbox"
-                checked={emailPreferences.receive_status_updates}
-                onChange={(e) => updateEmailPreferences({ receive_status_updates: e.target.checked })}
+                checked={emailPreferences.receive_order_status_updates}
+                onChange={(e) => updateEmailPreferences({ receive_order_status_updates: e.target.checked })}
                 className="w-4 h-4"
               />
             </div>
