@@ -65,7 +65,7 @@ export const NotificationCenter = () => {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-[450px] mr-4 ml-4">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Thông báo</span>
           <Button 
@@ -105,14 +105,14 @@ export const NotificationCenter = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-medium truncate">
+                        <h4 className="text-sm font-medium break-words">
                           {notification.title}
                         </h4>
                         {!notification.isRead && (
                           <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
                         {notification.message}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
