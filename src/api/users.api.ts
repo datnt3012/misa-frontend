@@ -464,26 +464,26 @@ export const usersApi = {
     // Backend returns: { success: true, message: "...", data: { email: { ... } } }
     if (data?.data?.email) {
       return {
-        receive_order_notifications: data.data.email.receive_order_notifications ?? true,
-        receive_status_updates: data.data.email.receive_status_updates ?? true,
-        receive_payment_updates: data.data.email.receive_payment_updates ?? true,
+        receive_order_notifications: !!data.data.email.receive_order_notifications,
+        receive_status_updates: !!data.data.email.receive_status_updates,
+        receive_payment_updates: !!data.data.email.receive_payment_updates,
       };
     }
     
     // Fallback: if response structure is different
     if (data?.email) {
       return {
-        receive_order_notifications: data.email.receive_order_notifications ?? true,
-        receive_status_updates: data.email.receive_status_updates ?? true,
-        receive_payment_updates: data.email.receive_payment_updates ?? true,
+        receive_order_notifications: !!data.email.receive_order_notifications,
+        receive_status_updates: !!data.email.receive_status_updates,
+        receive_payment_updates: !!data.email.receive_payment_updates,
       };
     }
     
     // Default values if no preferences found
     return {
-      receive_order_notifications: true,
-      receive_status_updates: true,
-      receive_payment_updates: true,
+      receive_order_notifications: false,
+      receive_status_updates: false,
+      receive_payment_updates: false,
     };
   },
 

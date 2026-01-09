@@ -31,9 +31,9 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     confirmPassword: '',
   });
   const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
-    receive_order_notifications: true,
-    receive_order_status_updates: true,
-    receive_payment_updates: true,
+    receive_order_notifications: false,
+    receive_status_updates: false,
+    receive_payment_updates: false,
   });
   const { toast } = useToast();
   const { user: currentUser, refreshUser } = useAuth();
@@ -174,7 +174,12 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
   const loadEmailPreferences = async () => {
     try {
       const preferences = await usersApi.getEmailPreferences();
-      setEmailPreferences(preferences);
+      // Ensure any missing or falsy values are treated as false.
+      setEmailPreferences({
+        receive_order_notifications: !!preferences?.receive_order_notifications,
+        receive_status_updates: !!preferences?.receive_status_updates,
+        receive_payment_updates: !!preferences?.receive_payment_updates,
+      });
     } catch (error: any) {
       // If GET endpoint doesn't exist or returns error, use default values
       console.log('Could not load email preferences from backend, using defaults:', error);
@@ -385,8 +390,8 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
               </div>
               <input
                 type="checkbox"
-                checked={emailPreferences.receive_order_status_updates}
-                onChange={(e) => updateEmailPreferences({ receive_order_status_updates: e.target.checked })}
+                checked={emailPreferences.receive_status_updates}
+                onChange={(e) => updateEmailPreferences({ receive_status_updates: e.target.checked })}
                 className="w-4 h-4"
               />
             </div>
