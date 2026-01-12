@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { useDialogUrl } from "@/hooks/useDialogUrl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,7 +99,10 @@ const OrdersContent: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('orders');
   const location = useLocation();
+  // Ref to track if we're currently closing a dialog to prevent reopening
+  const isClosingDialogRef = useRef(false);
   const loadOrderTagsCatalog = useCallback(async () => {
     try {
       // Only load tags with type 'order'
@@ -235,6 +239,52 @@ const OrdersContent: React.FC = () => {
     };
     fetchCategories();
   }, []);
+
+  // Read URL and auto-open dialog if present
+  useEffect(() => {
+    // Don't auto-open if we're currently closing a dialog
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      // Prevent opening if dialog is already open for the same order
+      const isViewOpen = showOrderViewDialog && selectedOrder?.id === dialogState.entityId && dialogState.dialogType === 'view';
+      const isDetailOpen = showOrderDetailDialog && selectedOrder?.id === dialogState.entityId && (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit');
+      
+      if (isViewOpen || isDetailOpen) {
+        return; // Already open, don't reopen
+      }
+
+      // Find the order by ID
+      const order = orders.find(o => o.id === dialogState.entityId);
+      if (order) {
+        setSelectedOrder(order);
+        if (dialogState.dialogType === 'view') {
+          setShowOrderViewDialog(true);
+        } else if (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit') {
+          setShowOrderDetailDialog(true);
+        }
+      } else if (orders.length > 0) {
+        // Orders loaded but this one not found, try to fetch it
+        orderApi.getOrderById(dialogState.entityId)
+          .then(order => {
+            setSelectedOrder(order);
+            if (dialogState.dialogType === 'view') {
+              setShowOrderViewDialog(true);
+            } else if (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit') {
+              setShowOrderDetailDialog(true);
+            }
+          })
+          .catch(() => {
+            // Order not found, close dialog
+            closeDialog();
+          });
+      }
+      // If orders not loaded yet, wait for them to load
+    }
+  }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
   // Handle creating export slip
   const handleCreateExportSlip = (order: any) => {
     setSelectedOrderForExport(order);
@@ -660,7 +710,10 @@ const OrdersContent: React.FC = () => {
               <h1 className="text-3xl font-bold text-foreground">Danh Sách Đơn Hàng</h1>
             </div>
             <Button
-              onClick={() => setShowCreateDialog(true)}
+              onClick={() => {
+                openDialog('create');
+                setShowCreateDialog(true);
+              }}
               className="bg-green-600 hover:bg-green-700"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -1124,6 +1177,7 @@ const OrdersContent: React.FC = () => {
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setSelectedOrder(order);
+                                    openDialog('view', order.id);
                                     setShowOrderViewDialog(true);
                                   }}
                                   className="cursor-pointer hover:bg-muted"
@@ -1134,6 +1188,7 @@ const OrdersContent: React.FC = () => {
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setSelectedOrder(order);
+                                    openDialog('edit', order.id);
                                     setShowOrderDetailDialog(true);
                                   }}
                                   className="cursor-pointer hover:bg-muted"
@@ -1144,6 +1199,7 @@ const OrdersContent: React.FC = () => {
                                <DropdownMenuItem 
                                  onClick={() => {
                                    setSelectedOrder(order);
+                                   openDialog('payment', order.id);
                                    setShowPaymentDialog(true);
                                  }}
                                  className="cursor-pointer hover:bg-muted"
@@ -1248,17 +1304,42 @@ const OrdersContent: React.FC = () => {
       {/* Create Order Dialog */}
       <CreateOrderForm
         open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
         onOrderCreated={() => {
           fetchOrders();
+          isClosingDialogRef.current = true;
+          closeDialog();
           setShowCreateDialog(false);
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
         }}
       />
       {/* Order View Dialog (Read-only) */}
       <OrderViewDialog
         order={selectedOrder}
         open={showOrderViewDialog}
-        onOpenChange={setShowOrderViewDialog}
+        onOpenChange={(open) => {
+          setShowOrderViewDialog(open);
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setSelectedOrder(null);
+            // Reset flag after a short delay to allow URL to update
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
       />
       {/* Order Detail Dialog (Editable) */}
       <OrderDetailDialog
@@ -1267,7 +1348,13 @@ const OrdersContent: React.FC = () => {
         onOpenChange={(open) => {
           setShowOrderDetailDialog(open);
           if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
             setSelectedOrder(null);
+            // Reset flag after a short delay to allow URL to update
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
           }
         }}
         onOrderUpdated={() => {
@@ -1277,6 +1364,9 @@ const OrdersContent: React.FC = () => {
           }
         }}
         onOpenPaymentDialog={() => {
+          if (selectedOrder?.id) {
+            openDialog('payment', selectedOrder.id);
+          }
           setShowPaymentDialog(true);
         }}
       />
@@ -1305,7 +1395,18 @@ const OrdersContent: React.FC = () => {
       {/* Payment Dialog */}
       <PaymentDialog
         open={showPaymentDialog}
-        onOpenChange={setShowPaymentDialog}
+        onOpenChange={(open) => {
+          setShowPaymentDialog(open);
+          if (open && selectedOrder?.id) {
+            openDialog('payment', selectedOrder.id);
+          } else if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
         order={selectedOrder}
         onUpdate={() => {
           fetchOrders();
@@ -1325,7 +1426,16 @@ const OrdersContent: React.FC = () => {
       {/* Multiple Payment Dialog */}
       <MultiplePaymentDialog
         open={showMultiplePaymentDialog}
-        onOpenChange={setShowMultiplePaymentDialog}
+        onOpenChange={(open) => {
+          setShowMultiplePaymentDialog(open);
+          if (!open) {
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
         orderIds={selectedOrders}
         orders={orders}
         onUpdate={() => {

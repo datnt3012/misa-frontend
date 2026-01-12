@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,6 +79,8 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
     description: ''
   });
   const { toast } = useToast();
+  const { openDialog, closeDialog, getDialogState } = useDialogUrl('categories');
+  const isClosingDialogRef = useRef(false);
   // Frontend permission checks for UI controls
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('CATEGORIES_CREATE');
@@ -107,6 +110,31 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
+
+  // Read URL and auto-open dialog if present
+  useEffect(() => {
+    if (isClosingDialogRef.current) {
+      return;
+    }
+
+    const dialogState = getDialogState();
+    if (dialogState.isOpen && dialogState.entityId) {
+      const isEditOpen = isEditDialogOpen && editingCategory?.id === dialogState.entityId && dialogState.dialogType === 'edit';
+      
+      if (isEditOpen) {
+        return;
+      }
+
+      const category = categories.find(c => c.id === dialogState.entityId);
+      if (category && dialogState.dialogType === 'edit') {
+        openEditDialog(category);
+      }
+    } else if (dialogState.isOpen && dialogState.dialogType === 'create') {
+      if (!isAddDialogOpen) {
+        setIsAddDialogOpen(true);
+      }
+    }
+  }, [getDialogState, categories, isEditDialogOpen, editingCategory, isAddDialogOpen, closeDialog]);
   const handleAddCategory = async () => {
     if (!newCategory.name.trim()) {
       toast({
@@ -123,8 +151,13 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
         description: "Đã thêm loại sản phẩm mới",
       });
       setNewCategory({ name: '', description: '' });
+      isClosingDialogRef.current = true;
+      closeDialog();
       setIsAddDialogOpen(false);
       fetchCategories();
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
     } catch (error) {
       toast({
         title: "Lỗi",
@@ -150,8 +183,13 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       });
       setEditingCategory(null);
       setEditCategory({ name: '', description: '' });
+      isClosingDialogRef.current = true;
+      closeDialog();
       setIsEditDialogOpen(false);
       fetchCategories();
+      setTimeout(() => {
+        isClosingDialogRef.current = false;
+      }, 100);
     } catch (error) {
       toast({
         title: "Lỗi",
@@ -185,6 +223,7 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
         name: category.name,
         description: category.description || ''
       });
+    openDialog('edit', category.id);
     setIsEditDialogOpen(true);
   };
   const openDeleteDialog = (category: Category) => {
@@ -251,7 +290,10 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
           </p>
         </div>
         {canCreate && (
-          <Button onClick={() => setIsAddDialogOpen(true)}>
+          <Button onClick={() => {
+            openDialog('create');
+            setIsAddDialogOpen(true);
+          }}>
             <Plus className="w-4 h-4 mr-2" />
             Thêm loại sản phẩm
           </Button>
@@ -267,7 +309,10 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
             </p>
           </div>
           {canCreate && (
-            <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Button onClick={() => {
+            openDialog('create');
+            setIsAddDialogOpen(true);
+          }}>
               <Plus className="w-4 h-4 mr-2" />
               Thêm loại sản phẩm
             </Button>
@@ -330,7 +375,10 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
                 }
               </p>
               {!searchTerm && statusFilter === 'all' && (
-                <Button onClick={() => setIsAddDialogOpen(true)}>
+                <Button onClick={() => {
+            openDialog('create');
+            setIsAddDialogOpen(true);
+          }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Thêm loại sản phẩm
                 </Button>
@@ -430,7 +478,16 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
         </CardContent>
       </Card>
       {/* Add Category Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+        setIsAddDialogOpen(open);
+        if (!open) {
+          isClosingDialogRef.current = true;
+          closeDialog();
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
+        }
+      }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Thêm loại sản phẩm mới</DialogTitle>
@@ -470,7 +527,18 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
         </DialogContent>
       </Dialog>
       {/* Edit Category Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open);
+        if (!open) {
+          isClosingDialogRef.current = true;
+          closeDialog();
+          setEditingCategory(null);
+          setEditCategory({ name: '', description: '' });
+          setTimeout(() => {
+            isClosingDialogRef.current = false;
+          }, 100);
+        }
+      }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Chỉnh sửa loại sản phẩm</DialogTitle>
@@ -510,7 +578,12 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
         </DialogContent>
       </Dialog>
       {/* Delete Category Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) {
+          setCategoryToDelete(null);
+        }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa loại sản phẩm</AlertDialogTitle>

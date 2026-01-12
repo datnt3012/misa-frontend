@@ -1370,46 +1370,46 @@ const InventoryContent = () => {
                   </div>
                 )}
                 {/* Warehouses List */}
-                <div className="rounded-md border overflow-x-auto">
-                  <Table className="min-w-full">
+                <div className="rounded-md border overflow-x-auto w-full">
+                  <Table className="w-full">
                     <TableHeader>
                       <TableRow>
                          <TableHead 
-                           className="cursor-pointer hover:bg-muted/50"
+                           className="cursor-pointer hover:bg-muted/50 text-center"
                            onClick={() => handleWarehouseSort('code')}
                          >
                            Mã Kho
                            {getWarehouseSortIcon('code')}
                          </TableHead>
                          <TableHead 
-                           className="cursor-pointer hover:bg-muted/50"
+                           className="cursor-pointer hover:bg-muted/50 text-center"
                            onClick={() => handleWarehouseSort('name')}
                          >
                            Tên Kho
                            {getWarehouseSortIcon('name')}
                          </TableHead>
                          <TableHead 
-                           className="cursor-pointer hover:bg-muted/50"
+                           className="cursor-pointer hover:bg-muted/50 text-center"
                            onClick={() => handleWarehouseSort('description')}
                          >
                            Mô Tả
                            {getWarehouseSortIcon('description')}
                          </TableHead>
                          <TableHead 
-                           className="cursor-pointer hover:bg-muted/50"
+                           className="cursor-pointer hover:bg-muted/50 text-center"
                            onClick={() => handleWarehouseSort('address')}
                          >
                            Địa Chỉ
                            {getWarehouseSortIcon('address')}
                          </TableHead>
                          <TableHead 
-                           className="cursor-pointer hover:bg-muted/50"
+                           className="cursor-pointer hover:bg-muted/50 text-center"
                            onClick={() => handleWarehouseSort('createdAt')}
                          >
                            Ngày Tạo
                            {getWarehouseSortIcon('createdAt')}
                          </TableHead>
-                         {canManageWarehouses && <TableHead>Thao Tác</TableHead>}
+                         {canManageWarehouses && <TableHead className="text-center">Thao Tác</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1422,15 +1422,15 @@ const InventoryContent = () => {
                       ) : (
                         sortedWarehouses.map((warehouse) => (
                           <TableRow key={warehouse.id}>
-                            <TableCell className="font-medium">{warehouse.code}</TableCell>
-                            <TableCell>{warehouse.name}</TableCell>
-                            <TableCell>{warehouse.description || '-'}</TableCell>
-                            <TableCell>{warehouse.address || '-'}</TableCell>
-                            <TableCell>
+                            <TableCell className="font-medium text-center">{warehouse.code}</TableCell>
+                            <TableCell className="text-center">{warehouse.name}</TableCell>
+                            <TableCell className="text-center">{warehouse.description || '-'}</TableCell>
+                            <TableCell className="text-center">{warehouse.address || '-'}</TableCell>
+                            <TableCell className="text-center">
                               {new Date(warehouse.createdAt).toLocaleDateString('vi-VN')}
                              </TableCell>
                              {canManageWarehouses && (
-                               <TableCell>
+                               <TableCell className="text-center flex justify-center">
                                  <div className="flex gap-2">
                                    <Button
                                      variant="outline"

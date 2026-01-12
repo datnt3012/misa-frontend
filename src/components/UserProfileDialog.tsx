@@ -7,7 +7,9 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { authApi } from "@/api/auth.api";
-import { Key, Loader2 } from "lucide-react";
+import { usersApi, EmailPreferences } from "@/api/users.api";
+import { Key, Loader2, Mail } from "lucide-react";
+import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 interface UserProfileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -28,6 +30,11 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
     newPassword: '',
     confirmPassword: '',
   });
+  const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
+    receive_order_notifications: false,
+    receive_status_updates: false,
+    receive_payment_updates: false,
+  });
   const { toast } = useToast();
   const { user: currentUser, refreshUser } = useAuth();
   useEffect(() => {
@@ -36,6 +43,8 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
       // This is important because username might have been updated
       refreshUser().catch(error => {
       });
+      // Load email preferences when dialog opens
+      loadEmailPreferences();
     }
   }, [open]); // Only depend on open to avoid infinite loops
   useEffect(() => {
@@ -162,6 +171,40 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
       setChangingPassword(false);
     }
   };
+  const loadEmailPreferences = async () => {
+    try {
+      const preferences = await usersApi.getEmailPreferences();
+      // Ensure any missing or falsy values are treated as false.
+      setEmailPreferences({
+        receive_order_notifications: !!preferences?.receive_order_notifications,
+        receive_status_updates: !!preferences?.receive_status_updates,
+        receive_payment_updates: !!preferences?.receive_payment_updates,
+      });
+    } catch (error: any) {
+      // If GET endpoint doesn't exist or returns error, use default values
+      console.log('Could not load email preferences from backend, using defaults:', error);
+    }
+  };
+
+  const updateEmailPreferences = async (newPrefs: Partial<EmailPreferences>) => {
+    try {
+      const updatedPrefs = { ...emailPreferences, ...newPrefs };
+      await usersApi.updateEmailPreferences(updatedPrefs);
+      setEmailPreferences(updatedPrefs);
+
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật cài đặt email",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật cài đặt email"),
+        variant: "destructive",
+      });
+    }    
+  };
+
   const handleCancel = () => {
     // Reset form data to original values
     if (currentUser) {
@@ -180,6 +223,8 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
       newPassword: '',
       confirmPassword: '',
     });
+    // Reload email preferences to reset to saved values
+    loadEmailPreferences();
     onOpenChange(false);
   };
   return (
@@ -313,6 +358,67 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ open, onOpenChang
               </>
             )}
           </Button>
+        </div>
+        <Separator />
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-muted-foreground" />
+            <Label className="text-base font-medium">Cài đặt nhận email</Label>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-base">Thông báo đơn hàng tổng quát</Label>
+                <p className="text-sm text-muted-foreground">
+                  Nhận email về các hoạt động chung liên quan đến đơn hàng
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={emailPreferences.receive_order_notifications}
+                onChange={(e) => updateEmailPreferences({ receive_order_notifications: e.target.checked })}
+                className="w-4 h-4"
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-base">Thay đổi trạng thái đơn hàng</Label>
+                <p className="text-sm text-muted-foreground">
+                  Nhận email khi trạng thái đơn hàng được cập nhật
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={emailPreferences.receive_status_updates}
+                onChange={(e) => updateEmailPreferences({ receive_status_updates: e.target.checked })}
+                className="w-4 h-4"
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-base">Cập nhật thanh toán</Label>
+                <p className="text-sm text-muted-foreground">
+                  Nhận email khi có thay đổi về thanh toán đơn hàng
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={emailPreferences.receive_payment_updates}
+                onChange={(e) => updateEmailPreferences({ receive_payment_updates: e.target.checked })}
+                className="w-4 h-4"
+              />
+            </div>
+          </div>
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-medium text-blue-800 mb-2">Lưu ý về email</h4>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• Email sẽ được gửi khi có thay đổi quan trọng về đơn hàng</li>
+              <li>• Bạn có thể tắt bất kỳ loại thông báo nào bằng cách bỏ chọn</li>
+              <li>• Cài đặt này chỉ áp dụng cho tài khoản của bạn</li>
+            </ul>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={saving}>
