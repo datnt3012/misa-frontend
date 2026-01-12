@@ -439,17 +439,17 @@ const SuppliersContent: React.FC = () => {
                 <TableBody>
                   {filteredSuppliers.map((supplier) => (
                     <TableRow key={supplier.id}>
-                      <TableCell className="font-mono">{supplier.code}</TableCell>
-                      <TableCell className="font-medium">{supplier.name}</TableCell>
+                      <TableCell className="font-mono text-center">{supplier.code}</TableCell>
+                      <TableCell className="font-medium text-center">{supplier.name}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex justify-center gap-2">
                           <Phone className="w-4 h-4 text-muted-foreground" />
                           {supplier.contact_phone}
                         </div>
                       </TableCell>
                       <TableCell>
                         {supplier.email ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex justify-center gap-2">
                             <Mail className="w-4 h-4 text-muted-foreground" />
                             {supplier.email}
                           </div>
@@ -469,13 +469,13 @@ const SuppliersContent: React.FC = () => {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge variant={supplier.isDeleted ? "destructive" : "default"}>
                           {supplier.isDeleted ? "Đã xóa" : "Hoạt động"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
