@@ -956,7 +956,7 @@ export const orderApi = {
           user_profile: item.user ? {
             full_name: item.user.firstName && item.user.lastName 
               ? `${item.user.firstName} ${item.user.lastName}`.trim()
-              : item.user.fullName || item.user.email || 'Hệ thống'
+              : item.user.fullName || item.user.username || item.user.email || ''
           } : { full_name: 'Hệ thống' }
         };
         // Map action and values based on HistoryAction type
