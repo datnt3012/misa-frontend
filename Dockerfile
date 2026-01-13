@@ -5,6 +5,14 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Build arguments for environment variables
+ARG VITE_API_BASE_URL
+ARG VITE_BACKEND_URL
+
+# Set environment variables from build args
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+
 # Configure npm for better network handling
 RUN npm config set fetch-retries 5 && \
     npm config set fetch-retry-mintimeout 20000 && \

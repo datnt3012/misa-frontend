@@ -228,18 +228,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
 
       // Translate UI snake_case to API camelCase for updates
       // Only allow editing receiver fields if they are empty originally
-      const original = orderDetails as any;
-      if ((field === 'receiverName' && original.receiverName) ||
-          (field === 'receiverPhone' && original.receiverPhone) ||
-          (field === 'receiverAddress' && (original.receiverAddress || original.addressInfo))) {
-        setLoading(false);
-        toast({
-          title: 'Không thể cập nhật',
-          description: 'Chỉ cho phép cập nhật thông tin người nhận khi đơn chưa có dữ liệu.',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // const original = orderDetails as any;
+      // if ((field === 'receiverName' && original.receiverName) ||
+      //     (field === 'receiverPhone' && original.receiverPhone) ||
+      //     (field === 'receiverAddress' && (original.receiverAddress || original.addressInfo))) {
+      //   setLoading(false);
+      //   toast({
+      //     title: 'Không thể cập nhật',
+      //     description: 'Chỉ cho phép cập nhật thông tin người nhận khi đơn chưa có dữ liệu.',
+      //     variant: 'destructive',
+      //   });
+      //   return;
+      // }
 
       // Map UI field names to BE expectations (camelCase per BE)
       if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
@@ -1397,7 +1397,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Đã thanh toán:</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-green-600">{formatCurrency(orderDetails?.paid_amount || orderDetails?.initial_payment)}</span>
+                    <span className="text-green-600">{formatCurrency(orderDetails?.totalPaidAmount || orderDetails?.initial_payment)}</span>
                     <Button size="sm" variant="outline" onClick={() => onOpenPaymentDialog?.()}>
                       Thanh toán
                     </Button>

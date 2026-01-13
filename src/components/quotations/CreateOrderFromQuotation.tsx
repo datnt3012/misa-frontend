@@ -234,35 +234,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
               </div>
             </div>
           </div>
-          {/* Payment Info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="paymentMethod">Phương thức thanh toán</Label>
-              <Combobox
-                options={[
-                  { label: "Tiền mặt", value: "cash" },
-                  { label: "Chuyển khoản", value: "bank_transfer" },
-                  { label: "Thẻ tín dụng", value: "credit_card" }
-                ]}
-                value={paymentMethod}
-                onValueChange={setPaymentMethod}
-                placeholder="Chọn phương thức thanh toán"
-                searchPlaceholder="Tìm phương thức..."
-                emptyMessage="Không có phương thức thanh toán nào"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="initialPayment">Thanh toán trước</Label>
-              <Input
-                id="initialPayment"
-                type="number"
-                value={initialPayment}
-                onChange={(e) => setInitialPayment(Number(e.target.value) || 0)}
-                min={0}
-                max={totalAmount}
-              />
-            </div>
-          </div>
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes">Ghi chú</Label>

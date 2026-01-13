@@ -5,10 +5,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # API Base URL
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3274/api/v0}
+        # Backend URL (cũng dùng cho Open Graph meta tags)
+        - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://localhost:3274}
     container_name: misa-service-client-app
     ports:
       - ${APP_PORT:-8082}:80
     environment:
       - NODE_ENV=production
     restart: unless-stopped
-

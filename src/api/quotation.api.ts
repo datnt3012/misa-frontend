@@ -39,6 +39,7 @@ export interface Quotation {
   };
   creator?: {
     id: string;
+    username: string;
     email: string;
     firstName?: string | null;
     lastName?: string | null;
@@ -151,6 +152,7 @@ export const quotationApi = {
       } : undefined,
       creator: row.creator ? {
         id: row.creator.id,
+        username: row.creator.username,
         email: row.creator.email,
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
@@ -222,6 +224,7 @@ export const quotationApi = {
       } : undefined,
       creator: row.creator ? {
         id: row.creator.id,
+        username: row.creator.username,
         email: row.creator.email,
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
@@ -277,6 +280,7 @@ export const quotationApi = {
       } : undefined,
       creator: row.creator ? {
         id: row.creator.id,
+        username: row.creator.username,
         email: row.creator.email,
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
@@ -332,6 +336,7 @@ export const quotationApi = {
       } : undefined,
       creator: row.creator ? {
         id: row.creator.id,
+        username: row.creator.username,
         email: row.creator.email,
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
