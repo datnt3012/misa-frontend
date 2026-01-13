@@ -248,6 +248,7 @@ export const orderApi = {
     page: number; 
     limit: number;
     summary?: {
+      totalPaidAmount: number;
       totalAmount: number;
       totalInitialPayment: number;
       totalDebt: number;
@@ -430,6 +431,7 @@ export const orderApi = {
         email: row.creator.email,
         firstName: row.creator.firstName,
         lastName: row.creator.lastName,
+        username: row.creator.username,
       } : undefined,
       tags: Array.isArray(row.tags) ? row.tags : undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
@@ -472,6 +474,7 @@ export const orderApi = {
         summary: data.summary ? {
           totalAmount: Number(data.summary.totalAmount || 0),
           totalInitialPayment: Number(data.summary.totalInitialPayment || 0),
+          totalPaidAmount: Number(data.summary.totalPaidAmount || 0),
           totalDebt: Number(data.summary.totalDebt || 0),
           totalExpenses: Number(data.summary.totalExpenses || 0),
         } : undefined,
@@ -482,6 +485,7 @@ export const orderApi = {
       orders,
       total: Number(response?.total ?? orders.length ?? 0),
       summary: data?.summary ? {
+        totalPaidAmount: Number(data.summary.totalPaidAmount || 0),
         totalAmount: Number(data.summary.totalAmount || 0),
         totalInitialPayment: Number(data.summary.totalInitialPayment || 0),
         totalDebt: Number(data.summary.totalDebt || 0),
