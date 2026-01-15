@@ -881,9 +881,9 @@ const OrdersContent: React.FC = () => {
       {/* Orders Table */}
       <Card className="shadow-sm border">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)]">
             <Table className="min-w-full text-xs sm:text-sm">
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-slate-50/50">
                 <TableRow className="border-b bg-slate-50/50">
                   <TableHead className="w-10 sm:w-12 py-1 sm:py-2 border-r border-slate-200">
                     <input 
@@ -912,11 +912,13 @@ const OrdersContent: React.FC = () => {
                     </div>
                   </TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Sản phẩm</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Hãng sản xuất</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
                     <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
+                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Số hợp đồng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[100px] sm:min-w-[110px] text-center">Người tạo đơn</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ngày hoàn thành</TableHead>
@@ -1022,12 +1024,26 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
                               {order.items?.map((item: any, index: number) => (
-                                <div key={index} className="text-sm py-5 px-5">
-                                  <div className="font-medium text-slate-900 truncate" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
+                                <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                  <div className="font-medium text-slate-900 truncate w-full" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
                                 </div>
                               ))}
                               {(!order.items || order.items.length === 0) && (
-                                <div className="text-sm text-muted-foreground">Không có sản phẩm</div>
+                                <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          {/* Manufacturer Column */}
+                          <TableCell className="p-0 border-r border-slate-200 text-center">
+                            <div className="divide-y divide-slate-100">
+                              {console.log(order.items)}
+                              {order.items?.map((item: any, index: number) => (
+                                <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                  <div className="font-medium text-slate-900 truncate w-full" title={item.manufacturer || '-'}>{item.manufacturer || '-'}</div>
+                                </div>
+                              ))}
+                              {(!order.items || order.items.length === 0) && (
+                                <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                               )}
                             </div>
                           </TableCell>
@@ -1035,12 +1051,12 @@ const OrdersContent: React.FC = () => {
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                               <div className="divide-y divide-slate-100">
                                 {order.items?.map((item: any, index: number) => (
-                                  <div key={index} className="text-sm py-5 px-5">
+                                  <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                     <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
                                   </div>
                                 ))}
                                 {(!order.items || order.items.length === 0) && (
-                                  <div className="text-sm text-muted-foreground">-</div>
+                                  <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                                 )}
                               </div>
                             </TableCell>
@@ -1048,12 +1064,12 @@ const OrdersContent: React.FC = () => {
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                              <div className="divide-y divide-slate-100">
                                {order.items?.map((item: any, index: number) => (
-                                 <div key={index} className="text-sm py-5 px-5">
+                                 <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                    <div className="font-medium text-slate-900">{item.quantity || 0}</div>
                                  </div>
                                ))}
                                {(!order.items || order.items.length === 0) && (
-                                 <div className="text-sm text-muted-foreground">-</div>
+                                 <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                                )}
                              </div>
                            </TableCell>
@@ -1115,6 +1131,10 @@ const OrdersContent: React.FC = () => {
                                   })()}
                                 </div>
                               </div>
+                           </TableCell>
+                           {/* Contract Code Column */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-medium text-slate-900">{order.contract_code || '-'}</div>
                            </TableCell>
                           {/* Quick Notes Column */}
                           <TableCell className="relative p-3 border-r border-slate-200 w-64 sm:w-40">

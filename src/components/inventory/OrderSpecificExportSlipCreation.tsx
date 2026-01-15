@@ -17,6 +17,7 @@ import { Package, Plus, CheckCircle, Clock, Bell } from "lucide-react";
 import { orderApi, type Order, type OrderItem } from "@/api/order.api";
 import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
+import { stockLevelsApi } from "@/api/stockLevels.api";
 import { supplierApi, type Supplier } from "@/api/supplier.api";
 import { Loading } from "@/components/ui/loading";
 interface OrderSpecificExportSlipCreationProps {
@@ -24,8 +25,7 @@ interface OrderSpecificExportSlipCreationProps {
   onExportSlipCreated?: () => void;
 }
 interface SelectedOrderItem {
-  warehouse_name: ReactNode;
-  warehouse_code: ReactNode;
+  warehouse_id: string;
   id: string;
   product_id: string;
   product_name: string;
@@ -33,8 +33,10 @@ interface SelectedOrderItem {
   requested_quantity: number; // SL đơn hàng (không thay đổi)
   export_quantity: number; // SL xuất kho (có thể thay đổi)
   exported_quantity: number; // Tổng SL đã xuất từ các phiếu xuất kho của đơn này
+  current_stock?: number; // Tồn kho hiện tại tại kho đã chọn
   unit_price: number;
   selected: boolean;
+  manufacturer: string;
 }
 export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCreationProps> = ({ 
   orderId,
@@ -47,6 +49,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
   const [selectedSupplier, setSelectedSupplier] = useState<string>('');
   const [slipCode, setSlipCode] = useState<string>('');
   const [selectedItems, setSelectedItems] = useState<SelectedOrderItem[]>([]);
+  const [exportedQuantityByProduct, setExportedQuantityByProduct] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [orderLoading, setOrderLoading] = useState(true);
@@ -74,7 +77,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       setOrderLoading(true);
       const orderData = await orderApi.getOrderIncludeDeleted(orderId);
       setOrder(orderData);
-      console.log(orderData);
 
       // Lấy thông tin tất cả các phiếu xuất kho đã tạo từ đơn hàng này (nếu có)
       let exportedQuantityByProduct: Record<string, number> = {};
@@ -84,7 +86,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         const allSlips: Awaited<ReturnType<typeof exportSlipsApi.getSlips>>['slips'] = [];
         
         while (true) {
-          const response = await exportSlipsApi.getSlips({ page, limit: 100 });
+          const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: orderId });
           const slipsForOrder = response.slips.filter(slip => slip.order_id === orderId);
           allSlips.push(...slipsForOrder);
           
@@ -95,36 +97,58 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
           page++;
         }
         
-        // Tính tổng số lượng đã xuất từ tất cả các phiếu
+        // Tính tổng số lượng đã xuất từ tất cả các phiếu (loại trừ phiếu có trạng thái 'cancelled')
         allSlips.forEach(slip => {
+          // Bỏ qua các phiếu xuất kho có trạng thái 'cancelled'
+          if (slip.status === 'cancelled') {
+            return;
+          }
+          
           if (slip.export_slip_items && Array.isArray(slip.export_slip_items)) {
             slip.export_slip_items.forEach(slipItem => {
+              // Kiểm tra product_id hợp lệ (không rỗng và không undefined)
               const productId = slipItem.product_id;
+              if (!productId || productId.trim() === '') {
+                console.warn('Export slip item missing product_id:', {
+                  slipItem,
+                  rawItem: slipItem,
+                  product_id: slipItem.product_id,
+                  productId: (slipItem as any).productId
+                });
+                return; // Bỏ qua item không có product_id
+              }
               const current = exportedQuantityByProduct[productId] || 0;
               // Dùng requested_quantity để tính tổng số lượng đã xuất
               exportedQuantityByProduct[productId] = current + (slipItem.requested_quantity || 0);
             });
           }
         });
+        
+        console.log('All slips:', allSlips);
+        console.log('Calculated exportedQuantityByProduct:', exportedQuantityByProduct);
       } catch (e) {
         // Nếu có lỗi khi lấy phiếu xuất kho thì bỏ qua, không chặn luồng tạo phiếu
         console.error("Failed to load export slips for order", e);
       }
 
+      // Lưu exportedQuantityByProduct vào state để dùng trong render
+      setExportedQuantityByProduct(exportedQuantityByProduct);
+
       // Initialize selected items
       setSelectedItems(
         (orderData.items || []).map(item => ({
           id: item.id,
+          warehouse_id: item.warehouse_id,
           product_id: item.product_id,
           product_name: item.product_name,
           product_code: item.product_code,
-          warehouse_name: item.warehouse_name,
-          warehouse_code: item.warehouse_code,
           requested_quantity: item.quantity, // SL đơn hàng (không thay đổi)
           export_quantity: item.quantity, // SL xuất kho (mặc định bằng SL đơn hàng)
           exported_quantity: exportedQuantityByProduct[item.product_id] || 0,
+          current_stock: undefined,
           unit_price: item.unit_price,
-          selected: true
+          selected: true,
+          manufacturer: item.manufacturer
         }))
       );
     } catch (error: any) {
@@ -183,6 +207,45 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       )
     );
   };
+  const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
+    if (!productId || !warehouseId) return;
+    try {
+      const stockLevels = await stockLevelsApi.getStockLevels({
+        productId,
+        warehouseId,
+        limit: 1
+      });
+      const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
+      setSelectedItems(prev => {
+        const items = [...prev];
+        if (items[index]) {
+          items[index] = { ...items[index], current_stock: currentStock };
+        }
+        return items;
+      });
+    } catch (error) {
+      setSelectedItems(prev => {
+        const items = [...prev];
+        if (items[index]) {
+          items[index] = { ...items[index], current_stock: 0 };
+        }
+        return items;
+      });
+    }
+  };
+  const updateItemWarehouse = (index: number, warehouseId: string) => {
+    const item = selectedItems[index];
+    setSelectedItems(prev => {
+      const items = [...prev];
+      if (items[index]) {
+        items[index] = { ...items[index], warehouse_id: warehouseId };
+      }
+      return items;
+    });
+    if (item?.product_id && warehouseId) {
+      void fetchStockLevel(index, item.product_id, warehouseId);
+    }
+  };
   const handleCreateExportSlip = async () => {
     if (!order) {
       toast({
@@ -192,11 +255,12 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-    const selectedExportItems = selectedItems.filter(item => item.selected);
+    // Chỉ lấy các sản phẩm đã được chọn và có số lượng > 0
+    const selectedExportItems = selectedItems.filter(item => item.selected && item.export_quantity > 0);
     if (selectedExportItems.length === 0) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng chọn ít nhất một sản phẩm để xuất kho",
+        description: "Vui lòng chọn ít nhất một sản phẩm với số lượng > 0 để xuất kho",
         variant: "destructive",
       });
       return;
@@ -350,6 +414,10 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       </Card>
     );
   }
+  function handleWarehouseChange(id: string, value: any) {
+    throw new Error("Function not implemented.");
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -358,10 +426,46 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
           Tạo phiếu xuất kho từ đơn hàng
         </CardTitle>
         <CardDescription>
-          Đơn hàng: {order.order_number} - {order.customer_name}
+          <div className="space-y-1">Đơn hàng: {order.order_number} - {order.customer_name}</div>
+          <div className="space-y-1">Hợp đồng: {order.contract_code || 'Không có'}</div>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Allocation status */}
+        <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm">
+          <h4 className="font-semibold text-gray-900 mb-3">Trạng thái phân bổ</h4>
+          <div>
+            {
+              order.order_items?.map(item => {
+                // Lấy trực tiếp từ exportedQuantityByProduct đã tính từ API
+                const exportedQuantity = exportedQuantityByProduct[item.product_id] || 0;
+                const remainingQuantity = item.quantity - exportedQuantity;
+                
+                return (
+                  <div key={item.id}  className="grid grid-cols-2 gap-4 w-full bg-gray-50 p-5 rounded-md items-center">
+                    <div className="">
+                      <div className="font-medium">{item.product_code} - <b>{item.product_name}</b></div>
+                    </div>
+                    <div className="text-right grid grid-cols-2 gap-4 justify-self-end">
+                      <div className="text-medium text-muted-foreground">{exportedQuantity}/{item.quantity}</div>
+                      {
+                        remainingQuantity > 0 ? 
+                          (<Badge variant="default" className="bg-yellow-100 text-yellow-800 w-fit">
+                            Còn {remainingQuantity}
+                          </Badge>
+                          ) : (
+                            <Badge variant="default" className="bg-green-100 text-green-800 w-fit">
+                              Đủ
+                            </Badge>
+                          )
+                      }
+                    </div>
+                  </div>
+                );
+              })
+            }
+          </div>
+        </div>
         {/* Order Info */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <h4 className="font-semibold text-gray-900 mb-3">Thông tin đơn hàng</h4>
@@ -430,15 +534,15 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                   </TableHead>
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead>Kho hàng</TableHead>
+                  <TableHead>Hãng sản xuất</TableHead>
                   <TableHead className="text-center">SL đơn hàng</TableHead>
-                  <TableHead className="text-center">SL đã xuất</TableHead>
                   <TableHead className="text-center">SL xuất kho</TableHead>
                   <TableHead className="text-center">Đơn giá</TableHead>
                   <TableHead className="text-center">Thành tiền</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="text-center">
-                {selectedItems.map((item) => (
+                {selectedItems.map((item, index) => (
                   <TableRow key={item.id}>
                     <TableCell>
                       <Checkbox
@@ -455,18 +559,41 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{item.warehouse_code}</div>
-                        <div className="text-sm text-muted-foreground">{item.warehouse_name}</div>
+                      <div className="space-y-1 text-left">
+                        <Combobox
+                          options={warehouses.map(warehouse => ({
+                            label: `${warehouse.name} (${warehouse.code})`,
+                            value: warehouse.id
+                          }))}
+                          value={item.warehouse_id}
+                          onValueChange={(value) => updateItemWarehouse(index, value)}
+                          placeholder="Chọn kho"
+                          searchPlaceholder="Tìm kho..."
+                          emptyMessage="Không có kho nào"
+                          className="w-full"
+                        />
+                        {item.current_stock !== undefined && (
+                          <div className="text-xs mt-1">
+                            {item.current_stock === 0 ? (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
+                                Hết hàng tại kho này
+                              </Badge>
+                            ) : (
+                              <span className="text-gray-600">
+                                Tồn kho: {item.current_stock}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right text-blue-600 font-medium">
+                    <TableCell className="text-center text-blue-600 font-medium">
+                      {item.manufacturer}
+                    </TableCell>
+                    <TableCell className="text-center text-blue-600 font-medium">
                       {item.requested_quantity}
                     </TableCell>
-                <TableCell className="text-right text-purple-600 font-medium">
-                  {item.exported_quantity}
-                </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="flex justify-center">
                       <NumberInput
                         min={1}
                         value={item.export_quantity}
@@ -477,8 +604,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                         disabled={!item.selected}
                       />
                     </TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                    <TableCell className="text-right font-medium">
+                    <TableCell className="text-center">{formatCurrency(item.unit_price)}</TableCell>
+                    <TableCell className="text-center font-medium">
                       {formatCurrency(item.export_quantity * item.unit_price)}
                     </TableCell>
                   </TableRow>
@@ -506,8 +633,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
               <h4 className="font-semibold text-blue-900">Trạng thái phiếu xuất kho</h4>
               <div className="text-sm text-blue-800 mt-2 space-y-1">
                 <p><strong>Chờ:</strong> Phiếu được tạo, chưa ảnh hưởng tồn kho</p>
-                <p><strong>Đã lấy hàng:</strong> Thủ kho xác nhận, bắt đầu trừ tồn kho</p>
-                <p><strong>Đã xuất kho:</strong> Hàng đã rời khỏi kho, hoàn tất quy trình</p>
+                <p><strong>Đã lấy hàng:</strong> Thủ kho xác nhận</p>
+                <p><strong>Đã xuất kho:</strong> Hàng đã rời khỏi kho, bắt đầu trừ tồn kho và hoàn tất quy trình</p>
               </div>
             </div>
           </div>

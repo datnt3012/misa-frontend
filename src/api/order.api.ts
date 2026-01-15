@@ -1,11 +1,13 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 export interface OrderItem {
+  warehouse_id: any;
   id: string;
   order_id: string;
   product_id: string;
   product_name: string;
   product_code: string;
+  manufacturer: string;
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -327,6 +329,7 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      manufacturer: it.product?.manufacturer ?? it.manufacturer ?? undefined,
       // category helpers for dashboard aggregations
       category_id: it.product?.category ?? undefined,
       quantity: Number(it.quantity ?? 0),
@@ -787,6 +790,7 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      manufacturer: it.product?.manufacturer ?? it.manufacturer ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
@@ -840,6 +844,8 @@ export const orderApi = {
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? '',
+      contract_code: row.contract_code ?? row.contractCode ?? undefined,
+      purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,

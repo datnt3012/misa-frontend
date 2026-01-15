@@ -429,7 +429,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     // Validate all items have required fields
     const invalidItems = newOrder.items.filter(item => 
       !item.product_id || !item.product_name || !item.product_code || 
-      !item.quantity || !item.unit_price
+      !item.quantity || item.unit_price == undefined
     );
     if (invalidItems.length > 0) {
       toast({
@@ -676,10 +676,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="customer">Khách hàng <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="customer">Khách hàng</Label>
                   <Combobox
                     options={[
-                      { label: "+ Khách hàng mới", value: "__new__" },
+                      { label: "Chọn khách hàng cũ", value: "__new__" },
                       ...customers.map(customer => ({
                         label: `${customer.name} (${customer.customer_code})`,
                         value: customer.id
@@ -728,7 +728,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="customer_phone">Số điện thoại</Label>
+                  <Label htmlFor="customer_phone">Số điện thoại <span className="text-red-500">*</span></Label>
                   <Input
                     id="customer_phone"
                     value={newOrder.customer_phone}

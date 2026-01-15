@@ -49,6 +49,8 @@ function ExportSlipsContent() {
   const [slipDetail, setSlipDetail] = useState<ExportSlip | null>(null);
   const [loadingSlipDetail, setLoadingSlipDetail] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState<Order | null>(null);
+  const [exportedQuantityByProduct, setExportedQuantityByProduct] = useState<Record<string, number>>({});
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -86,8 +88,8 @@ function ExportSlipsContent() {
     customer_name: '',
     customer_phone: '',
     customer_email: '',
+    contract_code: '',
     notes: '', // This will be required
-    warehouse_id: '',
     items: [] as Array<{
       product_id: string;
       product_code: string;
@@ -95,6 +97,7 @@ function ExportSlipsContent() {
       quantity: number;
       unit_price: number;
       total_price: number;
+      warehouse_id: string;
       current_stock?: number;
     }>,
     expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
@@ -463,7 +466,8 @@ function ExportSlipsContent() {
         product_name: '',
         quantity: 1,
         unit_price: 0,
-        total_price: 0
+        total_price: 0,
+        warehouse_id: ''
       }]
     }));
   };
@@ -490,9 +494,16 @@ function ExportSlipsContent() {
         const subtotal = items[index].quantity * items[index].unit_price;
         items[index].total_price = subtotal;
       }
-      // Fetch stock level when product changes
-      if (field === 'product_id') {
-        fetchStockLevel(index, items[index].product_id, prev.warehouse_id);
+      // Fetch stock level when product or warehouse changes
+      if (field === 'product_id' || field === 'warehouse_id') {
+        const productId = field === 'product_id' ? value : items[index].product_id;
+        const warehouseId = field === 'warehouse_id' ? value : items[index].warehouse_id;
+        if (productId && warehouseId) {
+          fetchStockLevel(index, productId, warehouseId);
+        } else {
+          // Clear stock if product or warehouse is cleared
+          items[index].current_stock = undefined;
+        }
       }
       return { ...prev, items };
     });
@@ -573,21 +584,12 @@ function ExportSlipsContent() {
     // Validate all items have required fields
     const invalidItems = exportSlipForm.items.filter(item =>
       !item.product_id || !item.product_name || !item.product_code ||
-      !item.quantity || item.warehouse_id
+      !item.quantity || !item.warehouse_id
     );
     if (invalidItems.length > 0) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng điền đầy đủ thông tin sản phẩm",
-        variant: "destructive",
-      });
-      return;
-    }
-    // Validate warehouse selection
-    if (!exportSlipForm.warehouse_id) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng chọn kho xuất hàng",
+        description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho cho từng sản phẩm",
         variant: "destructive",
       });
       return;
@@ -598,15 +600,18 @@ function ExportSlipsContent() {
       const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
       const code = `EXP${timestamp}${random}`;
-      // Prepare items
+      // Prepare items with warehouse_id for each item
       const items = exportSlipForm.items.map(item => ({
         product_id: item.product_id,
         requested_quantity: item.quantity,
-        unit_price: item.unit_price
+        unit_price: item.unit_price,
+        warehouse_id: item.warehouse_id
       }));
+      // Get the first warehouse_id as default (for backward compatibility with API)
+      const defaultWarehouseId = exportSlipForm.items.length > 0 ? exportSlipForm.items[0].warehouse_id : '';
       const response = await exportSlipsApi.createSlip({
         order_id: exportSlipForm.order_id || undefined, // Optional order ID
-        warehouse_id: exportSlipForm.warehouse_id,
+        warehouse_id: defaultWarehouseId, // Default warehouse (may not be used if API supports per-item warehouse)
         supplier_id: '', // Not needed for export slips
         code: code,
         notes: exportSlipForm.notes,
@@ -628,11 +633,13 @@ function ExportSlipsContent() {
         customer_name: '',
         customer_phone: '',
         customer_email: '',
+        contract_code: '',
         notes: '',
-        warehouse_id: '',
         items: [],
         expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
       });
+      setSelectedOrderForAllocation(null);
+      setExportedQuantityByProduct({});
       fetchExportSlips();
     } catch (error: any) {
       toast({
@@ -1161,6 +1168,9 @@ function ExportSlipsContent() {
             setTimeout(() => {
               isClosingDialogRef.current = false;
             }, 100);
+            // Reset allocation state when closing dialog
+            setSelectedOrderForAllocation(null);
+            setExportedQuantityByProduct({});
           }
         }}>
           <DialogTrigger asChild>
@@ -1220,7 +1230,10 @@ function ExportSlipsContent() {
                                     customer_name: '',
                                     customer_phone: '',
                                     customer_email: '',
+                                    contract_code: '',
                                   }));
+                                  setSelectedOrderForAllocation(null);
+                                  setExportedQuantityByProduct({});
                                 }}
                                 className="h-6 px-2 text-xs"
                               >
@@ -1237,7 +1250,7 @@ function ExportSlipsContent() {
                               }))
                             ]}
                             value={exportSlipForm.order_id}
-                            onValueChange={(value) => {
+                            onValueChange={async (value) => {
                               // Auto-fill customer information from selected order
                               const selectedOrder = orders.find(order => order.id === value);
                               if (selectedOrder) {
@@ -1249,8 +1262,65 @@ function ExportSlipsContent() {
                                   customer_phone: selectedOrder.customer_phone || selectedOrder.customer?.phone || '',
                                   customer_email: selectedOrder.customer_email || selectedOrder.customer?.email || '',
                                 }));
+                                
+                                // Load full order details and calculate exported quantities
+                                try {
+                                  const fullOrderData = await orderApi.getOrderIncludeDeleted(value);
+                                  setSelectedOrderForAllocation(fullOrderData);
+                                  
+                                  // Update contract_code from order
+                                  setExportSlipForm(prev => ({
+                                    ...prev,
+                                    contract_code: fullOrderData.contract_code || ''
+                                  }));
+                                  
+                                  // Calculate exported quantities (excluding cancelled slips)
+                                  let exportedQuantityByProduct: Record<string, number> = {};
+                                  try {
+                                    let page = 1;
+                                    const allSlips: Awaited<ReturnType<typeof exportSlipsApi.getSlips>>['slips'] = [];
+                                    
+                                    while (true) {
+                                      const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: value });
+                                      const slipsForOrder = response.slips.filter(slip => slip.order_id === value);
+                                      allSlips.push(...slipsForOrder);
+                                      
+                                      if (response.slips.length < 100 || page > 10) {
+                                        break;
+                                      }
+                                      page++;
+                                    }
+                                    
+                                    allSlips.forEach(slip => {
+                                      if (slip.status === 'cancelled') {
+                                        return;
+                                      }
+                                      
+                                      if (slip.export_slip_items && Array.isArray(slip.export_slip_items)) {
+                                        slip.export_slip_items.forEach(slipItem => {
+                                          const productId = slipItem.product_id;
+                                          if (!productId || productId.trim() === '') {
+                                            return;
+                                          }
+                                          const current = exportedQuantityByProduct[productId] || 0;
+                                          exportedQuantityByProduct[productId] = current + (slipItem.requested_quantity || 0);
+                                        });
+                                      }
+                                    });
+                                  } catch (e) {
+                                    console.error("Failed to load export slips for order", e);
+                                  }
+                                  
+                                  setExportedQuantityByProduct(exportedQuantityByProduct);
+                                } catch (error: any) {
+                                  console.error("Failed to load order details", error);
+                                  setSelectedOrderForAllocation(null);
+                                  setExportedQuantityByProduct({});
+                                }
                               } else {
                                 setExportSlipForm(prev => ({ ...prev, order_id: value }));
+                                setSelectedOrderForAllocation(null);
+                                setExportedQuantityByProduct({});
                               }
                             }}
                             placeholder="Chọn đơn hàng (tùy chọn)"
@@ -1259,6 +1329,15 @@ function ExportSlipsContent() {
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="contract_code">Mã hợp đồng</Label>
+                            <Input
+                              id="contract_code"
+                              value={exportSlipForm.contract_code}
+                              onChange={(e) => setExportSlipForm(prev => ({ ...prev, contract_code: e.target.value }))}
+                              placeholder="Nhập mã hợp đồng"
+                            />
+                          </div>
                           <div>
                             <Label htmlFor="customer_id">Khách hàng</Label>
                             <Combobox
@@ -1318,6 +1397,38 @@ function ExportSlipsContent() {
                         </div>
                       </CardContent>
                     </Card>
+                    {/* Allocation status - only show when order is selected */}
+                    {selectedOrderForAllocation && (
+                      <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm">
+                        <h4 className="font-semibold text-gray-900 mb-3">Trạng thái phân bổ</h4>
+                        <div>
+                          {selectedOrderForAllocation.order_items?.map(item => {
+                            const exportedQuantity = exportedQuantityByProduct[item.product_id] || 0;
+                            const remainingQuantity = item.quantity - exportedQuantity;
+                            
+                            return (
+                              <div key={item.id} className="grid grid-cols-2 gap-4 w-full bg-gray-50 p-5 rounded-md items-center">
+                                <div className="">
+                                  <div className="font-medium">{item.product_code} - <b>{item.product_name}</b></div>
+                                </div>
+                                <div className="text-right grid grid-cols-2 gap-4 justify-self-end">
+                                  <div className="text-medium text-muted-foreground">{exportedQuantity}/{item.quantity}</div>
+                                  {remainingQuantity > 0 ? (
+                                    <Badge variant="default" className="bg-yellow-100 text-yellow-800 w-fit">
+                                      Còn {remainingQuantity}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="default" className="bg-green-100 text-green-800 w-fit">
+                                      Đủ
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {/* Products */}
                     <Card>
                       <CardHeader>
@@ -1330,47 +1441,14 @@ function ExportSlipsContent() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="max-w-xs">
-                          <Label>
-                            Kho xuất hàng <span className="text-red-500">*</span>
-                          </Label>
-                          <Combobox
-                            options={[
-                              { label: "Chọn kho xuất hàng", value: "" },
-                              ...warehouses.map((warehouse) => ({
-                                label: `${warehouse.name} (${warehouse.code})`,
-                                value: warehouse.id
-                              }))
-                            ]}
-                            value={exportSlipForm.warehouse_id}
-                            onValueChange={(value) => {
-                              setExportSlipForm((prev) => {
-                                const updatedItems = prev.items.map((it) => ({
-                                  ...it,
-                                }));
-                                // Update stock levels for all items with new warehouse
-                                updatedItems.forEach((it, index) => {
-                                  if (it.product_id) {
-                                    fetchStockLevel(index, it.product_id, value);
-                                  }
-                                });
-                                return {
-                                  ...prev,
-                                  warehouse_id: value,
-                                  items: updatedItems,
-                                };
-                              });
-                            }}
-                            placeholder="Chọn kho xuất hàng"
-                            searchPlaceholder="Tìm kho..."
-                            emptyMessage="Không có kho nào"
-                          />
-                        </div>
                         <Table className="border border-border/30 rounded-lg overflow-hidden">
                           <TableHeader>
                             <TableRow className="bg-slate-50 border-b-2 border-slate-200">
                               <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                                 Sản phẩm <span className="text-red-500">*</span>
+                              </TableHead>
+                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                Kho hàng <span className="text-red-500">*</span>
                               </TableHead>
                               <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                                 Số lượng <span className="text-red-500">*</span>
@@ -1406,28 +1484,47 @@ function ExportSlipsContent() {
                                 </TableCell>
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
                                   <div className="space-y-1">
+                                    <Combobox
+                                      options={[
+                                        { label: "Chọn kho", value: "" },
+                                        ...warehouses.map((warehouse) => ({
+                                          label: `${warehouse.name} (${warehouse.code})`,
+                                          value: warehouse.id
+                                        }))
+                                      ]}
+                                      value={item.warehouse_id}
+                                      onValueChange={(value) => updateItem(index, "warehouse_id", value)}
+                                      placeholder="Chọn kho"
+                                      searchPlaceholder="Tìm kho..."
+                                      emptyMessage="Không có kho nào"
+                                      className="w-[200px]"
+                                    />
+                                    {item.current_stock !== undefined && (
+                                      <div className="text-xs mt-1">
+                                        {item.current_stock === 0 ? (
+                                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
+                                            Hết hàng tại kho này
+                                          </Badge>
+                                        ) : (
+                                          <span className="text-gray-600">
+                                            Tồn kho: {item.current_stock}
+                                          </span>
+                                        )}
+                                        {item.quantity > item.current_stock && item.current_stock > 0 && (
+                                          <span className="text-red-500 ml-1">⚠️</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="border-r border-slate-100 align-top pt-4">
+                                  <div className="space-y-1">
                                     <NumberInput
                                       value={item.quantity}
                                       onChange={(value) => updateItem(index, "quantity", value)}
                                       min={1}
                                       className="w-20"
                                     />
-                                    {item.current_stock !== undefined && (
-                                      <div className="text-xs">
-                                        <span
-                                          className={`${
-                                            item.quantity > item.current_stock
-                                              ? "text-red-600"
-                                              : "text-gray-600"
-                                          }`}
-                                        >
-                                          Tồn kho: {item.current_stock}
-                                        </span>
-                                        {item.quantity > item.current_stock && (
-                                          <span className="text-red-500 ml-1">⚠️</span>
-                                        )}
-                                      </div>
-                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell className="border-r border-slate-100 align-top pt-4">

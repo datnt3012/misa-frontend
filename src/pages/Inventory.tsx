@@ -1026,6 +1026,7 @@ const InventoryContent = () => {
         'Mã sản phẩm': product.code,
         'Tên sản phẩm': product.name,
         'Loại': product.category || '',
+        'Hãng sản xuất': product.manufacturer || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
         'Giá bán': product.price || 0,
@@ -1049,6 +1050,7 @@ const InventoryContent = () => {
       { wch: 15 },  // Mã sản phẩm
       { wch: 30 },  // Tên sản phẩm
       { wch: 15 },  // Loại
+      { wch: 15 },  // Hãng sản xuất
       { wch: 10 },  // Tồn kho
       { wch: 10 },  // Đơn vị
     ];
