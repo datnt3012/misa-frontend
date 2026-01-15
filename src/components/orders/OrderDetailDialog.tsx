@@ -138,6 +138,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     setError(null);
     try {
       const orderData = await orderApi.getOrder(order.id);
+      console.log('orderData', orderData);
       setOrderDetails(orderData);
       // Initialize editing expenses from order data
       setEditingExpenses(orderData.expenses || []);
@@ -755,6 +756,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           <div className="space-y-6">
             {/* Customer Information */}
             <div className="space-y-4">
+              {renderEditableField('contract_code', 'Mã hợp đồng', orderDetails?.contract_code || '')}
               {renderEditableField('customer_name', 'Họ tên', customerDetails?.name || orderDetails?.customer_name || '')}
               {renderEditableField('customer_phone', 'Điện thoại', orderDetails?.customer_phone || '')}
               <div>
@@ -855,10 +857,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Tên SP</TableHead>
-                    <TableHead className="text-center">KL</TableHead>
                     <TableHead className="text-center">SL</TableHead>
-                    <TableHead className="text-right">Giá</TableHead>
-                    <TableHead className="text-right">Tổng</TableHead>
+                    <TableHead className="text-center">Giá</TableHead>
+                    <TableHead className="text-center">Tổng</TableHead>
                     <TableHead className="w-24">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -899,7 +900,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell className="text-center">-</TableCell>
                             <TableCell className="text-center">
                               {isEditing ? (
                                 <NumberInput
@@ -912,18 +912,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                                 item.quantity
                               )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-center">
                               {isEditing ? (
                                 <CurrencyInput
                                   value={editedItem.unit_price || 0}
                                   onChange={(value) => updateEditingItem(item.id || '', 'unit_price', value)}
-                                  className="w-24 text-right"
+                                  className="w-24 text-center"
                                 />
                               ) : (
                                 formatCurrency(item.unit_price)
                               )}
                             </TableCell>
-                            <TableCell className="text-right font-medium">
+                            <TableCell className="text-center font-medium">
                               {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
                             </TableCell>
                             <TableCell>
@@ -1405,27 +1405,27 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 </div>
                 {/* Reconciliation tags are not shown in this dialog */}
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Số hợp đồng:</span>
+                  <span className="text-sm text-muted-foreground">Mã hợp đồng:</span>
                   <div className="flex items-center gap-2">
-                    {editingFields['contract_number'] ? (
+                    {editingFields['contract_code'] ? (
                       <div className="flex items-center gap-2">
                         <Input
-                          value={editValues['contract_number'] ?? (orderDetails?.contract_number || '')}
-                          onChange={(e) => setEditValues(prev => ({ ...prev, contract_number: e.target.value }))}
+                          value={editValues['contract_code'] ?? (orderDetails?.contract_code || '')}
+                          onChange={(e) => setEditValues(prev => ({ ...prev, contract_code: e.target.value }))}
                           className="w-40"
-                          placeholder="Nhập số hợp đồng"
+                          placeholder="Nhập mã hợp đồng"
                         />
-                        <Button size="sm" onClick={() => saveField('contract_number')} disabled={loading}>
+                        <Button size="sm" onClick={() => saveField('contract_code')} disabled={loading}>
                           Lưu
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_number')}>
+                        <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_code')}>
                           Hủy
                         </Button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="font-mono">{orderDetails?.contract_number || 'Chưa có'}</span>
-                        <Button size="sm" variant="outline" onClick={() => startEditing('contract_number', orderDetails?.contract_number || '')}>
+                        <span className="font-mono">{orderDetails?.contract_code || 'Chưa có'}</span>
+                        <Button size="sm" variant="outline" onClick={() => startEditing('contract_code', orderDetails?.contract_code || '')}>
                           Sửa
                         </Button>
                       </div>

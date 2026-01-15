@@ -20,6 +20,7 @@ export interface QuotationDetail {
 export interface Quotation {
   id: string;
   code: string;
+  contract_code: string;
   customer_id: string;
   customer_name?: string;
   customer_phone?: string;
@@ -48,6 +49,7 @@ export interface Quotation {
 
 export interface CreateQuotationRequest {
   customerId: string;
+  contractCode?: string;
   note?: string;
   status?: string;
   type?: string;
@@ -61,6 +63,7 @@ export interface CreateQuotationRequest {
 
 export interface UpdateQuotationRequest {
   customerId?: string;
+  contractCode?: string;
   note?: string;
   status?: string;
   type?: string;
@@ -129,6 +132,7 @@ export const quotationApi = {
     const normalizeQuotation = (row: any): Quotation => ({
       id: row.id,
       code: row.code ?? '',
+      contract_code: row.contract_code ?? row.contractCode ?? '',
       customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
       customer_name: row.customer?.name ?? row.customer_name ?? '',
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
@@ -201,6 +205,7 @@ export const quotationApi = {
     const normalizeQuotation = (row: any): Quotation => ({
       id: row.id,
       code: row.code ?? '',
+      contract_code: row.contract_code ?? row.contractCode ?? '',
       customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
       customer_name: row.customer?.name ?? row.customer_name ?? '',
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
@@ -258,6 +263,7 @@ export const quotationApi = {
     const normalizeQuotation = (row: any): Quotation => ({
       id: row.id,
       code: row.code ?? '',
+      contract_code: row.contract_code ?? row.contractCode ?? '',
       customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
       customer_name: row.customer?.name ?? row.customer_name ?? '',
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
@@ -314,6 +320,7 @@ export const quotationApi = {
     const normalizeQuotation = (row: any): Quotation => ({
       id: row.id,
       code: row.code ?? '',
+      contract_code: row.contract_code ?? row.contractCode ?? '',
       customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
       customer_name: row.customer?.name ?? row.customer_name ?? '',
       customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',

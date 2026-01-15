@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, type ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,11 +24,15 @@ interface OrderSpecificExportSlipCreationProps {
   onExportSlipCreated?: () => void;
 }
 interface SelectedOrderItem {
+  warehouse_name: ReactNode;
+  warehouse_code: ReactNode;
   id: string;
   product_id: string;
   product_name: string;
   product_code: string;
-  requested_quantity: number;
+  requested_quantity: number; // SL đơn hàng (không thay đổi)
+  export_quantity: number; // SL xuất kho (có thể thay đổi)
+  exported_quantity: number; // Tổng SL đã xuất từ các phiếu xuất kho của đơn này
   unit_price: number;
   selected: boolean;
 }
@@ -70,6 +74,43 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       setOrderLoading(true);
       const orderData = await orderApi.getOrderIncludeDeleted(orderId);
       setOrder(orderData);
+      console.log(orderData);
+
+      // Lấy thông tin tất cả các phiếu xuất kho đã tạo từ đơn hàng này (nếu có)
+      let exportedQuantityByProduct: Record<string, number> = {};
+      try {
+        // Lấy tất cả các phiếu xuất kho của đơn hàng này
+        let page = 1;
+        const allSlips: Awaited<ReturnType<typeof exportSlipsApi.getSlips>>['slips'] = [];
+        
+        while (true) {
+          const response = await exportSlipsApi.getSlips({ page, limit: 100 });
+          const slipsForOrder = response.slips.filter(slip => slip.order_id === orderId);
+          allSlips.push(...slipsForOrder);
+          
+          // Nếu không còn phiếu nào hoặc đã lấy hết
+          if (response.slips.length < 100 || page > 10) {
+            break;
+          }
+          page++;
+        }
+        
+        // Tính tổng số lượng đã xuất từ tất cả các phiếu
+        allSlips.forEach(slip => {
+          if (slip.export_slip_items && Array.isArray(slip.export_slip_items)) {
+            slip.export_slip_items.forEach(slipItem => {
+              const productId = slipItem.product_id;
+              const current = exportedQuantityByProduct[productId] || 0;
+              // Dùng requested_quantity để tính tổng số lượng đã xuất
+              exportedQuantityByProduct[productId] = current + (slipItem.requested_quantity || 0);
+            });
+          }
+        });
+      } catch (e) {
+        // Nếu có lỗi khi lấy phiếu xuất kho thì bỏ qua, không chặn luồng tạo phiếu
+        console.error("Failed to load export slips for order", e);
+      }
+
       // Initialize selected items
       setSelectedItems(
         (orderData.items || []).map(item => ({
@@ -77,7 +118,11 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
           product_id: item.product_id,
           product_name: item.product_name,
           product_code: item.product_code,
-          requested_quantity: item.quantity,
+          warehouse_name: item.warehouse_name,
+          warehouse_code: item.warehouse_code,
+          requested_quantity: item.quantity, // SL đơn hàng (không thay đổi)
+          export_quantity: item.quantity, // SL xuất kho (mặc định bằng SL đơn hàng)
+          exported_quantity: exportedQuantityByProduct[item.product_id] || 0,
           unit_price: item.unit_price,
           selected: true
         }))
@@ -134,7 +179,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
   const handleQuantityChange = (itemId: string, quantity: number) => {
     setSelectedItems(prev => 
       prev.map(item => 
-        item.id === itemId ? { ...item, requested_quantity: Math.max(1, quantity) } : item
+        item.id === itemId ? { ...item, export_quantity: Math.max(1, quantity) } : item
       )
     );
   };
@@ -190,7 +235,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         notes: notes.trim() || undefined,
         items: selectedExportItems.map(item => ({
           product_id: item.product_id,
-          requested_quantity: item.requested_quantity,
+          requested_quantity: item.export_quantity,
           unit_price: item.unit_price
         }))
       };
@@ -253,7 +298,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
   const totalSelectedItems = selectedItems.filter(item => item.selected).length;
   const totalSelectedValue = selectedItems
     .filter(item => item.selected)
-    .reduce((sum, item) => sum + (item.requested_quantity * item.unit_price), 0);
+    .reduce((sum, item) => sum + (item.export_quantity * item.unit_price), 0);
   if (!canCreateExportSlip) {
     return (
       <Card>
@@ -347,38 +392,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
           </div>
         </div>
-        {/* Warehouse Selection */}
-        <div>
-          <Label htmlFor="warehouse-select">Chọn kho xuất hàng <span className="text-red-500">*</span></Label>
-          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-            <SelectTrigger>
-              <SelectValue placeholder="Chọn kho xuất hàng" />
-            </SelectTrigger>
-            <SelectContent>
-              {warehouses.map((warehouse) => (
-                <SelectItem key={warehouse.id} value={warehouse.id}>
-                  {warehouse.name} ({warehouse.code})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Supplier Selection */}
-        <div>
-          <Label htmlFor="supplier-select">Chọn nhà cung cấp <span className="text-red-500">*</span></Label>
-          <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-            <SelectTrigger>
-              <SelectValue placeholder="Chọn nhà cung cấp" />
-            </SelectTrigger>
-            <SelectContent>
-              {suppliers.map((supplier) => (
-                <SelectItem key={supplier.id} value={supplier.id}>
-                  {supplier.name} ({supplier.code})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         {/* Slip Code */}
         <div>
           <Label htmlFor="slip-code">Mã phiếu xuất kho <span className="text-red-500">*</span></Label>
@@ -416,14 +429,15 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                     />
                   </TableHead>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>Mã SP</TableHead>
-                  <TableHead className="text-right">SL đơn hàng</TableHead>
-                  <TableHead className="text-right">SL xuất kho</TableHead>
-                  <TableHead className="text-right">Đơn giá</TableHead>
-                  <TableHead className="text-right">Thành tiền</TableHead>
+                  <TableHead>Kho hàng</TableHead>
+                  <TableHead className="text-center">SL đơn hàng</TableHead>
+                  <TableHead className="text-center">SL đã xuất</TableHead>
+                  <TableHead className="text-center">SL xuất kho</TableHead>
+                  <TableHead className="text-center">Đơn giá</TableHead>
+                  <TableHead className="text-center">Thành tiền</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="text-center">
                 {selectedItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
@@ -434,16 +448,28 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                         }
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{item.product_name}</TableCell>
-                    <TableCell>{item.product_code}</TableCell>
+                    <TableCell className="font-medium text-center">
+                      <div className="space-y-1">
+                        <div className="font-medium">{item.product_code}</div>
+                        <div className="text-sm text-muted-foreground">{item.product_name}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">{item.warehouse_code}</div>
+                        <div className="text-sm text-muted-foreground">{item.warehouse_name}</div>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right text-blue-600 font-medium">
                       {item.requested_quantity}
                     </TableCell>
+                <TableCell className="text-right text-purple-600 font-medium">
+                  {item.exported_quantity}
+                </TableCell>
                     <TableCell className="text-right">
                       <NumberInput
                         min={1}
-                        max={item.requested_quantity}
-                        value={item.requested_quantity}
+                        value={item.export_quantity}
                         onChange={(value) => 
                           handleQuantityChange(item.id, value)
                         }
@@ -453,7 +479,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(item.requested_quantity * item.unit_price)}
+                      {formatCurrency(item.export_quantity * item.unit_price)}
                     </TableCell>
                   </TableRow>
                 ))}

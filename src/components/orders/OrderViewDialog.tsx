@@ -416,10 +416,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                         <div className="text-base">{formatDateTime(orderDetails.completed_at)}</div>
                       </div>
                     )}
-                    {orderDetails.contract_number && (
+                    {orderDetails.contract_code && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Số hợp đồng:</label>
-                        <div className="text-base">{orderDetails.contract_number}</div>
+                        <label className="text-sm font-medium text-muted-foreground">Mã hợp đồng:</label>
+                        <div className="text-base">{orderDetails.contract_code}</div>
                       </div>
                     )}
                     {orderDetails.purchase_order_number && (

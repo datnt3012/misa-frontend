@@ -573,7 +573,7 @@ function ExportSlipsContent() {
     // Validate all items have required fields
     const invalidItems = exportSlipForm.items.filter(item =>
       !item.product_id || !item.product_name || !item.product_code ||
-      !item.quantity
+      !item.quantity || item.warehouse_id
     );
     if (invalidItems.length > 0) {
       toast({

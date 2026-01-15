@@ -8,6 +8,9 @@ export interface AddressAdministrativeUnitRef {
   type?: string | null;
 }
 export interface AddressInfo {
+  wardName: string;
+  districtName: string;
+  provinceName: string;
   id?: string;
   entityType?: string;
   entityId?: string;
