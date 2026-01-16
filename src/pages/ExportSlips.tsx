@@ -113,11 +113,12 @@ function ExportSlipsContent() {
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('export-slips');
   const isClosingDialogRef = useRef(false);
   const canDirectExport = hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
+  const canApproveExports = hasPermission('WAREHOUSE_RECEIPTS_APPROVE');
   // Get available status options based on current status and role
   const getAvailableStatusOptions = (currentStatus: string) => {
     const options = [];
-    // Only show options that make sense for the current status
-    if (currentStatus === 'pending') {
+    // Show options for approved status (sau khi đã duyệt)
+    if (currentStatus === 'approved') {
       options.push({ 
         value: 'picked', 
         label: 'Đã lấy hàng', 
@@ -131,12 +132,6 @@ function ExportSlipsContent() {
           description: 'Xuất kho trực tiếp' 
         });
       }
-      // Hủy lấy hàng xuống cuối cùng
-      options.push({ 
-        value: 'cancelled', 
-        label: 'Hủy lấy hàng', 
-        description: 'Hủy phiếu xuất kho (chưa trừ tồn kho)' 
-      });
     } else if (currentStatus === 'picked') {
       options.push({ 
         value: 'exported', 
@@ -144,7 +139,7 @@ function ExportSlipsContent() {
         description: 'Xác nhận hàng đã rời khỏi kho' 
       });
     }
-    // No options for 'exported' or 'cancelled' status - they are final
+    // No options for 'pending', 'exported', 'rejected', or 'cancelled' status
     return options;
   };
   // Debounce search term
@@ -257,6 +252,8 @@ function ExportSlipsContent() {
           id: s.id || '',
           code: s.code || '',
           order_id: s.order_id || '',
+          warehouse_id: s.warehouse_id || undefined,
+          warehouse_name: s.warehouse_name || undefined,
           status: s.status || 'pending',
           notes: s.notes || undefined,
           approval_notes: s.approval_notes || undefined,
@@ -345,6 +342,42 @@ function ExportSlipsContent() {
     }
   };
 
+  // Approve export slip using warehouseReceiptsApi
+  const approveExportSlip = async (slipId: string) => {
+    try {
+      await warehouseReceiptsApi.approveReceipt(slipId);
+      toast({
+        title: "Thành công",
+        description: "Đã phê duyệt phiếu xuất kho",
+      });
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể phê duyệt phiếu xuất kho",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Reject export slip using warehouseReceiptsApi
+  const rejectExportSlip = async (slipId: string) => {
+    try {
+      await warehouseReceiptsApi.rejectReceipt(slipId);
+      toast({
+        title: "Thành công",
+        description: "Đã từ chối phiếu xuất kho",
+      });
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể từ chối phiếu xuất kho",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Handle status updates based on role permissions
   const handleStatusUpdate = async (slipId: string, newStatus: string, notes: string = '') => {
     try {
@@ -427,7 +460,11 @@ function ExportSlipsContent() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ</Badge>;
+        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
+      case 'approved':
+        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
+      case 'rejected':
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
       case 'picked':
         return <Badge variant="outline" className="text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
       case 'exported':
@@ -2356,26 +2393,27 @@ function ExportSlipsContent() {
                   </TableCell>
                   <TableCell className="text-center min-w-[180px]">
                     <div className="flex space-x-2 justify-center">
+                      {/* Chi tiết button - always show */}
                       <Dialog open={selectedSlip?.id === slip.id} onOpenChange={(open) => {
-                        if (open) {
-                          openDialog('view', slip.id);
-                          setSelectedSlip(slip);
-                          loadSlipDetail(slip.id);
-                        } else {
-                          isClosingDialogRef.current = true;
-                          closeDialog();
-                          setSelectedSlip(null);
-                          setSlipDetail(null);
-                          setTimeout(() => {
-                            isClosingDialogRef.current = false;
-                          }, 100);
-                        }
-                      }}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <FileText className="w-4 h-4" />
-                          </Button>
-                        </DialogTrigger>
+                          if (open) {
+                            openDialog('view', slip.id);
+                            setSelectedSlip(slip);
+                            loadSlipDetail(slip.id);
+                          } else {
+                            isClosingDialogRef.current = true;
+                            closeDialog();
+                            setSelectedSlip(null);
+                            setSlipDetail(null);
+                            setTimeout(() => {
+                              isClosingDialogRef.current = false;
+                            }, 100);
+                          }
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <FileText className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
                         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
@@ -2411,6 +2449,12 @@ function ExportSlipsContent() {
                                 <Label className="font-medium">Trạng thái:</Label>
                                   <div className="text-sm">{getStatusBadge(slipDetail?.status || slip.status)}</div>
                               </div>
+                              {(slipDetail?.warehouse_name || slip.warehouse_name) && (
+                                <div>
+                                  <Label className="font-medium">Kho xuất:</Label>
+                                  <p className="text-sm">{slipDetail?.warehouse_name || slip.warehouse_name}</p>
+                                </div>
+                              )}
                                 {(slipDetail?.order?.customer_address || slip.order?.customer_address) && (
                                 <div className="col-span-2">
                                   <Label className="font-medium">Địa chỉ giao hàng:</Label>
@@ -2543,8 +2587,31 @@ function ExportSlipsContent() {
                           )}
                         </DialogContent>
                       </Dialog>
-                      {/* Status Update Dropdown - Only show when status can be updated */}
-                      {getAvailableStatusOptions(slip.status).length > 0 && (
+                      {/* Approval buttons - Only show when status is pending and user has permission */}
+                      {canApproveExports && slip.status === 'pending' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => approveExportSlip(slip.id)}
+                            className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+                          >
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Duyệt
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => rejectExportSlip(slip.id)}
+                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Từ chối
+                          </Button>
+                        </>
+                      )}
+                      {/* Status Update Dropdown - Only show when status is approved or picked */}
+                      {getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
                         <Select onValueChange={(newStatus) => {
                           handleStatusUpdateWithSelection(slip.id, newStatus, '');
                         }}>

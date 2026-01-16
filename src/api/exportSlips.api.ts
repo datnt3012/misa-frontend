@@ -14,7 +14,9 @@ export interface ExportSlip {
   id: string;
   code: string; // slip number
   order_id: string;
-  status: 'pending' | 'picked' | 'exported' | 'cancelled'; // New status values including cancelled
+  warehouse_id?: string;
+  warehouse_name?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'picked' | 'exported' | 'cancelled'; // Status values including approved/rejected
   notes?: string;
   approval_notes?: string;
   export_notes?: string;
@@ -93,6 +95,8 @@ const normalize = (row: any): ExportSlip => {
     id: row.id || '',
     code: row.code ?? row.slip_number ?? '',
     order_id: row.orderId ?? row.order_id ?? '',
+    warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? undefined,
+    warehouse_name: row.warehouse?.name ?? row.warehouseName ?? row.warehouse_name ?? undefined,
     status: row.status ?? 'pending',
     notes: row.description ?? row.notes ?? undefined,
     approval_notes: row.approval_notes ?? row.approvalNotes ?? undefined,
@@ -267,6 +271,13 @@ export const exportSlipsApi = {
     // Update status to approved
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.APPROVE(id), { 
       approvalNotes: approval_notes
+    });
+  },
+  rejectSlip: async (id: string, notes?: string): Promise<{ message: string }> => {
+    // Update status to rejected
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
+      status: 'rejected',
+      description: notes
     });
   },
   completeSlip: async (id: string, export_notes?: string): Promise<{ message: string }> => {
