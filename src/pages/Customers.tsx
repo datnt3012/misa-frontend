@@ -552,7 +552,7 @@ const CustomersContent = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
