@@ -292,6 +292,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           aValue = a.categoryName || '';
           bValue = b.categoryName || '';
           break;
+        case 'manufacturer':
+          aValue = a.manufacturer || '';
+          bValue = b.manufacturer || '';
+          break;
         case 'current_stock':
           aValue = a.current_stock;
           bValue = b.current_stock;
@@ -418,6 +422,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         'Mã sản phẩm': product.code,
         'Tên sản phẩm': product.name,
         'Loại': product.categoryName || '',
+        'Hãng sản xuất': product.manufacturer || '',
         'Tồn kho': product.current_stock,
         'Đơn vị': product.unit || 'cái',
         'Giá bán': product.price || 0,
@@ -601,6 +606,15 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                 </TableHead>
                 <TableHead 
                   className="cursor-pointer hover:bg-muted/50 select-none text-center"
+                  onClick={() => handleSort('manufacturer')}
+                >
+                  <div className="flex items-center">
+                    Hãng sản xuất
+                    {getSortIcon('manufacturer')}
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50 select-none text-center"
                   onClick={() => handleSort('current_stock')}
                 >
                   <div className="flex items-center">
@@ -671,6 +685,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
                     <TableCell className="text-center">{product.categoryName || '-'}</TableCell>
+                    <TableCell className="text-center">{product.manufacturer || '-'}</TableCell>
                     <TableCell className="text-center">
                       <span className={`font-medium ${
                         product.current_stock === 0 ? 'text-red-600' : 

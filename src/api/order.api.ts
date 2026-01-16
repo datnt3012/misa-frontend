@@ -1,12 +1,13 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 export interface OrderItem {
+  warehouse_id: any;
   id: string;
   order_id: string;
   product_id: string;
   product_name: string;
   product_code: string;
-  warehouse_id?: string;
+  manufacturer: string;
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -52,7 +53,7 @@ export interface Order {
   vat_type?: string;
   vat_rate?: number;
   vat_amount?: number;
-  contract_number?: string;
+  contract_code?: string;
   contract_url?: string;
   purchase_order_number?: string;
   created_by: string;
@@ -170,7 +171,7 @@ export interface CreateOrderRequest {
   description?: string;
   tags?: string[];
   isDeleted?: boolean;
-  contractNumber?: string;
+  contractCode?: string;
   purchaseOrderNumber?: string;
 }
 export interface UpdateOrderRequest {
@@ -195,7 +196,7 @@ export interface UpdateOrderRequest {
   debt_amount?: number;
   debt_date?: string;
   note?: string;
-  contract_number?: string;
+  contract_code?: string;
   purchase_order_number?: string;
   tags?: string[];
   // VAT company information
@@ -328,6 +329,7 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      manufacturer: it.product?.manufacturer ?? it.manufacturer ?? undefined,
       // category helpers for dashboard aggregations
       category_id: it.product?.category ?? undefined,
       quantity: Number(it.quantity ?? 0),
@@ -422,7 +424,7 @@ export const orderApi = {
         const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
         return isNaN(numValue) ? undefined : numValue;
       })(),
-      contract_number: row.contract_number ?? row.contractNumber ?? undefined,
+      contract_code: row.contract_code ?? row.contractCode ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
@@ -502,10 +504,10 @@ export const orderApi = {
     const normalizeItem = (it: any) => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
+      contract_code: it.contract_code ?? it.contractCode ?? '',
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-      warehouse_id: it.warehouse?.id ?? it.warehouseId ?? it.warehouse_id ?? undefined,
       category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
       category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
       quantity: Number(it.quantity ?? 0),
@@ -599,7 +601,7 @@ export const orderApi = {
         const numValue = typeof vatAmountValue === 'string' ? parseFloat(vatAmountValue) : Number(vatAmountValue);
         return isNaN(numValue) ? undefined : numValue;
       })(),
-      contract_number: row.contract_number ?? row.contractNumber ?? undefined,
+      contract_code: row.contract_code ?? row.contractCode ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
@@ -715,7 +717,7 @@ export const orderApi = {
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? row.description ?? '',
-      contract_number: row.contract_number ?? row.contractNumber ?? undefined,
+      contract_code: row.contract_code ?? row.contractCode ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
       created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
@@ -788,6 +790,7 @@ export const orderApi = {
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+      manufacturer: it.product?.manufacturer ?? it.manufacturer ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
@@ -841,6 +844,8 @@ export const orderApi = {
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
       notes: row.notes ?? row.note ?? '',
+      contract_code: row.contract_code ?? row.contractCode ?? undefined,
+      purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
       deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,

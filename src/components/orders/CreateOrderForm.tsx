@@ -39,7 +39,6 @@ interface OrderItem {
   vat_rate: number;
   vat_amount: number;
   warehouse_id: string;
-  current_stock?: number;
 }
 interface OrderFormState {
   customer_id: string;
@@ -49,7 +48,7 @@ interface OrderFormState {
   customer_email: string;
   order_type: string;
   notes: string;
-  contract_number: string;
+  contract_code: string;
   purchase_order_number: string;
   vat_tax_code: string;
   vat_company_name: string;
@@ -137,7 +136,7 @@ const createInitialOrderState = (): OrderFormState => ({
   // Removed customer address fields from UI; will derive from selected customer
   order_type: "sale",
   notes: "",
-  contract_number: "",
+  contract_code: "",
   purchase_order_number: "",
   // VAT Information (for invoice)
   vat_tax_code: "",
@@ -352,21 +351,13 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
     if (!productId || !warehouseId) return;
     try {
-      const stockLevels = await stockLevelsApi.getStockLevels({
-        productId,
-        warehouseId,
-        limit: 1
-      });
-      const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
       setNewOrder(prev => {
         const items = [...prev.items];
-        items[index].current_stock = currentStock;
         return { ...prev, items };
       });
     } catch (error) {
       setNewOrder(prev => {
         const items = [...prev.items];
-        items[index].current_stock = 0;
         return { ...prev, items };
       });
     }
@@ -438,7 +429,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     // Validate all items have required fields
     const invalidItems = newOrder.items.filter(item => 
       !item.product_id || !item.product_name || !item.product_code || 
-      !item.quantity || !item.unit_price || !item.warehouse_id
+      !item.quantity || item.unit_price == undefined
     );
     if (invalidItems.length > 0) {
       toast({
@@ -471,15 +462,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       toast({
         title: "Lỗi",
         description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
-        variant: "destructive",
-      });
-      return;
-    }
-    // Validate warehouse selection for order
-    if (!newOrder.order_warehouse_id) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng chọn kho xuất hàng cho đơn",
         variant: "destructive",
       });
       return;
@@ -567,8 +549,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         customerEmail: newOrder.customer_email || selectedCustomer?.email || undefined,
         customerAddress: selectedCustomer?.address || undefined,
         customerAddressInfo: customerAddressInfo,
-        code: newOrder.contract_number || undefined,
-        contractNumber: newOrder.contract_number || undefined,
+        code: newOrder.contract_code || undefined,
+        contractCode: newOrder.contract_code || undefined,
         purchaseOrderNumber: newOrder.purchase_order_number || undefined,
         note: newOrder.notes || undefined,
         status: 'new',
@@ -694,10 +676,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="customer">Khách hàng <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="customer">Khách hàng</Label>
                   <Combobox
                     options={[
-                      { label: "+ Khách hàng mới", value: "__new__" },
+                      { label: "Chọn khách hàng cũ", value: "__new__" },
                       ...customers.map(customer => ({
                         label: `${customer.name} (${customer.customer_code})`,
                         value: customer.id
@@ -746,7 +728,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="customer_phone">Số điện thoại</Label>
+                  <Label htmlFor="customer_phone">Số điện thoại <span className="text-red-500">*</span></Label>
                   <Input
                     id="customer_phone"
                     value={newOrder.customer_phone}
@@ -766,6 +748,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </div>
               </div>
               {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
+            </CardContent>
+          </Card>
+          {/* Contract Infomation */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin hợp đồng</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="contract_code">Mã hợp đồng</Label>
+                  <Input
+                    id="contract_code"
+                    value={newOrder.contract_code}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, contract_code: e.target.value }))}
+                    placeholder="Nhập mã hợp đồng"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
           {/* VAT Information */}
@@ -893,40 +894,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="max-w-xs">
-                <Label>
-                  Kho xuất hàng <span className="text-red-500">*</span>
-                </Label>
-                <Combobox
-                  options={warehouses.map(warehouse => ({
-                    label: `${warehouse.name} (${warehouse.code})`,
-                    value: warehouse.id
-                  }))}
-                  value={newOrder.order_warehouse_id}
-                  onValueChange={(value) => {
-                    setNewOrder((prev) => {
-                      const updatedItems = prev.items.map((it) => ({
-                        ...it,
-                        warehouse_id: value,
-                      }));
-                      // Gọi lại API tồn kho cho từng sản phẩm với kho mới
-                      updatedItems.forEach((it, index) => {
-                        if (it.product_id) {
-                          fetchStockLevel(index, it.product_id, value);
-                        }
-                      });
-                      return {
-                        ...prev,
-                        order_warehouse_id: value,
-                        items: updatedItems,
-                      };
-                    });
-                  }}
-                  placeholder="Chọn kho xuất hàng"
-                  searchPlaceholder="Tìm kho..."
-                  emptyMessage="Không có kho nào"
-                />
-              </div>
               <Table className="border border-border/30 rounded-lg overflow-hidden">
                 <TableHeader>
                   <TableRow className="bg-slate-50 border-b-2 border-slate-200">
@@ -982,22 +949,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             min={1}
                             className="w-20"
                           />
-                          {item.current_stock !== undefined && (
-                            <div className="text-xs">
-                              <span
-                                className={`${
-                                  item.quantity > item.current_stock
-                                    ? "text-red-600"
-                                    : "text-gray-600"
-                                }`}
-                              >
-                                Tồn kho: {item.current_stock}
-                              </span>
-                              {item.quantity > item.current_stock && (
-                                <span className="text-red-500 ml-1">⚠️</span>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-4">

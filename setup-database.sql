@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   debt_amount NUMERIC NOT NULL DEFAULT 0,
   debt_date DATE,
   notes TEXT,
-  contract_number TEXT,
+  contract_code TEXT,
   contract_url TEXT,
   purchase_order_number TEXT,
   vat_type TEXT DEFAULT 'none',

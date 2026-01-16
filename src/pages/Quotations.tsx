@@ -884,15 +884,19 @@ const QuotationsContent: React.FC = () => {
                   <div>{getStatusBadge(selectedQuotation.status)}</div>
                 </div>
                 <div>
+                  <label className="text-sm font-medium">Mã hợp đồng</label>
+                  <div className="text-sm">{selectedQuotation.contract_code || ''}</div>
+                </div>
+                <div>
                   <label className="text-sm font-medium">Khách hàng</label>
-                  <div className="text-sm">{selectedQuotation.customer_name || 'N/A'}</div>
+                  <div className="text-sm">{selectedQuotation.customer_name || ''}</div>
                   {selectedQuotation.customer_phone && (
                     <div className="text-xs text-muted-foreground">{selectedQuotation.customer_phone}</div>
                   )}
                 </div>
                 <div>
                   <label className="text-sm font-medium">Người tạo</label>
-                  <div className="text-sm"><CreatorDisplay createdBy={selectedQuotation.creator?.id} creatorInfo={selectedQuotation.creator} /></div>
+                  <div className="text-sm flex justify-start"><CreatorDisplay createdBy={selectedQuotation.creator?.id} creatorInfo={selectedQuotation.creator} /></div>
                 </div>
                 <div className="col-span-2">
                   <label className="text-sm font-medium">Ghi chú</label>

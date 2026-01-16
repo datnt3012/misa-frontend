@@ -14,7 +14,9 @@ export interface ExportSlip {
   id: string;
   code: string; // slip number
   order_id: string;
-  status: 'pending' | 'picked' | 'exported' | 'cancelled'; // New status values including cancelled
+  warehouse_id?: string;
+  warehouse_name?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'picked' | 'exported' | 'cancelled'; // Status values including approved/rejected
   notes?: string;
   approval_notes?: string;
   export_notes?: string;
@@ -29,6 +31,7 @@ export interface ExportSlip {
   export_slip_items?: ExportSlipItem[];
   order?: {
     order_number: string;
+    contract_code: string;
     customer_name: string;
     customer_address?: string;
     customer_phone?: string;
@@ -65,21 +68,35 @@ export interface ExportSlip {
     full_name: string;
   };
 }
-const normalizeItem = (it: any): ExportSlipItem => ({
-  id: it.id || '',
-  product_id: it.productId ?? it.product_id ?? '',
-  product_name: it.productName ?? it.product_name ?? '',
-  product_code: it.productCode ?? it.product_code ?? '',
-  requested_quantity: Number(it.requestedQuantity ?? it.requested_quantity ?? 0),
-  actual_quantity: Number(it.actualQuantity ?? it.actual_quantity ?? 0),
-  remaining_quantity: Number(it.remainingQuantity ?? it.remaining_quantity ?? 0),
-  unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-});
+const normalizeItem = (it: any): ExportSlipItem => {
+  // Thử nhiều cách để lấy product_id
+  const productId = it.productId 
+    ?? it.product_id 
+    ?? it.product?.id 
+    ?? '';
+  
+  if (!productId) {
+    console.warn('Export slip item missing product_id:', it);
+  }
+  
+  return {
+    id: it.id || '',
+    product_id: productId,
+    product_name: it.productName ?? it.product_name ?? it.product?.name ?? '',
+    product_code: it.productCode ?? it.product_code ?? it.product?.code ?? '',
+    requested_quantity: Number(it.requestedQuantity ?? it.requested_quantity ?? 0),
+    actual_quantity: Number(it.actualQuantity ?? it.actual_quantity ?? 0),
+    remaining_quantity: Number(it.remainingQuantity ?? it.remaining_quantity ?? 0),
+    unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+  };
+};
 const normalize = (row: any): ExportSlip => {
   return {
     id: row.id || '',
     code: row.code ?? row.slip_number ?? '',
     order_id: row.orderId ?? row.order_id ?? '',
+    warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? undefined,
+    warehouse_name: row.warehouse?.name ?? row.warehouseName ?? row.warehouse_name ?? undefined,
     status: row.status ?? 'pending',
     notes: row.description ?? row.notes ?? undefined,
     approval_notes: row.approval_notes ?? row.approvalNotes ?? undefined,
@@ -93,21 +110,35 @@ const normalize = (row: any): ExportSlip => {
     picked_by: row.picked_by ?? row.pickedBy ?? undefined,
     exported_by: row.exported_by ?? row.exportedBy ?? undefined,
     export_slip_items: Array.isArray(row.details)
-      ? row.details.map((detail: any) => ({
-          id: detail.id || '',
-          product_id: detail.productId ?? detail.product_id ?? '',
-          product_name: detail.product?.name ?? detail.product_name ?? '',
-          product_code: detail.product?.code ?? detail.product_code ?? '',
-          requested_quantity: Number(detail.quantity ?? 0),
-          actual_quantity: Number(detail.quantity ?? 0), // Same as requested for now
-          remaining_quantity: 0, // Not available in warehouse receipts
-          unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
-        }))
+      ? row.details.map((detail: any) => {
+          // Thử nhiều cách để lấy product_id
+          const productId = detail.productId 
+            ?? detail.product_id 
+            ?? detail.product?.id 
+            ?? detail.productId 
+            ?? '';
+          
+          if (!productId) {
+            console.warn('Export slip detail missing product_id:', detail);
+          }
+          
+          return {
+            id: detail.id || '',
+            product_id: productId,
+            product_name: detail.product?.name ?? detail.product_name ?? '',
+            product_code: detail.product?.code ?? detail.product_code ?? '',
+            requested_quantity: Number(detail.quantity ?? 0),
+            actual_quantity: Number(detail.quantity ?? 0), // Same as requested for now
+            remaining_quantity: 0, // Not available in warehouse receipts
+            unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
+          };
+        })
       : Array.isArray(row.export_slip_items)
         ? row.export_slip_items.map(normalizeItem)
         : [],
     order: row.order ? {
       order_number: row.order.order_number ?? row.order.orderNumber ?? '',
+      contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
       customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
       customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
       customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
@@ -153,6 +184,7 @@ export interface CreateExportSlipRequest {
     product_id: string;
     requested_quantity: number;
     unit_price: number;
+    warehouse_id?: string;
   }>;
 }
 export const exportSlipsApi = {
@@ -169,18 +201,20 @@ export const exportSlipsApi = {
       details: data.items.map(item => ({
         productId: item.product_id,
         quantity: item.requested_quantity,
-        unitPrice: item.unit_price.toString()
+        unitPrice: item.unit_price.toString(),
+        warehouseId: item.warehouse_id || data.warehouse_id // Use item warehouse_id if available, fallback to main warehouse_id
       }))
     };
     const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, slipData);
     return normalize(response.data || response);
   },
-  getSlips: async (params?: { page?: number; limit?: number; status?: string; search?: string }): Promise<{ slips: ExportSlip[]; total: number; page: number; limit: number }> => {
+  getSlips: async (params?: { page?: number; limit?: number; status?: string; search?: string; orderId?: string }): Promise<{ slips: ExportSlip[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
     if (params?.status) queryParams.append('status', params.status);
     if (params?.search) queryParams.append('keyword', params.search);
+    if (params?.orderId) queryParams.append('orderId', params.orderId);
     queryParams.append('type', 'export'); // Filter for export type only
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`;
     const response = await api.get<any>(url);
@@ -237,6 +271,13 @@ export const exportSlipsApi = {
     // Update status to approved
     return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.APPROVE(id), { 
       approvalNotes: approval_notes
+    });
+  },
+  rejectSlip: async (id: string, notes?: string): Promise<{ message: string }> => {
+    // Update status to rejected
+    return api.patch<{ message: string }>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), { 
+      status: 'rejected',
+      description: notes
     });
   },
   completeSlip: async (id: string, export_notes?: string): Promise<{ message: string }> => {
