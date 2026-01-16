@@ -81,8 +81,15 @@ function ExportSlipsContent() {
   const pollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const previousJobStatusesRef = React.useRef<Record<string, WarehouseReceiptImportJobStatus>>({});
   const [isPollingActive, setIsPollingActive] = useState(false);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   // Export slip form state
+  const generateSlipCode = () => {
+    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `EXP${timestamp}${random}`;
+  };
   const [exportSlipForm, setExportSlipForm] = useState({
+    code: generateSlipCode(),
     order_id: '',
     customer_id: '',
     customer_name: '',
@@ -97,7 +104,6 @@ function ExportSlipsContent() {
       quantity: number;
       unit_price: number;
       total_price: number;
-      warehouse_id: string;
       current_stock?: number;
     }>,
     expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
@@ -204,10 +210,14 @@ function ExportSlipsContent() {
       });
     }
   }, [jobStatusTab, jobHistorySort, jobHistoryPage, jobHistoryItemsPerPage]);
-  // Load data when create dialog opens
+  // Load data when create dialog opens and generate slip code
   useEffect(() => {
     if (showCreateDialog) {
       loadOrders();
+      // Generate new slip code when opening dialog
+      if (!exportSlipForm.code || exportSlipForm.code.trim() === '') {
+        setExportSlipForm(prev => ({ ...prev, code: generateSlipCode() }));
+      }
     }
   }, [showCreateDialog]);
   const fetchExportSlips = async () => {
@@ -498,8 +508,7 @@ function ExportSlipsContent() {
         product_name: '',
         quantity: 1,
         unit_price: 0,
-        total_price: 0,
-        warehouse_id: ''
+        total_price: 0
       }]
     }));
   };
@@ -526,14 +535,13 @@ function ExportSlipsContent() {
         const subtotal = items[index].quantity * items[index].unit_price;
         items[index].total_price = subtotal;
       }
-      // Fetch stock level when product or warehouse changes
-      if (field === 'product_id' || field === 'warehouse_id') {
-        const productId = field === 'product_id' ? value : items[index].product_id;
-        const warehouseId = field === 'warehouse_id' ? value : items[index].warehouse_id;
-        if (productId && warehouseId) {
-          fetchStockLevel(index, productId, warehouseId);
+      // Fetch stock level when product changes (warehouse is selected globally)
+      if (field === 'product_id') {
+        const productId = value;
+        if (productId && selectedWarehouse) {
+          fetchStockLevel(index, productId, selectedWarehouse);
         } else {
-          // Clear stock if product or warehouse is cleared
+          // Clear stock if product is cleared
           items[index].current_stock = undefined;
         }
       }
@@ -562,6 +570,24 @@ function ExportSlipsContent() {
       });
     }
   };
+  
+  // Fetch stock levels for all items when warehouse changes
+  useEffect(() => {
+    if (selectedWarehouse) {
+      exportSlipForm.items.forEach((item, index) => {
+        if (item.product_id) {
+          void fetchStockLevel(index, item.product_id, selectedWarehouse);
+        }
+      });
+    } else {
+      // Clear stock levels when warehouse is cleared
+      setExportSlipForm(prev => ({
+        ...prev,
+        items: prev.items.map(item => ({ ...item, current_stock: undefined }))
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWarehouse]);
   const addExpense = () => {
     setExportSlipForm(prev => ({
       ...prev,
@@ -613,37 +639,41 @@ function ExportSlipsContent() {
       });
       return;
     }
+    // Validate warehouse is selected
+    if (!selectedWarehouse) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng chọn kho xuất hàng",
+        variant: "destructive",
+      });
+      return;
+    }
     // Validate all items have required fields
     const invalidItems = exportSlipForm.items.filter(item =>
-      !item.product_id || !item.product_name || !item.product_code ||
-      !item.quantity || !item.warehouse_id
+      !item.product_id || !item.product_name || !item.product_code || !item.quantity
     );
     if (invalidItems.length > 0) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho cho từng sản phẩm",
+        description: "Vui lòng điền đầy đủ thông tin sản phẩm",
         variant: "destructive",
       });
       return;
     }
     setLoading(true);
     try {
-      // Generate a unique code for the export slip
-      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      const code = `EXP${timestamp}${random}`;
-      // Prepare items with warehouse_id for each item
+      // Generate code if not provided or use provided code
+      const code = exportSlipForm.code?.trim() || generateSlipCode();
+      // Prepare items with warehouse_id for each item (using selected warehouse)
       const items = exportSlipForm.items.map(item => ({
         product_id: item.product_id,
         requested_quantity: item.quantity,
         unit_price: item.unit_price,
-        warehouse_id: item.warehouse_id
+        warehouse_id: selectedWarehouse // Use the selected warehouse for all items
       }));
-      // Get the first warehouse_id as default (for backward compatibility with API)
-      const defaultWarehouseId = exportSlipForm.items.length > 0 ? exportSlipForm.items[0].warehouse_id : '';
       const response = await exportSlipsApi.createSlip({
         order_id: exportSlipForm.order_id || undefined, // Optional order ID
-        warehouse_id: defaultWarehouseId, // Default warehouse (may not be used if API supports per-item warehouse)
+        warehouse_id: selectedWarehouse, // Use selected warehouse
         supplier_id: '', // Not needed for export slips
         code: code,
         notes: exportSlipForm.notes,
@@ -660,6 +690,7 @@ function ExportSlipsContent() {
         isClosingDialogRef.current = false;
       }, 100);
       setExportSlipForm({
+        code: generateSlipCode(),
         order_id: '',
         customer_id: '',
         customer_name: '',
@@ -670,6 +701,7 @@ function ExportSlipsContent() {
         items: [],
         expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
       });
+      setSelectedWarehouse('');
       setSelectedOrderForAllocation(null);
       setExportedQuantityByProduct({});
       fetchExportSlips();
@@ -1226,6 +1258,24 @@ function ExportSlipsContent() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-6">
+                    {/* Slip Code */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Mã phiếu xuất kho</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Input
+                          id="slip-code"
+                          value={exportSlipForm.code}
+                          onChange={(e) => setExportSlipForm(prev => ({ ...prev, code: e.target.value }))}
+                          placeholder="Nhập mã phiếu xuất kho (3-20 ký tự)"
+                          maxLength={20}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Mã phiếu phải từ 3-20 ký tự
+                        </p>
+                      </CardContent>
+                    </Card>
                     {/* Order Selection (Optional) */}
                     <Card>
                       <CardHeader>
@@ -1465,6 +1515,29 @@ function ExportSlipsContent() {
                         </div>
                       </div>
                     )}
+                    {/* Warehouse Selection */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Kho hàng <span className="text-red-500">*</span></CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Combobox
+                          options={[
+                            { label: "Chọn kho", value: "" },
+                            ...warehouses.map((warehouse) => ({
+                              label: `${warehouse.name} (${warehouse.code})`,
+                              value: warehouse.id
+                            }))
+                          ]}
+                          value={selectedWarehouse}
+                          onValueChange={(value) => setSelectedWarehouse(value)}
+                          placeholder="Chọn kho xuất hàng"
+                          searchPlaceholder="Tìm kho..."
+                          emptyMessage="Không có kho nào"
+                          className="w-full"
+                        />
+                      </CardContent>
+                    </Card>
                     {/* Products */}
                     <Card>
                       <CardHeader>
@@ -1482,9 +1555,6 @@ function ExportSlipsContent() {
                             <TableRow className="bg-slate-50 border-b-2 border-slate-200">
                               <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                                 Sản phẩm <span className="text-red-500">*</span>
-                              </TableHead>
-                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                                Kho hàng <span className="text-red-500">*</span>
                               </TableHead>
                               <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                                 Số lượng <span className="text-red-500">*</span>
@@ -1505,37 +1575,20 @@ function ExportSlipsContent() {
                                 className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                               >
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
-                                  <Combobox
-                                    options={getAvailableProductsForRow(index).map((product) => ({
-                                      label: `${product.name} (${product.code})`,
-                                      value: product.id
-                                    }))}
-                                    value={item.product_id}
-                                    onValueChange={(value) => updateItem(index, "product_id", value)}
-                                    placeholder="Chọn sản phẩm"
-                                    searchPlaceholder="Tìm sản phẩm..."
-                                    emptyMessage={getAvailableProductsForRow(index).length === 0 ? "Không còn sản phẩm nào để chọn" : "Không có sản phẩm nào"}
-                                    className="w-[200px]"
-                                  />
-                                </TableCell>
-                                <TableCell className="border-r border-slate-100 align-top pt-4">
                                   <div className="space-y-1">
                                     <Combobox
-                                      options={[
-                                        { label: "Chọn kho", value: "" },
-                                        ...warehouses.map((warehouse) => ({
-                                          label: `${warehouse.name} (${warehouse.code})`,
-                                          value: warehouse.id
-                                        }))
-                                      ]}
-                                      value={item.warehouse_id}
-                                      onValueChange={(value) => updateItem(index, "warehouse_id", value)}
-                                      placeholder="Chọn kho"
-                                      searchPlaceholder="Tìm kho..."
-                                      emptyMessage="Không có kho nào"
+                                      options={getAvailableProductsForRow(index).map((product) => ({
+                                        label: `${product.name} (${product.code})`,
+                                        value: product.id
+                                      }))}
+                                      value={item.product_id}
+                                      onValueChange={(value) => updateItem(index, "product_id", value)}
+                                      placeholder="Chọn sản phẩm"
+                                      searchPlaceholder="Tìm sản phẩm..."
+                                      emptyMessage={getAvailableProductsForRow(index).length === 0 ? "Không còn sản phẩm nào để chọn" : "Không có sản phẩm nào"}
                                       className="w-[200px]"
                                     />
-                                    {item.current_stock !== undefined && (
+                                    {item.current_stock !== undefined && selectedWarehouse && (
                                       <div className="text-xs mt-1">
                                         {item.current_stock === 0 ? (
                                           <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
