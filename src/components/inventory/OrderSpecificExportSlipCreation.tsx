@@ -138,7 +138,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       setSelectedItems(
         (orderData.items || []).map(item => ({
           id: item.id,
-          warehouse_id: item.warehouse_id,
+          warehouse_id: '', // Không đặt mặc định, người dùng phải tự chọn
           product_id: item.product_id,
           product_name: item.product_name,
           product_code: item.product_code,
@@ -255,24 +255,33 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
-    // Chỉ lấy các sản phẩm đã được chọn và có số lượng > 0
-    const selectedExportItems = selectedItems.filter(item => item.selected && item.export_quantity > 0);
+    // CHỈ lấy các sản phẩm đã được TÍCH CHỌN (checkbox checked) và có số lượng > 0
+    // Sản phẩm không được tích chọn sẽ KHÔNG được đưa vào request body, kể cả khi đã điền đầy đủ thông tin
+    const selectedExportItems = selectedItems.filter(item => {
+      // Chỉ lấy những item có selected === true (đã tích checkbox)
+      return item.selected === true && item.export_quantity > 0;
+    });
+    
     if (selectedExportItems.length === 0) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng chọn ít nhất một sản phẩm với số lượng > 0 để xuất kho",
+        description: "Vui lòng tích chọn ít nhất một sản phẩm với số lượng > 0 để xuất kho",
         variant: "destructive",
       });
       return;
     }
-    if (!selectedWarehouse) {
+    
+    // Validate warehouse_id for each selected item
+    const itemsWithoutWarehouse = selectedExportItems.filter(item => !item.warehouse_id || item.warehouse_id.trim() === '');
+    if (itemsWithoutWarehouse.length > 0) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng chọn kho xuất hàng",
+        description: "Vui lòng chọn kho cho tất cả các sản phẩm đã chọn",
         variant: "destructive",
       });
       return;
     }
+    
     if (!selectedSupplier) {
       toast({
         title: "Lỗi",
@@ -281,6 +290,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
+    
     if (!slipCode || slipCode.length < 3 || slipCode.length > 20) {
       toast({
         title: "Lỗi",
@@ -289,18 +299,24 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       });
       return;
     }
+    
     try {
       setLoading(true);
+      // Use first item's warehouse_id as default warehouse_id, or fallback to selectedWarehouse
+      const defaultWarehouseId = selectedExportItems[0]?.warehouse_id || selectedWarehouse;
+      
+      // Chỉ map những sản phẩm đã được tích chọn vào request body
       const createRequest: CreateExportSlipRequest = {
         order_id: order.id,
-        warehouse_id: selectedWarehouse,
+        warehouse_id: defaultWarehouseId,
         supplier_id: selectedSupplier,
         code: slipCode,
         notes: notes.trim() || undefined,
         items: selectedExportItems.map(item => ({
           product_id: item.product_id,
           requested_quantity: item.export_quantity,
-          unit_price: item.unit_price
+          unit_price: item.unit_price,
+          warehouse_id: item.warehouse_id // Send warehouse_id for each item
         }))
       };
       const result = await exportSlipsApi.createSlip(createRequest);
