@@ -651,7 +651,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                                     className="w-full"
                                   />
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="flex justify-center">
                                   <NumberInput
                                     min={1}
                                     value={item.quantity}
@@ -660,7 +660,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                                     disabled={!item.product_id}
                                   />
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-center">
                                   {selectedOrderItem ? (
                                     <div className="space-y-1">
                                       <div className="text-sm font-medium text-blue-600">
