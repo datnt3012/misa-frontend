@@ -123,9 +123,6 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             });
           }
         });
-        
-        console.log('All slips:', allSlips);
-        console.log('Calculated exportedQuantityByProduct:', exportedQuantityByProduct);
       } catch (e) {
         // Nếu có lỗi khi lấy phiếu xuất kho thì bỏ qua, không chặn luồng tạo phiếu
         console.error("Failed to load export slips for order", e);

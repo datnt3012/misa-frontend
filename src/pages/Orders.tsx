@@ -1036,7 +1036,6 @@ const OrdersContent: React.FC = () => {
                           {/* Manufacturer Column */}
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
-                              {console.log(order.items)}
                               {order.items?.map((item: any, index: number) => (
                                 <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                   <div className="font-medium text-slate-900 truncate w-full" title={item.manufacturer || '-'}>{item.manufacturer || '-'}</div>

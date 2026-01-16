@@ -217,23 +217,30 @@ function ExportSlipsContent() {
         limit: displayLimit,
         search: debouncedSearchTerm || undefined
       });
-      // If order data is missing, we'll need to fetch it separately
+      // If order data is missing or incomplete, we'll need to fetch it separately
+      // Sử dụng getOrderIncludeDeleted theo ID để không phụ thuộc vào pagination
       const slips = await Promise.all((resp.slips || []).map(async (s) => {
         let orderData = s.order;
-        // If order data is missing but we have order_id, try to fetch it
-        if (!orderData && s.order_id) {
+        // Nếu thiếu order data hoặc thiếu contract_code, fetch lại từ API theo ID
+        // Việc fetch theo ID đảm bảo luôn lấy được dữ liệu, không phụ thuộc vào pagination
+        if (s.order_id && (!orderData || !orderData.contract_code)) {
           try {
             const orderResponse = await orderApi.getOrderIncludeDeleted(s.order_id);
+            // Merge dữ liệu: ưu tiên dữ liệu mới từ API, fallback về dữ liệu cũ nếu có
             orderData = {
-              order_number: orderResponse.order_number,
-              customer_name: orderResponse.customer_name || 'Không xác định',
-              customer_address: orderResponse.customer_address,
-              customer_phone: orderResponse.customer_phone,
-              customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo,
-              total_amount: orderResponse.total_amount,
-              order_items: orderResponse.order_items
+              order_number: orderResponse.order_number || orderData?.order_number || '',
+              contract_code: orderResponse.contract_code || orderData?.contract_code || undefined,
+              customer_name: orderResponse.customer_name || orderData?.customer_name || 'Không xác định',
+              customer_address: orderResponse.customer_address || orderData?.customer_address || undefined,
+              customer_phone: orderResponse.customer_phone || orderData?.customer_phone || undefined,
+              customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo || orderData?.customer_addressInfo || undefined,
+              total_amount: orderResponse.total_amount || orderData?.total_amount || 0,
+              order_items: orderResponse.order_items || orderData?.order_items || undefined
             };
           } catch (error) {
+            // Nếu fetch thất bại, vẫn giữ nguyên dữ liệu hiện có (nếu có)
+            // Không throw error để không block việc hiển thị danh sách phiếu xuất kho
+            console.warn(`Failed to fetch order details for order_id: ${s.order_id}`, error);
           }
         }
         return {
@@ -249,6 +256,7 @@ function ExportSlipsContent() {
           approved_by: s.approved_by || undefined,
           order: orderData ? {
             order_number: orderData.order_number || '',
+            contract_code: orderData.contract_code || undefined,
             customer_name: orderData.customer_name || '',
             customer_address: orderData.customer_address || undefined,
             customer_phone: orderData.customer_phone || undefined,
@@ -290,6 +298,30 @@ function ExportSlipsContent() {
     try {
       setLoadingSlipDetail(true);
       const detail = await exportSlipsApi.getSlip(slipId);
+      
+      // Nếu có order_id nhưng thiếu thông tin order hoặc thiếu contract_code, fetch thêm từ order API
+      // Sử dụng getOrderIncludeDeleted theo ID để không phụ thuộc vào pagination
+      if (detail.order_id && (!detail.order || !detail.order.contract_code)) {
+        try {
+          const orderResponse = await orderApi.getOrderIncludeDeleted(detail.order_id);
+          // Merge dữ liệu: ưu tiên dữ liệu mới từ API, fallback về dữ liệu cũ nếu có
+          detail.order = {
+            order_number: orderResponse.order_number || detail.order?.order_number || '',
+            contract_code: orderResponse.contract_code || detail.order?.contract_code || undefined,
+            customer_name: orderResponse.customer_name || detail.order?.customer_name || 'Không xác định',
+            customer_address: orderResponse.customer_address || detail.order?.customer_address || undefined,
+            customer_phone: orderResponse.customer_phone || detail.order?.customer_phone || undefined,
+            customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo || detail.order?.customer_addressInfo || undefined,
+            total_amount: orderResponse.total_amount || detail.order?.total_amount || 0,
+            order_items: orderResponse.order_items || detail.order?.order_items || undefined,
+          };
+        } catch (orderError) {
+          // Nếu không fetch được order, vẫn giữ nguyên detail hiện tại
+          // Không throw error để không block việc hiển thị dialog chi tiết
+          console.warn(`Failed to fetch order details for order_id: ${detail.order_id}`, orderError);
+        }
+      }
+      
       setSlipDetail(detail);
     } catch (error: any) {
       toast({
@@ -1122,6 +1154,10 @@ function ExportSlipsContent() {
         case 'order_number':
           aValue = a.order?.order_number || '';
           bValue = b.order?.order_number || '';
+          break;
+        case 'contract_code':
+          aValue = a.order?.contract_code || '';
+          bValue = b.order?.contract_code || '';
           break;
         case 'customer_name':
           aValue = a.order?.customer_name || '';
@@ -2307,6 +2343,10 @@ function ExportSlipsContent() {
                                   <p className="text-sm">{slipDetail?.code || slip.code}</p>
                               </div>
                               <div>
+                                <Label className="font-medium">Số hợp đồng:</Label>
+                                  <p className="text-sm">{slipDetail?.order?.contract_code || slip.order?.contract_code}</p>
+                              </div>
+                              <div>
                                 <Label className="font-medium">Đơn hàng:</Label>
                                   <p className="text-sm">{slipDetail?.order?.order_number || slip.order?.order_number}</p>
                               </div>
@@ -2376,52 +2416,47 @@ function ExportSlipsContent() {
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {(slipDetail?.order?.order_items || slip.order?.order_items) && (slipDetail?.order?.order_items?.length || slip.order?.order_items?.length) > 0 ? (
-                                        // Show order items with export quantities
-                                          (slipDetail?.order?.order_items || slip.order?.order_items || []).map((orderItem, index) => {
-                                          // Find corresponding export slip item
-                                            const exportSlipItems = slipDetail?.export_slip_items || slip.export_slip_items || [];
-                                            const exportItem = exportSlipItems.find(
-                                            item => item.product_code === orderItem.product_code
-                                          );
-                                          const requestedQuantity = orderItem.quantity;
-                                          const actualQuantity = exportItem?.actual_quantity || 0;
-                                          return (
-                                            <TableRow key={index}>
+                                        {(() => {
+                                          // Lấy export_slip_items (chỉ những item thực sự được xuất)
+                                          const exportSlipItems = slipDetail?.export_slip_items || slip.export_slip_items || [];
+                                          
+                                          // Lấy order_items để lấy requestedQuantity
+                                          const orderItems = slipDetail?.order?.order_items || slip.order?.order_items || [];
+                                          
+                                          // Chỉ hiển thị những item có trong export_slip_items
+                                          return exportSlipItems.map((exportItem, index) => {
+                                            // Tìm order_item tương ứng để lấy requestedQuantity từ đơn hàng
+                                            const orderItem = orderItems.find(
+                                              item => item.product_code === exportItem.product_code
+                                            );
+                                            
+                                            // Ưu tiên lấy requestedQuantity từ order_item, nếu không có thì dùng từ exportItem
+                                            const requestedQuantity = orderItem?.quantity || exportItem.requested_quantity || exportItem.actual_quantity;
+                                            const actualQuantity = exportItem.actual_quantity;
+                                            
+                                            // Lấy thông tin sản phẩm từ order_item nếu có, nếu không thì dùng từ exportItem
+                                            const productName = orderItem?.product_name || exportItem.product_name;
+                                            const productCode = exportItem.product_code;
+                                            const unitPrice = orderItem?.unit_price || exportItem.unit_price;
+                                            
+                                            return (
+                                              <TableRow key={index}>
                                                 <TableCell className="text-center font-medium">
-                                                  <div className="truncate" title={orderItem.product_name}>{orderItem.product_name}</div>
+                                                  <div className="truncate" title={productName}>{productName}</div>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                  <div className="truncate" title={orderItem.product_code}>{orderItem.product_code}</div>
+                                                  <div className="truncate" title={productCode}>{productCode}</div>
                                                 </TableCell>
                                                 <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
-                                              <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
-                                              <TableCell className="text-center">{formatCurrency(orderItem.unit_price)}</TableCell>
-                                              <TableCell className="text-center font-medium">
-                                                {formatCurrency(actualQuantity * orderItem.unit_price)}
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })
-                                      ) : (
-                                        // Show export slip items directly (no order)
-                                          (slipDetail?.export_slip_items || slip.export_slip_items || []).map((exportItem, index) => (
-                                          <TableRow key={index}>
-                                              <TableCell className="text-center font-medium">
-                                                <div className="truncate" title={exportItem.product_name}>{exportItem.product_name}</div>
-                                              </TableCell>
-                                              <TableCell className="text-center">
-                                                <div className="truncate" title={exportItem.product_code}>{exportItem.product_code}</div>
-                                              </TableCell>
-                                              <TableCell className="text-center font-medium text-green-600">{exportItem.requested_quantity || exportItem.actual_quantity}</TableCell>
-                                            <TableCell className="text-center font-medium text-blue-600">{exportItem.actual_quantity}</TableCell>
-                                            <TableCell className="text-center">{formatCurrency(exportItem.unit_price)}</TableCell>
-                                            <TableCell className="text-center font-medium">
-                                              {formatCurrency(exportItem.actual_quantity * exportItem.unit_price)}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))
-                                      )}
+                                                <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
+                                                <TableCell className="text-center">{formatCurrency(unitPrice)}</TableCell>
+                                                <TableCell className="text-center font-medium">
+                                                  {formatCurrency(actualQuantity * unitPrice)}
+                                                </TableCell>
+                                              </TableRow>
+                                            );
+                                          });
+                                        })()}
                                     </TableBody>
                                   </Table>
                                 </div>

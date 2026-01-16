@@ -138,7 +138,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     setError(null);
     try {
       const orderData = await orderApi.getOrder(order.id);
-      console.log('orderData', orderData);
       setOrderDetails(orderData);
       // Initialize editing expenses from order data
       setEditingExpenses(orderData.expenses || []);

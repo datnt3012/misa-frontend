@@ -29,6 +29,7 @@ export interface ExportSlip {
   export_slip_items?: ExportSlipItem[];
   order?: {
     order_number: string;
+    contract_code: string;
     customer_name: string;
     customer_address?: string;
     customer_phone?: string;
@@ -133,6 +134,7 @@ const normalize = (row: any): ExportSlip => {
         : [],
     order: row.order ? {
       order_number: row.order.order_number ?? row.order.orderNumber ?? '',
+      contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
       customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
       customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
       customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
