@@ -32,14 +32,12 @@ interface QuotationDetail {
 }
 interface QuotationFormState {
   customer_id: string;
-  contract_code: string;
   note: string;
   status: string;
   details: QuotationDetail[];
 }
 const createInitialQuotationState = (): QuotationFormState => ({
   customer_id: "",
-  contract_code: "",
   note: "",
   status: "pending",
   details: []
@@ -62,7 +60,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
         // Load quotation data for edit, but set status to pending by default
         setQuotation({
           customer_id: initialQuotation.customer_id,
-          contract_code: initialQuotation.contract_code || "",
           note: initialQuotation.note || "",
           status: "pending", // Mặc định chọn "pending" khi chỉnh sửa
           details: initialQuotation.details?.map((d, index) => ({
@@ -173,7 +170,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
       setLoading(true);
       const quotationData = {
         customerId: quotation.customer_id,
-        contractCode: quotation.contract_code,
         note: quotation.note || undefined,
         status: quotation.status,
         details: quotation.details.map(d => ({
@@ -212,7 +208,7 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
   const totalAmount = calculateTotalAmount();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[500vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditMode ? "Chỉnh sửa báo giá" : "Tạo báo giá mới"}</DialogTitle>
           <DialogDescription>
@@ -234,32 +230,6 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
               searchPlaceholder="Tìm khách hàng..."
               emptyMessage="Không có khách hàng nào"
             />
-          </div>
-          {/* Contract Code */}
-          <div className="space-y-2">
-            <Label htmlFor="contract_code">Mã hợp đồng</Label>
-            <Input
-              id="contract_code"
-              value={quotation.contract_code}
-              onChange={(e) => setQuotation(prev => ({ ...prev, contract_code: e.target.value }))}
-              placeholder="Nhập mã hợp đồng"
-            />
-          </div>
-          {/* Status and Type */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="status">Trạng thái</Label>
-              <Select value={quotation.status} onValueChange={(value) => setQuotation(prev => ({ ...prev, status: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Chờ xử lý</SelectItem>
-                  <SelectItem value="completed">Hoàn thành</SelectItem>
-                  <SelectItem value="cancelled">Đã hủy</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           {/* Note */}
           <div className="space-y-2">
@@ -294,8 +264,8 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                     <TableHeader>
                       <TableRow>
                         <TableHead>Sản phẩm</TableHead>
-                        <TableHead>Giá</TableHead>
                         <TableHead>Số lượng</TableHead>
+                        <TableHead>Giá</TableHead>
                         <TableHead>Thành tiền</TableHead>
                         <TableHead>Ghi chú</TableHead>
                         <TableHead className="w-12"></TableHead>
@@ -328,20 +298,22 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({
                           </TableCell>
                           <TableCell>
                             <NumberInput
-                              value={detail.price}
-                              onChange={(value) => updateDetail(index, 'price', value || 0)}
-                              min={0}
-                              step={1000}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <NumberInput
+                              className="text-center"
                               value={detail.quantity}
                               onChange={(value) => updateDetail(index, 'quantity', value || 1)}
                               min={1}
                             />
                           </TableCell>
                           <TableCell>
+                            <NumberInput
+                              className="text-center"
+                              value={detail.price}
+                              onChange={(value) => updateDetail(index, 'price', value || 0)}
+                              min={0}
+                              step={1000}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center">
                             {new Intl.NumberFormat('vi-VN').format(detail.price * detail.quantity)}
                           </TableCell>
                           <TableCell>

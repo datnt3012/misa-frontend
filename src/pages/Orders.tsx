@@ -653,7 +653,7 @@ const OrdersContent: React.FC = () => {
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
     // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
-    const isLongLabel = status === 'delivery_failed';
+    const isLongLabel = status === 'delivery_failed' || status === 'Giao hàng thất bại';
     const className = cn(
       config.className,
       isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''
