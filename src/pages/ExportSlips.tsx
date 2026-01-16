@@ -109,14 +109,29 @@ function ExportSlipsContent() {
     expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
   });
   const { toast } = useToast();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, userRole } = usePermissions();
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('export-slips');
   const isClosingDialogRef = useRef(false);
   const canDirectExport = hasPermission('ADMIN') || hasPermission('WAREHOUSE_ADMIN');
   const canApproveExports = hasPermission('WAREHOUSE_RECEIPTS_APPROVE');
+  
+  // Check if user can see "Đã xuất kho" option: Admin, Chief Accountant, Owner/Director, or has WAREHOUSE_RECEIPTS_APPROVE permission
+  const canSeeExportedOption = () => {
+    if (!userRole) return false;
+    const roleName = userRole.name?.toLowerCase() || userRole.code?.toLowerCase() || '';
+    const isAdmin = roleName.includes('admin') || roleName.includes('administrator');
+    const isChiefAccountant = roleName === 'chief_accountant';
+    const isOwnerDirector = roleName.includes('owner') || roleName === 'owner_director';
+    const hasApprovePermission = hasPermission('WAREHOUSE_RECEIPTS_APPROVE');
+    
+    return isAdmin || isChiefAccountant || isOwnerDirector || hasApprovePermission;
+  };
+  
   // Get available status options based on current status and role
   const getAvailableStatusOptions = (currentStatus: string) => {
     const options = [];
+    const canExport = canSeeExportedOption();
+    
     // Show options for approved status (sau khi đã duyệt)
     if (currentStatus === 'approved') {
       options.push({ 
@@ -124,8 +139,8 @@ function ExportSlipsContent() {
         label: 'Đã lấy hàng', 
         description: 'Xác nhận đã lấy hàng từ kho' 
       });
-      // Only show direct export when user has admin-level permission
-      if (canDirectExport) {
+      // Only show "Đã xuất kho" when user has required permission
+      if (canExport) {
         options.push({ 
           value: 'exported', 
           label: 'Đã xuất kho', 
@@ -133,11 +148,14 @@ function ExportSlipsContent() {
         });
       }
     } else if (currentStatus === 'picked') {
-      options.push({ 
-        value: 'exported', 
-        label: 'Đã xuất kho', 
-        description: 'Xác nhận hàng đã rời khỏi kho' 
-      });
+      // Only show "Đã xuất kho" when user has required permission
+      if (canExport) {
+        options.push({ 
+          value: 'exported', 
+          label: 'Đã xuất kho', 
+          description: 'Xác nhận hàng đã rời khỏi kho' 
+        });
+      }
     }
     // No options for 'pending', 'exported', 'rejected', or 'cancelled' status
     return options;
