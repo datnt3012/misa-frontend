@@ -25,39 +25,58 @@ export function getErrorMessage(error: any, fallbackMessage: string = 'Có lỗi
   if (error?.response?.data) {
     const data = error.response.data;
     
-    // Check for message field
+    // Check if message is an array (validation errors from backend) - check this FIRST
+    if (Array.isArray(data.message)) {
+      return data.message.filter((msg: any) => msg && msg.trim()).join('\n');
+    }
+    
+    // Check for validation errors array
+    if (data.errors && Array.isArray(data.errors)) {
+      const errorMessages = data.errors
+        .map((err: any) => err.message || err)
+        .filter((msg: any) => msg && msg.trim());
+      return errorMessages.join('\n');
+    }
+    
+    // Check for message field (string)
     if (data.message) {
       return data.message;
     }
     
     // Check for error field
     if (data.error) {
+      // If error is an array, join it
+      if (Array.isArray(data.error)) {
+        return data.error.filter((msg: any) => msg && msg.trim()).join('\n');
+      }
       return data.error;
     }
     
     // Check for details field
     if (data.details) {
+      // If details is an array, join it
+      if (Array.isArray(data.details)) {
+        return data.details.filter((msg: any) => msg && msg.trim()).join('\n');
+      }
       return data.details;
-    }
-    
-    // Check for validation errors
-    if (data.errors && Array.isArray(data.errors)) {
-      return data.errors.map((err: any) => err.message || err).join('\n');
-    }
-    
-    // Check if message is an array (validation errors from backend)
-    if (Array.isArray(data.message)) {
-      return data.message.join('\n');
     }
   }
 
   // Try to extract from error object directly
   if (error?.message) {
+    // If message is an array, join it
+    if (Array.isArray(error.message)) {
+      return error.message.filter((msg: any) => msg && msg.trim()).join('\n');
+    }
     return error.message;
   }
 
   // Try to extract from error object
   if (error?.error) {
+    // If error is an array, join it
+    if (Array.isArray(error.error)) {
+      return error.error.filter((msg: any) => msg && msg.trim()).join('\n');
+    }
     return error.error;
   }
 

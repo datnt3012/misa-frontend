@@ -727,7 +727,17 @@ const QuotationsContent: React.FC = () => {
                                     'completed': 'Hoàn thành',
                                     'cancelled': 'Đã hủy',
                                   };
-                                  return statusConfig[quotation.status || 'pending'] || quotation.status;
+                                  switch (quotation.status) {
+                                    case 'pending':
+                                    case 'Chờ xử lý':
+                                      return (<Badge className="text-center bg-[#E3F2FD] text-blue-800 border-blue-100">Chờ xử lý</Badge>);
+                                    case 'completed':
+                                    case 'Hoàn thành':
+                                      return (<Badge className="text-center bg-[#1B5E20] text-white border-green-500">Hoàn thành</Badge>);
+                                    case 'cancelled':
+                                    case 'Đã hủy':
+                                      return (<Badge className="text-center bg-[#757575] text-white border-gray-500">Đã hủy</Badge>);
+                                  }
                                 })()}
                               </SelectValue>
                             </SelectTrigger>

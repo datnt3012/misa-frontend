@@ -157,7 +157,6 @@ export interface CreateOrderRequest {
   // Order details
   details: {
     productId: string;
-    warehouseId: string;
     quantity: number;
     unitPrice: number;
   }[];

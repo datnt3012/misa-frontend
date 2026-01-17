@@ -28,6 +28,7 @@ interface CreateOrderFromQuotationProps {
 }
 
 interface OrderFormState {
+  contract_code: string;
   vat_tax_code: string;
   vat_invoice_email: string;
   vat_company_name: string;
@@ -112,6 +113,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
   const [initialPayment, setInitialPayment] = useState(0);
   const [notes, setNotes] = useState("");
   const [orderData, setOrderData] = useState<OrderFormState>({
+    contract_code: "",
     vat_tax_code: "",
     vat_invoice_email: "",
     vat_company_name: "",
@@ -264,7 +266,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
         customerId: quotation.customer_id,
         customerName: quotation.customer_name,
         customerPhone: quotation.customer_phone,
-        contractCode: quotation.contract_code,
+        contractCode: orderData.contract_code || undefined,
         note: notes || `Tạo từ báo giá ${quotation.code}`,
         status: 'new',
         orderType: 'sale',
@@ -289,7 +291,6 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
         // Order details
         details: orderItems.map(item => ({
           productId: item.product_id,
-          warehouseId: item.warehouse_id,
           quantity: item.quantity,
           unitPrice: item.unit_price
         })),
@@ -326,25 +327,20 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
           <DialogHeader>
             <DialogTitle>Tạo đơn hàng từ báo giá</DialogTitle>
             <DialogDescription>
-              Tạo đơn hàng từ báo giá {quotation.code} - Khách hàng: {quotation.customer_name}
             </DialogDescription>
           </DialogHeader>
         </div>
         
         {/* Sticky Quotation Info */}
         <div className="flex-shrink-0 px-6 py-4 border-b bg-muted">
-          <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <Label className="text-muted-foreground">Mã báo giá</Label>
-              <div className="font-medium">{quotation.code}</div>
+              <Label className="text-muted-foreground flex justify-center mb-2">Mã báo giá</Label>
+              <div className="font-medium flex justify-center text-lg">{quotation.code}</div>
             </div>
             <div>
-              <Label className="text-muted-foreground">Mã hợp đồng</Label>
-              <div className="font-medium">{quotation.contract_code}</div>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Khách hàng</Label>
-              <div className="font-medium">{quotation.customer_name}</div>
+              <Label className="text-muted-foreground flex justify-center mb-2">Khách hàng</Label>
+              <div className="font-medium flex justify-center text-lg">{quotation.customer_name}</div>
             </div>
           </div>
         </div>
@@ -352,6 +348,25 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="space-y-4">
+          {/* Contract Infomation */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin hợp đồng</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="contract_code">Mã hợp đồng</Label>
+                  <Input
+                    id="contract_code"
+                    value={orderData.contract_code}
+                    onChange={(e) => setOrderData(prev => ({ ...prev, contract_code: e.target.value }))}
+                    placeholder="Nhập mã hợp đồng"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           {/* VAT Info */}
           <Card ref={vatCardRef}>
             <CardHeader>
@@ -417,7 +432,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="shipping_recipient_name">Người nhận hàng</Label>
+                  <Label htmlFor="shipping_recipient_name">Người nhận hàng <span className="text-red-500">*</span></Label>
                   <Input
                     id="shipping_recipient_name"
                     value={orderData.shipping_recipient_name}
@@ -426,7 +441,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="shipping_recipient_phone">Số điện thoại</Label>
+                  <Label htmlFor="shipping_recipient_phone">Số điện thoại <span className="text-red-500">*</span></Label>
                   <Input
                     id="shipping_recipient_phone"
                     value={orderData.shipping_recipient_phone}
@@ -436,8 +451,9 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
                 </div>
               </div>
               <div>
-                <Label>Địa chỉ nhận hàng</Label>
+                <Label>Địa chỉ nhận hàng <span className="text-red-500">*</span></Label>
                 <AddressFormSeparate
+                  required={true}
                   key={shippingAddressVersion}
                   value={{
                     address: orderData.shipping_address,
