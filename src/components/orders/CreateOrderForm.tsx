@@ -235,15 +235,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     }
   };
   const handleCreateNewCustomer = async () => {
-    // Validate required fields
-    if (!newOrder.customer_name || !newOrder.customer_name.trim()) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng nhập tên khách hàng",
-        variant: "destructive",
-      });
-      return;
-    }
     try {
       setLoading(true);
       // Build customer data from order form
@@ -389,83 +380,75 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     return { subtotal, debt };
   };
   const handleSubmit = async () => {
-    if (!newOrder.customer_id || newOrder.customer_id === "__new__") {
-      // Validate required fields for new customer
-      if (!newOrder.customer_name || !newOrder.customer_name.trim()) {
-        toast({
-          title: "Lỗi",
-          description: "Vui lòng nhập tên khách hàng",
-          variant: "destructive",
-        });
-        return;
-      }
-    } else {
-      // Validate for existing customer
-      if (!newOrder.customer_id) {
-        toast({
-          title: "Lỗi",
-          description: "Vui lòng chọn khách hàng",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!newOrder.customer_name) {
-        toast({
-          title: "Lỗi",
-          description: "Vui lòng nhập tên khách hàng",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-    if (newOrder.items.length === 0) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng thêm ít nhất một sản phẩm",
-        variant: "destructive",
-      });
-      return;
-    }
-    // Validate all items have required fields
-    const invalidItems = newOrder.items.filter(item => 
-      !item.product_id || !item.product_name || !item.product_code || 
-      !item.quantity || item.unit_price == undefined
-    );
-    if (invalidItems.length > 0) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho",
-        variant: "destructive",
-      });
-      return;
-    }
-    const { subtotal } = calculateTotals();
-    if (subtotal < 0) {
-      toast({
-        title: "Lỗi",
-        description: "Tổng tiền không được âm",
-        variant: "destructive",
-      });
-      return;
-    }
-    const paymentMethod = newOrder.initial_payment_method || "cash";
-    if (paymentMethod.length < 1 || paymentMethod.length > 20) {
-      toast({
-        title: "Lỗi",
-        description: "Phương thức thanh toán phải có độ dài từ 1-20 ký tự",
-        variant: "destructive",
-      });
-      return;
-    }
-    // Validate bank selection for bank transfer
-    if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
-        variant: "destructive",
-      });
-      return;
-    }
+    // if (!newOrder.customer_id || newOrder.customer_id === "__new__") {
+    //   handleCreateNewCustomer();
+    // } else {
+    //   // Validate for existing customer
+    //   if (!newOrder.customer_id) {
+    //     toast({
+    //       title: "Lỗi",
+    //       description: "Vui lòng chọn khách hàng",
+    //       variant: "destructive",
+    //     });
+    //     return;
+    //   }
+    //   if (!newOrder.customer_name) {
+    //     toast({
+    //       title: "Lỗi",
+    //       description: "Vui lòng nhập tên khách hàng",
+    //       variant: "destructive",
+    //     });
+    //     return;
+    //   }
+    // }
+    // if (newOrder.items.length === 0) {
+    //   toast({
+    //     title: "Lỗi",
+    //     description: "Vui lòng thêm ít nhất một sản phẩm",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
+    // // Validate all items have required fields
+    // const invalidItems = newOrder.items.filter(item => 
+    //   !item.product_id || !item.product_name || !item.product_code || 
+    //   !item.quantity || item.unit_price == undefined
+    // );
+    // if (invalidItems.length > 0) {
+    //   toast({
+    //     title: "Lỗi",
+    //     description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
+    // const { subtotal } = calculateTotals();
+    // if (subtotal < 0) {
+    //   toast({
+    //     title: "Lỗi",
+    //     description: "Tổng tiền không được âm",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
+    // const paymentMethod = newOrder.initial_payment_method || "cash";
+    // if (paymentMethod.length < 1 || paymentMethod.length > 20) {
+    //   toast({
+    //     title: "Lỗi",
+    //     description: "Phương thức thanh toán phải có độ dài từ 1-20 ký tự",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
+    // // Validate bank selection for bank transfer
+    // if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
+    //   toast({
+    //     title: "Lỗi",
+    //     description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
     setLoading(true);
     try {
       // If "Khách hàng mới" is selected, create the customer first
@@ -833,7 +816,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="shipping_recipient_name">Người nhận hàng</Label>
+                  <Label htmlFor="shipping_recipient_name">Người nhận hàng <span className="text-red-500">*</span></Label>
                   <Input
                     id="shipping_recipient_name"
                     value={newOrder.shipping_recipient_name}
@@ -842,7 +825,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   />
                 </div>
                 <div>
-                  <Label htmlFor="shipping_recipient_phone">Số điện thoại</Label>
+                  <Label htmlFor="shipping_recipient_phone">Số điện thoại <span className="text-red-500">*</span></Label>
                   <Input
                     id="shipping_recipient_phone"
                     value={newOrder.shipping_recipient_phone}
@@ -852,9 +835,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 </div>
               </div>
               <div>
-                <Label>Địa chỉ nhận hàng</Label>
+                <Label>Địa chỉ nhận hàng <span className="text-red-500">*</span></Label>
                 <AddressFormSeparate
                   key={shippingAddressVersion}
+                  required={true}
                   value={{
                     address: newOrder.shipping_address,
                     provinceCode: newOrder.shipping_addressInfo?.provinceCode,
@@ -941,8 +925,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           className="w-full"
                         />
                       </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-4">
-                        <div className="space-y-1">
+                      <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
+                        <div className="inline-block">
                           <NumberInput
                             value={item.quantity}
                             onChange={(value) => updateItem(index, "quantity", value)}
@@ -951,14 +935,16 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-4">
-                        <CurrencyInput
-                          value={item.unit_price}
-                          onChange={(value) => updateItem(index, "unit_price", value)}
-                          className="w-32"
-                        />
+                      <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
+                        <div className="inline-block">
+                          <CurrencyInput
+                            value={item.unit_price}
+                            onChange={(value) => updateItem(index, "unit_price", value)}
+                            className="w-32"
+                          />
+                        </div>
                       </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-7">
+                      <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
                         {item.total_price.toLocaleString("vi-VN")}
                       </TableCell>
                       <TableCell className="align-top pt-4">
@@ -1078,7 +1064,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   />
                 </div>
                 <div>
-                  <Label htmlFor="initial_payment_method">Phương thức thanh toán <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
                   <Select value={newOrder.initial_payment_method} onValueChange={(value) => setNewOrder(prev => ({
                     ...prev,
                     initial_payment_method: value,

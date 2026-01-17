@@ -480,7 +480,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         {/* Allocation status */}
         <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm">
           <h4 className="font-semibold text-gray-900 mb-3">Trạng thái phân bổ</h4>
-          <div>
+          <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2">
             {
               order.order_items?.map(item => {
                 // Lấy trực tiếp từ exportedQuantityByProduct đã tính từ API
