@@ -515,25 +515,6 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         toast({ title: 'Lỗi', description: 'Phiếu nhập kho không có sản phẩm nào', variant: 'destructive' });
         return;
       }
-      // First, validate and update stock levels BEFORE approving
-      for (const item of receipt.items) {
-        // Validate data first
-        if (!receipt.warehouse_id || receipt.warehouse_id.trim() === '') {
-          throw new Error('Warehouse ID không được để trống');
-        }
-        if (!item.product_id) {
-          throw new Error('Product ID không được để trống');
-        }
-        if (!item.quantity || item.quantity <= 0) {
-          throw new Error('Số lượng phải lớn hơn 0');
-        }
-        // Update stock level
-        await stockLevelsApi.updateStockQuantity(
-          receipt.warehouse_id,
-          item.product_id,
-          item.quantity
-        );
-      }
       // Only approve the warehouse receipt if all stock updates succeed
       const approvedReceipt = await warehouseReceiptsApi.approveReceipt(slipId);
       toast({ title: 'Thành công', description: `Đã phê duyệt phiếu nhập kho ${approvedReceipt.code} và cập nhật tồn kho` });
