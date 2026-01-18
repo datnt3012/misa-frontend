@@ -45,6 +45,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
   const [availableTags, setAvailableTags] = useState<OrderTag[]>([]);
   const [editingExpenses, setEditingExpenses] = useState<Array<{ name: string; amount: number; note?: string }>>([]);
@@ -64,6 +65,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setEditValues({});
       setProducts([]);
       setWarehouses([]);
+      setCustomers([]);
       setEditingItems({});
       setAvailableTags([]);
       setEditingExpenses([]);
@@ -75,6 +77,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       loadOrderDetails();
       loadTags();
       loadWarehouses();
+      loadCustomers();
     } else if (!open) {
       // Reset loading and error when dialog closes to prevent UI blocking
       setLoading(false);
@@ -127,6 +130,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     } catch (error) {
       // Fallback to empty array if API fails
       setWarehouses([]);
+    }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      const response = await customerApi.getCustomers({ page: 1, limit: 1000 });
+      setCustomers(response.customers || []);
+    } catch (error) {
+      // Fallback to empty array if API fails
+      setCustomers([]);
     }
   };
 
@@ -242,7 +255,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       // }
 
       // Map UI field names to BE expectations (camelCase per BE)
-      if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
+      if (field === 'customerId') {
+        updateData['customerId'] = value;
+      } else if (field === 'receiverName' || field === 'receiverPhone' || field === 'receiverAddress') {
         updateData[field] = value;
       } else if (field === 'taxCode') {
         updateData['taxCode'] = value;
@@ -274,6 +289,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       // Refresh order details from API
       const updatedOrder = await orderApi.getOrder(orderDetails.id);
       setOrderDetails(updatedOrder);
+      
+      // If customerId was updated, refresh customer details
+      if (field === 'customerId' && value) {
+        try {
+          const customer = await customerApi.getCustomer(value);
+          setCustomerDetails(customer);
+        } catch (e) {
+          // If customer fetch fails, still continue
+          console.error('Error loading customer details:', e);
+        }
+      }
+      
       setEditingFields(prev => ({ ...prev, [field]: false }));
       setEditValues(prev => {
         const newValues = { ...prev };
@@ -381,46 +408,88 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     const isEditing = editingFields[field];
     const editValue = editValues[field] ?? value;
     return (
-      <div>
-        <label className="text-sm font-medium text-muted-foreground">{label}:</label>
-        <div className="mt-1">
-          {isEditing ? (
-            <div className="space-y-3">
-              <div>
-                {type === 'textarea' ? (
-                  <Textarea
-                    value={editValue || ''}
-                    onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
-                    className="w-full"
-                    rows={2}
+      field === 'customerId' ? (
+        <div>
+          <label className="text-sm font-medium text-muted-foreground">{label}:</label>
+          <div className="mt-1">
+            {isEditing ? (
+              <div className="space-y-3">
+                <div>
+                  <Combobox
+                    options={customers.map(customer => ({
+                      label: `${customer.name} (${customer.customer_code || customer.code || ''})`,
+                      value: customer.id
+                    }))}
+                    value={editValue || orderDetails?.customer_id || ''}
+                    onValueChange={(selectedCustomerId) => {
+                      setEditValues(prev => ({ ...prev, [field]: selectedCustomerId }));
+                    }}
+                    placeholder="Chọn khách hàng"
+                    searchPlaceholder="Tìm khách hàng..."
+                    emptyMessage="Không có khách hàng nào"
                   />
-                ) : (
-                  <Input
-                    value={editValue || ''}
-                    onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
-                    className="w-full"
-                  />
-                )}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                    Lưu
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                    Hủy
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
-                  Lưu
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
-                  Hủy
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
+                <Button size="sm" variant="outline" onClick={() => startEditing(field, orderDetails?.customer_id || value)}>
+                  Sửa
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
-              <Button size="sm" variant="outline" onClick={() => startEditing(field, value)}>
-                Sửa
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <label className="text-sm font-medium text-muted-foreground">{label}:</label>
+          <div className="mt-1">
+            {isEditing ? (
+              <div className="space-y-3">
+                <div>
+                  {type === 'textarea' ? (
+                    <Textarea
+                      value={editValue || ''}
+                      onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                      className="w-full"
+                      rows={2}
+                    />
+                  ) : (
+                    <Input
+                      value={editValue || ''}
+                      onChange={(e) => setEditValues(prev => ({ ...prev, [field]: e.target.value }))}
+                      className="w-full"
+                    />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => saveField(field)} disabled={loading}>
+                    Lưu
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => cancelEditing(field)}>
+                    Hủy
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-base break-words whitespace-normal min-w-0" style={{wordBreak: 'break-all', overflowWrap: 'break-word'}}>{value || 'Chưa có thông tin'}</div>
+                <Button size="sm" variant="outline" onClick={() => startEditing(field, value)}>
+                  Sửa
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )
     );
   };
 
@@ -756,7 +825,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             {/* Customer Information */}
             <div className="space-y-4">
               {renderEditableField('contract_code', 'Mã hợp đồng', orderDetails?.contract_code || '')}
-              {renderEditableField('customer_name', 'Họ tên', customerDetails?.name || orderDetails?.customer_name || '')}
+              {renderEditableField('customerId', 'Khách hàng', customerDetails?.name || orderDetails?.customer_name || '')}
               {renderEditableField('customer_phone', 'Điện thoại', orderDetails?.customer_phone || '')}
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
