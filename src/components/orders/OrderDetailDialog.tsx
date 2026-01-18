@@ -1065,21 +1065,24 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                               className="w-full"
                             />
                           </TableCell>
-                          <TableCell className="text-center">-</TableCell>
                           <TableCell className="text-center">
-                            <NumberInput
-                              min={1}
-                              value={pendingItem.quantity || 1}
-                              onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'quantity', value)}
-                              className="w-20 text-center"
-                            />
+                            <div className="flex justify-center">
+                              <NumberInput
+                                min={1}
+                                value={pendingItem.quantity || 1}
+                                onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'quantity', value)}
+                                className="w-20 text-center"
+                              />
+                            </div>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <CurrencyInput
-                              value={pendingItem.unit_price || 0}
-                              onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'unit_price', value)}
-                              className="w-24 text-right"
-                            />
+                          <TableCell className="text-center">
+                            <div className="flex justify-center">
+                              <CurrencyInput
+                                value={pendingItem.unit_price || 0}
+                                onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'unit_price', value)}
+                                className="w-24 text-right"
+                              />
+                            </div>
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(pendingItem.total_price || 0)}
