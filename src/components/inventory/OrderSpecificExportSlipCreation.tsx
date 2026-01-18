@@ -186,7 +186,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         const allSlips: Awaited<ReturnType<typeof exportSlipsApi.getSlips>>['slips'] = [];
         
         while (true) {
-          const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: orderId });
+          const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: orderId, status: 'pending,approved,picked,exported' });
           const slipsForOrder = response.slips.filter(slip => slip.order_id === orderId);
           allSlips.push(...slipsForOrder);
           

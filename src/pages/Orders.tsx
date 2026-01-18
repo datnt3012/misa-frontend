@@ -964,7 +964,7 @@ const OrdersContent: React.FC = () => {
                              <div className="text-xs text-muted-foreground">
                                {order.created_at ? format(new Date(order.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
                              </div>
-                             <div className="flex gap-1 flex-wrap">
+                             <div className="flex gap-1 flex-wrap justify-center">
                                {specialTags.length > 0 ? (
                                  specialTags.map((tag: any, idx: number) => (
                                    <Badge
