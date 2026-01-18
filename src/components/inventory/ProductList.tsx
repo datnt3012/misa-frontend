@@ -53,6 +53,21 @@ const IMPORT_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Đã hủy',
 };
 
+const mapSortKeyToAPI = (key: string): string => {
+  const keyMap: Record<string, string> = {
+    'code': 'code',
+    'name': 'name',
+    'category': 'category',
+    'manufacturer': 'manufacturer',
+    'current_stock': 'stocklevel',
+    'cost_price': 'costPrice',
+    'unit_price': 'price',
+    'warehouse': 'warehouse',
+    'updated_at': 'UpdatedAt',
+  };
+  return keyMap[key] || key;
+};
+
 // Always use backend job.status directly (do not infer status from processedRows/totalRows).
 const getJobStatusLabel = (job: ProductImportJobSnapshot): string => {
   return IMPORT_STATUS_LABELS[job.status] ?? job.status;
@@ -133,6 +148,10 @@ const ProductList: React.FC<ProductListProps> = ({
       if (filterCategory !== 'all') {
         params.category = filterCategory;
       }
+      if (sortConfig) {
+        params.sortBy = mapSortKeyToAPI(sortConfig.key);
+        params.sortOrder = sortConfig.direction;
+      }
       const response = await productApi.getProducts(params);
       setProducts(response.products || []);
       setTotalProducts(response.total || 0);
@@ -148,7 +167,7 @@ const ProductList: React.FC<ProductListProps> = ({
     } finally {
       setLoadingProducts(false);
     }
-  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, toast]);
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, toast, sortConfig]);
 
   // Debounce search term
   React.useEffect(() => {

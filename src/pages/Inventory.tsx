@@ -95,6 +95,19 @@ const InventoryContent = () => {
   const canViewWarehouses = hasPermission('WAREHOUSES_READ') || true; // Temporarily bypass for testing
   // Toast hook - must be declared before functions that use it
   const { toast } = useToast();
+
+  const mapSortKeyToAPI = (key: string): string => {
+    const keyMap: Record<string, string> = {
+      'code': 'code',
+      'name': 'name',
+      'description': 'description',
+      'address': 'address',
+      'createdAt': 'createdAt',
+      'updatedAt': 'updatedAt',
+    };
+    return keyMap[key] || key;
+  };
+
   // Clear error states when permissions are available
   useEffect(() => {
     if (canViewProducts && canViewWarehouses) {
@@ -125,12 +138,12 @@ const InventoryContent = () => {
     }
   }, [currentSearchParams]); // Only depends on currentSearchParams
 
-  // Load warehouses when warehouses tab is active
+  // Load warehouses when warehouses tab is active or sort config changes
   useEffect(() => {
     if (activeTab === 'warehouses' && canViewWarehouses && !permissionsLoading) {
       loadWarehouses();
     }
-  }, [activeTab, canViewWarehouses, permissionsLoading]);
+  }, [activeTab, canViewWarehouses, permissionsLoading, warehouseSortConfig]);
   // Import job polling functions (moved from ProductList)
   const stopImportPolling = React.useCallback(() => {
     if (pollingRef.current) {
@@ -419,7 +432,12 @@ const InventoryContent = () => {
         }));
         return;
       }
-      const response = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
+      const params: any = { page: 1, limit: 1000 };
+      if (warehouseSortConfig) {
+        params.sortBy = mapSortKeyToAPI(warehouseSortConfig.key);
+        params.sortOrder = warehouseSortConfig.direction === 'asc' ? 'ASC' : 'DESC';
+      }
+      const response = await warehouseApi.getWarehouses(params);
       setWarehouses(response.warehouses || []);
       setErrorStates(prev => ({ ...prev, warehouses: null }));
     } catch (error: any) {
@@ -464,6 +482,7 @@ const InventoryContent = () => {
   });
   const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
   const [isEditingWarehouse, setIsEditingWarehouse] = useState(false);
+  const [isWarehouseDialogOpen, setIsWarehouseDialogOpen] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -755,45 +774,6 @@ const InventoryContent = () => {
       return 0;
     });
   }, [filteredProducts, sortConfig, warehouses]);
-  // Warehouse sorting logic
-  const sortedWarehouses = React.useMemo(() => {
-    if (!warehouseSortConfig) return warehouses;
-    return [...warehouses].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-      switch (warehouseSortConfig.key) {
-        case 'code':
-          aValue = a.code;
-          bValue = b.code;
-          break;
-        case 'name':
-          aValue = a.name;
-          bValue = b.name;
-          break;
-        case 'description':
-          aValue = a.description || '';
-          bValue = b.description || '';
-          break;
-        case 'address':
-          aValue = a.address || '';
-          bValue = b.address || '';
-          break;
-        case 'createdAt':
-          aValue = new Date(a.createdAt);
-          bValue = new Date(b.createdAt);
-          break;
-        default:
-          return 0;
-      }
-      if (aValue < bValue) {
-        return warehouseSortConfig.direction === 'asc' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return warehouseSortConfig.direction === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-  }, [warehouses, warehouseSortConfig]);
   // Pagination logic
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -806,18 +786,7 @@ const InventoryContent = () => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1); // Reset to first page
   };
-  // Handle sorting
-  const handleSort = (key: string) => {
-    setSortConfig(prevConfig => {
-      if (!prevConfig || prevConfig.key !== key) {
-        return { key, direction: 'asc' };
-      }
-      if (prevConfig.direction === 'asc') {
-        return { key, direction: 'desc' };
-      }
-      return null; // Remove sorting
-    });
-  };
+
   // Handle warehouse sorting
   const handleWarehouseSort = (key: string) => {
     setWarehouseSortConfig(prevConfig => {
@@ -830,15 +799,7 @@ const InventoryContent = () => {
       return null; // Remove sorting
     });
   };
-  // Get sort icon
-  const getSortIcon = (key: string) => {
-    if (!sortConfig || sortConfig.key !== key) {
-      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
-    }
-    return sortConfig.direction === 'asc' 
-      ? <ArrowUp className="h-4 w-4 ml-1" />
-      : <ArrowDown className="h-4 w-4 ml-1" />;
-  };
+
   // Get warehouse sort icon
   const getWarehouseSortIcon = (key: string) => {
     if (!warehouseSortConfig || warehouseSortConfig.key !== key) {
@@ -891,9 +852,8 @@ const InventoryContent = () => {
       });
       setIsEditingWarehouse(false);
       setEditingWarehouse(null);
+      setIsWarehouseDialogOpen(false);
       loadData(currentSearchParams || undefined);
-      // Close the warehouse creation form
-      setIsEditingWarehouse(false);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể tạo kho"), variant: "destructive" });
     }
@@ -924,6 +884,7 @@ const InventoryContent = () => {
       }
     });
     setIsEditingWarehouse(true);
+    setIsWarehouseDialogOpen(true);
   };
   const cancelEditWarehouse = () => {
     setEditingWarehouse(null);
@@ -942,6 +903,7 @@ const InventoryContent = () => {
       }
     });
     setIsEditingWarehouse(false);
+    setIsWarehouseDialogOpen(false);
   };
   const updateWarehouse = async () => {
     if (!newWarehouse.name) {
@@ -963,8 +925,6 @@ const InventoryContent = () => {
       toast({ title: "Thành công", description: "Đã cập nhật thông tin kho" });
       cancelEditWarehouse();
       loadData(currentSearchParams || undefined);
-      // Ensure editing form is closed
-      setIsEditingWarehouse(false);
     } catch (error: any) {
       toast({ title: "Lỗi", description: convertPermissionCodesInMessage(error.response?.data?.message || error.message || "Không thể cập nhật kho"), variant: "destructive" });
     }
@@ -1279,97 +1239,136 @@ const InventoryContent = () => {
             <PermissionGuard requiredPermissions={['WAREHOUSES_VIEW']}>
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <WarehouseIcon className="w-5 h-5" />
-                  Quản Lý Kho
-                </CardTitle>
-                <CardDescription>Tạo và quản lý các kho hàng</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <WarehouseIcon className="w-5 h-5" />
+                      Quản Lý Kho
+                    </CardTitle>
+                    <CardDescription>Tạo và quản lý các kho hàng</CardDescription>
+                  </div>
+                  {/* Add New Warehouse Button */}
+                  {canManageWarehouses && (
+                    <Button onClick={() => {
+                      setIsEditingWarehouse(false);
+                      setEditingWarehouse(null);
+                      setNewWarehouse({
+                        name: "",
+                        code: "",
+                        description: "",
+                        address: "",
+                        addressInfo: {
+                          provinceCode: undefined,
+                          districtCode: undefined,
+                          wardCode: undefined,
+                          provinceName: undefined,
+                          districtName: undefined,
+                          wardName: undefined
+                        }
+                      });
+                      setIsWarehouseDialogOpen(true);
+                    }}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Thêm kho mới
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Add New Warehouse Form */}
+                {/* Warehouse Dialog */}
                 {canManageWarehouses && (
-                  <div className="border rounded-lg p-4 bg-muted/50">
-                    <h4 className="font-medium mb-4">
-                      {isEditingWarehouse ? 'Chỉnh sửa kho' : 'Thêm kho mới'}
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="warehouse-name">Tên kho <span className="text-red-500">*</span></Label>
-                        <Input
-                          id="warehouse-name"
-                          value={newWarehouse.name}
-                          onChange={(e) => setNewWarehouse(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Nhập tên kho"
-                        />
+                  <Dialog open={isWarehouseDialogOpen} onOpenChange={(open) => {
+                    setIsWarehouseDialogOpen(open);
+                    if (!open) {
+                      cancelEditWarehouse();
+                    }
+                  }}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {isEditingWarehouse ? 'Chỉnh sửa kho' : 'Thêm kho mới'}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {isEditingWarehouse ? 'Cập nhật thông tin kho hàng' : 'Điền thông tin để tạo kho hàng mới'}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                        <div>
+                          <Label htmlFor="warehouse-name">Tên kho <span className="text-red-500">*</span></Label>
+                          <Input
+                            id="warehouse-name"
+                            value={newWarehouse.name}
+                            onChange={(e) => setNewWarehouse(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Nhập tên kho"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="warehouse-code">Mã kho (tùy chọn)</Label>
+                          <Input
+                            id="warehouse-code"
+                            value={newWarehouse.code}
+                            onChange={(e) => setNewWarehouse(prev => ({ ...prev, code: e.target.value }))}
+                            placeholder="Để trống để hệ thống tự tạo"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label htmlFor="warehouse-description">Mô tả</Label>
+                          <Textarea
+                            id="warehouse-description"
+                            value={newWarehouse.description}
+                            onChange={(e) => setNewWarehouse(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Mô tả kho"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label>Địa chỉ kho <span className="text-red-500">*</span></Label>
+                          <AddressFormSeparate
+                            key={isEditingWarehouse ? `edit-${editingWarehouse?.id}` : 'create'}
+                            value={{
+                              address: newWarehouse.address || '',
+                              provinceCode: newWarehouse.addressInfo?.provinceCode,
+                              districtCode: newWarehouse.addressInfo?.districtCode,
+                              wardCode: newWarehouse.addressInfo?.wardCode,
+                              provinceName: newWarehouse.addressInfo?.provinceName,
+                              districtName: newWarehouse.addressInfo?.districtName,
+                              wardName: newWarehouse.addressInfo?.wardName
+                            }}
+                            onChange={(data) => {
+                              setNewWarehouse(prev => ({
+                                ...prev,
+                                address: data.address || '',
+                                addressInfo: {
+                                  provinceCode: data.provinceCode || undefined,
+                                  districtCode: data.districtCode || undefined,
+                                  wardCode: data.wardCode || undefined,
+                                  provinceName: data.provinceName || undefined,
+                                  districtName: data.districtName || undefined,
+                                  wardName: data.wardName || undefined
+                                }
+                              }));
+                            }}
+                            required={true}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <Label htmlFor="warehouse-code">Mã kho (tùy chọn)</Label>
-                        <Input
-                          id="warehouse-code"
-                          value={newWarehouse.code}
-                          onChange={(e) => setNewWarehouse(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Để trống để hệ thống tự tạo"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label htmlFor="warehouse-description">Mô tả</Label>
-                        <Textarea
-                          id="warehouse-description"
-                          value={newWarehouse.description}
-                          onChange={(e) => setNewWarehouse(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Mô tả kho"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label>Địa chỉ kho <span className="text-red-500">*</span></Label>
-                        <AddressFormSeparate
-                          key={isEditingWarehouse ? `edit-${editingWarehouse?.id}` : 'create'}
-                          value={{
-                            address: newWarehouse.address || '',
-                            provinceCode: newWarehouse.addressInfo?.provinceCode,
-                            districtCode: newWarehouse.addressInfo?.districtCode,
-                            wardCode: newWarehouse.addressInfo?.wardCode,
-                            provinceName: newWarehouse.addressInfo?.provinceName,
-                            districtName: newWarehouse.addressInfo?.districtName,
-                            wardName: newWarehouse.addressInfo?.wardName
-                          }}
-                          onChange={(data) => {
-                            setNewWarehouse(prev => ({
-                              ...prev,
-                              address: data.address || '',
-                              addressInfo: {
-                                provinceCode: data.provinceCode || undefined,
-                                districtCode: data.districtCode || undefined,
-                                wardCode: data.wardCode || undefined,
-                                provinceName: data.provinceName || undefined,
-                                districtName: data.districtName || undefined,
-                                wardName: data.wardName || undefined
-                              }
-                            }));
-                          }}
-                          required={true}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      {isEditingWarehouse ? (
-                        <>
-                          <Button variant="outline" onClick={cancelEditWarehouse}>
-                            Hủy
-                          </Button>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={cancelEditWarehouse}>
+                          Hủy
+                        </Button>
+                        {isEditingWarehouse ? (
                           <Button onClick={updateWarehouse}>
                             <Edit className="w-4 h-4 mr-2" />
                             Cập nhật
                           </Button>
-                        </>
-                      ) : (
-                        <Button onClick={createWarehouse}>
-                          <Plus className="w-4 h-4 mr-2" />
-                          Tạo Kho
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                        ) : (
+                          <Button onClick={createWarehouse}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Tạo Kho
+                          </Button>
+                        )}
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 )}
                 {/* Warehouses List */}
                 <div className="rounded-md border overflow-x-auto w-full">
@@ -1411,18 +1410,25 @@ const InventoryContent = () => {
                            Ngày Tạo
                            {getWarehouseSortIcon('createdAt')}
                          </TableHead>
+                         <TableHead 
+                           className="cursor-pointer hover:bg-muted/50 text-center"
+                           onClick={() => handleWarehouseSort('updatedAt')}
+                         >
+                           Ngày Cập Nhật
+                           {getWarehouseSortIcon('updatedAt')}
+                         </TableHead>
                          {canManageWarehouses && <TableHead className="text-center">Thao Tác</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sortedWarehouses.length === 0 ? (
+                      {warehouses.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={canManageWarehouses ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={canManageWarehouses ? 7 : 6} className="text-center py-8 text-muted-foreground">
                             Chưa có kho nào
                           </TableCell>
                         </TableRow>
                       ) : (
-                        sortedWarehouses.map((warehouse) => (
+                        warehouses.map((warehouse) => (
                           <TableRow key={warehouse.id}>
                             <TableCell className="font-medium text-center">{warehouse.code}</TableCell>
                             <TableCell className="text-center">{warehouse.name}</TableCell>
@@ -1430,7 +1436,10 @@ const InventoryContent = () => {
                             <TableCell className="text-center">{warehouse.address || '-'}</TableCell>
                             <TableCell className="text-center">
                               {new Date(warehouse.createdAt).toLocaleDateString('vi-VN')}
-                             </TableCell>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {warehouse.updatedAt ? new Date(warehouse.updatedAt).toLocaleDateString('vi-VN') : '-'}
+                            </TableCell>
                              {canManageWarehouses && (
                                <TableCell className="text-center flex justify-center">
                                  <div className="flex gap-2">

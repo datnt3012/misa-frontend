@@ -375,7 +375,6 @@ const CustomersContent = () => {
       email: customer.email || "",
       address: customer.address || "",
       vatRate: customer.vatRate,
-      administrativeUnitId: customer.administrativeUnitId ?? "none",
       addressInfo: buildAddressInfoState(customer.addressInfo),
       vatInfo: populateVatInfoState(customer.vatInfo),
     });
@@ -387,20 +386,21 @@ const CustomersContent = () => {
     try {
       const vatInfoPayload = buildVatInfoPayload(editCustomer.vatInfo);
       const updatePayload: any = {
-        name: editCustomer.name,
-        phoneNumber: editCustomer.phone || null,
-        email: editCustomer.email || null,
-        address: editCustomer.address || null,
-        vatRate: editCustomer.vatRate,
-        addressInfo: {
+      };
+      if (editCustomer.name) { updatePayload.name = editCustomer.name; }
+      if (editCustomer.phone) { updatePayload.phoneNumber = editCustomer.phone; }
+      if (editCustomer.email) { updatePayload.email = editCustomer.email; }
+      if (editCustomer.address) { updatePayload.address = editCustomer.address; }
+      if (editCustomer.vatRate) { updatePayload.vatRate = editCustomer.vatRate; }
+      if (editCustomer.addressInfo.provinceCode || editCustomer.addressInfo.districtCode || editCustomer.addressInfo.wardCode) {
+        updatePayload.addressInfo = {
           provinceCode: editCustomer.addressInfo?.provinceCode || null,
           districtCode: editCustomer.addressInfo?.districtCode || null,
           wardCode: editCustomer.addressInfo?.wardCode || null
-        }
-      };
-      if (vatInfoPayload) {
-        updatePayload.vatInfo = vatInfoPayload;
+        };
       }
+      if (vatInfoPayload) { updatePayload.vatInfo = vatInfoPayload; }
+      if (vatInfoPayload) { updatePayload.vatInfo = vatInfoPayload; }
       await customerApi.updateCustomer(editingCustomer.id, updatePayload);
       // Reload customers to get updated data
       await loadCustomers();

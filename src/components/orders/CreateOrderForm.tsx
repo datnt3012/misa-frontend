@@ -450,6 +450,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     //   return;
     // }
     setLoading(true);
+    // Track if a new customer was created in this submission attempt
+    let newlyCreatedCustomer: Customer | undefined;
     try {
       // If "Khách hàng mới" is selected, create the customer first
       let customerId = newOrder.customer_id;
@@ -481,6 +483,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           }
           customerId = newCustomer.id;
           selectedCustomer = newCustomer;
+          newlyCreatedCustomer = newCustomer; // Track that we created a new customer
           // Reload customers list
           const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
           setCustomers(customersRes.customers || []);
@@ -627,6 +630,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         description: getErrorMessage(error, "Không thể tạo đơn hàng"),
         variant: "destructive",
       });
+      // If a new customer was created but order creation failed,
+      // select the newly created customer in the combobox
+      if (newlyCreatedCustomer) {
+        const vatInfoFromNewCustomer = buildVatInfoFromCustomer(newlyCreatedCustomer);
+        const shippingInfoFromNewCustomer = buildShippingInfoFromCustomer(newlyCreatedCustomer);
+        setNewOrder(prev => ({
+          ...prev,
+          customer_id: newlyCreatedCustomer.id,
+          customer_name: newlyCreatedCustomer.name || prev.customer_name,
+          customer_code: newlyCreatedCustomer.customer_code || "",
+          customer_phone: newlyCreatedCustomer.phoneNumber || prev.customer_phone,
+          customer_email: newlyCreatedCustomer.email || prev.customer_email,
+          ...vatInfoFromNewCustomer,
+          ...shippingInfoFromNewCustomer,
+        }));
+        setShippingAddressVersion((v) => v + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -635,7 +655,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   // Show loading wrapper for the entire dialog
   return (
     <LoadingWrapper
-      isLoading={loading}
+      isLoading={false}
       error={null}
       onRetry={() => {
         loadData();
