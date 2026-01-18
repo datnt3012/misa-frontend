@@ -38,6 +38,22 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  // Map UI sort keys to API sort keys
+  const mapSortKeyToAPI = (key: string): string => {
+    const keyMap: Record<string, string> = {
+      'code': 'code',
+      'name': 'name',
+      'category': 'category',
+      'manufacturer': 'manufacturer',
+      'current_stock': 'stocklevel',
+      'cost_price': 'costPrice',
+      'unit_price': 'price',
+      'warehouse': 'warehouse',
+      'stock_updated_at': 'stockUpdatedAt',
+    };
+    return keyMap[key] || key;
+  };
+
   // Load products from API with pagination
   const loadProducts = React.useCallback(async () => {
     try {
@@ -66,6 +82,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           params.stockStatus = 'out_of_stock';
         }
       }
+      // Add sort parameters
+      if (sortConfig) {
+        params.sortBy = mapSortKeyToAPI(sortConfig.key);
+        params.sortOrder = sortConfig.direction;
+      }
       
       const response = await productApi.getProducts(params);
       setProducts(response.products || []);
@@ -82,7 +103,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     } finally {
       setLoadingProducts(false);
     }
-  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, toast]);
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, sortConfig, toast]);
 
   // Debounce search term
   useEffect(() => {
@@ -112,10 +133,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     loadAllProductsForOptions();
   }, [loadAllProductsForOptions]);
 
-  // Load products when pagination or filters change
+  // Load products when pagination, filters, or sort changes
   useEffect(() => {
     loadProducts();
-  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, loadProducts]);
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, sortConfig, loadProducts]);
   const findCategoryByValue = (value?: string | null) => {
     if (!value) return undefined;
     const trimmed = value.toString().trim();
@@ -273,61 +294,9 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     );
     return warehouses.filter(w => warehouseIds.has(w.id));
   }, [warehouses, allProducts]);
-  // Sorting logic
-  const sortedProducts = React.useMemo(() => {
-    if (!sortConfig) return filteredProducts;
-    return [...filteredProducts].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-      switch (sortConfig.key) {
-        case 'code':
-          aValue = a.code;
-          bValue = b.code;
-          break;
-        case 'name':
-          aValue = a.name;
-          bValue = b.name;
-          break;
-        case 'category':
-          aValue = a.categoryName || '';
-          bValue = b.categoryName || '';
-          break;
-        case 'manufacturer':
-          aValue = a.manufacturer || '';
-          bValue = b.manufacturer || '';
-          break;
-        case 'current_stock':
-          aValue = a.current_stock;
-          bValue = b.current_stock;
-          break;
-        case 'cost_price':
-          aValue = a.costPrice;
-          bValue = b.costPrice;
-          break;
-        case 'unit_price':
-          aValue = a.price;
-          bValue = b.price;
-          break;
-        case 'warehouse':
-          aValue = a.warehouse_name || a.location || '';
-          bValue = b.warehouse_name || b.location || '';
-          break;
-        case 'updated_at':
-          aValue = new Date(a.updated_at);
-          bValue = new Date(b.updated_at);
-          break;
-        default:
-          return 0;
-      }
-      if (aValue < bValue) {
-        return sortConfig.direction === 'asc' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-  }, [filteredProducts, sortConfig, warehouses]);
+  // Products are already sorted by API, so use filteredProducts directly
+  // Note: search term filtering is still done client-side for instant feedback
+  const sortedProducts = filteredProducts;
   // Pagination logic
   // When status or warehouse filter is active, use client-side pagination
   // Otherwise, use API pagination (products are already paginated from API)
@@ -380,7 +349,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     // Clear products to prevent showing old data while loading
     setProducts([]);
   };
-  // Handle sorting
+  // Handle sorting - triggers API reload
   const handleSort = (key: string) => {
     setSortConfig(prevConfig => {
       if (!prevConfig || prevConfig.key !== key) {
@@ -654,11 +623,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                 <TableHead>Trạng Thái</TableHead>
                 <TableHead 
                   className="cursor-pointer hover:bg-muted/50 select-none"
-                  onClick={() => handleSort('updated_at')}
+                  onClick={() => handleSort('stock_updated_at')}
                 >
                   <div className="flex items-center">
                     Cập Nhật
-                    {getSortIcon('updated_at')}
+                    {getSortIcon('stock_updated_at')}
                   </div>
                 </TableHead>
               </TableRow>
