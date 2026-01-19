@@ -512,6 +512,25 @@ const OrdersContent: React.FC = () => {
       });
     }
   };
+
+  const getFilenameFromContentDisposition = (cd?: string) => {
+    if (!cd) return null;
+  
+    // Ưu tiên filename* (RFC 5987)
+    const utf8Match = cd.match(/filename\*\=UTF-8''([^;]+)/i);
+    if (utf8Match) {
+      return decodeURIComponent(utf8Match[1]);
+    }
+  
+    // Fallback filename="..."
+    const asciiMatch = cd.match(/filename="([^"]+)"/i);
+    if (asciiMatch) {
+      return asciiMatch[1];
+    }
+  
+    return null;
+  }
+
   // Export delivery note to PDF
   const exportDeliveryNoteToPDF = async (order: any) => {
     try {
@@ -567,35 +586,40 @@ const OrdersContent: React.FC = () => {
   const exportDeliveryNoteToXLSX = async (order: any) => {
     try {
       setExportingDeliveryXLSX(true);
+
       const url = `/orders/${order.id}/export?type=xlsx`;
       const response = await apiClient.get(url, {
         responseType: 'blob',
       });
+
       const blob = response.data;
       const downloadUrl = URL.createObjectURL(blob);
+
       const link = document.createElement("a");
       link.href = downloadUrl;
-      // Get filename from Content-Disposition header, or use default
-      const contentDisposition = response.headers['content-disposition'];
-      let filename = `delivery_note_${order.order_number}.xlsx`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
-        if (filenameMatch) {
-          filename = decodeURIComponent(filenameMatch[1]);
-        }
-      }
+
+      const cd = response.headers['content-disposition'];
+      const parsedFilename = getFilenameFromContentDisposition(cd);
+
+      const filename =
+        parsedFilename ?? `delivery_note_${order.order_number}.xlsx`;
+
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
       URL.revokeObjectURL(downloadUrl);
+
       toast({
         title: "Thành công",
         description: `Đã xuất biên bản giao hàng ${order.order_number} ra file Excel`,
       });
+
       setShowExportDeliveryDialog(false);
     } catch (error: any) {
       let errorMessage = "Không thể xuất file Excel";
+
       if (error?.response?.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
@@ -605,6 +629,7 @@ const OrdersContent: React.FC = () => {
           errorMessage = `Lỗi từ server: ${error.response.status} ${error.response.statusText}`;
         }
       }
+
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -614,6 +639,7 @@ const OrdersContent: React.FC = () => {
       setExportingDeliveryXLSX(false);
     }
   };
+  // Handle sort icon click
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
