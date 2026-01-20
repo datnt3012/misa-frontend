@@ -546,11 +546,9 @@ const OrdersContent: React.FC = () => {
       // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `delivery_note_${order.order_number}.pdf`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
-        if (filenameMatch) {
-          filename = decodeURIComponent(filenameMatch[1]);
-        }
+      const parsedFilename = getFilenameFromContentDisposition(contentDisposition);
+      if (parsedFilename) {
+        filename = parsedFilename;
       }
       link.download = filename;
       document.body.appendChild(link);
