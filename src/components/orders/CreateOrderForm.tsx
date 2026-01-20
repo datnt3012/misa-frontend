@@ -380,75 +380,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     return { subtotal, debt };
   };
   const handleSubmit = async () => {
-    // if (!newOrder.customer_id || newOrder.customer_id === "__new__") {
-    //   handleCreateNewCustomer();
-    // } else {
-    //   // Validate for existing customer
-    //   if (!newOrder.customer_id) {
-    //     toast({
-    //       title: "Lỗi",
-    //       description: "Vui lòng chọn khách hàng",
-    //       variant: "destructive",
-    //     });
-    //     return;
-    //   }
-    //   if (!newOrder.customer_name) {
-    //     toast({
-    //       title: "Lỗi",
-    //       description: "Vui lòng nhập tên khách hàng",
-    //       variant: "destructive",
-    //     });
-    //     return;
-    //   }
-    // }
-    // if (newOrder.items.length === 0) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Vui lòng thêm ít nhất một sản phẩm",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // // Validate all items have required fields
-    // const invalidItems = newOrder.items.filter(item => 
-    //   !item.product_id || !item.product_name || !item.product_code || 
-    //   !item.quantity || item.unit_price == undefined
-    // );
-    // if (invalidItems.length > 0) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // const { subtotal } = calculateTotals();
-    // if (subtotal < 0) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Tổng tiền không được âm",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // const paymentMethod = newOrder.initial_payment_method || "cash";
-    // if (paymentMethod.length < 1 || paymentMethod.length > 20) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Phương thức thanh toán phải có độ dài từ 1-20 ký tự",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // // Validate bank selection for bank transfer
-    // if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
     setLoading(true);
     // Track if a new customer was created in this submission attempt
     let newlyCreatedCustomer: Customer | undefined;
@@ -535,7 +466,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         customerEmail: newOrder.customer_email || selectedCustomer?.email || undefined,
         customerAddress: selectedCustomer?.address || undefined,
         customerAddressInfo: customerAddressInfo,
-        code: newOrder.contract_code || undefined,
+        // code: newOrder.contract_code || undefined,
         contractCode: newOrder.contract_code || undefined,
         purchaseOrderNumber: newOrder.purchase_order_number || undefined,
         note: newOrder.notes || undefined,
