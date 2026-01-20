@@ -826,7 +826,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             <div className="space-y-4">
               {renderEditableField('contract_code', 'Mã hợp đồng', orderDetails?.contract_code || '')}
               {renderEditableField('customerId', 'Khách hàng', customerDetails?.name || orderDetails?.customer_name || '')}
-              {renderEditableField('customer_phone', 'Điện thoại', orderDetails?.customer_phone || '')}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">SĐT khách hàng:</label>
+                <div className="text-base">{orderDetails?.customer?.phone || orderDetails?.customer_phone || 'Không có số điện thoại'}</div>
+              </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
                 <div className="text-base">{orderDetails?.customer?.code || orderDetails?.customer_code || 'Chưa có mã'}</div>
@@ -852,7 +855,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   )}
                 </div>
               </div>
-              {renderEditableField('notes', 'Ghi chú', orderDetails?.notes, 'textarea')}
+              {renderEditableField('note', 'Ghi chú', orderDetails?.notes, 'textarea')}
             </div>
 
             {/* Shipping Information */}
