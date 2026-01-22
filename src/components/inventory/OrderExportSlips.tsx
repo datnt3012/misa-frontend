@@ -3,11 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// // import { supabase } from "@/integrations/supabase/client"; // Removed - using API instead // Removed - using API instead
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Package, CheckCircle, XCircle, Clock, FileText, Eye } from "lucide-react";
-import { ExportSlip } from "./ExportSlip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 interface OrderExportSlipsProps {
   orderId: string;
@@ -37,56 +35,7 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
   const [showSlipDialog, setShowSlipDialog] = useState(false);
   const { toast } = useToast();
   useEffect(() => {
-    loadExportSlips();
   }, [orderId]);
-  const loadExportSlips = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('export_slips')
-        .select(`
-          id,
-          slip_number,
-          status,
-          created_at,
-          approved_at,
-          export_completed_at,
-          created_by,
-          approved_by,
-          export_slip_items (
-            product_name,
-            product_code,
-            requested_quantity,
-            actual_quantity,
-            remaining_quantity
-          )
-        `)
-        .eq('order_id', orderId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      // Get creator and approver profiles separately
-      const enrichedData = await Promise.all((data || []).map(async (slip) => {
-        const [creatorProfile, approverProfile] = await Promise.all([
-          slip.created_by ? supabase.from('profiles').select('full_name').eq('id', slip.created_by).single() : null,
-          slip.approved_by ? supabase.from('profiles').select('full_name').eq('id', slip.approved_by).single() : null,
-        ]);
-        return {
-          ...slip,
-          creator_profile: creatorProfile?.data || { full_name: 'Không xác định' },
-          approver_profile: approverProfile?.data || { full_name: 'Không xác định' },
-        };
-      }));
-      setExportSlips(enrichedData);
-    } catch (error) {
-      toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -223,14 +172,6 @@ export const OrderExportSlips: React.FC<OrderExportSlipsProps> = ({ orderId, onU
               </DialogTitle>
             </DialogHeader>
             <div className="mt-4">
-              <ExportSlip 
-                orderId={orderId}
-                onUpdate={() => {
-                  loadExportSlips();
-                  if (onUpdate) onUpdate();
-                  setShowSlipDialog(false);
-                }}
-              />
             </div>
           </DialogContent>
         </Dialog>
