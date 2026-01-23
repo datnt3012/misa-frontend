@@ -974,8 +974,12 @@ const OrdersContent: React.FC = () => {
       {/* Orders Table */}
       <Card className="shadow-sm border">
         <CardContent className="p-0">
-          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)]">
-            <Table className="min-w-full text-xs sm:text-sm">
+          <div 
+            className="overflow-x-scroll overflow-y-auto max-h-[calc(100vh-400px)]" 
+            style={{ scrollbarGutter: 'stable' }}
+          >
+            <div className="table-wrapper" style={{ display: 'inline-block', minWidth: '100%' }}>
+              <Table className="min-w-full text-xs sm:text-sm">
               <TableHeader className="sticky top-0 z-10 bg-slate-50/50">
                 <TableRow className="border-b bg-slate-50/50">
                   <TableHead className="w-10 sm:w-12 py-1 sm:py-2 border-r border-slate-200">
@@ -1407,6 +1411,7 @@ const OrdersContent: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
