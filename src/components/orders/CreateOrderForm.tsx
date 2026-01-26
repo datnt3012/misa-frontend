@@ -896,6 +896,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             onChange={(value) => updateItem(index, "vat_percentage", value)}
                             min={0}
                             max={100}
+                            allowDecimal={true}
                             className="w-20 text-center"
                           />
                         </div>

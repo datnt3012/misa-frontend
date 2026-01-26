@@ -980,6 +980,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                                   min={0}
                                   max={100}
                                   value={editedItem.vat_percentage || 0}
+                                  allowDecimal={true}
                                   onChange={(value) => updateEditingItem(item.id || '', 'vat_percentage', value)}
                                   className="w-20 text-center"
                                 />
@@ -1503,35 +1504,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                     <Button size="sm" variant="outline" onClick={() => onOpenPaymentDialog?.()}>
                       Thanh toán
                     </Button>
-                  </div>
-                </div>
-                {/* Reconciliation tags are not shown in this dialog */}
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Mã hợp đồng:</span>
-                  <div className="flex items-center gap-2">
-                    {editingFields['contract_code'] ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={editValues['contract_code'] ?? (orderDetails?.contract_code || '')}
-                          onChange={(e) => setEditValues(prev => ({ ...prev, contract_code: e.target.value }))}
-                          className="w-40"
-                          placeholder="Nhập mã hợp đồng"
-                        />
-                        <Button size="sm" onClick={() => saveField('contract_code')} disabled={loading}>
-                          Lưu
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => cancelEditing('contract_code')}>
-                          Hủy
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono">{orderDetails?.contract_code || 'Chưa có'}</span>
-                        <Button size="sm" variant="outline" onClick={() => startEditing('contract_code', orderDetails?.contract_code || '')}>
-                          Sửa
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
