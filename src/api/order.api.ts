@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 import { number } from 'yup';
+import { title } from 'process';
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -863,6 +864,8 @@ export const orderApi = {
         // History entity has: id, entityType, entityId, action, title, message, oldValue, newValue, metadata, userId, createdAt, user
         const transformed: any = {
           id: item.id,
+          action: item.action,
+          title: item.title,
           order_id: item.entityId || item.entity_id || orderId,
           changed_at: item.createdAt || item.created_at || new Date().toISOString(),
           notes: item.message || item.title || '',
