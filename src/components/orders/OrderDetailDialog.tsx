@@ -104,7 +104,6 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
         page: 1,
         limit: 1000,
         warehouse: warehouseFilter,
-        hasStock: true
       });
       setProducts(response.products || []);
     } catch (error) {
@@ -565,7 +564,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
         product_code: item.product_code,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        total_price: item.total_price
+        total_price: item.total_price,
+        vat_percentage: item.vat_percentage
       }
     }));
   };
@@ -615,7 +615,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
         productName: editedItem.product_name || '',
         productCode: editedItem.product_code || '',
         quantity: editedItem.quantity || 0,
-        unitPrice: editedItem.unit_price || 0
+        unitPrice: editedItem.unit_price || 0,
+        vatPercentage: editedItem.vat_percentage || 0
       });
       
       // Refresh order details
@@ -697,6 +698,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       product_name: "",
       warehouse_id: defaultWarehouse.id,
       quantity: 1,
+      vat_percentage: 0,
       unit_price: 0,
       total_price: 0
     };
@@ -763,9 +765,9 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           productId: pendingItem.product_id,
           productName: pendingItem.product_name,
           productCode: pendingItem.product_code,
-          warehouseId: pendingItem.warehouse_id!,
           quantity: pendingItem.quantity,
-          unitPrice: pendingItem.unit_price
+          unitPrice: pendingItem.unit_price,
+          vatPercentage: pendingItem.vat_percentage
         });
       }
 
@@ -826,7 +828,10 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
             <div className="space-y-4">
               {renderEditableField('contract_code', 'Mã hợp đồng', orderDetails?.contract_code || '')}
               {renderEditableField('customerId', 'Khách hàng', customerDetails?.name || orderDetails?.customer_name || '')}
-              {renderEditableField('customer_phone', 'Điện thoại', orderDetails?.customer_phone || '')}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">SĐT khách hàng:</label>
+                <div className="text-base">{orderDetails?.customer?.phone || orderDetails?.customer_phone || 'Không có số điện thoại'}</div>
+              </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
                 <div className="text-base">{orderDetails?.customer?.code || orderDetails?.customer_code || 'Chưa có mã'}</div>
@@ -852,7 +857,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   )}
                 </div>
               </div>
-              {renderEditableField('notes', 'Ghi chú', orderDetails?.notes, 'textarea')}
+              {renderEditableField('note', 'Ghi chú', orderDetails?.notes, 'textarea')}
             </div>
 
             {/* Shipping Information */}
@@ -925,6 +930,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Tên SP</TableHead>
+                    <TableHead className="text-center">Thuế suất</TableHead>
                     <TableHead className="text-center">SL</TableHead>
                     <TableHead className="text-center">Giá</TableHead>
                     <TableHead className="text-center">Tổng</TableHead>
@@ -966,6 +972,19 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                                   <div className="font-medium">{item.product_code || 'N/A'}</div>
                                   <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
                                 </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isEditing ? (
+                                <NumberInput
+                                  min={0}
+                                  max={100}
+                                  value={editedItem.vat_percentage || 0}
+                                  onChange={(value) => updateEditingItem(item.id || '', 'vat_percentage', value)}
+                                  className="w-20 text-center"
+                                />
+                              ) : (
+                                `${(((item.total_price ?? 0) * (item.vat_percentage ?? 0)) / 100) } (${item.vat_percentage ?? 0}%)`
                               )}
                             </TableCell>
                             <TableCell className="text-center">
@@ -1068,6 +1087,18 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                           <TableCell className="text-center">
                             <div className="flex justify-center">
                               <NumberInput
+                                min={0}
+                                max={100}
+                                value={pendingItem.vat_percentage || 0}
+                                onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'vat_percentage', value)}
+                                className="w-20 text-center"
+                              />
+                              {<span className="text-muted-foreground text-sm flex items-center ml-2">%</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex justify-center">
+                              <NumberInput
                                 min={1}
                                 value={pendingItem.quantity || 1}
                                 onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'quantity', value)}
@@ -1080,11 +1111,11 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                               <CurrencyInput
                                 value={pendingItem.unit_price || 0}
                                 onChange={(value) => handlePendingNewItemChange(pendingItem.id!, 'unit_price', value)}
-                                className="w-24 text-right"
+                                className="w-24 text-center"
                               />
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-center font-medium">
                             {formatCurrency(pendingItem.total_price || 0)}
                           </TableCell>
                           <TableCell>

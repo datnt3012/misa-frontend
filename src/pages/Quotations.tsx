@@ -250,6 +250,23 @@ const QuotationsContent: React.FC = () => {
     const config = statusConfig[status] || { label: status, variant: 'outline' as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
+  const getFilenameFromContentDisposition = (cd?: string) => {
+    if (!cd) return null;
+  
+    // Ưu tiên filename* (RFC 5987)
+    const utf8Match = cd.match(/filename\*\=UTF-8''([^;]+)/i);
+    if (utf8Match) {
+      return decodeURIComponent(utf8Match[1]);
+    }
+  
+    // Fallback filename="..."
+    const asciiMatch = cd.match(/filename="([^"]+)"/i);
+    if (asciiMatch) {
+      return asciiMatch[1];
+    }
+  
+    return null;
+  };
   const exportToExcel = () => {
     if (quotations.length === 0) {
       toast({
@@ -364,9 +381,9 @@ const QuotationsContent: React.FC = () => {
       const contentDisposition = response.headers['content-disposition'];
       let filename = `quotation_${quotation.code}.pdf`;
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
-        if (filenameMatch) {
-          filename = decodeURIComponent(filenameMatch[1]);
+        const parsedFilename = getFilenameFromContentDisposition(contentDisposition);
+        if (parsedFilename) {
+          filename = parsedFilename;
         }
       }
       link.download = filename;
@@ -436,9 +453,9 @@ const QuotationsContent: React.FC = () => {
       const contentDisposition = response.headers['content-disposition'];
       let filename = `quotation_${quotation.code}.xlsx`;
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
-        if (filenameMatch) {
-          filename = decodeURIComponent(filenameMatch[1]);
+        const parsedFilename = getFilenameFromContentDisposition(contentDisposition);
+        if (parsedFilename) {
+          filename = parsedFilename;
         }
       }
       link.download = filename;

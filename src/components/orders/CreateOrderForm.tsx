@@ -36,7 +36,8 @@ interface OrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
-  vat_rate: number;
+  vat_percentage: number;
+  vat_total_price: number;
   vat_amount: number;
   warehouse_id: string;
 }
@@ -60,7 +61,8 @@ interface OrderFormState {
     wardCode: string;
   };
   vat_invoice_email: string;
-  vat_rate?: number;
+  vat_percentage?: number;
+  vat_total_price?: number;
   shipping_recipient_name: string;
   shipping_recipient_phone: string;
   shipping_address: string;
@@ -149,7 +151,8 @@ const createInitialOrderState = (): OrderFormState => ({
     wardCode: ""
   },
   vat_invoice_email: "",
-  vat_rate: undefined as number | undefined, // VAT rate (sẽ lấy từ customer nếu không có)
+  vat_percentage: undefined as number | undefined,
+  vat_total_price: undefined as number | undefined,
   // Shipping Information (auto-fill from selected customer)
   shipping_recipient_name: "",
   shipping_recipient_phone: "",
@@ -297,7 +300,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         quantity: 1,
         unit_price: 0,
         total_price: 0,
-        vat_rate: 0,
+        vat_percentage: 0,
+        vat_total_price: 0,
         vat_amount: 0,
         warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : "")
       }]
@@ -380,75 +384,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     return { subtotal, debt };
   };
   const handleSubmit = async () => {
-    // if (!newOrder.customer_id || newOrder.customer_id === "__new__") {
-    //   handleCreateNewCustomer();
-    // } else {
-    //   // Validate for existing customer
-    //   if (!newOrder.customer_id) {
-    //     toast({
-    //       title: "Lỗi",
-    //       description: "Vui lòng chọn khách hàng",
-    //       variant: "destructive",
-    //     });
-    //     return;
-    //   }
-    //   if (!newOrder.customer_name) {
-    //     toast({
-    //       title: "Lỗi",
-    //       description: "Vui lòng nhập tên khách hàng",
-    //       variant: "destructive",
-    //     });
-    //     return;
-    //   }
-    // }
-    // if (newOrder.items.length === 0) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Vui lòng thêm ít nhất một sản phẩm",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // // Validate all items have required fields
-    // const invalidItems = newOrder.items.filter(item => 
-    //   !item.product_id || !item.product_name || !item.product_code || 
-    //   !item.quantity || item.unit_price == undefined
-    // );
-    // if (invalidItems.length > 0) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Vui lòng điền đầy đủ thông tin sản phẩm và chọn kho",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // const { subtotal } = calculateTotals();
-    // if (subtotal < 0) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Tổng tiền không được âm",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // const paymentMethod = newOrder.initial_payment_method || "cash";
-    // if (paymentMethod.length < 1 || paymentMethod.length > 20) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Phương thức thanh toán phải có độ dài từ 1-20 ký tự",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    // // Validate bank selection for bank transfer
-    // if (paymentMethod === "bank_transfer" && !newOrder.initial_payment_bank) {
-    //   toast({
-    //     title: "Lỗi",
-    //     description: "Vui lòng chọn ngân hàng khi thanh toán bằng chuyển khoản",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
     setLoading(true);
     // Track if a new customer was created in this submission attempt
     let newlyCreatedCustomer: Customer | undefined;
@@ -535,7 +470,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         customerEmail: newOrder.customer_email || selectedCustomer?.email || undefined,
         customerAddress: selectedCustomer?.address || undefined,
         customerAddressInfo: customerAddressInfo,
-        code: newOrder.contract_code || undefined,
+        // code: newOrder.contract_code || undefined,
         contractCode: newOrder.contract_code || undefined,
         purchaseOrderNumber: newOrder.purchase_order_number || undefined,
         note: newOrder.notes || undefined,
@@ -579,7 +514,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         // Order details
         details: newOrder.items.map(it => ({
           productId: it.product_id,
-          warehouseId: it.warehouse_id,
+          vatPercentage: it.vat_percentage || 0,
           quantity: it.quantity,
           unitPrice: it.unit_price,
         })),
@@ -905,13 +840,22 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       Sản phẩm <span className="text-red-500">*</span>
                     </TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Thuế suất
+                    </TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                       Số lượng <span className="text-red-500">*</span>
                     </TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                       Đơn giá <span className="text-red-500">*</span>
                     </TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Thành tiền
+                      Tiền thuế GTGT
+                    </TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Thành tiền (chưa có thuế GTGT)
+                    </TableHead>
+                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                      Thành tiền (có thuế GTGT)
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700"></TableHead>
                   </TableRow>
@@ -948,10 +892,21 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
                         <div className="inline-block">
                           <NumberInput
+                            value={item.vat_percentage}
+                            onChange={(value) => updateItem(index, "vat_percentage", value)}
+                            min={0}
+                            max={100}
+                            className="w-20 text-center"
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
+                        <div className="inline-block">
+                          <NumberInput
                             value={item.quantity}
                             onChange={(value) => updateItem(index, "quantity", value)}
                             min={1}
-                            className="w-20"
+                            className="w-20 text-center"
                           />
                         </div>
                       </TableCell>
@@ -960,12 +915,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           <CurrencyInput
                             value={item.unit_price}
                             onChange={(value) => updateItem(index, "unit_price", value)}
-                            className="w-32"
+                            className="w-32 text-center"
                           />
                         </div>
                       </TableCell>
                       <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                        {(item.total_price * item.vat_percentage / 100).toLocaleString("vi-VN")}
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
                         {item.total_price.toLocaleString("vi-VN")}
+                      </TableCell>
+                      <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                        {(item.total_price + (item.total_price * item.vat_percentage / 100)).toLocaleString("vi-VN")}
                       </TableCell>
                       <TableCell className="align-top pt-4">
                         <Button
@@ -1029,7 +990,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             <CurrencyInput
                               value={expense.amount}
                               onChange={(value) => updateExpense(index, "amount", value)}
-                              className="w-32"
+                              className="w-32 text-center"
                             />
                           </TableCell>
                           <TableCell className="border-r border-slate-100 align-top pt-4">

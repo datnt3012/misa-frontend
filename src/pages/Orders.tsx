@@ -48,6 +48,75 @@ const isPendingDisplayTag = (tag: ApiOrderTag) => tagMatchesNames(tag, PENDING_T
 const getTagDisplayName = (tag: ApiOrderTag) => {
   return tag.display_name || tag.name || tag.raw_name || tag.id;
 };
+
+// Hook để đồng bộ chiều cao các item trong cùng một row
+const useSyncRowHeights = (orderId: string, itemCount: number) => {
+  useEffect(() => {
+    if (itemCount === 0) return;
+
+    const syncHeights = () => {
+      // Tìm tất cả các row item trong cùng một order
+      const rowSelector = `[data-order-id="${orderId}"] [data-item-row]`;
+      const rows = document.querySelectorAll<HTMLElement>(rowSelector);
+      
+      if (rows.length === 0) return;
+
+      // Nhóm các item theo index (item-row-index)
+      const itemsByIndex: { [key: number]: HTMLElement[] } = {};
+      
+      rows.forEach((row) => {
+        const index = parseInt(row.getAttribute('data-item-index') || '0');
+        if (!itemsByIndex[index]) {
+          itemsByIndex[index] = [];
+        }
+        itemsByIndex[index].push(row);
+      });
+
+      // Đồng bộ chiều cao cho mỗi nhóm
+      Object.values(itemsByIndex).forEach((items) => {
+        let maxHeight = 0;
+        
+        // Reset height để tính lại
+        items.forEach((item) => {
+          item.style.height = 'auto';
+        });
+
+        // Tìm chiều cao lớn nhất
+        items.forEach((item) => {
+          const height = item.offsetHeight;
+          if (height > maxHeight) {
+            maxHeight = height;
+          }
+        });
+
+        // Áp dụng chiều cao lớn nhất cho tất cả
+        items.forEach((item) => {
+          item.style.height = `${maxHeight}px`;
+        });
+      });
+    };
+
+    // Sync ngay lập tức và sau khi render
+    const timer = setTimeout(syncHeights, 0);
+    const rafTimer = requestAnimationFrame(syncHeights);
+    
+    // Sync khi window resize
+    window.addEventListener('resize', syncHeights);
+    
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(rafTimer);
+      window.removeEventListener('resize', syncHeights);
+    };
+  }, [orderId, itemCount]);
+};
+
+// Component để đồng bộ chiều cao các row
+const RowHeightSync: React.FC<{ orderId: string; itemCount: number }> = ({ orderId, itemCount }) => {
+  useSyncRowHeights(orderId, itemCount);
+  return null;
+};
+
 const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -268,7 +337,7 @@ const OrdersContent: React.FC = () => {
         }
       } else if (orders.length > 0) {
         // Orders loaded but this one not found, try to fetch it
-        orderApi.getOrderById(dialogState.entityId)
+        orderApi.getOrder(dialogState.entityId)
           .then(order => {
             setSelectedOrder(order);
             if (dialogState.dialogType === 'view') {
@@ -546,11 +615,9 @@ const OrdersContent: React.FC = () => {
       // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `delivery_note_${order.order_number}.pdf`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/);
-        if (filenameMatch) {
-          filename = decodeURIComponent(filenameMatch[1]);
-        }
+      const parsedFilename = getFilenameFromContentDisposition(contentDisposition);
+      if (parsedFilename) {
+        filename = parsedFilename;
       }
       link.download = filename;
       document.body.appendChild(link);
@@ -907,8 +974,12 @@ const OrdersContent: React.FC = () => {
       {/* Orders Table */}
       <Card className="shadow-sm border">
         <CardContent className="p-0">
-          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)]">
-            <Table className="min-w-full text-xs sm:text-sm">
+          <div 
+            className="overflow-x-scroll overflow-y-auto max-h-[calc(100vh-400px)]" 
+            style={{ scrollbarGutter: 'stable' }}
+          >
+            <div className="table-wrapper" style={{ display: 'inline-block', minWidth: '100%' }}>
+              <Table className="min-w-full text-xs sm:text-sm">
               <TableHeader className="sticky top-0 z-10 bg-slate-50/50">
                 <TableRow className="border-b bg-slate-50/50">
                   <TableHead className="w-10 sm:w-12 py-1 sm:py-2 border-r border-slate-200">
@@ -941,8 +1012,11 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Hãng sản xuất</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Giá</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Thuế suất</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị (chưa có thuế GTGT)</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng tiền thuế GTGT</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị (có thuế GTGT)</TableHead>
                     <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                     <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Số hợp đồng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>
@@ -972,7 +1046,8 @@ const OrdersContent: React.FC = () => {
                     const otherTags = tags.filter((tag) => !specialTags.includes(tag));
                     const hasReconciliation = specialTags.some((tag) => isReconciledDisplayTag(tag));
                     return (
-                      <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100">
+                      <TableRow key={order.id} className="hover:bg-slate-50/50 border-b border-slate-100" data-order-id={order.id}>
+                        <RowHeightSync orderId={order.id} itemCount={order.items?.length || 0} />
                         <TableCell className="py-3 border-r border-slate-200">
                           <input 
                             type="checkbox" 
@@ -1050,7 +1125,7 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
                               {order.items?.map((item: any, index: number) => (
-                                <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                   <div className="font-medium text-slate-900 truncate w-full" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
                                 </div>
                               ))}
@@ -1063,7 +1138,7 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
                               {order.items?.map((item: any, index: number) => (
-                                <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                   <div className="font-medium text-slate-900 truncate w-full" title={item.manufacturer || '-'}>{item.manufacturer || '-'}</div>
                                 </div>
                               ))}
@@ -1076,7 +1151,7 @@ const OrdersContent: React.FC = () => {
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                               <div className="divide-y divide-slate-100">
                                 {order.items?.map((item: any, index: number) => (
-                                  <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                  <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                     <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
                                   </div>
                                 ))}
@@ -1089,8 +1164,24 @@ const OrdersContent: React.FC = () => {
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                              <div className="divide-y divide-slate-100">
                                {order.items?.map((item: any, index: number) => (
-                                 <div key={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                 <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                    <div className="font-medium text-slate-900">{item.quantity || 0}</div>
+                                 </div>
+                               ))}
+                               {(!order.items || order.items.length === 0) && (
+                                 <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
+                               )}
+                             </div>
+                           </TableCell>
+                           {/* Vat Column */}
+                           <TableCell className="p-0 border-r border-slate-200 text-center">
+                             <div className="divide-y divide-slate-100">
+                               {order.items?.map((item: any, index: number) => (
+                                 <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                    <div className="font-medium text-slate-900 text-center leading-tight space-y-0">
+                                      <div className="leading-none">{formatVndNoSymbol(item.vat_price)}</div>
+                                      <div className="text-xs text-slate-500 leading-none">({item.vat_percentage}%)</div>
+                                    </div>
                                  </div>
                                ))}
                                {(!order.items || order.items.length === 0) && (
@@ -1118,6 +1209,23 @@ const OrdersContent: React.FC = () => {
                                {formatVndNoSymbol(
                                  // Backend totalAmount already includes products + expenses
                                  (order as any).totalAmount ?? order.total_amount ?? 0
+                               )}
+                             </div>
+                           </TableCell>
+                           {/* Vat Price Column - use backend aggregated vatPercentage * totalVat */}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-semibold text-slate-900">
+                               {formatVndNoSymbol(
+                                 (order as any).totalVat ?? order.total_vat ?? 0
+                               )}
+                             </div>
+                           </TableCell>
+                           {/* Total VAT Price Column - use backend aggregated vatTotalAmount*/}
+                           <TableCell className="py-3 border-r border-slate-200 text-center">
+                             <div className="text-sm font-semibold text-slate-900">
+                               {formatVndNoSymbol(
+                                 // Backend totalAmount already includes products + expenses
+                                 (order as any).totalVatAmount ?? order.total_vat_amount ?? 0
                                )}
                              </div>
                            </TableCell>
@@ -1162,18 +1270,23 @@ const OrdersContent: React.FC = () => {
                              <div className="text-sm font-medium text-slate-900">{order.contract_code || '-'}</div>
                            </TableCell>
                           {/* Quick Notes Column */}
-                          <TableCell className="relative p-3 border-r border-slate-200 w-64 sm:w-40">
-                            <textarea
-                              defaultValue={order.notes || ""}
-                              placeholder="Thêm ghi chú..."
-                              className="absolute inset-0 w-full h-full border-none bg-transparent text-sm p-2 py-7 leading-[1.5] hover:bg-muted/50 focus:bg-background focus:border-border whitespace-normal break-words resize-none"
-                              onBlur={(e) => handleQuickNote(order.id, e.target.value)}
+                          <TableCell className="relative p-0 border-r border-slate-200 w-64 sm:w-40 h-20">
+                            <div
+                              className="absolute inset-0 w-full h-full flex items-center justify-center text-center 
+                              text-sm p-2 overflow-auto hover:bg-muted/50 focus:bg-background 
+                              focus:outline-none focus:ring-1 focus:ring-ring break-words"
+                              contentEditable
+                              suppressContentEditableWarning={true}
+                              onBlur={(e) => handleQuickNote(order.id, e.currentTarget.textContent)}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
+                                  e.preventDefault();
                                   e.currentTarget.blur();
                                 }
                               }}
-                            />
+                            >
+                              {order.notes || ""}
+                            </div>
                           </TableCell>
                            {/* Creator Column */}
                           <TableCell className="py-3 border-r border-slate-200">
@@ -1298,6 +1411,7 @@ const OrdersContent: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
@@ -1634,3 +1748,4 @@ const OrdersContent: React.FC = () => {
  };
 
  export default Orders;
+
