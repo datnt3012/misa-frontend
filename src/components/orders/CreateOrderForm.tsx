@@ -852,10 +852,10 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       Tiền thuế GTGT
                     </TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Thành tiền (chưa có thuế GTGT)
+                      Thành tiền chưa có thuế GTGT
                     </TableHead>
                     <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Thành tiền (có thuế GTGT)
+                      Thành tiền có thuế GTGT
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700"></TableHead>
                   </TableRow>
@@ -896,6 +896,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             onChange={(value) => updateItem(index, "vat_percentage", value)}
                             min={0}
                             max={100}
+                            allowDecimal={true}
                             className="w-20 text-center"
                           />
                         </div>

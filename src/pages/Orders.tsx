@@ -1014,9 +1014,9 @@ const OrdersContent: React.FC = () => {
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[64px] sm:min-w-[70px]">Số lượng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[80px] sm:min-w-[90px]">Thuế suất</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Chi phí</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị (chưa có thuế GTGT)</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị chưa có thuế GTGT</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng tiền thuế GTGT</TableHead>
-                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị (có thuế GTGT)</TableHead>
+                   <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Tổng giá trị có thuế GTGT</TableHead>
                     <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Thanh toán</TableHead>
                     <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 text-center min-w-[96px] sm:min-w-[110px]">Số hợp đồng</TableHead>
                    <TableHead className="py-1 sm:py-2 font-medium text-slate-700 border-r border-slate-200 min-w-[112px] sm:min-w-[130px] text-center">Ghi chú</TableHead>

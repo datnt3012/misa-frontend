@@ -23,6 +23,8 @@ interface OrderViewDialogProps {
 }
 interface StatusHistoryItem {
   id: string;
+  action: string;
+  title: string;
   old_status?: string;
   new_status?: string;
   old_paid_amount?: number;
@@ -218,6 +220,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
         // Normalize and map backend history data
         const activities: StatusHistoryItem[] = historyData.map((item: any) => ({
           id: item.id || `history-${item.changed_at}`,
+          action: item.action || 'update',
+          title: item.title || '',
           old_status: item.old_status || item.oldStatus,
           new_status: item.new_status || item.newStatus,
           old_paid_amount: item.old_paid_amount ?? item.oldPaidAmount,
@@ -268,6 +272,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       // Add order creation activity
       activities.push({
         id: 'creation',
+        action: 'create',
+        title: 'Tạo đơn hàng',
         new_status: orderDetails.status,
         notes: `Đơn hàng ${orderDetails.order_number} được tạo`,
         changed_at: orderDetails.created_at,
@@ -279,6 +285,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       paymentHistory.forEach((payment) => {
         activities.push({
           id: `payment-${payment.id}`,
+          action: 'payment',
+          title: 'Thanh toán',
           new_status: orderDetails.status,
           notes: `Thanh toán ${formatCurrency(payment.amount)} bằng ${getPaymentMethodLabel(payment.payment_method)}${payment.notes ? ` - ${payment.notes}` : ''}`,
           changed_at: payment.payment_date,
@@ -292,6 +300,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
         if (timeDiff > 1000) {
           activities.push({
             id: 'update',
+            action: 'update',
+            title: 'Cập nhật đơn hàng',
             new_status: orderDetails.status,
             notes: `Đơn hàng được cập nhật`,
             changed_at: orderDetails.updated_at,
@@ -303,6 +313,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       if (orderDetails.completed_at) {
         activities.push({
           id: 'completion',
+          action: 'complete',
+          title: 'Hoàn thành đơn hàng',
           new_status: 'completed',
           notes: `Đơn hàng hoàn thành`,
           changed_at: orderDetails.completed_at,
@@ -830,6 +842,16 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                 <span>•</span>
                                 <span>{formatDateTime(item.changed_at)}</span>
                               </div>
+                              {/* {console.log(item)} */}
+                              {
+                                item.title && (
+                                  <div className="space-y-2">
+                                    <div className="text-sm text-muted-foreground">
+                                      <i>{item.title}</i>
+                                    </div>
+                                  </div>
+                                )
+                              }
                               <div className="space-y-2">
                                 {/* Show status change if old_status and new_status are different */}
                                 {item.old_status && item.new_status && item.old_status !== item.new_status && (
@@ -871,7 +893,14 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                 )}
                                 {item.notes && (
                                   <div className="bg-gray-50 rounded-md p-3">
-                                    <p className="text-sm text-gray-700">{item.notes}</p>
+                                    <p className="text-sm text-gray-700">
+                                      {item.notes.split('\n').map((line, index) => (
+                                        <React.Fragment key={index}>
+                                          {line}
+                                          {index < item.notes.split('\n').length - 1 && <br />}
+                                        </React.Fragment>
+                                      ))}
+                                    </p>
                                   </div>
                                 )}
                               </div>
