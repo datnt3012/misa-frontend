@@ -1540,7 +1540,7 @@ function ExportSlipsContent() {
                     </Card>
                     {/* Allocation status - only show when order is selected */}
                     {selectedOrderForAllocation && (
-                      <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm">
+                      <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm max-h-[220px] overflow-y-auto">
                         <h4 className="font-semibold text-gray-900 mb-3">Trạng thái phân bổ</h4>
                         <div>
                           {selectedOrderForAllocation.order_items?.map(item => {
@@ -1548,12 +1548,19 @@ function ExportSlipsContent() {
                             const remainingQuantity = item.quantity - exportedQuantity;
                             
                             return (
-                              <div key={item.id} className="grid grid-cols-2 gap-4 w-full bg-gray-50 p-5 rounded-md items-center">
-                                <div className="">
-                                  <div className="font-medium">{item.product_code} - <b>{item.product_name}</b></div>
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between w-full bg-gray-50 p-5 rounded-md"
+                              >
+                                <div>
+                                  <div className="font-medium">
+                                    {item.product_code} - <b>{item.product_name}</b>
+                                  </div>
                                 </div>
-                                <div className="text-right grid grid-cols-2 gap-4 justify-self-end">
-                                  <div className="text-medium text-muted-foreground">{exportedQuantity}/{item.quantity}</div>
+                                <div className="flex items-center gap-3 text-right">
+                                  <div className="text-sm text-muted-foreground">
+                                    {exportedQuantity}/{item.quantity}
+                                  </div>
                                   {remainingQuantity > 0 ? (
                                     <Badge variant="default" className="bg-yellow-100 text-yellow-800 w-fit">
                                       Còn {remainingQuantity}
