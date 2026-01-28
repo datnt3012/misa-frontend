@@ -87,6 +87,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         params.sortBy = mapSortKeyToAPI(sortConfig.key);
         params.sortOrder = sortConfig.direction;
       }
+      else {
+        // Default sort by stock updated time desc
+        params.sortBy = 'stockUpdatedAt';
+        params.sortOrder = 'desc';
+      }
       
       const response = await productApi.getProducts(params);
       setProducts(response.products || []);
@@ -113,25 +118,6 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
-  // Load all products for filter options (without filters, just first page to get categories and warehouses)
-  const loadAllProductsForOptions = React.useCallback(async () => {
-    try {
-      const response = await productApi.getProducts({ 
-        page: 1, 
-        limit: 1000 
-      });
-      setAllProducts(response.products || []);
-    } catch (error: any) {
-      // Silently fail - filter options will be empty
-      setAllProducts([]);
-    }
-  }, []);
-
-  // Load all products for filter options on mount
-  useEffect(() => {
-    loadAllProductsForOptions();
-  }, [loadAllProductsForOptions]);
 
   // Load products when pagination, filters, or sort changes
   useEffect(() => {
