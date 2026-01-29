@@ -422,24 +422,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       description: `Đã xuất ${exportData.length} sản phẩm ra file Excel`,
     });
   };
-  if (loadingProducts) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Báo Cáo Tồn Kho</CardTitle>
-          <CardDescription>Đang tải dữ liệu tồn kho...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Đang tải dữ liệu tồn kho...</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Loading state is now handled inline to prevent card remounting
   return (
     <Card>
       <CardHeader>
@@ -619,7 +602,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loadingProducts ? (
+              {loadingProducts && products.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canViewCostPrice ? 9 : 8} className="text-center py-8">
                     <div className="flex items-center justify-center space-x-2">
