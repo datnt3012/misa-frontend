@@ -1103,8 +1103,8 @@ const OrdersContent: React.FC = () => {
                              <div className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                                {maskPhoneNumber(order.customer_phone || "")}
                              </div>
-                             <div className="font-medium">{order.customer_name}</div>
-                             <div className="text-sm text-muted-foreground">
+                             <div className="font-medium truncate" title={order.customer_name}>{order.customer_name}</div>
+                             <div className="text-sm text-muted-foreground truncate" title={formatAddress(order.customer_address)}>
                                {formatAddress(order.customer_address)}
                              </div>
                              <div className="flex flex-wrap gap-1 mt-1 text-center justify-center">
