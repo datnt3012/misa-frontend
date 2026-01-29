@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
@@ -165,6 +165,11 @@ const OrdersContent: React.FC = () => {
     totalDebt: number;
     totalExpenses: number;
   } | null>(null);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  // Use useCallback for search handler to prevent input focus loss during re-renders
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value.trim());
+  }, []);
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
@@ -722,6 +727,7 @@ const OrdersContent: React.FC = () => {
     setStartDate(undefined);
     setEndDate(undefined);
     setCreatorFilter("all");
+    setFiltersCollapsed(false);
     setCurrentPage(1);
   };
   const handleMultiplePayments = () => {
@@ -792,9 +798,8 @@ const OrdersContent: React.FC = () => {
     { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
   );
   // Show loading if loading
-  if (loading) {
-    return <Loading message="Đang tải danh sách đơn hàng..." />;
-  }
+  // Don't return early - show inline loading to preserve input focus
+  const isInitialLoading = loading && orders.length === 0;
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
         <div className="w-full mx-auto space-y-3 sm:space-y-4">
@@ -818,13 +823,15 @@ const OrdersContent: React.FC = () => {
             <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4" />
-              <Input
-                placeholder="Nhập ID đơn sản (API ID)"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
-              />
+              <div className="relative">
+                <Search  className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground"/>
+                <Input
+                  placeholder="Nhập từ khoá tìm kiếm..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="w-64 pl-8"
+                />
+              </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-40">
@@ -839,69 +846,83 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Combobox
-              options={[
-                { label: "Tất cả loại", value: "all" },
-                ...categories.map((category) => ({
-                  label: category.name,
-                  value: category.id
-                }))
-              ]}
-              value={categoryFilter}
-              onValueChange={setCategoryFilter}
-              placeholder="Chọn loại sản phẩm"
-              searchPlaceholder="Tìm loại sản phẩm..."
-              emptyMessage="Không có loại sản phẩm nào"
-              className="w-40"
-            />
-            {/* Date Filter */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Từ ngày:</label>
-              <Input
-                type="date"
-                className="w-40"
-                value={startDate || ""}
-                onChange={(e) => setStartDate(e.target.value || undefined)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Đến ngày:</label>
-              <Input
-                type="date"
-                className="w-40"
-                value={endDate || ""}
-                onChange={(e) => setEndDate(e.target.value || undefined)}
-              />
-            </div>
-            {/* Creator Filter */}
-            <Combobox
-              options={[
-                { label: "Tất cả người tạo", value: "all" },
-                ...creators.map((creator) => {
-                  const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
-                  const displayName = fullName || creator.email || creator.username || 'Không xác định';
-                  return {
-                    label: displayName,
-                    value: creator.id
-                  };
-                })
-              ]}
-              value={creatorFilter}
-              onValueChange={setCreatorFilter}
-              placeholder="Người tạo đơn"
-              searchPlaceholder="Tìm người tạo..."
-              emptyMessage="Không có người tạo nào"
-              className="w-48"
-            />
+            {/* Collapse Filter Button */}
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            >
+              <Filter className="w-4 h-4" />
+              Bộ lọc
+              {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
             {/* Reset Filters Button */}
             <Button
               onClick={handleResetFilters}
               variant="outline"
-              className="ml-auto"
             >
               Đặt lại
             </Button>
           </div>
+          {/* Collapsible Filters Row */}
+          {filtersCollapsed && (
+            <div className="flex flex-wrap gap-4 items-center mt-4">
+              <Combobox
+                options={[
+                  { label: "Tất cả loại", value: "all" },
+                  ...categories.map((category) => ({
+                    label: category.name,
+                    value: category.id
+                  }))
+                ]}
+                value={categoryFilter}
+                onValueChange={setCategoryFilter}
+                placeholder="Chọn loại sản phẩm"
+                searchPlaceholder="Tìm loại sản phẩm..."
+                emptyMessage="Không có loại sản phẩm nào"
+                className="w-40"
+              />
+              {/* Date Filter */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Từ ngày:</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={startDate || ""}
+                  onChange={(e) => setStartDate(e.target.value || undefined)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Đến ngày:</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={endDate || ""}
+                  onChange={(e) => setEndDate(e.target.value || undefined)}
+                />
+              </div>
+              {/* Creator Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả người tạo", value: "all" },
+                  ...creators.map((creator) => {
+                    const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+                    const displayName = fullName || creator.email || creator.username || 'Không xác định';
+                    return {
+                      label: displayName,
+                      value: creator.id
+                    };
+                  })
+                ]}
+                value={creatorFilter}
+                onValueChange={setCreatorFilter}
+                placeholder="Người tạo đơn"
+                searchPlaceholder="Tìm người tạo..."
+                emptyMessage="Không có người tạo nào"
+                className="w-48"
+              />
+            </div>
+          )}
         </CardContent>
           </Card>
       {/* Summary Row */}
