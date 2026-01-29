@@ -27,13 +27,14 @@ import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpecificExportSlipCreation";
-import { format } from "date-fns";
+import { format, set } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { Loading } from "@/components/ui/loading";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import apiClient from "@/lib/api";
+import { CurrencyInput } from "@/components/ui/currency-input";
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
 const PENDING_TAG_NAMES = ["chưa đối soát", "pending reconciliation"];
@@ -127,6 +128,10 @@ const OrdersContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<string | undefined>();
   const [endDate, setEndDate] = useState<string | undefined>();
+  const [completedStartDate, setCompletedStartDate] = useState<string | undefined>();
+  const [completedEndDate, setCompletedEndDate] = useState<string | undefined>();
+  const [minTotalAmount, setMinTotalAmount] = useState<number | undefined>();
+  const [maxTotalAmount, setMaxTotalAmount] = useState<number | undefined>();
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -200,14 +205,18 @@ const OrdersContent: React.FC = () => {
       if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
-      if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
+      if (minTotalAmount !== undefined) params.minTotalAmount = minTotalAmount;
+      if (maxTotalAmount !== undefined) params.maxTotalAmount = maxTotalAmount;
+      if (completedStartDate) params.completedStartDate = completedStartDate;
+      if (completedEndDate) params.completedEndDate = completedEndDate;
+      if (creatorFilter !== 'all') params.createdBy = creatorFilter;
       const resp = await orderApi.getOrders(params);
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
       // Load payments for all orders to calculate accurate paid amounts
-      if (resp.orders && resp.orders.length > 0) {
-        loadPaymentsForOrders(resp.orders.map(o => o.id));
-      }
+      // if (resp.orders && resp.orders.length > 0) {
+      //   loadPaymentsForOrders(resp.orders.map(o => o.id));
+      // }
       // Set summary from API if available
       if (resp.summary) {
         setSummary({
@@ -247,7 +256,20 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, toast]);
+  }, [currentPage, 
+    itemsPerPage, 
+    statusFilter, 
+    categoryFilter, 
+    debouncedSearchTerm, 
+    startDate, 
+    endDate, 
+    completedStartDate,
+    completedEndDate,
+    minTotalAmount, 
+    maxTotalAmount, 
+    creatorFilter, 
+    toast]);
+    
   // Load payments for orders and cache total paid amounts
   const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
     if (!orderIds || orderIds.length === 0) return;
@@ -449,10 +471,23 @@ const OrdersContent: React.FC = () => {
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, fetchOrders]); // Fetch when pagination or filters change
+  }, [currentPage, 
+    itemsPerPage, 
+    statusFilter, 
+    categoryFilter, 
+    debouncedSearchTerm, 
+    startDate, 
+    endDate, 
+    completedStartDate, 
+    completedEndDate,
+    minTotalAmount,
+    maxTotalAmount, 
+    creatorFilter]); // Fetch when pagination or filters change
+
   useEffect(() => {
     loadOrderTagsCatalog();
   }, [loadOrderTagsCatalog]);
+
   // Fetch creators for filter
   const fetchCreators = async () => {
     try {
@@ -463,9 +498,11 @@ const OrdersContent: React.FC = () => {
       setCreators([]);
     }
   };
+
   useEffect(() => {
     fetchCreators();
   }, []);
+  
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
@@ -726,6 +763,10 @@ const OrdersContent: React.FC = () => {
     setCategoryFilter("all");
     setStartDate(undefined);
     setEndDate(undefined);
+    setMinTotalAmount(undefined);
+    setMaxTotalAmount(undefined);
+    setCompletedStartDate(undefined);
+    setCompletedEndDate(undefined);
     setCreatorFilter("all");
     setFiltersCollapsed(false);
     setCurrentPage(1);
@@ -818,9 +859,9 @@ const OrdersContent: React.FC = () => {
               THÊM MỚI
             </Button>
           </div>
-          {/* Filters */}
-          <Card>
-            <CardContent className="pt-6">
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -853,9 +894,29 @@ const OrdersContent: React.FC = () => {
               onClick={() => setFiltersCollapsed(!filtersCollapsed)}
             >
               <Filter className="w-4 h-4" />
-              Bộ lọc
+              {filtersCollapsed ? "Thu gọn" : "Mở rộng"}
               {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
+            {/* Creator Filter */}
+            <Combobox
+              options={[
+                { label: "Tất cả người tạo", value: "all" },
+                ...creators.map((creator) => {
+                  const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
+                  const displayName = fullName || creator.email || creator.username || 'Không xác định';
+                  return {
+                    label: displayName,
+                    value: creator.id
+                  };
+                })
+              ]}
+              value={creatorFilter}
+              onValueChange={setCreatorFilter}
+              placeholder="Người tạo đơn"
+              searchPlaceholder="Tìm người tạo..."
+              emptyMessage="Không có người tạo nào"
+              className="w-48"
+            />
             {/* Reset Filters Button */}
             <Button
               onClick={handleResetFilters}
@@ -866,7 +927,7 @@ const OrdersContent: React.FC = () => {
           </div>
           {/* Collapsible Filters Row */}
           {filtersCollapsed && (
-            <div className="flex flex-wrap gap-4 items-center mt-4">
+            <div className="flex flex-wrap gap-6 items-center mt-4">
               <Combobox
                 options={[
                   { label: "Tất cả loại", value: "all" },
@@ -882,49 +943,71 @@ const OrdersContent: React.FC = () => {
                 emptyMessage="Không có loại sản phẩm nào"
                 className="w-40"
               />
-              {/* Date Filter */}
+              {/* Created Date Filters */}
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Từ ngày:</label>
+                <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Ngày tạo:</label>
                 <Input
                   type="date"
                   className="w-40"
                   value={startDate || ""}
                   onChange={(e) => setStartDate(e.target.value || undefined)}
                 />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">-</label>
+                  <Input
+                    type="date"
+                    className="w-40"
+                    value={endDate || ""}
+                    onChange={(e) => setEndDate(e.target.value || undefined)}
+                  />
+                </div>
               </div>
+              {/*Completed Date Filters */}
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Đến ngày:</label>
+                <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Ngày hoàn thành:</label>
                 <Input
                   type="date"
                   className="w-40"
-                  value={endDate || ""}
-                  onChange={(e) => setEndDate(e.target.value || undefined)}
+                  value={completedStartDate || ""}
+                  onChange={(e) => setCompletedStartDate(e.target.value || undefined)}
                 />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">-</label>
+                  <Input
+                    type="date"
+                    className="w-40"
+                    value={completedEndDate || ""}
+                    onChange={(e) => setCompletedEndDate(e.target.value || undefined)}
+                  />
+                </div>
               </div>
-              {/* Creator Filter */}
-              <Combobox
-                options={[
-                  { label: "Tất cả người tạo", value: "all" },
-                  ...creators.map((creator) => {
-                    const fullName = `${creator.firstName || ''} ${creator.lastName || ''}`.trim();
-                    const displayName = fullName || creator.email || creator.username || 'Không xác định';
-                    return {
-                      label: displayName,
-                      value: creator.id
-                    };
-                  })
-                ]}
-                value={creatorFilter}
-                onValueChange={setCreatorFilter}
-                placeholder="Người tạo đơn"
-                searchPlaceholder="Tìm người tạo..."
-                emptyMessage="Không có người tạo nào"
-                className="w-48"
-              />
+              {/* Amount Filters */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Tổng tiền:</label>
+                <CurrencyInput
+                  className="w-40"
+                  value={minTotalAmount || ""}
+                  onChange={(value) => setMinTotalAmount(value || undefined)}
+                />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">-</label>
+                  <CurrencyInput
+                    className="w-40"
+                    value={maxTotalAmount || ""}
+                    onChange={(value) => setMaxTotalAmount(value || undefined)}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
-          </Card>
+      </Card>
       {/* Summary Row */}
       <Card>
         <CardContent className="pt-6">

@@ -243,6 +243,7 @@ export const orderApi = {
     region?: 'north' | 'central' | 'south';
     includeDeleted?: boolean;
     productIds?: string | string[];
+    createdBy?: string;
   }): Promise<{
     orders: Order[]; 
     total: number; 
@@ -301,6 +302,10 @@ export const orderApi = {
     // Region filter
     if (params?.region) {
       queryParams.append('region', params.region);
+    }
+    // Creator filter
+    if (params?.createdBy) {
+      queryParams.append('createdBy', params.createdBy);
     }
     // Product IDs filter: support CSV or array syntax per backend
     if (params?.productIds) {
