@@ -663,10 +663,21 @@ function ExportSlipsContent() {
     });
   };
   // Get available products for a specific row (excluding already selected products)
+  // If order is selected, only show products from that order; otherwise show all products
   const getAvailableProductsForRow = (currentIndex: number) => {
     const selectedProductIds = exportSlipForm.items
       .map((item, index) => index !== currentIndex ? item.product_id : null)
       .filter(id => id); // Remove nulls and current row
+    
+    // If order is selected, filter to only show products from that order
+    if (exportSlipForm.order_id && selectedOrderForAllocation?.order_items) {
+      const orderProductIds = selectedOrderForAllocation.order_items.map(item => item.product_id);
+      return products.filter(product => 
+        orderProductIds.includes(product.id) && !selectedProductIds.includes(product.id)
+      );
+    }
+    
+    // If no order selected, show all products (excluding already selected)
     return products.filter(product => !selectedProductIds.includes(product.id));
   };
   const calculateTotals = () => {
@@ -1341,11 +1352,11 @@ function ExportSlipsContent() {
                             size="sm"
                             onClick={() => {
                               isClosingDialogRef.current = true;
-      closeDialog();
-      setShowCreateDialog(false);
-      setTimeout(() => {
-        isClosingDialogRef.current = false;
-      }, 100);
+                              closeDialog();
+                              setShowCreateDialog(false);
+                              setTimeout(() => {
+                                isClosingDialogRef.current = false;
+                              }, 100);
                               navigate('/orders');
                             }}
                             className="flex items-center gap-2"
