@@ -35,6 +35,8 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import apiClient from "@/lib/api";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { productApi } from "@/api/product.api";
+
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
 const PENDING_TAG_NAMES = ["chưa đối soát", "pending reconciliation"];
@@ -149,6 +151,9 @@ const OrdersContent: React.FC = () => {
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
+  const [manufacturerFilter, setManufacturerFilter] = useState("all");
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
+  const [paymentMethodFilters, setpaymentMethodFilters] = useState("all");
   // Export delivery note states
   const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
   const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
@@ -210,6 +215,9 @@ const OrdersContent: React.FC = () => {
       if (completedStartDate) params.completedStartDate = completedStartDate;
       if (completedEndDate) params.completedEndDate = completedEndDate;
       if (creatorFilter !== 'all') params.createdBy = creatorFilter;
+      if (manufacturerFilter !== 'all') params.manufacturers = manufacturerFilter;
+      if (paymentMethodFilters !== 'all') params.paymentMethods = paymentMethodFilters;
+
       const resp = await orderApi.getOrders(params);
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
@@ -267,7 +275,9 @@ const OrdersContent: React.FC = () => {
     completedEndDate,
     minTotalAmount, 
     maxTotalAmount, 
-    creatorFilter, 
+    creatorFilter,
+    manufacturerFilter,
+    paymentMethodFilters,
     toast]);
     
   // Load payments for orders and cache total paid amounts
@@ -315,6 +325,7 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -322,6 +333,7 @@ const OrdersContent: React.FC = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
   // Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
@@ -381,11 +393,13 @@ const OrdersContent: React.FC = () => {
       // If orders not loaded yet, wait for them to load
     }
   }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
+
   // Handle creating export slip
   const handleCreateExportSlip = (order: any) => {
     setSelectedOrderForExport(order);
     setShowExportSlipDialog(true);
   };
+
   // Handle checkbox selection
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev => 
@@ -394,6 +408,7 @@ const OrdersContent: React.FC = () => {
         : [...prev, orderId]
     );
   };
+
   const handleSelectAll = () => {
     if (selectedOrders.length === orders.length) {
       setSelectedOrders([]);
@@ -401,6 +416,7 @@ const OrdersContent: React.FC = () => {
       setSelectedOrders(orders.map(order => order.id));
     }
   };
+
   // Handle delete orders
   const handleDeleteOrders = async () => {
     if (selectedOrders.length === 0) {
@@ -434,6 +450,7 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
+
   // Handle delete single order
   const handleDeleteSingleOrder = async () => {
     if (!orderToDelete) {
@@ -464,13 +481,15 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
+
   // Scroll to top when component mounts or route changes
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [location.pathname]);
+
+  // Fetch when pagination or filters change
   useEffect(() => {
     fetchOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, 
     itemsPerPage, 
     statusFilter, 
@@ -482,7 +501,10 @@ const OrdersContent: React.FC = () => {
     completedEndDate,
     minTotalAmount,
     maxTotalAmount, 
-    creatorFilter]); // Fetch when pagination or filters change
+    creatorFilter,
+    manufacturerFilter,
+    paymentMethodFilters,
+  ]);
 
   useEffect(() => {
     loadOrderTagsCatalog();
@@ -501,7 +523,18 @@ const OrdersContent: React.FC = () => {
 
   useEffect(() => {
     fetchCreators();
+    fetchManufacturers();
   }, []);
+
+  const fetchManufacturers = async () => {
+    try {
+      const data = await productApi.getManufacturers();
+      setManufacturers(data || []);
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+      setManufacturers([]);
+    }
+  };
   
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
@@ -887,16 +920,6 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            {/* Collapse Filter Button */}
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
-            >
-              <Filter className="w-4 h-4" />
-              {filtersCollapsed ? "Thu gọn" : "Mở rộng"}
-              {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </Button>
             {/* Creator Filter */}
             <Combobox
               options={[
@@ -917,32 +940,28 @@ const OrdersContent: React.FC = () => {
               emptyMessage="Không có người tạo nào"
               className="w-48"
             />
+            {/* Collapse Filter Button */}
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            >
+              <Filter className="w-4 h-4" />
+              {filtersCollapsed ? "Thu gọn" : "Mở rộng"}
+              {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
             {/* Reset Filters Button */}
             <Button
               onClick={handleResetFilters}
               variant="outline"
+              disabled={loading}
             >
-              Đặt lại
+              {loading ? "Đang tải..." : "Đặt lại"}
             </Button>
           </div>
           {/* Collapsible Filters Row */}
           {filtersCollapsed && (
-            <div className="flex flex-wrap gap-6 items-center mt-4">
-              <Combobox
-                options={[
-                  { label: "Tất cả loại", value: "all" },
-                  ...categories.map((category) => ({
-                    label: category.name,
-                    value: category.id
-                  }))
-                ]}
-                value={categoryFilter}
-                onValueChange={setCategoryFilter}
-                placeholder="Chọn loại sản phẩm"
-                searchPlaceholder="Tìm loại sản phẩm..."
-                emptyMessage="Không có loại sản phẩm nào"
-                className="w-40"
-              />
+            <div className="grid grid-cols-3 gap-3 gap-y-6 justify-items-center items-center mt-4">
               {/* Created Date Filters */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2">
@@ -1004,6 +1023,58 @@ const OrdersContent: React.FC = () => {
                   />
                 </div>
               </div>
+              {/* Category Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả loại sản phẩm", value: "all" },
+                  ...categories.map((category) => ({
+                    label: category.name,
+                    value: category.id
+                  }))
+                ]}
+                value={categoryFilter}
+                onValueChange={setCategoryFilter}
+                placeholder="Chọn loại sản phẩm"
+                searchPlaceholder="Tìm loại sản phẩm..."
+                emptyMessage="Không có loại sản phẩm nào"
+                className="w-60"
+              />
+              {/* Category Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả phương thức thanh toán", value: "all" },
+                  ...[
+                    {id: 'cash', name: 'Tiền mặt'},
+                    {id: 'credit_card', name: 'Thẻ tín dụng'},
+                    {id: 'bank_transfer', name: 'Chuyển khoản'}
+                  ].map((pm) => ({
+                    label: pm.name,
+                    value: pm.id
+                  }))
+                ]}
+                value={paymentMethodFilters}
+                onValueChange={setpaymentMethodFilters}
+                placeholder="Chọn phương thức thanh toán"
+                searchPlaceholder="Tìm phương thức thanh toán..."
+                emptyMessage="Không có phương thức thanh toán nào"
+                className="w-80"
+              />
+              {/* Manifacturers Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả nhà sản xuất", value: "all" },
+                  ...manufacturers.map((m) => ({
+                    label: m,
+                    value: m
+                  }))
+                ]}
+                value={manufacturerFilter}
+                onValueChange={setManufacturerFilter}
+                placeholder="Nhà sản xuất"
+                searchPlaceholder="Tìm nhà sản xuất..."
+                emptyMessage="Không có nhà sản xuất nào"
+                className="w-60"
+              />
             </div>
           )}
         </CardContent>

@@ -244,6 +244,7 @@ export const orderApi = {
     includeDeleted?: boolean;
     productIds?: string | string[];
     createdBy?: string;
+    manufacturers?: string | string[];
   }): Promise<{
     orders: Order[]; 
     total: number; 
@@ -320,6 +321,8 @@ export const orderApi = {
       }
     }
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
+    if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
+
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.ORDERS.LIST;

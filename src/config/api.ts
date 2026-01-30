@@ -78,6 +78,7 @@ export const API_ENDPOINTS = {
     IMPORT_STATUS_LIST: '/products/import/status',
     IMPORT_STATUS: (jobId: string) => `/products/import/status/${jobId}`,
     EXPORT: '/products/export',
+    MANUFACTURERS: '/products/manufacturers',
   },
   
   // Categories

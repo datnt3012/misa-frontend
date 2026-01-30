@@ -436,5 +436,16 @@ export const productApi = {
     }
     const blob = await response.blob();
     return { blob, filename };
+  },
+  // Get all manufacturers
+  getManufacturers: async (): Promise<string[]> => {
+    const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.MANUFACTURERS);
+    const data = response?.data || response;
+    // Backend returns { code, message, data: [...] }
+    if (data && Array.isArray(data.data)) {
+      return data.data;
+    }
+    // Fallback if data is directly an array
+    return Array.isArray(data) ? data : [];
   }
 };
