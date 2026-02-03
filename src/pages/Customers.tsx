@@ -302,19 +302,26 @@ const CustomersContent = () => {
   const fetchCustomerOrders = async (customerId: string) => {
     try {
       // Use backend API to fetch customer orders
-      const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000 });
-      const allOrders = ordersResponse.orders || [];
-      // Filter orders for this customer
-      const customerOrders = allOrders.filter(order => order.customer_id === customerId);
-      setCustomerOrders(customerOrders);
-      // Calculate customer stats
+      const ordersResponse = await orderApi.getOrders({ page: 1, limit: 1000, customerId: customerId});
+      const customerOrders = ordersResponse.orders || [];
       const totalOrders = customerOrders.length;
-      const totalSpent = customerOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
-      const currentDebt = customerOrders.reduce((sum, order) => sum + Number(order.debt_amount || 0), 0);
+      const totalSpent = ordersResponse.summary?.totalInitialPayment || 0;
+      const totalDebt = ordersResponse.summary?.totalDebt || 0;
+      setCustomerOrders(customerOrders.map(order => ({
+        id: order.id,
+        order_number: order.order_number,
+        status: order.status,
+        total_amount: order.totalAmount,
+        paid_amount: order.totalPaidAmount,
+        debt_amount: order.remainingDebt,
+        created_at: order.created_at,
+        order_type: 'bán hàng',
+      })));
+      // Calculate customer stats
       setCustomerStats({
         total_orders: totalOrders,
         total_spent: totalSpent,
-        current_debt: currentDebt
+        current_debt: totalDebt,
       });
     } catch (error) {
       toast({
@@ -1159,10 +1166,12 @@ const CustomersContent = () => {
                                 {Number(order.total_amount).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number(order.paid_amount ?? (order as any).initial_payment).toLocaleString('vi-VN')}
+                                <span className="text-green-600">
+                                  {Number(order.paid_amount ?? (order as any).initial_payment).toLocaleString('vi-VN')}
+                                </span>
                               </TableCell>
                               <TableCell className="text-right">
-                                <span className={Number(order.debt_amount) > 0 ? 'text-red-600' : 'text-green-600'}>
+                                <span className="text-red-600">
                                   {Number(order.debt_amount).toLocaleString('vi-VN')}
                                 </span>
                               </TableCell>
