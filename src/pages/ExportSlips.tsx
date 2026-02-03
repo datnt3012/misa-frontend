@@ -922,8 +922,8 @@ function ExportSlipsContent() {
       // Chuyển sang tab "Đang chạy" để user có thể thấy job
       setJobStatusTab('running');
       
-      // Close dialog và reset form
-      setIsImportDialogOpen(false);
+      // reset form
+      // setIsImportDialogOpen(false);
       setImportFile(null);
       setImportErrors([]);
       setImportSummary(null);
@@ -2427,6 +2427,7 @@ function ExportSlipsContent() {
                   <SelectItem value="approved">Đã duyệt</SelectItem>
                   <SelectItem value="picked">Đã lấy hàng</SelectItem>
                   <SelectItem value="exported">Đã xuất kho</SelectItem>
+                  <SelectItem value="rejected">Đã từ chối</SelectItem>
                 </SelectContent>
               </Select>
               {/* Category Filter */}
