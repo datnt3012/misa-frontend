@@ -25,6 +25,7 @@ export interface ExportSlip {
   picked_at?: string;
   exported_at?: string;
   created_by: string;
+  completed_at?: string
   approved_by?: string;
   picked_by?: string;
   exported_by?: string;
@@ -33,9 +34,21 @@ export interface ExportSlip {
     order_number: string;
     contract_code: string;
     customer_name: string;
-    customer_address?: string;
     customer_phone?: string;
+    customer_address?: string;
     customer_addressInfo?: {
+      provinceCode?: string;
+      districtCode?: string;
+      wardCode?: string;
+      province?: { code?: string; name?: string; };
+      district?: { code?: string; name?: string; };
+      ward?: { code?: string; name?: string; };
+      provinceName?: string;
+      districtName?: string;
+      wardName?: string;
+    };
+    receiver_address?: string
+    receiver_addressInfo?: {
       provinceCode?: string;
       districtCode?: string;
       wardCode?: string;
@@ -104,7 +117,7 @@ const normalize = (row: any): ExportSlip => {
     created_at: row.createdAt ?? row.created_at ?? '',
     approved_at: row.approved_at ?? row.approvedAt ?? undefined,
     picked_at: row.picked_at ?? row.pickedAt ?? undefined,
-    exported_at: row.exported_at ?? row.exportedAt ?? undefined,
+    completed_at: row.completed_at ?? row.completedAt ?? undefined,
     created_by: row.created_by ?? row.createdBy ?? '',
     approved_by: row.approved_by ?? row.approvedBy ?? undefined,
     picked_by: row.picked_by ?? row.pickedBy ?? undefined,
@@ -144,6 +157,22 @@ const normalize = (row: any): ExportSlip => {
       customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
       customer_addressInfo: (() => {
         const ai = row.order.customer_addressInfo || row.order.customerAddressInfo || row.order.customer?.addressInfo || row.order.customer?.address_info;
+        if (!ai) return undefined;
+        return {
+          provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
+          districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+          wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name ?? ai.provinceName,
+          districtName: ai.district?.name ?? ai.districtName,
+          wardName: ai.ward?.name ?? ai.wardName,
+        };
+      })(),
+      receiver_address: row.order.receiver_address ?? row.order.receiverAddress ?? row.order.receiver?.address ?? undefined,
+      receiver_addressInfo: (() => {
+        const ai = row.order.receiver_addressInfo || row.order.receiverAddressInfo || row.order.receiver?.addressInfo || row.order.receiver?.address_info || row.order.address_info || row.order.addressInfo;
         if (!ai) return undefined;
         return {
           provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
@@ -208,13 +237,23 @@ export const exportSlipsApi = {
     const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, slipData);
     return normalize(response.data || response);
   },
-  getSlips: async (params?: { page?: number; limit?: number; status?: string; search?: string; orderId?: string }): Promise<{ slips: ExportSlip[]; total: number; page: number; limit: number }> => {
+  getSlips: async (params?: { page?: number; limit?: number; status?: string; search?: string; orderId?: string; startDate?: string; endDate?: string; completedStartDate?: string; completedEndDate?: string; warehouseId?: string; categories?: string; manufacturers?: string; sortBy?: string; sortOrder?: string;}): Promise<{ slips: ExportSlip[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
     if (params?.status) queryParams.append('status', params.status);
     if (params?.search) queryParams.append('keyword', params.search);
     if (params?.orderId) queryParams.append('orderId', params.orderId);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.completedStartDate) queryParams.append('completedStartDate', params.completedStartDate);
+    if (params?.completedEndDate) queryParams.append('completedEndDate', params.completedEndDate);
+    if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+    if (params?.categories) queryParams.append('categories', params.categories);
+    if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers);
+
     queryParams.append('type', 'export'); // Filter for export type only
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`;
     const response = await api.get<any>(url);

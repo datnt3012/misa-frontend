@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,23 +27,19 @@ import { customerApi, type Customer } from '@/api/customer.api';
 import { productApi } from '@/api/product.api';
 import { warehouseApi } from '@/api/warehouse.api';
 import { stockLevelsApi } from '@/api/stockLevels.api';
+import { categoriesApi } from '@/api/categories.api';
 import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
 import { useToast } from '@/hooks/use-toast';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
+import { set } from 'date-fns';
+
 function ExportSlipsContent() {
   const navigate = useNavigate();
   const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [addressCache, setAddressCache] = useState<Record<string, string>>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<string>('created_at');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [total, setTotal] = useState<number>(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState<ExportSlip | null>(null);
   const [slipDetail, setSlipDetail] = useState<ExportSlip | null>(null);
@@ -55,6 +51,8 @@ function ExportSlipsContent() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -82,6 +80,39 @@ function ExportSlipsContent() {
   const previousJobStatusesRef = React.useRef<Record<string, WarehouseReceiptImportJobStatus>>({});
   const [isPollingActive, setIsPollingActive] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [completedStartDate, setCompletedStartDate] = useState<string>('');
+  const [completedEndDate, setCompletedEndDate] = useState<string>('');
+  const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [manufacturerFilter, setManufacturerFilter] = useState("all");
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [total, setTotal] = useState<number>(0);
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setWarehouseFilter("all");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setManufacturerFilter("all");
+    setFiltersCollapsed(false);
+    setCurrentPage(1);
+    setSortDirection('desc');
+    setSortField('createdAt')
+  };
+
   // Export slip form state
   const generateSlipCode = () => {
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -171,6 +202,8 @@ function ExportSlipsContent() {
 
   useEffect(() => {
     fetchExportSlips();
+    fetchCategories();
+    fetchManufacturers();
     loadOrders();
     // Load active jobs on mount
     refreshImportJobs({ onlyActive: true });
@@ -182,7 +215,20 @@ function ExportSlipsContent() {
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, [displayLimit, currentPage, debouncedSearchTerm, sortField, sortDirection]);
+  }, [displayLimit, 
+    currentPage, 
+    debouncedSearchTerm,
+    startDate,
+    endDate,
+    completedStartDate,
+    completedEndDate,
+    warehouseFilter,
+    statusFilter,
+    categoryFilter,
+    manufacturerFilter,
+    sortField, 
+    sortDirection,
+  ]);
 
   // Read URL and auto-open dialog if present
   useEffect(() => {
@@ -235,11 +281,24 @@ function ExportSlipsContent() {
   }, [showCreateDialog]);
   const fetchExportSlips = async () => {
     try {
-      const resp = await exportSlipsApi.getSlips({ 
+      setLoading(true);
+      const params: any = {
         page: currentPage, 
         limit: displayLimit,
-        search: debouncedSearchTerm || undefined
-      });
+      }
+      if(sortField) {params.sortBy = sortField;}
+      if(sortDirection) {params.sortOrder = sortDirection;}
+      if(debouncedSearchTerm) {params.search = debouncedSearchTerm;}
+      if(startDate) {params.startDate = startDate;}
+      if(endDate) {params.endDate = endDate;}
+      if(completedStartDate) {params.completedStartDate = completedStartDate;}
+      if(completedEndDate) {params.completedEndDate = completedEndDate;}
+      if(warehouseFilter != 'all') {params.warehouseId = warehouseFilter;}
+      if(statusFilter != 'all') {params.status = statusFilter;}
+      if(categoryFilter != 'all') {params.categories = categoryFilter;}
+      if(manufacturerFilter != 'all') {params.manufacturers = manufacturerFilter;}
+
+      const resp = await exportSlipsApi.getSlips(params);
       // If order data is missing or incomplete, we'll need to fetch it separately
       // Sử dụng getOrderIncludeDeleted theo ID để không phụ thuộc vào pagination
       const slips = await Promise.all((resp.slips || []).map(async (s) => {
@@ -257,6 +316,8 @@ function ExportSlipsContent() {
               customer_address: orderResponse.customer_address || orderData?.customer_address || undefined,
               customer_phone: orderResponse.customer_phone || orderData?.customer_phone || undefined,
               customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo || orderData?.customer_addressInfo || undefined,
+              receiver_address: orderResponse.receiverAddress || orderData.receiver_address || undefined,
+              receiver_addressInfo: orderResponse.addressInfo || orderData.receiver_addressInfo || undefined,
               total_amount: orderResponse.total_amount || orderData?.total_amount || 0,
               order_items: orderResponse.order_items || orderData?.order_items || undefined
             };
@@ -276,6 +337,7 @@ function ExportSlipsContent() {
           notes: s.notes || undefined,
           approval_notes: s.approval_notes || undefined,
           created_at: s.created_at || '',
+          completed_at: s.completed_at,
           approved_at: s.approved_at || undefined,
           created_by: s.created_by || '',
           approved_by: s.approved_by || undefined,
@@ -286,6 +348,8 @@ function ExportSlipsContent() {
             customer_address: orderData.customer_address || undefined,
             customer_phone: orderData.customer_phone || undefined,
             customer_addressInfo: orderData.customer_addressInfo || undefined,
+            receiver_address: orderData.receiver_address,
+            receiver_addressInfo: orderData.receiver_addressInfo,
             total_amount: orderData.total_amount || 0,
             order_items: orderData.order_items || undefined,
           } : undefined,
@@ -299,12 +363,12 @@ function ExportSlipsContent() {
       // Update address cache for slips that now have addressInfo
       const newCache: Record<string, string> = {};
       for (const slip of slips) {
-        if (slip.order?.customer_address && slip.order?.customer_addressInfo) {
-          const fullAddress = formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo);
+        if (slip.order?.receiver_address && slip.order?.receiver_addressInfo) {
+          const fullAddress = formatFullAddress(slip.order.receiver_address, slip.order.receiver_addressInfo);
           newCache[slip.id] = fullAddress;
-        } else if (slip.order?.customer_address) {
+        } else if (slip.order?.receiver_address) {
           // Even without addressInfo, cache the basic address
-          newCache[slip.id] = slip.order.customer_address;
+          newCache[slip.id] = slip.order.receiver_address;
         }
       }
       setAddressCache(newCache);
@@ -315,6 +379,9 @@ function ExportSlipsContent() {
         description: error.response?.data?.message || error.message || "Không thể tải danh sách phiếu xuất kho. Vui lòng kiểm tra kết nối backend.",
         variant: "destructive",
       });
+    }
+    finally {
+      setLoading(false);
     }
   };
 
@@ -337,6 +404,8 @@ function ExportSlipsContent() {
             customer_address: orderResponse.customer_address || detail.order?.customer_address || undefined,
             customer_phone: orderResponse.customer_phone || detail.order?.customer_phone || undefined,
             customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo || detail.order?.customer_addressInfo || undefined,
+            receiver_address: orderResponse.receiverAddress || detail.order?.receiver_address || undefined,
+            receiver_addressInfo: orderResponse.addressInfo || detail.order?.receiver_addressInfo || undefined,
             total_amount: orderResponse.total_amount || detail.order?.total_amount || 0,
             order_items: orderResponse.order_items || detail.order?.order_items || undefined,
           };
@@ -475,6 +544,27 @@ function ExportSlipsContent() {
       });
     }
   };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+      // Filter out deleted categories
+      const activeCategories = response.categories.filter(cat => cat.isActive);
+      setCategories(activeCategories);
+    } catch (error) {
+    }
+  };
+
+  const fetchManufacturers = async () => {
+    try {
+      const data = await productApi.getManufacturers();
+      setManufacturers(data || []);
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+      setManufacturers([]);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -509,23 +599,7 @@ function ExportSlipsContent() {
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
   };
-  // Enhanced address formatting with fallback to order API
-  const formatAddressWithFallback = async (slip: ExportSlip) => {
-    if (slip.order?.customer_addressInfo) {
-      return formatFullAddress(slip.order.customer_address || '', slip.order.customer_addressInfo);
-    }
-    // If no addressInfo in export slip, try to get from order API
-    if (slip.order_id) {
-      try {
-        const orderDetails = await orderApi.getOrderIncludeDeleted(slip.order_id);
-        if (orderDetails.customer_addressInfo) {
-          return formatFullAddress(slip.order?.customer_address || '', orderDetails.customer_addressInfo);
-        }
-      } catch (error) {
-      }
-    }
-    return slip.order?.customer_address || '';
-  };
+
   // Permission checks removed - let backend handle authorization
   const loadOrders = async () => {
     try {
@@ -1180,7 +1254,7 @@ function ExportSlipsContent() {
 
   const exportToExcel = () => {
     // Prepare data for export
-    const exportData = filteredAndSortedSlips.map((slip, index) => {
+    const exportData = exportSlips.map((slip, index) => {
       // Get product details for each slip
       const productDetails = slip.order?.order_items?.map((item) => {
         const exportItem = slip.export_slip_items?.find(
@@ -1199,7 +1273,7 @@ function ExportSlipsContent() {
         'Số phiếu': slip.code,
         'Đơn hàng': slip.order?.order_number || '',
         'Khách hàng': slip.order?.customer_name || '',
-        'Địa chỉ': slip.order?.customer_address ? formatFullAddress(slip.order.customer_address, slip.order.customer_addressInfo) : '',
+        'Địa chỉ': slip.order?.receiver_address ? formatFullAddress(slip.order.receiver_address, slip.order.receiver_addressInfo) : '',
         'SĐT': slip.order?.customer_phone || '',
         'Trạng thái': slip.status === 'pending' ? 'Chờ' : 
                      slip.status === 'picked' ? 'Đã lấy hàng' :
@@ -1240,58 +1314,10 @@ function ExportSlipsContent() {
       description: `Đã xuất ${exportData.length} phiếu xuất kho ra file Excel`,
     });
   };
-  // Filter and sort export slips (client-side sorting since API doesn't support it yet)
-  const filteredAndSortedSlips = exportSlips
-    .sort((a, b) => {
-      let aValue: any, bValue: any;
-      switch (sortField) {
-        case 'slip_number':
-          aValue = a.code;
-          bValue = b.code;
-          break;
-        case 'order_number':
-          aValue = a.order?.order_number || '';
-          bValue = b.order?.order_number || '';
-          break;
-        case 'contract_code':
-          aValue = a.order?.contract_code || '';
-          bValue = b.order?.contract_code || '';
-          break;
-        case 'customer_name':
-          aValue = a.order?.customer_name || '';
-          bValue = b.order?.customer_name || '';
-          break;
-        case 'total_amount':
-          aValue = a.order?.total_amount || 0;
-          bValue = b.order?.total_amount || 0;
-          break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        case 'created_at':
-        default:
-          aValue = new Date(a.created_at);
-          bValue = new Date(b.created_at);
-          break;
-      }
-      if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = bValue.toLowerCase();
-      }
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
+
   return (
     <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Quản Lý Phiếu Xuất Kho</h1>
-          <p className="text-muted-foreground">
-            Danh sách và duyệt phiếu xuất kho hàng hóa
-          </p>
-        </div>
+      <div className="flex justify-end items-center">
         <Dialog open={showCreateDialog} onOpenChange={(open) => {
           setShowCreateDialog(open);
           if (open) {
@@ -1842,329 +1868,6 @@ function ExportSlipsContent() {
                 </DialogContent>
               </Dialog>
       </div>
-      {/* Import Job History Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
-              <TabsTrigger value="history">Lịch sử ({jobHistoryPagination?.total || completedJobs.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="running" className="mt-4 space-y-3">
-              {runningJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
-                </p>
-              ) : (
-                runningJobs.map((job) => (
-                  <div
-                    key={job.jobId}
-                    onClick={() => handleJobCardSelect(job.jobId)}
-                    className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
-                      activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-sm font-medium">
-                      <span>Job #{job.jobId.slice(-6)}</span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
-                        {(job.status === 'queued' || job.status === 'processing') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCancelJob(job.jobId);
-                            }}
-                            disabled={cancellingJobId === job.jobId}
-                          >
-                            {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <Progress value={job.percent ?? 0} />
-                    <div className="text-xs text-muted-foreground">
-                      Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
-                    </div>
-                    {job.errors && job.errors.length > 0 && (
-                      <div className="text-xs text-destructive space-y-1">
-                        {job.errors.slice(-2).map((error, index) => (
-                          <div key={`${job.jobId}-err-${index}`}>
-                            Dòng {error.row ?? 'N/A'}: {error.reason}
-                          </div>
-                        ))}
-                        {job.errors.length > 2 && (
-                          <div className="text-[10px] text-destructive/80">
-                            ... và {job.errors.length - 2} lỗi khác
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </TabsContent>
-            <TabsContent value="history" className="mt-4 space-y-3">
-              {/* Job History Controls */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-sm font-medium whitespace-nowrap">Sắp xếp:</span>
-                  <Select value={jobHistorySort} onValueChange={(value: 'newest' | 'oldest') => {
-                    setJobHistorySort(value);
-                    setJobHistoryPage(1);
-                    refreshImportJobs({
-                      onlyActive: false,
-                      sortBy: 'createdAt',
-                      sortOrder: value === 'newest' ? 'DESC' : 'ASC',
-                      page: 1,
-                      limit: jobHistoryItemsPerPage
-                    });
-                  }}>
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="Chọn sắp xếp" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">Mới nhất</SelectItem>
-                      <SelectItem value="oldest">Cũ nhất</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-sm font-medium whitespace-nowrap">Hiển thị:</span>
-                  <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
-                      const newLimit = parseInt(value);
-                      setJobHistoryItemsPerPage(newLimit);
-                      setJobHistoryPage(1);
-                      refreshImportJobs({
-                        onlyActive: false,
-                        sortBy: 'createdAt',
-                        sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                        page: 1,
-                        limit: newLimit
-                      });
-                  }}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue placeholder="Số lượng" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {completedJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
-              ) : (
-                <>
-                  {/* Job History Items */}
-                  <div className="space-y-3">
-                    {completedJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        onClick={() => handleJobCardSelect(job.jobId)}
-                        className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
-                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>Job #{job.jobId.slice(-6)}</span>
-                          <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
-                            {getJobStatusLabel(job)}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
-                          {job.createdAt && (
-                            <span className="ml-2">
-                              · {new Date(job.createdAt).toLocaleString('vi-VN')}
-                            </span>
-                          )}
-                        </div>
-                        {job.errors && job.errors.length > 0 && (
-                          <div className="space-y-1">
-                            <div
-                              className="flex items-center gap-1 text-xs text-destructive cursor-pointer hover:text-destructive/80"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleJobErrors(job.jobId);
-                              }}
-                            >
-                              {expandedJobErrors.has(job.jobId) ? (
-                                <ChevronDown className="w-3 h-3" />
-                              ) : (
-                                <ChevronRight className="w-3 h-3" />
-                              )}
-                              {job.errors.length} lỗi
-                            </div>
-                            {expandedJobErrors.has(job.jobId) && (
-                              <div className="ml-4 space-y-1 text-xs text-destructive/90">
-                                {job.errors.map((error, index) => (
-                                  <div key={`${job.jobId}-error-${index}`}>
-                                    Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Job History Pagination */}
-                  {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
-                    <div className="flex flex-col items-center pt-4 border-t">
-                      <div className="text-sm text-muted-foreground mb-4">
-                        Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
-                      </div>
-                      <Pagination>
-                        <PaginationContent>
-                          <PaginationItem>
-                            <PaginationPrevious 
-                              href="#" 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (jobHistoryPage > 1) {
-                                  const newPage = jobHistoryPage - 1;
-                            setJobHistoryPage(newPage);
-                            refreshImportJobs({
-                              onlyActive: false,
-                              sortBy: 'createdAt',
-                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                              page: newPage,
-                              limit: jobHistoryItemsPerPage
-                            });
-                                }
-                          }}
-                              className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
-                            />
-                          </PaginationItem>
-                          {/* Show first page */}
-                          {jobHistoryPage > 3 && (
-                            <>
-                              <PaginationItem>
-                                <PaginationLink 
-                                  href="#" 
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setJobHistoryPage(1);
-                                    refreshImportJobs({
-                                      onlyActive: false,
-                                      sortBy: 'createdAt',
-                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                      page: 1,
-                                      limit: jobHistoryItemsPerPage
-                                    });
-                                  }}
-                                >
-                                  1
-                                </PaginationLink>
-                              </PaginationItem>
-                              {jobHistoryPage > 4 && (
-                                <PaginationItem>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              )}
-                            </>
-                          )}
-                          {/* Show pages around current page */}
-                          {Array.from({ length: Math.min(5, jobHistoryPagination.totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (jobHistoryPagination.totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (jobHistoryPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (jobHistoryPage >= jobHistoryPagination.totalPages - 2) {
-                              pageNum = jobHistoryPagination.totalPages - 4 + i;
-                            } else {
-                              pageNum = jobHistoryPage - 2 + i;
-                            }
-                            if (pageNum < 1 || pageNum > jobHistoryPagination.totalPages) return null;
-                            return (
-                              <PaginationItem key={pageNum}>
-                                <PaginationLink 
-                                  href="#" 
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setJobHistoryPage(pageNum);
-                                    refreshImportJobs({
-                                      onlyActive: false,
-                                      sortBy: 'createdAt',
-                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                      page: pageNum,
-                                      limit: jobHistoryItemsPerPage
-                                    });
-                                  }}
-                                  isActive={jobHistoryPage === pageNum}
-                                >
-                                  {pageNum}
-                                </PaginationLink>
-                              </PaginationItem>
-                            );
-                          })}
-                          {/* Show last page */}
-                          {jobHistoryPage < jobHistoryPagination.totalPages - 2 && (
-                            <>
-                              {jobHistoryPage < jobHistoryPagination.totalPages - 3 && (
-                                <PaginationItem>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              )}
-                              <PaginationItem>
-                                <PaginationLink 
-                                  href="#" 
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setJobHistoryPage(jobHistoryPagination.totalPages);
-                                    refreshImportJobs({
-                                      onlyActive: false,
-                                      sortBy: 'createdAt',
-                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                      page: jobHistoryPagination.totalPages,
-                                      limit: jobHistoryItemsPerPage
-                                    });
-                                  }}
-                                >
-                                  {jobHistoryPagination.totalPages}
-                                </PaginationLink>
-                              </PaginationItem>
-                            </>
-                          )}
-                          <PaginationItem>
-                            <PaginationNext 
-                              href="#" 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (jobHistoryPage < jobHistoryPagination.totalPages) {
-                            const newPage = jobHistoryPage + 1;
-                            setJobHistoryPage(newPage);
-                            refreshImportJobs({
-                              onlyActive: false,
-                              sortBy: 'createdAt',
-                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                              page: newPage,
-                              limit: jobHistoryItemsPerPage
-                            });
-                                }
-                          }}
-                              className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
-                            />
-                          </PaginationItem>
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
-                  )}
-                </>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -2186,7 +1889,7 @@ function ExportSlipsContent() {
                       Nhập từ Excel
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px]">
+                  <DialogContent className="sm:max-w-[1200px]">
                     <DialogHeader>
                       <DialogTitle>Nhập Phiếu Xuất Kho Từ Excel</DialogTitle>
                       <DialogDescription>
@@ -2255,6 +1958,331 @@ function ExportSlipsContent() {
                         </Alert>
                       )}
                     </div>
+                    <div>
+                      {/* Import Job History Card */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
+                            <TabsList className="grid w-full grid-cols-2">
+                              <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
+                              <TabsTrigger value="history">Lịch sử ({jobHistoryPagination?.total || completedJobs.length})</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="running" className="mt-4 space-y-3">
+                              {runningJobs.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                  Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
+                                </p>
+                              ) : (
+                                runningJobs.map((job) => (
+                                  <div
+                                    key={job.jobId}
+                                    onClick={() => handleJobCardSelect(job.jobId)}
+                                    className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
+                                      activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between text-sm font-medium">
+                                      <span>Job #{job.jobId.slice(-6)}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
+                                        {(job.status === 'queued' || job.status === 'processing') && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCancelJob(job.jobId);
+                                            }}
+                                            disabled={cancellingJobId === job.jobId}
+                                          >
+                                            {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Progress value={job.percent ?? 0} />
+                                    <div className="text-xs text-muted-foreground">
+                                      Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                                    </div>
+                                    {job.errors && job.errors.length > 0 && (
+                                      <div className="text-xs text-destructive space-y-1">
+                                        {job.errors.slice(-2).map((error, index) => (
+                                          <div key={`${job.jobId}-err-${index}`}>
+                                            Dòng {error.row ?? 'N/A'}: {error.reason}
+                                          </div>
+                                        ))}
+                                        {job.errors.length > 2 && (
+                                          <div className="text-[10px] text-destructive/80">
+                                            ... và {job.errors.length - 2} lỗi khác
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </TabsContent>
+                            <TabsContent value="history" className="mt-4 space-y-3">
+                              {/* Job History Controls */}
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  <span className="text-sm font-medium whitespace-nowrap">Sắp xếp:</span>
+                                  <Select value={jobHistorySort} onValueChange={(value: 'newest' | 'oldest') => {
+                                    setJobHistorySort(value);
+                                    setJobHistoryPage(1);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: value === 'newest' ? 'DESC' : 'ASC',
+                                      page: 1,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}>
+                                    <SelectTrigger className="w-[140px]">
+                                      <SelectValue placeholder="Chọn sắp xếp" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="newest">Mới nhất</SelectItem>
+                                      <SelectItem value="oldest">Cũ nhất</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  <span className="text-sm font-medium whitespace-nowrap">Hiển thị:</span>
+                                  <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
+                                      const newLimit = parseInt(value);
+                                      setJobHistoryItemsPerPage(newLimit);
+                                      setJobHistoryPage(1);
+                                      refreshImportJobs({
+                                        onlyActive: false,
+                                        sortBy: 'createdAt',
+                                        sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                        page: 1,
+                                        limit: newLimit
+                                      });
+                                  }}>
+                                    <SelectTrigger className="w-20">
+                                      <SelectValue placeholder="Số lượng" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="3">3</SelectItem>
+                                      <SelectItem value="5">5</SelectItem>
+                                      <SelectItem value="10">10</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              {completedJobs.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
+                              ) : (
+                                <>
+                                  {/* Job History Items */}
+                                  <div className="space-y-3">
+                                    {completedJobs.map((job) => (
+                                      <div
+                                        key={job.jobId}
+                                        onClick={() => handleJobCardSelect(job.jobId)}
+                                        className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
+                                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span>Job #{job.jobId.slice(-6)}</span>
+                                          <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
+                                            {getJobStatusLabel(job)}
+                                          </Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                                          {job.createdAt && (
+                                            <span className="ml-2">
+                                              · {new Date(job.createdAt).toLocaleString('vi-VN')}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {job.errors && job.errors.length > 0 && (
+                                          <div className="space-y-1">
+                                            <div
+                                              className="flex items-center gap-1 text-xs text-destructive cursor-pointer hover:text-destructive/80"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleJobErrors(job.jobId);
+                                              }}
+                                            >
+                                              {expandedJobErrors.has(job.jobId) ? (
+                                                <ChevronDown className="w-3 h-3" />
+                                              ) : (
+                                                <ChevronRight className="w-3 h-3" />
+                                              )}
+                                              {job.errors.length} lỗi
+                                            </div>
+                                            {expandedJobErrors.has(job.jobId) && (
+                                              <div className="ml-4 space-y-1 text-xs text-destructive/90">
+                                                {job.errors.map((error, index) => (
+                                                  <div key={`${job.jobId}-error-${index}`}>
+                                                    Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* Job History Pagination */}
+                                  {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
+                                    <div className="flex flex-col items-center pt-4 border-t">
+                                      <div className="text-sm text-muted-foreground mb-4">
+                                        Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
+                                      </div>
+                                      <Pagination>
+                                        <PaginationContent>
+                                          <PaginationItem>
+                                            <PaginationPrevious 
+                                              href="#" 
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                if (jobHistoryPage > 1) {
+                                                  const newPage = jobHistoryPage - 1;
+                                            setJobHistoryPage(newPage);
+                                            refreshImportJobs({
+                                              onlyActive: false,
+                                              sortBy: 'createdAt',
+                                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                              page: newPage,
+                                              limit: jobHistoryItemsPerPage
+                                            });
+                                                }
+                                          }}
+                                              className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
+                                            />
+                                          </PaginationItem>
+                                          {/* Show first page */}
+                                          {jobHistoryPage > 3 && (
+                                            <>
+                                              <PaginationItem>
+                                                <PaginationLink 
+                                                  href="#" 
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setJobHistoryPage(1);
+                                                    refreshImportJobs({
+                                                      onlyActive: false,
+                                                      sortBy: 'createdAt',
+                                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                      page: 1,
+                                                      limit: jobHistoryItemsPerPage
+                                                    });
+                                                  }}
+                                                >
+                                                  1
+                                                </PaginationLink>
+                                              </PaginationItem>
+                                              {jobHistoryPage > 4 && (
+                                                <PaginationItem>
+                                                  <PaginationEllipsis />
+                                                </PaginationItem>
+                                              )}
+                                            </>
+                                          )}
+                                          {/* Show pages around current page */}
+                                          {Array.from({ length: Math.min(5, jobHistoryPagination.totalPages) }, (_, i) => {
+                                            let pageNum;
+                                            if (jobHistoryPagination.totalPages <= 5) {
+                                              pageNum = i + 1;
+                                            } else if (jobHistoryPage <= 3) {
+                                              pageNum = i + 1;
+                                            } else if (jobHistoryPage >= jobHistoryPagination.totalPages - 2) {
+                                              pageNum = jobHistoryPagination.totalPages - 4 + i;
+                                            } else {
+                                              pageNum = jobHistoryPage - 2 + i;
+                                            }
+                                            if (pageNum < 1 || pageNum > jobHistoryPagination.totalPages) return null;
+                                            return (
+                                              <PaginationItem key={pageNum}>
+                                                <PaginationLink 
+                                                  href="#" 
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setJobHistoryPage(pageNum);
+                                                    refreshImportJobs({
+                                                      onlyActive: false,
+                                                      sortBy: 'createdAt',
+                                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                      page: pageNum,
+                                                      limit: jobHistoryItemsPerPage
+                                                    });
+                                                  }}
+                                                  isActive={jobHistoryPage === pageNum}
+                                                >
+                                                  {pageNum}
+                                                </PaginationLink>
+                                              </PaginationItem>
+                                            );
+                                          })}
+                                          {/* Show last page */}
+                                          {jobHistoryPage < jobHistoryPagination.totalPages - 2 && (
+                                            <>
+                                              {jobHistoryPage < jobHistoryPagination.totalPages - 3 && (
+                                                <PaginationItem>
+                                                  <PaginationEllipsis />
+                                                </PaginationItem>
+                                              )}
+                                              <PaginationItem>
+                                                <PaginationLink 
+                                                  href="#" 
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setJobHistoryPage(jobHistoryPagination.totalPages);
+                                                    refreshImportJobs({
+                                                      onlyActive: false,
+                                                      sortBy: 'createdAt',
+                                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                      page: jobHistoryPagination.totalPages,
+                                                      limit: jobHistoryItemsPerPage
+                                                    });
+                                                  }}
+                                                >
+                                                  {jobHistoryPagination.totalPages}
+                                                </PaginationLink>
+                                              </PaginationItem>
+                                            </>
+                                          )}
+                                          <PaginationItem>
+                                            <PaginationNext 
+                                              href="#" 
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                if (jobHistoryPage < jobHistoryPagination.totalPages) {
+                                            const newPage = jobHistoryPage + 1;
+                                            setJobHistoryPage(newPage);
+                                            refreshImportJobs({
+                                              onlyActive: false,
+                                              sortBy: 'createdAt',
+                                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                              page: newPage,
+                                              limit: jobHistoryItemsPerPage
+                                            });
+                                                }
+                                          }}
+                                              className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
+                                            />
+                                          </PaginationItem>
+                                        </PaginationContent>
+                                      </Pagination>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </TabsContent>
+                          </Tabs>
+                        </CardContent>
+                      </Card>
+                    </div>
                     <DialogFooter>
                       <Button
                         variant="outline"
@@ -2306,9 +2334,9 @@ function ExportSlipsContent() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Search Bar */}
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1">
+          <div className="flex items-center gap-6 mb-6">
+            {/* Search Bar */}
+            <div className="relative w-80">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Tìm kiếm theo số phiếu, đơn hàng hoặc khách hàng..."
@@ -2317,362 +2345,505 @@ function ExportSlipsContent() {
                 className="pl-10"
               />
             </div>
+            {/* Created Date Filters */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Ngày tạo:</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={startDate || ""}
+                onChange={(e) => setStartDate(e.target.value || undefined)}
+              />
+              <label className="text-sm font-medium">-</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={endDate || ""}
+                onChange={(e) => setEndDate(e.target.value || undefined)}
+              />
+            </div>
+            {/* Collapse Filter Button */}
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            >
+              <Filter className="w-4 h-4" />
+              {filtersCollapsed ? "Thu gọn" : "Mở rộng"}
+              {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+            {/* Reset Filters Button */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
+              disabled={loading}
+            >
+              {loading ? "Đang tải..." : "Đặt lại"}
+            </Button>
           </div>
-          <div className="overflow-x-auto w-full">
-            <Table className="min-w-[1200px] w-full">
-            <TableHeader>
-              <TableRow>
-                <TableHead
-                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
-                  onClick={() => handleSort('slip_number')}
-                >
-                  <div className="flex items-center gap-1">
-                    Số phiếu
-                    {getSortIcon('slip_number')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
-                  onClick={() => handleSort('order_number')}
-                >
-                  <div className="flex items-center gap-1">
-                    Đơn hàng
-                    {getSortIcon('order_number')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[180px]"
-                  onClick={() => handleSort('customer_name')}
-                >
-                  <div className="flex items-center gap-1">
-                    Khách hàng
-                    {getSortIcon('customer_name')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[130px]"
-                  onClick={() => handleSort('total_amount')}
-                >
-                  <div className="flex items-center gap-1">
-                    Giá trị
-                    {getSortIcon('total_amount')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
-                  onClick={() => handleSort('status')}
-                >
-                  <div className="flex items-center gap-1">
-                    Trạng thái
-                    {getSortIcon('status')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
-                  onClick={() => handleSort('created_at')}
-                >
-                  <div className="flex items-center gap-1">
-                    Ngày tạo
-                    {getSortIcon('created_at')}
-                  </div>
-                </TableHead>
-                <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
-                <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          {/* Collapsible Filters Row */}
+          {filtersCollapsed && (
+            <div className="grid grid-cols-3 gap-3 gap-y-6 justify-items-center items-center mt-4 mb-4">
+              {/* Created Date Filters */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">Ngày xuất kho:</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={completedStartDate || ""}
+                  onChange={(e) => setCompletedStartDate(e.target.value || undefined)}
+                />
+                <label className="text-sm font-medium">-</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={completedEndDate || ""}
+                  onChange={(e) => setCompletedEndDate(e.target.value || undefined)}
+                />
+              </div>
+              {/* Warehouse filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả kho", value: "all" },
+                  ...warehouses.map((warehouse) => ({
+                    label: warehouse.name,
+                    value: warehouse.id
+                  }))
+                ]}
+                value={warehouseFilter}
+                onValueChange={setWarehouseFilter}
+                placeholder="Lọc theo kho"
+                searchPlaceholder="Tìm kho..."
+                emptyMessage="Không có kho nào"
+              />
+              {/* Status filter */}
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Lọc theo trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="pending">Chờ duyệt</SelectItem>
+                  <SelectItem value="approved">Đã duyệt</SelectItem>
+                  <SelectItem value="picked">Đã lấy hàng</SelectItem>
+                  <SelectItem value="exported">Đã xuất kho</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Category Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả loại sản phẩm", value: "all" },
+                  ...categories.map((category) => ({
+                    label: category.name,
+                    value: category.id
+                  }))
+                ]}
+                value={categoryFilter}
+                onValueChange={setCategoryFilter}
+                placeholder="Chọn loại sản phẩm"
+                searchPlaceholder="Tìm loại sản phẩm..."
+                emptyMessage="Không có loại sản phẩm nào"
+                className="w-full"
+              />
+              {/* Manifacturers Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả nhà sản xuất", value: "all" },
+                  ...manufacturers.map((m) => ({
+                    label: m,
+                    value: m
+                  }))
+                ]}
+                value={manufacturerFilter}
+                onValueChange={setManufacturerFilter}
+                placeholder="Nhà sản xuất"
+                searchPlaceholder="Tìm nhà sản xuất..."
+                emptyMessage="Không có nhà sản xuất nào"
+                className="w-full"
+              />
+            </div>
+          )}
+          {/* Export Slips Table */}
+          <div className="overflow-x-scroll overflow-y-auto w-full max-h-[calc(100vh-420px)]" style={{ scrollbarGutter: 'stable' }}>
+            <div className="table-wrapper" style={{ display: 'inline-block', minWidth: '100%' }}>
+              <Table className="min-w-[1200px] w-full">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <div className="flex items-center justify-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
+                    onClick={() => handleSort('code')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Số phiếu
+                      {getSortIcon('code')}
                     </div>
-                  </TableCell>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
+                    onClick={() => handleSort('orderCode')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Đơn hàng
+                      {getSortIcon('orderCode')}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[180px]"
+                    onClick={() => handleSort('customerName')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Khách hàng
+                      {getSortIcon('customerName')}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[130px]"
+                    onClick={() => handleSort('totalAmount')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Giá trị
+                      {getSortIcon('totalAmount')}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Trạng thái
+                      {getSortIcon('status')}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
+                    onClick={() => handleSort('createdAt')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Ngày tạo
+                      {getSortIcon('createdAt')}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
+                    onClick={() => handleSort('warehouse')}
+                  >
+                    <div className="flex items-center gap-1">
+                      kho xuất
+                      {getSortIcon('warehouse')}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
+                    onClick={() => handleSort('completedAt')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Ngày xuất
+                      {getSortIcon('completedAt')}
+                    </div>
+                  </TableHead>
+                  <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
                 </TableRow>
-              ) : filteredAndSortedSlips.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    {searchTerm ? 'Không tìm thấy phiếu xuất kho nào' : 'Chưa có phiếu xuất kho nào'}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredAndSortedSlips.map((slip) => (
-                <TableRow key={slip.id}>
-                  <TableCell className="font-medium text-center min-w-[120px]">
-                    <div className="truncate" title={slip.code}>{slip.code}</div>
-                  </TableCell>
-                  <TableCell className="text-center min-w-[120px]">
-                    <div className="truncate" title={slip.order?.order_number || ''}>{slip.order?.order_number || '-'}</div>
-                  </TableCell>
-                  <TableCell className="text-center min-w-[180px]">
-                    <div className="truncate" title={slip.order?.customer_name || ''}>{slip.order?.customer_name || '-'}</div>
-                  </TableCell>
-                  <TableCell className="text-center min-w-[130px] font-semibold">
-                    <div className="relative group">
-                      <span className="cursor-help">
-                        {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
-                      </span>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                        {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        <span className="text-muted-foreground">Đang tải dữ liệu...</span>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center min-w-[120px]">{getStatusBadge(slip.status)}</TableCell>
-                  <TableCell className="text-center min-w-[150px] text-muted-foreground text-sm">
-                    {new Date(slip.created_at).toLocaleString('vi-VN')}
-                  </TableCell>
-                  <TableCell className="text-center min-w-[200px]">
-                    <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
-                      {slip.notes || '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center min-w-[180px]">
-                    <div className="flex space-x-2 justify-center">
-                      {/* Chi tiết button - always show */}
-                      <Dialog open={selectedSlip?.id === slip.id} onOpenChange={(open) => {
-                          if (open) {
-                            openDialog('view', slip.id);
-                            setSelectedSlip(slip);
-                            loadSlipDetail(slip.id);
-                          } else {
-                            isClosingDialogRef.current = true;
-                            closeDialog();
-                            setSelectedSlip(null);
-                            setSlipDetail(null);
-                            setTimeout(() => {
-                              isClosingDialogRef.current = false;
-                            }, 100);
-                          }
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <FileText className="w-4 h-4" />
-                            </Button>
-                          </DialogTrigger>
-                        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
-                            <DialogDescription>
-                              Thông tin chi tiết phiếu {slipDetail?.code || slip.code}
-                            </DialogDescription>
-                          </DialogHeader>
-                          {loadingSlipDetail ? (
-                            <div className="flex items-center justify-center py-8">
-                              <p>Đang tải chi tiết phiếu xuất kho...</p>
-                            </div>
-                          ) : (
-                          <div className="space-y-6">
-                            {/* Basic Info */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <Label className="font-medium">Số phiếu:</Label>
-                                  <p className="text-sm">{slipDetail?.code || slip.code}</p>
+                    </TableCell>
+                  </TableRow>
+                ) : exportSlips.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      {searchTerm ? 'Không tìm thấy phiếu xuất kho nào' : 'Chưa có phiếu xuất kho nào'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  exportSlips.map((slip) => (
+                  <TableRow key={slip.id}>
+                    <TableCell className="font-medium text-center min-w-[120px]">
+                      <div className="truncate" title={slip.code}>{slip.code}</div>
+                    </TableCell>
+                    <TableCell className="text-center min-w-[120px]">
+                      <div className="truncate" title={slip.order?.order_number || ''}>{slip.order?.order_number || '-'}</div>
+                    </TableCell>
+                    <TableCell className="text-center min-w-[180px]">
+                      <div className="truncate" title={slip.order?.customer_name || ''}>{slip.order?.customer_name || '-'}</div>
+                    </TableCell>
+                    <TableCell className="text-center min-w-[130px] font-semibold">
+                      <div className="relative group">
+                        <span className="cursor-help">
+                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                        </span>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center min-w-[120px]">{getStatusBadge(slip.status)}</TableCell>
+                    <TableCell className="text-center min-w-[150px] text-muted-foreground text-sm">
+                      {new Date(slip.created_at).toLocaleString('vi-VN')}
+                    </TableCell>
+                    <TableCell className="text-center min-w-[150px] text-muted-foreground text-sm">
+                      {slip.warehouse_name || '-'}
+                    </TableCell>
+                    <TableCell className="text-center min-w-[150px] text-muted-foreground text-sm">
+                      {slip.completed_at ? new Date(slip.completed_at).toLocaleString('vi-VN') : '-'}
+                    </TableCell>
+                    <TableCell className="text-center min-w-[200px]">
+                      <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
+                        {slip.notes || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center min-w-[180px]">
+                      <div className="flex space-x-2 justify-center">
+                        {/* Chi tiết button - always show */}
+                        <Dialog open={selectedSlip?.id === slip.id} onOpenChange={(open) => {
+                            if (open) {
+                              openDialog('view', slip.id);
+                              setSelectedSlip(slip);
+                              loadSlipDetail(slip.id);
+                            } else {
+                              isClosingDialogRef.current = true;
+                              closeDialog();
+                              setSelectedSlip(null);
+                              setSlipDetail(null);
+                              setTimeout(() => {
+                                isClosingDialogRef.current = false;
+                              }, 100);
+                            }
+                          }}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <FileText className="w-4 h-4" />
+                              </Button>
+                            </DialogTrigger>
+                          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
+                              <DialogDescription>
+                                Thông tin chi tiết phiếu {slipDetail?.code || slip.code}
+                              </DialogDescription>
+                            </DialogHeader>
+                            {loadingSlipDetail ? (
+                              <div className="flex items-center justify-center py-8">
+                                <p>Đang tải chi tiết phiếu xuất kho...</p>
                               </div>
-                              <div>
-                                <Label className="font-medium">Số hợp đồng:</Label>
-                                  <p className="text-sm">{slipDetail?.order?.contract_code || slip.order?.contract_code}</p>
-                              </div>
-                              <div>
-                                <Label className="font-medium">Đơn hàng:</Label>
-                                  <p className="text-sm">{slipDetail?.order?.order_number || slip.order?.order_number}</p>
-                              </div>
-                              <div>
-                                <Label className="font-medium">Khách hàng:</Label>
-                                  <p className="text-sm">{slipDetail?.order?.customer_name || slip.order?.customer_name}</p>
-                              </div>
-                              <div>
-                                <Label className="font-medium">Trạng thái:</Label>
-                                  <div className="text-sm">{getStatusBadge(slipDetail?.status || slip.status)}</div>
-                              </div>
-                              {(slipDetail?.warehouse_name || slip.warehouse_name) && (
+                            ) : (
+                            <div className="space-y-6">
+                              {/* Basic Info */}
+                              <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <Label className="font-medium">Kho xuất:</Label>
-                                  <p className="text-sm">{slipDetail?.warehouse_name || slip.warehouse_name}</p>
+                                  <Label className="font-medium">Số phiếu:</Label>
+                                    <p className="text-sm">{slipDetail?.code || slip.code}</p>
                                 </div>
-                              )}
-                                {(slipDetail?.order?.customer_address || slip.order?.customer_address) && (
-                                <div className="col-span-2">
-                                  <Label className="font-medium">Địa chỉ giao hàng:</Label>
-                                  <p className="text-sm">
-                                    {(() => {
-                                        const orderData = slipDetail?.order || slip.order;
-                                        const slipId = slipDetail?.id || slip.id;
-                                        if (orderData?.customer_address) {
-                                          const cachedAddress = addressCache[slipId];
-                                          const directAddress = formatFullAddress(orderData.customer_address, orderData.customer_addressInfo);
-                                      return cachedAddress || directAddress;
-                                        }
-                                        return '-';
-                                    })()}
+                                <div>
+                                  <Label className="font-medium">Số hợp đồng:</Label>
+                                    <p className="text-sm">{slipDetail?.order?.contract_code || slip.order?.contract_code}</p>
+                                </div>
+                                <div>
+                                  <Label className="font-medium">Đơn hàng:</Label>
+                                    <p className="text-sm">{slipDetail?.order?.order_number || slip.order?.order_number}</p>
+                                </div>
+                                <div>
+                                  <Label className="font-medium">Khách hàng:</Label>
+                                    <p className="text-sm">{slipDetail?.order?.customer_name || slip.order?.customer_name}</p>
+                                </div>
+                                <div>
+                                  <Label className="font-medium">Trạng thái:</Label>
+                                    <div className="text-sm">{getStatusBadge(slipDetail?.status || slip.status)}</div>
+                                </div>
+                                {(slipDetail?.warehouse_name || slip.warehouse_name) && (
+                                  <div>
+                                    <Label className="font-medium">Kho xuất:</Label>
+                                    <p className="text-sm">{slipDetail?.warehouse_name || slip.warehouse_name}</p>
+                                  </div>
+                                )}
+                                  {(slipDetail?.order?.customer_address || slip.order?.customer_address) && (
+                                  <div className="col-span-2">
+                                    <Label className="font-medium">Địa chỉ giao hàng:</Label>
+                                    <p className="text-sm">
+                                      {/* {console.log(slipDetail?.order || slip.order)} */}
+                                      {(() => {
+                                          const orderData = slipDetail?.order || slip.order;
+                                          if (orderData) {
+                                            const fullReceiverAddress = formatFullAddress(orderData.receiver_address, orderData.receiver_addressInfo);
+                                        return fullReceiverAddress;
+                                          }
+                                          return '-';
+                                      })()}
+                                    </p>
+                                  </div>
+                                )}
+                                  {(slipDetail?.order?.customer_phone || slip.order?.customer_phone) && (
+                                  <div>
+                                    <Label className="font-medium">Số điện thoại:</Label>
+                                      <p className="text-sm">{slipDetail?.order?.customer_phone || slip.order?.customer_phone}</p>
+                                  </div>
+                                )}
+                                <div>
+                                  <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
+                                  <p className="text-sm font-medium text-green-600">
+                                      {formatCurrency((slipDetail?.order?.total_amount || slip.order?.total_amount) || 0)}
                                   </p>
                                 </div>
-                              )}
-                                {(slipDetail?.order?.customer_phone || slip.order?.customer_phone) && (
                                 <div>
-                                  <Label className="font-medium">Số điện thoại:</Label>
-                                    <p className="text-sm">{slipDetail?.order?.customer_phone || slip.order?.customer_phone}</p>
+                                  <Label className="font-medium">Tổng giá trị thực xuất:</Label>
+                                  <p className="text-sm font-medium text-blue-600">
+                                      {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                                  </p>
+                                </div>
+                              </div>
+                              {/* Product List */}
+                                {((slipDetail?.order?.order_items && slipDetail.order.order_items.length > 0) || (slipDetail?.export_slip_items && slipDetail.export_slip_items.length > 0) || 
+                                  (slip.order?.order_items && slip.order.order_items.length > 0) || (slip.export_slip_items && slip.export_slip_items.length > 0)) && (
+                                <div>
+                                  <Label className="font-medium block mb-3">
+                                      {(slipDetail?.order?.order_items || slip.order?.order_items) && (slipDetail?.order?.order_items?.length || slip.order?.order_items?.length) > 0
+                                      ? "Danh sách sản phẩm cần xuất:"
+                                      : "Danh sách sản phẩm đã xuất:"}
+                                  </Label>
+                                  <div className="border rounded-md overflow-hidden">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead className="text-center">Tên sản phẩm</TableHead>
+                                          <TableHead className="text-center">Mã SP</TableHead>
+                                            <TableHead className="text-center">Số lượng cần xuất</TableHead>
+                                            <TableHead className="text-center">Số lượng thực xuất</TableHead>
+                                          <TableHead className="text-center">Đơn giá</TableHead>
+                                          <TableHead className="text-center">Thành tiền</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                          {(() => {
+                                            // Lấy export_slip_items (chỉ những item thực sự được xuất)
+                                            const exportSlipItems = slipDetail?.export_slip_items || slip.export_slip_items || [];
+                                            
+                                            // Lấy order_items để lấy requestedQuantity
+                                            const orderItems = slipDetail?.order?.order_items || slip.order?.order_items || [];
+                                            
+                                            // Chỉ hiển thị những item có trong export_slip_items
+                                            return exportSlipItems.map((exportItem, index) => {
+                                              // Tìm order_item tương ứng để lấy requestedQuantity từ đơn hàng
+                                              const orderItem = orderItems.find(
+                                                item => item.product_code === exportItem.product_code
+                                              );
+                                              
+                                              // Ưu tiên lấy requestedQuantity từ order_item, nếu không có thì dùng từ exportItem
+                                              const requestedQuantity = orderItem?.quantity || exportItem.requested_quantity || exportItem.actual_quantity;
+                                              const actualQuantity = exportItem.actual_quantity;
+                                              
+                                              // Lấy thông tin sản phẩm từ order_item nếu có, nếu không thì dùng từ exportItem
+                                              const productName = orderItem?.product_name || exportItem.product_name;
+                                              const productCode = exportItem.product_code;
+                                              const unitPrice = orderItem?.unit_price || exportItem.unit_price;
+                                              
+                                              return (
+                                                <TableRow key={index}>
+                                                  <TableCell className="text-center font-medium">
+                                                    <div className="truncate" title={productName}>{productName}</div>
+                                                  </TableCell>
+                                                  <TableCell className="text-center">
+                                                    <div className="truncate" title={productCode}>{productCode}</div>
+                                                  </TableCell>
+                                                  <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
+                                                  <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
+                                                  <TableCell className="text-center">{formatCurrency(unitPrice)}</TableCell>
+                                                  <TableCell className="text-center font-medium">
+                                                    {formatCurrency(actualQuantity * unitPrice)}
+                                                  </TableCell>
+                                                </TableRow>
+                                              );
+                                            });
+                                          })()}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
                                 </div>
                               )}
+                              {/* Notes */}
+                              {(slipDetail?.notes || slip.notes) && (
+                                <div>
+                                  <Label className="font-medium">Ghi chú:</Label>
+                                  <div className="mt-1 p-3 bg-gray-50 rounded-md">
+                                    <p className="text-sm">{slipDetail?.notes || slip.notes}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {(slipDetail?.approval_notes || slip.approval_notes) && (
+                                <div>
+                                  <Label className="font-medium">Ghi chú duyệt:</Label>
+                                  <div className="mt-1 p-3 bg-blue-50 rounded-md">
+                                    <p className="text-sm">{slipDetail?.approval_notes || slip.approval_notes}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {/* Documents - Temporarily disabled */}
                               <div>
-                                <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
-                                <p className="text-sm font-medium text-green-600">
-                                    {formatCurrency((slipDetail?.order?.total_amount || slip.order?.total_amount) || 0)}
-                                </p>
-                              </div>
-                              <div>
-                                <Label className="font-medium">Tổng giá trị thực xuất:</Label>
-                                <p className="text-sm font-medium text-blue-600">
-                                    {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
-                                </p>
+                                <Label className="font-medium block mb-3">Tài liệu đính kèm:</Label>
+                                <div className="text-sm text-muted-foreground">
+                                  Chưa có tài liệu đính kèm nào
+                                </div>
                               </div>
                             </div>
-                            {/* Product List */}
-                              {((slipDetail?.order?.order_items && slipDetail.order.order_items.length > 0) || (slipDetail?.export_slip_items && slipDetail.export_slip_items.length > 0) || 
-                                (slip.order?.order_items && slip.order.order_items.length > 0) || (slip.export_slip_items && slip.export_slip_items.length > 0)) && (
-                              <div>
-                                <Label className="font-medium block mb-3">
-                                    {(slipDetail?.order?.order_items || slip.order?.order_items) && (slipDetail?.order?.order_items?.length || slip.order?.order_items?.length) > 0
-                                    ? "Danh sách sản phẩm cần xuất:"
-                                    : "Danh sách sản phẩm đã xuất:"}
-                                </Label>
-                                <div className="border rounded-md overflow-hidden">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead className="text-center">Tên sản phẩm</TableHead>
-                                        <TableHead className="text-center">Mã SP</TableHead>
-                                          <TableHead className="text-center">Số lượng cần xuất</TableHead>
-                                          <TableHead className="text-center">Số lượng thực xuất</TableHead>
-                                        <TableHead className="text-center">Đơn giá</TableHead>
-                                        <TableHead className="text-center">Thành tiền</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {(() => {
-                                          // Lấy export_slip_items (chỉ những item thực sự được xuất)
-                                          const exportSlipItems = slipDetail?.export_slip_items || slip.export_slip_items || [];
-                                          
-                                          // Lấy order_items để lấy requestedQuantity
-                                          const orderItems = slipDetail?.order?.order_items || slip.order?.order_items || [];
-                                          
-                                          // Chỉ hiển thị những item có trong export_slip_items
-                                          return exportSlipItems.map((exportItem, index) => {
-                                            // Tìm order_item tương ứng để lấy requestedQuantity từ đơn hàng
-                                            const orderItem = orderItems.find(
-                                              item => item.product_code === exportItem.product_code
-                                            );
-                                            
-                                            // Ưu tiên lấy requestedQuantity từ order_item, nếu không có thì dùng từ exportItem
-                                            const requestedQuantity = orderItem?.quantity || exportItem.requested_quantity || exportItem.actual_quantity;
-                                            const actualQuantity = exportItem.actual_quantity;
-                                            
-                                            // Lấy thông tin sản phẩm từ order_item nếu có, nếu không thì dùng từ exportItem
-                                            const productName = orderItem?.product_name || exportItem.product_name;
-                                            const productCode = exportItem.product_code;
-                                            const unitPrice = orderItem?.unit_price || exportItem.unit_price;
-                                            
-                                            return (
-                                              <TableRow key={index}>
-                                                <TableCell className="text-center font-medium">
-                                                  <div className="truncate" title={productName}>{productName}</div>
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                  <div className="truncate" title={productCode}>{productCode}</div>
-                                                </TableCell>
-                                                <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
-                                                <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
-                                                <TableCell className="text-center">{formatCurrency(unitPrice)}</TableCell>
-                                                <TableCell className="text-center font-medium">
-                                                  {formatCurrency(actualQuantity * unitPrice)}
-                                                </TableCell>
-                                              </TableRow>
-                                            );
-                                          });
-                                        })()}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </div>
                             )}
-                            {/* Notes */}
-                            {(slipDetail?.notes || slip.notes) && (
-                              <div>
-                                <Label className="font-medium">Ghi chú:</Label>
-                                <div className="mt-1 p-3 bg-gray-50 rounded-md">
-                                  <p className="text-sm">{slipDetail?.notes || slip.notes}</p>
-                                </div>
-                              </div>
-                            )}
-                            {(slipDetail?.approval_notes || slip.approval_notes) && (
-                              <div>
-                                <Label className="font-medium">Ghi chú duyệt:</Label>
-                                <div className="mt-1 p-3 bg-blue-50 rounded-md">
-                                  <p className="text-sm">{slipDetail?.approval_notes || slip.approval_notes}</p>
-                                </div>
-                              </div>
-                            )}
-                            {/* Documents - Temporarily disabled */}
-                            <div>
-                              <Label className="font-medium block mb-3">Tài liệu đính kèm:</Label>
-                              <div className="text-sm text-muted-foreground">
-                                Chưa có tài liệu đính kèm nào
-                              </div>
-                            </div>
-                          </div>
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                      {/* Approval buttons - Only show when status is pending and user has permission */}
-                      {canApproveExports && slip.status === 'pending' && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => approveExportSlip(slip.id)}
-                            className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
-                          >
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Duyệt
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => rejectExportSlip(slip.id)}
-                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
-                          >
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Từ chối
-                          </Button>
-                        </>
-                      )}
-                      {/* Status Update Dropdown - Only show when status is approved or picked */}
-                      {getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
-                        <Select onValueChange={(newStatus) => {
-                          handleStatusUpdateWithSelection(slip.id, newStatus, '');
-                        }}>
-                          <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
-                            <SelectValue placeholder="Cập nhật trạng thái" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getAvailableStatusOptions(slip.status).map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-              )}
-            </TableBody>
-            </Table>
+                          </DialogContent>
+                        </Dialog>
+                        {/* Approval buttons - Only show when status is pending and user has permission */}
+                        {canApproveExports && slip.status === 'pending' && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => approveExportSlip(slip.id)}
+                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Duyệt
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => rejectExportSlip(slip.id)}
+                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                            >
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Từ chối
+                            </Button>
+                          </>
+                        )}
+                        {/* Status Update Dropdown - Only show when status is approved or picked */}
+                        {getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
+                          <Select onValueChange={(newStatus) => {
+                            handleStatusUpdateWithSelection(slip.id, newStatus, '');
+                          }}>
+                            <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
+                              <SelectValue placeholder="Cập nhật trạng thái" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getAvailableStatusOptions(slip.status).map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+                )}
+              </TableBody>
+              </Table>
+            </div>
           </div>
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalPages > 0 && (
             <div className="flex flex-col items-center mt-4 pt-4 border-t">
               <div className="text-sm text-muted-foreground mb-4">
                 Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} phiếu xuất kho
