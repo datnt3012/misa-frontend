@@ -213,7 +213,7 @@ export const productApi = {
     stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC' | 'asc' | 'desc';
-  }): Promise<{ products: Product[]; summary:object; total: number; page: number; limit: number }> => {
+  }): Promise<{ products: Product[]; summary:object; total: number; page: number; limit: number; totalPages: number; }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -237,6 +237,7 @@ export const productApi = {
         total: Number(data.count ?? data.rows.length ?? 0),
         page: Number(data.page ?? params?.page ?? 1),
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
+        totalPages: Number(data.totalPage ?? data.rows.totalPage ?? 0)
       };
     }
     // Fallback if API already returns expected shape
@@ -246,6 +247,7 @@ export const productApi = {
       total: Number(response?.total ?? 0),
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? 0),
+      totalPages: Number(response?.totalPage ?? 0),
     };
   },
   // Get product by ID
