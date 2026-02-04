@@ -170,15 +170,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     const categoryName = getCategoryName(product.category);
       
       // Get stock levels from product.stockLevel (from API)
+      // Status filtering is handled by API, so no client-side filtering needed
       let productStockLevels = product.stockLevel || [];
-      
-      // Filter stock levels by status if status filter is active
-      if (filterStatus !== 'all') {
-        const threshold = product.lowStockThreshold != null ? Number(product.lowStockThreshold) : null;
-        productStockLevels = productStockLevels.filter(stock => {
-          return matchesStatusFilter(stock.quantity, threshold, filterStatus);
-        });
-      }
       
       // Filter stock levels by warehouse if warehouse filter is active
       if (filterWarehouse !== 'all') {
@@ -243,14 +236,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     // If no threshold or stock > threshold, show "Còn hàng"
       return <Badge variant="secondary" className="text-green-600 border-green-600 whitespace-nowrap">Còn hàng</Badge>;
   };
-  // Filter productsWithStock - status and warehouse are already filtered by API
-  // Category is already filtered by products API
-  // Only need to filter by search term (client-side for instant feedback)
-  const filteredProducts = productsWithStock.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.code.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+  // Search term filtering is handled by API via debouncedSearchTerm
+  // Use productsWithStock directly as it already reflects API-filtered results
+  const filteredProducts = productsWithStock;
+  console.log(filteredProducts);
   // Get unique categories and warehouses for filters from all data (not filtered)
   // This ensures filter options don't change when filters are applied
   const uniqueCategories = React.useMemo(() => {
@@ -670,7 +659,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           </Table>
         </div>
         {/* Pagination Controls */}
-        {totalPages > 1 && (
+        {totalPages > 0 && (
           <div className="flex justify-center mt-6">
             <Pagination>
               <PaginationContent>
