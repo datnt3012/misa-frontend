@@ -58,23 +58,62 @@ export interface WarehouseReceiptItem {
 
 export interface WarehouseReceipt {
   id: string;
+  order_id?: string;
   code: string; // slip number
   warehouse_id: string;
+  status: string; // draft | completed | approved
+  notes: string;
+  created_at: string;
+  completed_at?: string;
+  created_by: string;
+  created_by_name?: string;
+  updated_at?: string;
+  approved_by?: string;
   supplier_id?: string;
   supplier_name?: string;
   supplier_contact?: string;
   description?: string;
-  status: string; // draft | completed | approved
   type: string;   // import
-  total_amount: number;
-  created_at: string;
-  updated_at: string;
-  approved_at?: string;
-  created_by?: string;
-  created_by_name?: string;
-  approved_by?: string;
-  approved_by_name?: string;
   items?: WarehouseReceiptItem[];
+  order?: {
+    order_number: string;
+    contract_code: string;
+    customer_name: string;
+    customer_phone?: string;
+    customer_address?: string;
+    customer_addressInfo?: {
+      provinceCode?: string;
+      districtCode?: string;
+      wardCode?: string;
+      province?: { code?: string; name?: string; };
+      district?: { code?: string; name?: string; };
+      ward?: { code?: string; name?: string; };
+      provinceName?: string;
+      districtName?: string;
+      wardName?: string;
+    };
+    receiver_address?: string
+    receiver_addressInfo?: {
+      provinceCode?: string;
+      districtCode?: string;
+      wardCode?: string;
+      province?: { code?: string; name?: string; };
+      district?: { code?: string; name?: string; };
+      ward?: { code?: string; name?: string; };
+      provinceName?: string;
+      districtName?: string;
+      wardName?: string;
+    };
+    total_amount: number;
+    order_items?: Array<{
+      product_name: string;
+      product_code: string;
+      quantity: number;
+      unit_price: number;
+      total_price?: number;
+    }>;
+  };
+  total_amount: number;
 }
 
 export interface CreateWarehouseReceiptRequest {
@@ -121,31 +160,122 @@ const normalizeImportJobResponse = (job: any): WarehouseReceiptImportJobSnapshot
   };
 };
 
+const normalize = (row: any): WarehouseReceipt => ({
+  id: row.id,
+  code: row.code ?? row.slip_number ?? '',
+  order_id: row.orderId ?? row.order_id ?? '',
+  warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
+  status: row.status ?? 'draft',
+  notes: row.description ?? row.notes ?? undefined,
+  created_at: row.createdAt ?? row.created_at ?? '',
+  completed_at: row.completed_at ?? row.completedAt ?? undefined,
+  updated_at: row.updated_at ?? row.updatedAt ?? '',
+  created_by: row.created_by ?? row.createdBy ?? '',
+  created_by_name: row.created_by_name ?? row.createdByName ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
+  approved_by: row.approved_by ?? row.approvedBy ?? '',
+  supplier_id: row.supplierId ?? row.supplier_id ?? undefined,
+  supplier_name: row.supplier?.name ?? row.supplier_name ?? undefined,
+  supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
+  description: row.description ?? undefined,
+  type: row.type ?? 'import',
+  items: Array.isArray(row.details)
+    ? row.details.map((detail: any) => ({
+        id: detail.id,
+        product_id: detail.product?.id ?? detail.productId ?? detail.product_id,
+        product: detail.product ? {
+          id: detail.product.id,
+          code: detail.product.code,
+          name: detail.product.name,
+          description: detail.product.description,
+          category: detail.product.category,
+          unit: detail.product.unit,
+          price: detail.product.price
+        } : undefined,
+        requested_quantity: Number(row.quantity ?? 0),
+        quantity: Number(detail.quantity ?? 0),
+        unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
+        total_price: Number(detail.totalPrice ?? detail.total_price ?? 0),
+        po_number: detail.poNumber ?? detail.po_number ?? undefined,
+        notes: detail.notes ?? undefined,
+      }))
+    : Array.isArray(row.items)
+    ? row.items.map((it: any) => ({
+        id: it.id,
+        product_id: it.productId ?? it.product_id,
+        product: it.product ? {
+          id: it.product.id,
+          code: it.product.code,
+          name: it.product.name,
+          description: it.product.description,
+          category: it.product.category,
+          unit: it.product.unit,
+          price: it.product.price
+        } : undefined,
+        quantity: Number(it.quantity ?? 0),
+        unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+        total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+        po_number: it.poNumber ?? it.po_number ?? undefined,
+        notes: it.notes ?? undefined,
+      }))
+    : undefined,
+  order: row.order ? {
+    order_number: row.order.order_number ?? row.order.orderNumber ?? '',
+    contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
+    customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
+    customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
+    customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
+    customer_addressInfo: (() => {
+      const ai = row.order.customer_addressInfo || row.order.customerAddressInfo || row.order.customer?.addressInfo || row.order.customer?.address_info;
+      if (!ai) return undefined;
+      return {
+        provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
+        districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+        wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
+        province: ai.province,
+        district: ai.district,
+        ward: ai.ward,
+        provinceName: ai.province?.name ?? ai.provinceName,
+        districtName: ai.district?.name ?? ai.districtName,
+        wardName: ai.ward?.name ?? ai.wardName,
+      };
+    })(),
+    receiver_address: row.order.receiver_address ?? row.order.receiverAddress ?? row.order.receiver?.address ?? undefined,
+    receiver_addressInfo: (() => {
+      const ai = row.order.receiver_addressInfo || row.order.receiverAddressInfo || row.order.receiver?.addressInfo || row.order.receiver?.address_info || row.order.address_info || row.order.addressInfo;
+      if (!ai) return undefined;
+      return {
+        provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
+        districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+        wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
+        province: ai.province,
+        district: ai.district,
+        ward: ai.ward,
+        provinceName: ai.province?.name ?? ai.provinceName,
+        districtName: ai.district?.name ?? ai.districtName,
+        wardName: ai.ward?.name ?? ai.wardName,
+      };
+    })(),
+    total_amount: Number(row.order.total_amount ?? row.order.totalAmount ?? row.totalAmount ?? row.total_amount ?? 0),
+    order_items: Array.isArray(row.order.order_items)
+      ? row.order.order_items.map((oi: any) => ({
+          product_name: oi.product_name ?? oi.productName,
+          product_code: oi.product_code ?? oi.productCode,
+          quantity: Number(oi.quantity ?? 0),
+          unit_price: Number(oi.unit_price ?? oi.unitPrice ?? 0),
+          total_price: Number(oi.total_price ?? oi.totalPrice ?? oi.quantity * (oi.unit_price ?? oi.unitPrice ?? 0)),
+        }))
+      : undefined,
+  } : undefined,
+  total_amount: Number(row.totalAmount ?? row.total_amount ?? 0),
+});
+
 export const warehouseReceiptsApi = {
   // Create new warehouse receipt
   createReceipt: async (data: CreateWarehouseReceiptRequest): Promise<WarehouseReceipt> => {
     const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, data);
     const receiptData = response?.data || response;
     
-    return {
-      id: receiptData.id,
-      code: receiptData.code,
-      warehouse_id: receiptData.warehouseId,
-      supplier_id: receiptData.supplierId,
-      description: receiptData.description,
-      status: receiptData.status || 'pending',
-      type: receiptData.type,
-      total_amount: Number(receiptData.totalAmount || 0),
-      created_at: receiptData.createdAt || receiptData.created_at,
-      updated_at: receiptData.updatedAt || receiptData.updated_at,
-      items: receiptData.details?.map((detail: any) => ({
-        id: detail.id,
-        product_id: detail.productId,
-        quantity: Number(detail.quantity),
-        unit_price: Number(detail.unitPrice),
-        total_price: Number(detail.totalPrice || detail.quantity * detail.unitPrice),
-      })) || []
-    };
+    return normalize(receiptData);
   },
 
   // Get a single receipt by ID
@@ -153,75 +283,25 @@ export const warehouseReceiptsApi = {
     const response = await api.get<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id));
     const data = response?.data || response;
     
-    const normalize = (row: any): WarehouseReceipt => ({
-      id: row.id,
-      code: row.code ?? row.slip_number ?? '',
-      warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
-      supplier_id: row.supplierId ?? row.supplier_id ?? undefined,
-      supplier_name: row.supplier?.name ?? row.supplier_name ?? undefined,
-      supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
-      description: row.description ?? undefined,
-      status: row.status ?? 'draft',
-      type: row.type ?? 'import',
-      total_amount: Number(row.totalAmount ?? row.total_amount ?? 0),
-      created_at: row.created_at ?? row.createdAt ?? '',
-      updated_at: row.updated_at ?? row.updatedAt ?? '',
-      approved_at: row.approved_at ?? row.approvedAt ?? undefined,
-      created_by: row.created_by ?? row.createdBy ?? undefined,
-      created_by_name: row.created_by_name ?? row.createdByName ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
-      approved_by: row.approved_by ?? row.approvedBy ?? undefined,
-      approved_by_name: row.approved_by_name ?? row.approvedByName ?? row.approver?.name ?? row.approver?.full_name ?? undefined,
-      items: Array.isArray(row.details)
-        ? row.details.map((detail: any) => ({
-            id: detail.id,
-            product_id: detail.product?.id ?? detail.productId ?? detail.product_id,
-            product: detail.product ? {
-              id: detail.product.id,
-              code: detail.product.code,
-              name: detail.product.name,
-              description: detail.product.description,
-              category: detail.product.category,
-              unit: detail.product.unit,
-              price: detail.product.price
-            } : undefined,
-            quantity: Number(detail.quantity ?? 0),
-            unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
-            total_price: Number(detail.totalPrice ?? detail.total_price ?? 0),
-            po_number: detail.poNumber ?? detail.po_number ?? undefined,
-            notes: detail.notes ?? undefined,
-          }))
-        : Array.isArray(row.items)
-        ? row.items.map((it: any) => ({
-            id: it.id,
-            product_id: it.productId ?? it.product_id,
-            product: it.product ? {
-              id: it.product.id,
-              code: it.product.code,
-              name: it.product.name,
-              description: it.product.description,
-              category: it.product.category,
-              unit: it.product.unit,
-              price: it.product.price
-            } : undefined,
-            quantity: Number(it.quantity ?? 0),
-            unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-            total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-            po_number: it.poNumber ?? it.po_number ?? undefined,
-            notes: it.notes ?? undefined,
-          }))
-        : undefined,
-    });
-    
     return normalize(data);
   },
 
-  getReceipts: async (params?: { page?: number; limit?: number; search?: string; warehouse_id?: string; status?: string; type?: 'import' | 'export' | string }): Promise<{ receipts: WarehouseReceipt[]; total: number; page: number; limit: number }> => {
+  getReceipts: async (params?: { page?: number; limit?: number; sortBy?: string; sortOrder?: string; orderId?: string; startDate?: string; endDate?: string; completedStartDate?: string; completedEndDate?: string; warehouseId?: string; categories?: string; manufacturers?: string; search?: string; warehouse_id?: string; status?: string; type?: 'import' | 'export' | string }): Promise<{ receipts: WarehouseReceipt[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
-    if (params?.search) queryParams.append('keyword', params.search);
-    if (params?.warehouse_id) queryParams.append('warehouse_id', params.warehouse_id);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
     if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('keyword', params.search);
+    if (params?.orderId) queryParams.append('orderId', params.orderId);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.completedStartDate) queryParams.append('completedStartDate', params.completedStartDate);
+    if (params?.completedEndDate) queryParams.append('completedEndDate', params.completedEndDate);
+    if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+    if (params?.categories) queryParams.append('categories', params.categories);
+    if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers);
     if (params?.type) queryParams.append('type', params.type);
 
     const url = queryParams.toString()
@@ -230,65 +310,6 @@ export const warehouseReceiptsApi = {
 
     const response = await api.get<any>(url);
     const data = response?.data || response;
-
-    const normalize = (row: any): WarehouseReceipt => ({
-      id: row.id,
-      code: row.code ?? row.slip_number ?? '',
-      warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
-      supplier_id: row.supplierId ?? row.supplier_id ?? undefined,
-      supplier_name: row.supplier?.name ?? row.supplier_name ?? undefined,
-      supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
-      description: row.description ?? undefined,
-      status: row.status ?? 'draft',
-      type: row.type ?? 'import',
-      total_amount: Number(row.totalAmount ?? row.total_amount ?? 0),
-      created_at: row.created_at ?? row.createdAt ?? '',
-      updated_at: row.updated_at ?? row.updatedAt ?? '',
-      approved_at: row.approved_at ?? row.approvedAt ?? undefined,
-      created_by: row.created_by ?? row.createdBy ?? undefined,
-      created_by_name: row.created_by_name ?? row.createdByName ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
-      approved_by: row.approved_by ?? row.approvedBy ?? undefined,
-      approved_by_name: row.approved_by_name ?? row.approvedByName ?? row.approver?.name ?? row.approver?.full_name ?? undefined,
-      items: Array.isArray(row.details)
-        ? row.details.map((detail: any) => ({
-            id: detail.id,
-            product_id: detail.product?.id ?? detail.productId ?? detail.product_id,
-            product: detail.product ? {
-              id: detail.product.id,
-              code: detail.product.code,
-              name: detail.product.name,
-              description: detail.product.description,
-              category: detail.product.category,
-              unit: detail.product.unit,
-              price: detail.product.price
-            } : undefined,
-            quantity: Number(detail.quantity ?? 0),
-            unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
-            total_price: Number(detail.totalPrice ?? detail.total_price ?? 0),
-            po_number: detail.poNumber ?? detail.po_number ?? undefined,
-            notes: detail.notes ?? undefined,
-          }))
-        : Array.isArray(row.items)
-        ? row.items.map((it: any) => ({
-            id: it.id,
-            product_id: it.productId ?? it.product_id,
-            product: it.product ? {
-              id: it.product.id,
-              code: it.product.code,
-              name: it.product.name,
-              description: it.product.description,
-              category: it.product.category,
-              unit: it.product.unit,
-              price: it.product.price
-            } : undefined,
-            quantity: Number(it.quantity ?? 0),
-            unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-            total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-            po_number: it.poNumber ?? it.po_number ?? undefined,
-            notes: it.notes ?? undefined,
-          }))
-        : undefined,
-    });
 
     const filterByType = (receipts: WarehouseReceipt[]) => {
       if (params?.type) {
@@ -325,25 +346,7 @@ export const warehouseReceiptsApi = {
     });
     const receiptData = response?.data || response;
     
-    return {
-      id: receiptData.id,
-      code: receiptData.code,
-      warehouse_id: receiptData.warehouseId,
-      supplier_id: receiptData.supplierId,
-      description: receiptData.description,
-      status: receiptData.status || 'approved',
-      type: receiptData.type,
-      total_amount: Number(receiptData.totalAmount || 0),
-      created_at: receiptData.createdAt || receiptData.created_at,
-      updated_at: receiptData.updatedAt || receiptData.updated_at,
-      items: receiptData.details?.map((detail: any) => ({
-        id: detail.id,
-        product_id: detail.productId,
-        quantity: Number(detail.quantity),
-        unit_price: Number(detail.unitPrice),
-        total_price: Number(detail.totalPrice || detail.quantity * detail.unitPrice),
-      })) || []
-    };
+    return normalize(receiptData);
   },
 
   // Reject warehouse receipt
@@ -353,25 +356,7 @@ export const warehouseReceiptsApi = {
     });
     const receiptData = response?.data || response;
     
-    return {
-      id: receiptData.id,
-      code: receiptData.code,
-      warehouse_id: receiptData.warehouseId,
-      supplier_id: receiptData.supplierId,
-      description: receiptData.description,
-      status: receiptData.status || 'rejected',
-      type: receiptData.type,
-      total_amount: Number(receiptData.totalAmount || 0),
-      created_at: receiptData.createdAt || receiptData.created_at,
-      updated_at: receiptData.updatedAt || receiptData.updated_at,
-      items: receiptData.details?.map((detail: any) => ({
-        id: detail.id,
-        product_id: detail.productId,
-        quantity: Number(detail.quantity),
-        unit_price: Number(detail.unitPrice),
-        total_price: Number(detail.totalPrice || detail.quantity * detail.unitPrice),
-      })) || []
-    };
+    return normalize(receiptData);
   },
 
   // Delete warehouse receipt

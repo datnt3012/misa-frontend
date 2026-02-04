@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
@@ -27,13 +27,16 @@ import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpecificExportSlipCreation";
-import { format } from "date-fns";
+import { format, set } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { Loading } from "@/components/ui/loading";
 import { getErrorMessage } from "@/lib/error-utils";
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import apiClient from "@/lib/api";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { productApi } from "@/api/product.api";
+
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
 const PENDING_TAG_NAMES = ["chưa đối soát", "pending reconciliation"];
@@ -127,6 +130,10 @@ const OrdersContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<string | undefined>();
   const [endDate, setEndDate] = useState<string | undefined>();
+  const [completedStartDate, setCompletedStartDate] = useState<string | undefined>();
+  const [completedEndDate, setCompletedEndDate] = useState<string | undefined>();
+  const [minTotalAmount, setMinTotalAmount] = useState<number | undefined>();
+  const [maxTotalAmount, setMaxTotalAmount] = useState<number | undefined>();
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -144,6 +151,9 @@ const OrdersContent: React.FC = () => {
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
+  const [manufacturerFilter, setManufacturerFilter] = useState("all");
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
+  const [paymentMethodFilters, setpaymentMethodFilters] = useState("all");
   // Export delivery note states
   const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
   const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
@@ -165,6 +175,11 @@ const OrdersContent: React.FC = () => {
     totalDebt: number;
     totalExpenses: number;
   } | null>(null);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  // Use useCallback for search handler to prevent input focus loss during re-renders
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value.trim());
+  }, []);
   const { toast } = useToast();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
@@ -195,14 +210,21 @@ const OrdersContent: React.FC = () => {
       if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
-      if (creatorFilter !== 'all') params.creatorFilter = creatorFilter;
+      if (minTotalAmount !== undefined) params.minTotalAmount = minTotalAmount;
+      if (maxTotalAmount !== undefined) params.maxTotalAmount = maxTotalAmount;
+      if (completedStartDate) params.completedStartDate = completedStartDate;
+      if (completedEndDate) params.completedEndDate = completedEndDate;
+      if (creatorFilter !== 'all') params.createdBy = creatorFilter;
+      if (manufacturerFilter !== 'all') params.manufacturers = manufacturerFilter;
+      if (paymentMethodFilters !== 'all') params.paymentMethods = paymentMethodFilters;
+
       const resp = await orderApi.getOrders(params);
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
       // Load payments for all orders to calculate accurate paid amounts
-      if (resp.orders && resp.orders.length > 0) {
-        loadPaymentsForOrders(resp.orders.map(o => o.id));
-      }
+      // if (resp.orders && resp.orders.length > 0) {
+      //   loadPaymentsForOrders(resp.orders.map(o => o.id));
+      // }
       // Set summary from API if available
       if (resp.summary) {
         setSummary({
@@ -242,7 +264,22 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, toast]);
+  }, [currentPage, 
+    itemsPerPage, 
+    statusFilter, 
+    categoryFilter, 
+    debouncedSearchTerm, 
+    startDate, 
+    endDate, 
+    completedStartDate,
+    completedEndDate,
+    minTotalAmount, 
+    maxTotalAmount, 
+    creatorFilter,
+    manufacturerFilter,
+    paymentMethodFilters,
+    toast]);
+    
   // Load payments for orders and cache total paid amounts
   const loadPaymentsForOrders = useCallback(async (orderIds: string[]) => {
     if (!orderIds || orderIds.length === 0) return;
@@ -288,6 +325,7 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -295,6 +333,7 @@ const OrdersContent: React.FC = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
   // Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
@@ -354,11 +393,13 @@ const OrdersContent: React.FC = () => {
       // If orders not loaded yet, wait for them to load
     }
   }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
+
   // Handle creating export slip
   const handleCreateExportSlip = (order: any) => {
     setSelectedOrderForExport(order);
     setShowExportSlipDialog(true);
   };
+
   // Handle checkbox selection
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev => 
@@ -367,6 +408,7 @@ const OrdersContent: React.FC = () => {
         : [...prev, orderId]
     );
   };
+
   const handleSelectAll = () => {
     if (selectedOrders.length === orders.length) {
       setSelectedOrders([]);
@@ -374,6 +416,7 @@ const OrdersContent: React.FC = () => {
       setSelectedOrders(orders.map(order => order.id));
     }
   };
+
   // Handle delete orders
   const handleDeleteOrders = async () => {
     if (selectedOrders.length === 0) {
@@ -407,6 +450,7 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
+
   // Handle delete single order
   const handleDeleteSingleOrder = async () => {
     if (!orderToDelete) {
@@ -437,17 +481,35 @@ const OrdersContent: React.FC = () => {
       setLoading(false);
     }
   };
+
   // Scroll to top when component mounts or route changes
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [location.pathname]);
+
+  // Fetch when pagination or filters change
   useEffect(() => {
     fetchOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, itemsPerPage, statusFilter, categoryFilter, debouncedSearchTerm, startDate, endDate, creatorFilter, fetchOrders]); // Fetch when pagination or filters change
+  }, [currentPage, 
+    itemsPerPage, 
+    statusFilter, 
+    categoryFilter, 
+    debouncedSearchTerm, 
+    startDate, 
+    endDate, 
+    completedStartDate, 
+    completedEndDate,
+    minTotalAmount,
+    maxTotalAmount, 
+    creatorFilter,
+    manufacturerFilter,
+    paymentMethodFilters,
+  ]);
+
   useEffect(() => {
     loadOrderTagsCatalog();
   }, [loadOrderTagsCatalog]);
+
   // Fetch creators for filter
   const fetchCreators = async () => {
     try {
@@ -458,9 +520,22 @@ const OrdersContent: React.FC = () => {
       setCreators([]);
     }
   };
+
   useEffect(() => {
     fetchCreators();
+    fetchManufacturers();
   }, []);
+
+  const fetchManufacturers = async () => {
+    try {
+      const data = await productApi.getManufacturers();
+      setManufacturers(data || []);
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+      setManufacturers([]);
+    }
+  };
+  
   const formatCurrency = (amount: number | string | undefined | null) => {
     const numAmount = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN', {
@@ -721,7 +796,12 @@ const OrdersContent: React.FC = () => {
     setCategoryFilter("all");
     setStartDate(undefined);
     setEndDate(undefined);
+    setMinTotalAmount(undefined);
+    setMaxTotalAmount(undefined);
+    setCompletedStartDate(undefined);
+    setCompletedEndDate(undefined);
     setCreatorFilter("all");
+    setFiltersCollapsed(false);
     setCurrentPage(1);
   };
   const handleMultiplePayments = () => {
@@ -792,9 +872,8 @@ const OrdersContent: React.FC = () => {
     { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
   );
   // Show loading if loading
-  if (loading) {
-    return <Loading message="Đang tải danh sách đơn hàng..." />;
-  }
+  // Don't return early - show inline loading to preserve input focus
+  const isInitialLoading = loading && orders.length === 0;
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
         <div className="w-full mx-auto space-y-3 sm:space-y-4">
@@ -813,18 +892,20 @@ const OrdersContent: React.FC = () => {
               THÊM MỚI
             </Button>
           </div>
-          {/* Filters */}
-          <Card>
-            <CardContent className="pt-6">
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4" />
-              <Input
-                placeholder="Nhập ID đơn sản (API ID)"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
-              />
+              <div className="relative">
+                <Search  className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground"/>
+                <Input
+                  placeholder="Nhập từ khoá tìm kiếm..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="w-64 pl-8"
+                />
+              </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-40">
@@ -839,40 +920,6 @@ const OrdersContent: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Combobox
-              options={[
-                { label: "Tất cả loại", value: "all" },
-                ...categories.map((category) => ({
-                  label: category.name,
-                  value: category.id
-                }))
-              ]}
-              value={categoryFilter}
-              onValueChange={setCategoryFilter}
-              placeholder="Chọn loại sản phẩm"
-              searchPlaceholder="Tìm loại sản phẩm..."
-              emptyMessage="Không có loại sản phẩm nào"
-              className="w-40"
-            />
-            {/* Date Filter */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Từ ngày:</label>
-              <Input
-                type="date"
-                className="w-40"
-                value={startDate || ""}
-                onChange={(e) => setStartDate(e.target.value || undefined)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Đến ngày:</label>
-              <Input
-                type="date"
-                className="w-40"
-                value={endDate || ""}
-                onChange={(e) => setEndDate(e.target.value || undefined)}
-              />
-            </div>
             {/* Creator Filter */}
             <Combobox
               options={[
@@ -893,17 +940,145 @@ const OrdersContent: React.FC = () => {
               emptyMessage="Không có người tạo nào"
               className="w-48"
             />
+            {/* Collapse Filter Button */}
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            >
+              <Filter className="w-4 h-4" />
+              {filtersCollapsed ? "Thu gọn" : "Mở rộng"}
+              {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
             {/* Reset Filters Button */}
             <Button
               onClick={handleResetFilters}
               variant="outline"
-              className="ml-auto"
+              disabled={loading}
             >
-              Đặt lại
+              {loading ? "Đang tải..." : "Đặt lại"}
             </Button>
           </div>
+          {/* Collapsible Filters Row */}
+          {filtersCollapsed && (
+            <div className="grid grid-cols-3 gap-3 gap-y-6 justify-items-center items-center mt-4">
+              {/* Created Date Filters */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Ngày tạo:</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={startDate || ""}
+                  onChange={(e) => setStartDate(e.target.value || undefined)}
+                />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">-</label>
+                  <Input
+                    type="date"
+                    className="w-40"
+                    value={endDate || ""}
+                    onChange={(e) => setEndDate(e.target.value || undefined)}
+                  />
+                </div>
+              </div>
+              {/*Completed Date Filters */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Ngày hoàn thành:</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={completedStartDate || ""}
+                  onChange={(e) => setCompletedStartDate(e.target.value || undefined)}
+                />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">-</label>
+                  <Input
+                    type="date"
+                    className="w-40"
+                    value={completedEndDate || ""}
+                    onChange={(e) => setCompletedEndDate(e.target.value || undefined)}
+                  />
+                </div>
+              </div>
+              {/* Amount Filters */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Tổng tiền:</label>
+                <CurrencyInput
+                  className="w-40"
+                  value={minTotalAmount || ""}
+                  onChange={(value) => setMinTotalAmount(value || undefined)}
+                />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">-</label>
+                  <CurrencyInput
+                    className="w-40"
+                    value={maxTotalAmount || ""}
+                    onChange={(value) => setMaxTotalAmount(value || undefined)}
+                  />
+                </div>
+              </div>
+              {/* Category Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả loại sản phẩm", value: "all" },
+                  ...categories.map((category) => ({
+                    label: category.name,
+                    value: category.id
+                  }))
+                ]}
+                value={categoryFilter}
+                onValueChange={setCategoryFilter}
+                placeholder="Chọn loại sản phẩm"
+                searchPlaceholder="Tìm loại sản phẩm..."
+                emptyMessage="Không có loại sản phẩm nào"
+                className="w-60"
+              />
+              {/* Category Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả phương thức thanh toán", value: "all" },
+                  ...[
+                    {id: 'cash', name: 'Tiền mặt'},
+                    {id: 'credit_card', name: 'Thẻ tín dụng'},
+                    {id: 'bank_transfer', name: 'Chuyển khoản'}
+                  ].map((pm) => ({
+                    label: pm.name,
+                    value: pm.id
+                  }))
+                ]}
+                value={paymentMethodFilters}
+                onValueChange={setpaymentMethodFilters}
+                placeholder="Chọn phương thức thanh toán"
+                searchPlaceholder="Tìm phương thức thanh toán..."
+                emptyMessage="Không có phương thức thanh toán nào"
+                className="w-80"
+              />
+              {/* Manifacturers Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả nhà sản xuất", value: "all" },
+                  ...manufacturers.map((m) => ({
+                    label: m,
+                    value: m
+                  }))
+                ]}
+                value={manufacturerFilter}
+                onValueChange={setManufacturerFilter}
+                placeholder="Nhà sản xuất"
+                searchPlaceholder="Tìm nhà sản xuất..."
+                emptyMessage="Không có nhà sản xuất nào"
+                className="w-60"
+              />
+            </div>
+          )}
         </CardContent>
-          </Card>
+      </Card>
       {/* Summary Row */}
       <Card>
         <CardContent className="pt-6">
@@ -1103,8 +1278,8 @@ const OrdersContent: React.FC = () => {
                              <div className="text-sm font-medium text-blue-600 cursor-pointer hover:underline">
                                {maskPhoneNumber(order.customer_phone || "")}
                              </div>
-                             <div className="font-medium">{order.customer_name}</div>
-                             <div className="text-sm text-muted-foreground">
+                             <div className="font-medium truncate" title={order.customer_name}>{order.customer_name}</div>
+                             <div className="text-sm text-muted-foreground truncate" title={formatAddress(order.customer_address)}>
                                {formatAddress(order.customer_address)}
                              </div>
                              <div className="flex flex-wrap gap-1 mt-1 text-center justify-center">

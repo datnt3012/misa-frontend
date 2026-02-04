@@ -27,12 +27,30 @@ import InventoryStock from "@/components/inventory/InventoryStock";
 import { productApi, type Product, type ProductWithStock, type ProductImportError, type ProductImportJobSnapshot, type ProductImportJobStatus } from "@/api/product.api";
 import { categoriesApi, type Category } from "@/api/categories.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
-import { stockLevelsApi, type StockLevel } from "@/api/stockLevels.api";
 import { dashboardApi } from "@/api/dashboard.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { CategoriesContent } from "@/pages/Categories";
 import { useSearchParams } from "react-router-dom";
 import React from "react";
+
+// Helper function to normalize summary data from API response
+const normalizeSummary = (summary: any): {
+  totalOutOfStocks: number;
+  totalLowStocks: number;
+  totalInStocks: number;
+} => {
+  if (!summary) {
+    return { totalOutOfStocks: 0, totalLowStocks: 0, totalInStocks: 0 };
+  }
+  
+  return {
+    // Handle camelCase (from API response)
+    totalOutOfStocks: summary.totalOutOfStocks ?? summary.total_out_of_stocks ?? 0,
+    totalLowStocks: summary.totalLowStocks ?? summary.total_low_stocks ?? 0,
+    totalInStocks: summary.totalInStocks ?? summary.total_in_stocks ?? 0,
+  };
+};
+
 const InventoryContent = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -56,12 +74,16 @@ const InventoryContent = () => {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
   const [inventoryOverview, setInventoryOverview] = useState<{
     inventoryData: any[];
     lowStockProducts: any[];
     productStockData: any[];
     totalProducts: number;
+    summary?: {
+      totalOutOfStocks?: number;
+      totalLowStocks?: number;
+      totalInStocks?: number;
+    };
     counts: {
       inStock: number;
       lowStock: number;
@@ -72,7 +94,6 @@ const InventoryContent = () => {
   const [errorStates, setErrorStates] = useState({
     products: null as string | null,
     warehouses: null as string | null,
-    stockLevels: null as string | null,
     inventoryOverview: null as string | null
   });
   // Import job state and polling logic (moved from ProductList to persist across tab switches)
@@ -531,7 +552,7 @@ const InventoryContent = () => {
                 products: 'Không có quyền truy cập dữ liệu sản phẩm (cần Read Products)'
               }));
             }
-            return { products: [] };
+            return { products: [], summary: {} };
           })
         );
         promiseLabels.push('products');
@@ -555,23 +576,6 @@ const InventoryContent = () => {
         );
         promiseLabels.push('warehouses');
       }
-      // Load stock levels for summary cards
-      promises.push(
-        stockLevelsApi.getStockLevels({ 
-          page: 1, 
-          limit: 1000,
-          includeDeleted: false 
-        }).catch(error => {
-          if (error?.response?.status === 403) {
-            setErrorStates(prev => ({ 
-              ...prev, 
-              stockLevels: 'Không có quyền truy cập dữ liệu tồn kho' 
-            }));
-          }
-          return { stockLevels: [] };
-        })
-      );
-      promiseLabels.push('stockLevels');
       // Load categories for mapping category IDs -> names
       promises.push(
         categoriesApi.getCategories({ page: 1, limit: 1000 }).catch(error => {
@@ -605,20 +609,15 @@ const InventoryContent = () => {
       if (promises.length > 0) {
         const responses = await Promise.all(promises);
         // Process responses
-        let productsResponse = { products: [] };
+        let productsResponse = { products: [], summary: {} as Record<string, any> };
         let warehousesResponse = { warehouses: [] };
-        let stockLevelsResponse = { stockLevels: [] };
         let categoriesResponse = { categories: [] as Category[] };
         let inventoryOverviewResponse = {
           inventoryData: [],
           lowStockProducts: [],
           productStockData: [],
           totalProducts: 0,
-          counts: {
-            inStock: 0,
-            lowStock: 0,
-            outOfStock: 0,
-          }
+          summary: {}
         };
         responses.forEach((response, index) => {
           const label = promiseLabels[index];
@@ -626,18 +625,27 @@ const InventoryContent = () => {
             productsResponse = response;
           } else if (label === 'warehouses') {
             warehousesResponse = response;
-          } else if (label === 'stockLevels') {
-            stockLevelsResponse = response;
           } else if (label === 'categories') {
             categoriesResponse = response;
           } else if (label === 'inventoryOverview') {
             inventoryOverviewResponse = response;
           }
         });
-        // Store inventory overview data
-        setInventoryOverview(inventoryOverviewResponse);
-        // Store stock levels
-        setStockLevels(stockLevelsResponse.stockLevels || []);
+        
+        // Extract and normalize summary from products response for inventory overview
+        const normalizedSummary = normalizeSummary(productsResponse.summary);
+        
+        // Update inventory overview with summary from product API
+        setInventoryOverview({
+          ...inventoryOverviewResponse,
+          summary: normalizedSummary,
+          counts: {
+            inStock: normalizedSummary.totalInStocks,
+            lowStock: normalizedSummary.totalLowStocks,
+            outOfStock: normalizedSummary.totalOutOfStocks,
+          }
+        });
+        
         // Store categories (active and inactive)
         setCategories(categoriesResponse.categories || []);
         // Transform products to include stock information (mock data for now)
@@ -1099,41 +1107,10 @@ const InventoryContent = () => {
             </Card>
           )}
           {(() => {
-            // Read counts directly from API response (same as dashboard)
-            let inStockCount = 0;
-            let lowStockCount = 0;
-            let outOfStockCount = 0;
-            if (inventoryOverview && !errorStates.inventoryOverview && inventoryOverview.counts) {
-              // Use counts from API response
-              inStockCount = inventoryOverview.counts.inStock || 0;
-              lowStockCount = inventoryOverview.counts.lowStock || 0;
-              outOfStockCount = inventoryOverview.counts.outOfStock || 0;
-            } else {
-              // Fallback to client-side calculation if API data not available
-              const productStockMap = new Map<string, number>();
-              stockLevels.forEach(stock => {
-                const currentTotal = productStockMap.get(stock.productId) || 0;
-                productStockMap.set(stock.productId, currentTotal + stock.quantity);
-              });
-              inStockCount = products.filter(p => {
-                const totalStock = productStockMap.get(p.id) || 0;
-                const threshold = p.lowStockThreshold ?? 100;
-                return totalStock > threshold;
-              }).length;
-              lowStockCount = products.filter(p => {
-                const totalStock = productStockMap.get(p.id) || 0;
-                const threshold = p.lowStockThreshold ?? 100;
-                return totalStock > 0 && totalStock <= threshold;
-              }).length;
-              outOfStockCount = products.filter(p => {
-                const totalStock = productStockMap.get(p.id) || 0;
-                return totalStock === 0;
-              }).length;
-            }
             return (
               <>
-                {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
-                  <PermissionErrorCard title="Còn Hàng" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
+                {errorStates.products ? (
+                  <PermissionErrorCard title="Còn Hàng" error={errorStates.products || errorStates.inventoryOverview} />
                 ) : (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1142,13 +1119,13 @@ const InventoryContent = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-green-600">
-                        {inStockCount}
+                        {inventoryOverview?.counts?.inStock || 0}
                       </div>
                     </CardContent>
                   </Card>
                 )}
-                {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
-                  <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
+                {errorStates.products || errorStates.inventoryOverview ? (
+                  <PermissionErrorCard title="Sắp Hết" error={errorStates.products || errorStates.inventoryOverview} />
                 ) : (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1157,13 +1134,13 @@ const InventoryContent = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-orange-600">
-                        {lowStockCount}
+                        {inventoryOverview?.counts?.lowStock || 0}
                       </div>
                     </CardContent>
                   </Card>
                 )}
-                {errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview ? (
-                  <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.stockLevels || errorStates.inventoryOverview} />
+                {errorStates.products || errorStates.inventoryOverview ? (
+                  <PermissionErrorCard title="Hết Hàng" error={errorStates.products || errorStates.inventoryOverview} />
                 ) : (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1172,7 +1149,7 @@ const InventoryContent = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-red-600">
-                        {outOfStockCount}
+                        {inventoryOverview?.counts?.outOfStock || 0}
                       </div>
                     </CardContent>
                   </Card>
