@@ -377,7 +377,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     });
   };
   const calculateTotals = () => {
-    const itemsSubtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
+    const itemsSubtotal = newOrder.items.reduce((sum, item) => sum + (item.vat_percentage ? (item.total_price + (item.total_price * item.vat_percentage / 100)) : item.total_price), 0);
     const expensesTotal = newOrder.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const subtotal = itemsSubtotal + expensesTotal;
     const debt = subtotal - (newOrder.initial_payment || 0);
