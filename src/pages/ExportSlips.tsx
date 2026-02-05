@@ -110,7 +110,9 @@ function ExportSlipsContent() {
     setFiltersCollapsed(false);
     setCurrentPage(1);
     setSortDirection('desc');
-    setSortField('createdAt')
+    setSortField('createdAt');
+    setCompletedStartDate('');
+    setCompletedStartDate('');
   };
 
   // Export slip form state
