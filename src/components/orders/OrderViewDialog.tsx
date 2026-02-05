@@ -572,7 +572,12 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                       {orderDetails.receiverAddress && (
                         <div className="md:col-span-2">
                           <label className="text-sm font-medium text-muted-foreground">Địa chỉ giao hàng:</label>
-                          <div className="text-base">{orderDetails.receiverAddress}</div>
+                          <div className="text-base">
+                            {orderDetails.receiverAddress + ' ' 
+                            + (orderDetails.addressInfo?.ward ? orderDetails.addressInfo?.ward?.name + ', ' : '') + ' '
+                            + (orderDetails.addressInfo?.district ? orderDetails.addressInfo?.district?.name + ', ' : '') + ' '
+                            + (orderDetails.addressInfo?.province ? orderDetails.addressInfo?.province?.name : '') }
+                          </div>
                         </div>
                       )}
                     </div>

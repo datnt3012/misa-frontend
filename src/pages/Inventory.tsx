@@ -839,7 +839,7 @@ const InventoryContent = () => {
         address: newWarehouse.address,
         addressInfo: {
           provinceCode: newWarehouse.addressInfo?.provinceCode || undefined,
-          districtCode: newWarehouse.addressInfo?.districtCode || undefined,
+          districtCode: newWarehouse.addressInfo?.districtCode ?? null,
           wardCode: newWarehouse.addressInfo?.wardCode || undefined
         }
       });
@@ -926,7 +926,7 @@ const InventoryContent = () => {
         address: newWarehouse.address,
         addressInfo: {
           provinceCode: newWarehouse.addressInfo?.provinceCode || undefined,
-          districtCode: newWarehouse.addressInfo?.districtCode || undefined,
+          districtCode: newWarehouse.addressInfo?.districtCode ?? null,
           wardCode: newWarehouse.addressInfo?.wardCode || undefined
         }
       });
@@ -1316,7 +1316,7 @@ const InventoryContent = () => {
                                 address: data.address || '',
                                 addressInfo: {
                                   provinceCode: data.provinceCode || undefined,
-                                  districtCode: data.districtCode || undefined,
+                                  districtCode: data.districtCode ?? null,
                                   wardCode: data.wardCode || undefined,
                                   provinceName: data.provinceName || undefined,
                                   districtName: data.districtName || undefined,

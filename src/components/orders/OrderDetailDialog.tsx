@@ -276,7 +276,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       if (addressInfo) {
         const normalizedInfo = {
           provinceCode: addressInfo.provinceCode || undefined,
-          districtCode: addressInfo.districtCode || undefined,
+          districtCode: addressInfo.districtCode ?? null,
           wardCode: addressInfo.wardCode || undefined,
         };
         if (field === 'receiverAddress') {

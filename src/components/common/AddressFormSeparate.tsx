@@ -6,20 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { administrativeApi, AdministrativeUnit } from "@/api/administrative.api";
-interface AdministrativeUnit {
-  code: string;
-  name: string;
-  level: string;
-  parentCode?: string;
-}
+
+// Get administrative version from environment
+const getAdministrativeVersion = (): number => {
+  const version = import.meta.env.VITE_ADMINISTRATIVE_VERSION;
+  if (version === '2') {
+    return 2;
+  }
+  return 1; // Default to version 1
+};
+
 interface AddressData {
   address: string;
-  provinceCode?: string;
-  districtCode?: string;
-  wardCode?: string;
-  provinceName?: string;
-  districtName?: string;
-  wardName?: string;
+  provinceCode?: string | null;
+  districtCode?: string | null;
+  wardCode?: string | null;
+  provinceName?: string | null;
+  districtName?: string | null;
+  wardName?: string | null;
 }
 interface AddressFormSeparateProps {
   value?: Partial<AddressData>;
@@ -33,6 +37,10 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   disabled = false,
   required = false
 }) => {
+  // Check administrative version
+  const adminVersion = getAdministrativeVersion();
+  const isV2 = adminVersion === 2;
+
   // Store all data loaded from API
   const [allProvinces, setAllProvinces] = useState<AdministrativeUnit[]>([]);
   const [allDistricts, setAllDistricts] = useState<AdministrativeUnit[]>([]);
@@ -49,12 +57,17 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
   // Filtered lists based on selection (computed after state declarations)
   // These are filtered from already-loaded data - NO API CALLS when selecting options
   const provinces = allProvinces;
-  const districts = selectedProvince 
+  const districts = !isV2 && selectedProvince 
     ? allDistricts.filter(d => d.parentCode === selectedProvince)
     : [];
-  const wards = selectedDistrict
-    ? allWards.filter(w => w.parentCode === selectedDistrict)
-    : [];
+  // V2: ward's parent is province (parentCode/parent_code = province code). V1: ward's parent is district.
+  const getWardParentCode = (w: AdministrativeUnit) =>
+    w.parentCode ?? (w as { parent_code?: string }).parent_code ?? (w as { provinceCode?: string }).provinceCode ?? '';
+  const wards = !isV2 && selectedDistrict 
+    ? allWards.filter(w => String(getWardParentCode(w)) === String(selectedDistrict))
+    : isV2 && selectedProvince 
+      ? allWards.filter(w => String(getWardParentCode(w)) === String(selectedProvince))
+      : [];
   // Autocomplete popover states
   const [openProvince, setOpenProvince] = useState(false);
   const [openDistrict, setOpenDistrict] = useState(false);
@@ -87,47 +100,87 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     dataLoadStartedRef.current = true;
     try {
       setLoading(true);
-      // Load all 3 levels in parallel - ONLY CALLED ONCE on mount
-      const [provincesRes, districtsRes, wardsRes] = await Promise.all([
-        administrativeApi.getAdministrativeUnits({ noPaging: true, level: '1' }),
-        administrativeApi.getAdministrativeUnits({ noPaging: true, level: '2' }),
-        administrativeApi.getAdministrativeUnits({ noPaging: true, level: '3' })
-      ]);
-      // Filter and remove duplicates by code
-      const removeDuplicates = (items: AdministrativeUnit[]): AdministrativeUnit[] => {
-        const seen = new Map<string, AdministrativeUnit>();
-        items.forEach(item => {
-          if (item.code && !seen.has(item.code)) {
-            seen.set(item.code, item);
-          }
-        });
-        return Array.from(seen.values());
-      };
-      const provincesList = removeDuplicates(
-        (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'))
-      );
-      const districtsList = removeDuplicates(
-        (districtsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'district'))
-      );
-      const wardsList = removeDuplicates(
-        (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'))
-      );
-      setAllProvinces(provincesList);
-      setAllDistricts(districtsList);
-      setAllWards(wardsList);
-      setDataLoaded(true);
-      // Update names if we have selections but no names
-      if (selectedProvince && !selectedProvinceName) {
-        const found = provincesList.find(p => p.code === selectedProvince);
-        if (found) setSelectedProvinceName(found.name);
-      }
-      if (selectedDistrict && !selectedDistrictName) {
-        const found = districtsList.find(d => d.code === selectedDistrict);
-        if (found) setSelectedDistrictName(found.name);
-      }
-      if (selectedWard && !selectedWardName) {
-        const found = wardsList.find(w => w.code === selectedWard);
-        if (found) setSelectedWardName(found.name);
+      // Load data based on version - V2 doesn't need districts
+      if (isV2) {
+        // Version 2: Only load provinces and wards (no districts required)
+        const [provincesRes, wardsRes] = await Promise.all([
+          administrativeApi.getAdministrativeUnits({ noPaging: true, level: '1', version: 2 }),
+          administrativeApi.getAdministrativeUnits({ noPaging: true, level: '3', version: 2 })
+        ]);
+        const removeDuplicates = (items: AdministrativeUnit[]): AdministrativeUnit[] => {
+          const seen = new Map<string, AdministrativeUnit>();
+          items.forEach(item => {
+            if (item.code && !seen.has(item.code)) {
+              seen.set(item.code, item);
+            }
+          });
+          return Array.from(seen.values());
+        };
+        const provincesList = removeDuplicates(
+          (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'))
+        );
+        const wardsList = removeDuplicates(
+          (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'))
+        );
+        setAllProvinces(provincesList);
+        setAllDistricts([]); // V2 doesn't use districts
+        setAllWards(wardsList);
+        setDataLoaded(true);
+        // Clear district in V2 mode
+        setSelectedDistrict('');
+        setSelectedDistrictName('');
+        // Update names if we have selections but no names
+        if (selectedProvince && !selectedProvinceName) {
+          const found = provincesList.find(p => p.code === selectedProvince);
+          if (found) setSelectedProvinceName(found.name);
+        }
+        if (selectedWard && !selectedWardName) {
+          const found = wardsList.find(w => w.code === selectedWard);
+          if (found) setSelectedWardName(found.name);
+        }
+      } else {
+        // Version 1: Load all 3 levels
+        const [provincesRes, districtsRes, wardsRes] = await Promise.all([
+          administrativeApi.getAdministrativeUnits({ noPaging: true, level: '1' }),
+          administrativeApi.getAdministrativeUnits({ noPaging: true, level: '2' }),
+          administrativeApi.getAdministrativeUnits({ noPaging: true, level: '3' })
+        ]);
+        // Filter and remove duplicates by code
+        const removeDuplicates = (items: AdministrativeUnit[]): AdministrativeUnit[] => {
+          const seen = new Map<string, AdministrativeUnit>();
+          items.forEach(item => {
+            if (item.code && !seen.has(item.code)) {
+              seen.set(item.code, item);
+            }
+          });
+          return Array.from(seen.values());
+        };
+        const provincesList = removeDuplicates(
+          (provincesRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'province'))
+        );
+        const districtsList = removeDuplicates(
+          (districtsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'district'))
+        );
+        const wardsList = removeDuplicates(
+          (wardsRes.administrativeUnits || []).filter(org => levelMatches(org.level, 'ward'))
+        );
+        setAllProvinces(provincesList);
+        setAllDistricts(districtsList);
+        setAllWards(wardsList);
+        setDataLoaded(true);
+        // Update names if we have selections but no names
+        if (selectedProvince && !selectedProvinceName) {
+          const found = provincesList.find(p => p.code === selectedProvince);
+          if (found) setSelectedProvinceName(found.name);
+        }
+        if (selectedDistrict && !selectedDistrictName) {
+          const found = districtsList.find(d => d.code === selectedDistrict);
+          if (found) setSelectedDistrictName(found.name);
+        }
+        if (selectedWard && !selectedWardName) {
+          const found = wardsList.find(w => w.code === selectedWard);
+          if (found) setSelectedWardName(found.name);
+        }
       }
     } catch (error: any) {
       setAllProvinces([]);
@@ -148,7 +201,12 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       const found = allProvinces.find(p => p.code === selectedProvince);
       if (found) setSelectedProvinceName(found.name);
     }
-  }, [selectedProvince, selectedProvinceName, allProvinces, dataLoaded]);
+    // Clear district when province changes in V2 mode
+    if (isV2 && selectedProvince) {
+      setSelectedDistrict('');
+      setSelectedDistrictName('');
+    }
+  }, [selectedProvince, selectedProvinceName, allProvinces, dataLoaded, isV2]);
   useEffect(() => {
     if (!dataLoaded) return;
     if (selectedDistrict && !selectedDistrictName) {
@@ -195,6 +253,44 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     // Wait for data to be loaded
     if (!dataLoaded) return;
     if (!value) return;
+
+    // Handle case where only ward is provided - derive parent selections from ward's parentCode
+    if (!value.provinceCode && value.wardCode && !selectedProvince) {
+      // Find the ward in loaded data to get its parentCode (V2: parent = province, V1: parent = district)
+      const ward = allWards.find(w => w.code === value.wardCode);
+      const wardParentCode = ward ? (ward.parentCode ?? (ward as { parent_code?: string }).parent_code ?? (ward as { provinceCode?: string }).provinceCode ?? '') : '';
+      if (ward && wardParentCode) {
+        // Clear district in V2 mode
+        if (isV2) {
+          setSelectedDistrict('');
+          setSelectedDistrictName('');
+        }
+        if (isV2) {
+          // V2: ward's parent is province code
+          setSelectedProvince(wardParentCode);
+          setSelectedProvinceName(allProvinces.find(p => p.code === wardParentCode)?.name || '');
+        } else {
+          // V1: ward's parentCode is districtCode, need to find province from district
+          const district = allDistricts.find(d => d.code === ward.parentCode);
+          if (district?.parentCode) {
+            setSelectedDistrict(ward.parentCode);
+            setSelectedDistrictName(district.name || '');
+            setSelectedProvince(district.parentCode);
+            setSelectedProvinceName(allProvinces.find(p => p.code === district.parentCode)?.name || '');
+          }
+        }
+        // Set ward name and mark as initialized
+        setSelectedWardName(ward.name || '');
+        initializedRef.current = true;
+        hydratingRef.current = true;
+        // Trigger onChange with the hydrated data
+        setTimeout(() => {
+          hydratingRef.current = false;
+        }, 100);
+        return; // Don't continue with normal hydration
+      }
+    }
+
     if (!value.provinceCode) {
       // If value has no provinceCode, clear everything only if we have selections
       if (selectedProvince || selectedDistrict || selectedWard) {
@@ -261,7 +357,7 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     setSelectedProvince(value.provinceCode);
     const province = allProvinces.find(p => p.code === value.provinceCode);
     setSelectedProvinceName(value.provinceName || province?.name || '');
-    // Set district if provided
+    // Set district if provided (V1 only; V2 has no district)
     if (value.districtCode) {
       setSelectedDistrict(value.districtCode);
       const district = allDistricts.find(d => d.code === value.districtCode);
@@ -276,14 +372,17 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
         setSelectedWardName('');
       }
     } else {
-      // Only clear if province changed (fresh init or province change)
-      if (!initializedRef.current || provinceChanged) {
-        setSelectedDistrict('');
-        setSelectedDistrictName('');
+      setSelectedDistrict('');
+      setSelectedDistrictName('');
+      // V2: no districtCode; always sync ward from value when we have provinceCode + wardCode
+      if (value.wardCode) {
+        setSelectedWard(value.wardCode);
+        const ward = allWards.find(w => w.code === value.wardCode);
+        setSelectedWardName(value.wardName || ward?.name || '');
+      } else {
         setSelectedWard('');
         setSelectedWardName('');
       }
-      // Otherwise keep current selection
     }
     hydratingRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,10 +401,13 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     const provinceName = selectedProvinceName || allProvinces.find(p => p.code === selectedProvince)?.name || '';
     const districtName = selectedDistrictName || allDistricts.find(d => d.code === selectedDistrict)?.name || '';
     const wardName = selectedWardName || allWards.find(w => w.code === selectedWard)?.name || '';
+    // Determine district value for comparison
+    const districtValue = isV2 ? null : (selectedDistrict || undefined);
+    const districtNameValue = isV2 ? null : (districtName || undefined);
     // Check if values actually changed to avoid unnecessary onChange calls
     const currentValues = {
       province: selectedProvince || undefined,
-      district: selectedDistrict || undefined,
+      district: districtValue,
       ward: selectedWard || undefined,
       address: addressDetail
     };
@@ -315,7 +417,10 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
       currentValues.district !== prevValues.district ||
       currentValues.ward !== prevValues.ward ||
       currentValues.address !== prevValues.address;
-    if (!valuesChanged) {
+    
+    // Always call onChange if isV2 changed (to ensure district is cleared)
+    // or if any other value changed
+    if (!valuesChanged && prevValues.district === districtValue) {
       return; // No actual change, skip onChange
     }
     // Update previous values
@@ -325,19 +430,19 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
     const addressData: AddressData = {
       address: addressDetail,
       provinceCode: selectedProvince || undefined,
-      districtCode: selectedDistrict || undefined, // Always include if selectedDistrict exists
+      districtCode: districtValue, // Send null in V2 to clear V1 data
       wardCode: selectedWard || undefined,
       provinceName: provinceName || undefined,
-      districtName: districtName || undefined,
+      districtName: districtNameValue, // Send null in V2
       wardName: wardName || undefined
     };
     onChange(addressData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProvince, selectedDistrict, selectedWard, selectedProvinceName, selectedDistrictName, selectedWardName, addressDetail, dataLoaded, allProvinces, allDistricts, allWards]);
+  }, [selectedProvince, selectedDistrict, selectedWard, selectedProvinceName, selectedDistrictName, selectedWardName, addressDetail, dataLoaded, allProvinces, allDistricts, allWards, isV2]);
   return (
     <div className="space-y-3">
       {/* Address Selection Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className={`grid grid-cols-1 ${isV2 ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-3`}>
         {/* Province Autocomplete */}
         <div className="space-y-1">
           <Label className="text-xs">Tỉnh/TP {required}</Label>
@@ -366,43 +471,45 @@ export const AddressFormSeparate: React.FC<AddressFormSeparateProps> = ({
             </PopoverContent>
           </Popover>
         </div>
-        {/* District Autocomplete */}
-        <div className="space-y-1">
-          <Label className="text-xs">Quận/Huyện {required}</Label>
-          <Popover open={openDistrict} onOpenChange={setOpenDistrict}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedProvince}>
-                {selectedDistrict
-                  ? (selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || 'Đang tải...')
-                  : 'Chọn quận/huyện'}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-[300px]" onWheelCapture={(e) => e.stopPropagation()}>
-              <Command>
-                <CommandInput placeholder="Tìm quận/huyện..." className="h-9" />
-                <CommandList className="max-h-60 overflow-y-auto overscroll-contain" onWheel={(e) => e.stopPropagation()}>
-                  <CommandEmpty>Không tìm thấy</CommandEmpty>
-                  <CommandGroup>
-                    {districts.map((d) => (
-                      <CommandItem key={d.code} value={`${d.code} ${d.name} ${normalizeText(d.name)}`} onSelect={() => { setSelectedDistrict(d.code); setSelectedDistrictName(d.name); setSelectedWard(''); setSelectedWardName(''); setOpenDistrict(false); }}>
-                        {d.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+        {/* District Autocomplete - Hidden in V2 */}
+        {!isV2 && (
+          <div className="space-y-1">
+            <Label className="text-xs">Quận/Huyện {required}</Label>
+            <Popover open={openDistrict} onOpenChange={setOpenDistrict}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedProvince}>
+                  {selectedDistrict
+                    ? (selectedDistrictName || districts.find(d => d.code === selectedDistrict)?.name || 'Đang tải...')
+                    : 'Chọn quận/huyện'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[300px]" onWheelCapture={(e) => e.stopPropagation()}>
+                <Command>
+                  <CommandInput placeholder="Tìm quận/huyện..." className="h-9" />
+                  <CommandList className="max-h-60 overflow-y-auto overscroll-contain" onWheel={(e) => e.stopPropagation()}>
+                    <CommandEmpty>Không tìm thấy</CommandEmpty>
+                    <CommandGroup>
+                      {districts.map((d) => (
+                        <CommandItem key={d.code} value={`${d.code} ${d.name} ${normalizeText(d.name)}`} onSelect={() => { setSelectedDistrict(d.code); setSelectedDistrictName(d.name); setSelectedWard(''); setSelectedWardName(''); setOpenDistrict(false); }}>
+                          {d.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
         {/* Ward Autocomplete */}
         <div className="space-y-1">
           <Label className="text-xs">Phường/Xã {required}</Label>
           <Popover open={openWard} onOpenChange={setOpenWard}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || !selectedDistrict}>
+              <Button variant="outline" className="w-full justify-between h-8" disabled={disabled || (!isV2 && !selectedDistrict)}>
                 {selectedWard
                   ? (selectedWardName || wards.find(w => w.code === selectedWard)?.name || 'Đang tải...')
-                  : 'Chọn phường/xã'}
+                  : (isV2 ? (selectedProvince ? 'Chọn phường/xã' : 'Chọn tỉnh trước') : 'Chọn phường/xã')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[300px]" onWheelCapture={(e) => e.stopPropagation()}>
