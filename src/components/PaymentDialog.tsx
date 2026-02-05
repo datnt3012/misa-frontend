@@ -50,9 +50,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const { toast } = useToast();
   const { user } = useAuth();
-  console.log(order);
-  const totalAmount = order.vat_percentage || order.vatPercentage || order.totalVat > 0 ? 
-    (Number(order.totalVatAmount) ?? Number(order.total_vat_amount) ?? 0)  : Number(order?.totalAmount) ?? Number(order?.total_amount) ?? 0;
+
+  const totalAmount = order?.vat_percentage || order?.vatPercentage || order?.totalVat > 0 ?
+    (Number(order?.totalVatAmount) ?? Number(order?.total_vat_amount) ?? 0)  : Number(order?.totalAmount) ?? Number(order?.total_amount) ?? 0;
   // Calculate paid amount from payment history if available, otherwise from order
   const paidAmount = useMemo(() => {
     if (paymentHistory.length > 0) {
@@ -88,7 +88,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   };
   const loadPaymentHistory = async () => {
     try {
-      const payments = await paymentsApi.getPaymentsByOrder(order.id);
+      const payments = await paymentsApi.getPaymentsByOrder(order?.id);
       // Sort payments by date (newest first)
       const sortedPayments = [...payments].sort((a, b) => {
         const dateA = new Date(a.payment_date).getTime();
@@ -151,7 +151,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       let createdPayment;
       try {
         createdPayment = await paymentsApi.createPayment({
-          order_id: order.id,
+          order_id: order?.id,
           amount: amount,
           payment_method: paymentMethod as 'cash' | 'bank_transfer' | 'card' | 'other',
           payment_date: new Date().toISOString(),
@@ -182,9 +182,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       // Step 3: Update order's paid_amount
       try {
         const { orderApi } = await import('@/api/order.api');
-        const currentPaidAmount = order.paid_amount || 0;
+        const currentPaidAmount = order?.paid_amount || 0;
         const newPaidAmount = currentPaidAmount + amount;
-        await orderApi.updateOrder(order.id, {
+        await orderApi.updateOrder(order?.id, {
           paid_amount: newPaidAmount
         });
       } catch (orderUpdateError: any) {

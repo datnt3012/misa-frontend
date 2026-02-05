@@ -375,7 +375,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
       </Dialog>
     );
   }
-  const totalAmount = orderDetails.total_amount || 0;
+  const totalAmount = orderDetails.totalVat > 0 ? orderDetails.totalVatAmount : orderDetails.totalAmount || 0;
   const expenses = orderDetails.expenses || [];
   const expensesTotal = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
   // Calculate paid amount from payment history (most accurate source)
@@ -598,6 +598,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                       <TableRow>
                         <TableHead className="w-8">#</TableHead>
                         <TableHead>Tên SP</TableHead>
+                        <TableHead className="text-center">VAT</TableHead>
                         <TableHead className="text-center">SL</TableHead>
                         <TableHead className="text-right">Giá</TableHead>
                         <TableHead className="text-right">Tổng</TableHead>
@@ -614,9 +615,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                 <div className="text-sm text-muted-foreground">{item.product_name || 'N/A'}</div>
                               </div>
                             </TableCell>
+                            <TableCell className="text-center">{item.vat_percentage ?? 0}</TableCell>
                             <TableCell className="text-center">{item.quantity}</TableCell>
                             <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                            <TableCell className="text-right font-medium">{formatCurrency(item.total_price)}</TableCell>
+                            <TableCell className="text-right font-medium">{item.vat_percentage ? formatCurrency(item.vat_total_price) : formatCurrency(item.total_price)}</TableCell>
                           </TableRow>
                         ))
                       ) : (
@@ -635,7 +637,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                         <span>
                           {formatCurrency(
                             orderDetails.items?.reduce(
-                              (sum, item) => sum + (Number(item.total_price) || 0),
+                              (sum, item) => sum + ((item.vat_percentage ? (Number(item.vat_total_price)) : Number(item.total_price)) || 0),
                               0
                             ) || 0
                           )}
@@ -847,7 +849,6 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                 <span>•</span>
                                 <span>{formatDateTime(item.changed_at)}</span>
                               </div>
-                              {/* {console.log(item)} */}
                               {
                                 item.title && (
                                   <div className="space-y-2">

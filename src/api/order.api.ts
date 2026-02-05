@@ -15,6 +15,9 @@ export interface OrderItem {
   vat_percentage?: number;
   vat_total_price?: number;
   created_at: string;
+  category_id?: string;
+  category_name?: string;
+  vat_price?: number;
 }
 export interface Order {
   id: string;
@@ -331,7 +334,7 @@ export const orderApi = {
     // Structure 1: { code: 200, data: { rows: [], summary: {} } }
     // Structure 2: { rows: [], summary: {} }
     const data = response?.data || response;
-    const normalizeItem = (it: any) => ({
+    const normalizeItem = (it: any): OrderItem => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
@@ -343,7 +346,7 @@ export const orderApi = {
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
       vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
-      vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
+      vat_total_price: Number(it.vat_total_price || it.vatTotalPrice || 0),
       vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
       created_at: it.created_at ?? it.createdAt ?? '',
     });
@@ -480,10 +483,9 @@ export const orderApi = {
   getOrder: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}`);
     const data = response?.data || response;
-    const normalizeItem = (it: any) => ({
+    const normalizeItem = (it: any): OrderItem => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
-      contract_code: it.contract_code ?? it.contractCode ?? '',
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
@@ -493,8 +495,10 @@ export const orderApi = {
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
       vat_percentage: it.vat_percentage ?? it.vatPercentage ?? undefined,
-      vat_total_price: Number(it.vat_total_price) ?? Number(it.vatTotalPrice) ?? undefined,
+      vat_total_price: Number(it.vat_total_price) || Number(it.vatTotalPrice) || undefined,
       vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
+      manufacturer: it.product?.manufacturer ?? '',
+      created_at: it.product?.created_at ?? it.product.createdAt ?? '',
     });
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
