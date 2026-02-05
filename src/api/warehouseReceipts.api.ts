@@ -229,7 +229,7 @@ const normalize = (row: any): WarehouseReceipt => ({
       if (!ai) return undefined;
       return {
         provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
-        districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+        districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code ?? null,
         wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
         province: ai.province,
         district: ai.district,
@@ -245,7 +245,7 @@ const normalize = (row: any): WarehouseReceipt => ({
       if (!ai) return undefined;
       return {
         provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
-        districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
+        districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code ?? null,
         wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
         province: ai.province,
         district: ai.district,

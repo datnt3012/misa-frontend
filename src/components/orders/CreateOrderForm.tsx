@@ -247,7 +247,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         address: newOrder.shipping_address?.trim() || undefined,
         addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
           provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
-          districtCode: newOrder.shipping_addressInfo.districtCode || undefined,
+          districtCode: newOrder.shipping_addressInfo.districtCode ?? null,
           wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
         } : undefined,
       };
@@ -400,7 +400,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           address: newOrder.shipping_address?.trim() || undefined,
           addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
             provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
-            districtCode: newOrder.shipping_addressInfo.districtCode || undefined,
+            districtCode: newOrder.shipping_addressInfo.districtCode ?? null,
             wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
           } : undefined,
         };
@@ -497,7 +497,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           if (hasProvinceCode || hasDistrictCode || hasWardCode || (newOrder.shipping_address && newOrder.shipping_address.trim() !== "")) {
             return {
               provinceCode: hasProvinceCode ? addrInfo.provinceCode : undefined,
-              districtCode: hasDistrictCode ? addrInfo.districtCode : undefined,
+              districtCode: hasDistrictCode ? addrInfo.districtCode : null,
               wardCode: hasWardCode ? addrInfo.wardCode : undefined
             };
           }

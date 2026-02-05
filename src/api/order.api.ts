@@ -364,7 +364,7 @@ export const orderApi = {
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
           wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
           province: ai.province,
           district: ai.district,
@@ -379,7 +379,7 @@ export const orderApi = {
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
           wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
           province: ai.province,
           district: ai.district,
@@ -512,7 +512,7 @@ export const orderApi = {
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
           wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
           province: ai.province,
           district: ai.district,
@@ -527,7 +527,7 @@ export const orderApi = {
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
           wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
           province: ai.province,
           district: ai.district,
@@ -634,7 +634,7 @@ export const orderApi = {
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
           wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
           province: ai.province,
           district: ai.district,
@@ -744,7 +744,7 @@ export const orderApi = {
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
           wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
           province: ai.province,
           district: ai.district,

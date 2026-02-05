@@ -150,7 +150,7 @@ const SuppliersContent: React.FC = () => {
         ...newSupplier,
         addressInfo: {
           provinceCode: newSupplier.addressInfo?.provinceCode || undefined,
-          districtCode: newSupplier.addressInfo?.districtCode || undefined,
+          districtCode: newSupplier.addressInfo?.districtCode ?? null,
           wardCode: newSupplier.addressInfo?.wardCode || undefined
         }
       });
@@ -212,7 +212,7 @@ const SuppliersContent: React.FC = () => {
         address: editingSupplier.address,
         addressInfo: {
           provinceCode: editingSupplier.addressInfo?.provinceCode || undefined,
-          districtCode: editingSupplier.addressInfo?.districtCode || undefined,
+          districtCode: editingSupplier.addressInfo?.districtCode ?? null,
           wardCode: editingSupplier.addressInfo?.wardCode || undefined
         }
       };

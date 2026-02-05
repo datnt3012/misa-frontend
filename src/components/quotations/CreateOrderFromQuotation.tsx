@@ -285,7 +285,7 @@ const CreateOrderFromQuotation: React.FC<CreateOrderFromQuotationProps> = ({
         receiverAddress: orderData.shipping_address || undefined,
         addressInfo: orderData.shipping_addressInfo?.provinceCode ? {
           provinceCode: orderData.shipping_addressInfo.provinceCode || undefined,
-          districtCode: orderData.shipping_addressInfo.districtCode || undefined,
+          districtCode: orderData.shipping_addressInfo.districtCode ?? null,
           wardCode: orderData.shipping_addressInfo.wardCode || undefined,
         } : undefined,
         // Order details
