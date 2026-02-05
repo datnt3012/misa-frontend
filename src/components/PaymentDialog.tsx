@@ -50,7 +50,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const { toast } = useToast();
   const { user } = useAuth();
-  const totalAmount = Number(order?.total_amount || order?.tongTien) || 0;
+  console.log(order);
+  const totalAmount = order.vat_percentage || order.vatPercentage || order.totalVat > 0 ? 
+    (Number(order.totalVatAmount) ?? Number(order.total_vat_amount) ?? 0)  : Number(order?.totalAmount) ?? Number(order?.total_amount) ?? 0;
   // Calculate paid amount from payment history if available, otherwise from order
   const paidAmount = useMemo(() => {
     if (paymentHistory.length > 0) {
