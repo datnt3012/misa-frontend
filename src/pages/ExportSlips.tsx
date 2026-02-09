@@ -772,7 +772,9 @@ function ExportSlipsContent() {
     return { subtotal };
   };
   const handleResetForm = () => {
-    setSelectedOrder(null)
+    setSelectedOrder(null);
+    setSelectedWarehouse('');
+    setSelectedOrderForAllocation(null);
     setExportSlipForm({
       code: generateSlipCode(),
       order_id: '',
@@ -1344,9 +1346,8 @@ function ExportSlipsContent() {
             setTimeout(() => {
               isClosingDialogRef.current = false;
             }, 100);
-            // Reset allocation state when closing dialog
-            setSelectedOrderForAllocation(null);
-            setExportedQuantityByProduct({});
+            // Reset form when closing dialog (including clicking outside)
+            handleResetForm();
           }
         }}>
           <DialogTrigger asChild>
@@ -1905,7 +1906,7 @@ function ExportSlipsContent() {
                     })()}
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => {setShowCreateDialog(false); handleResetForm()}}>
+                    <Button variant="outline" onClick={() => {setShowCreateDialog(false); handleResetForm();}} disabled={loading}>
                       Hủy
                     </Button>
                     <Button onClick={createExportSlip} disabled={loading}>
