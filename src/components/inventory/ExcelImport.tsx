@@ -353,7 +353,7 @@ const ExcelImport: React.FC<ExcelImportProps> = ({ onImportComplete }) => {
             throw new Error(`Invalid detail: ${JSON.stringify(detail)}`);
           }
         }
-        const result = await warehouseReceiptsApi.createReceipt(receiptData);
+        const result = await warehouseReceiptsApi.createReceipt(receiptData, 90000); // 90 second timeout for Excel imports
         receipts.push(result);
         // Update progress
         setImportProgress(i + 1);

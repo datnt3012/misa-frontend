@@ -127,6 +127,7 @@ export interface CreateWarehouseReceiptRequest {
     productId: string;
     quantity: number;
     unitPrice: number;
+    vatPercentage?: number;
   }>;
   isDeleted?: boolean;
 }
@@ -271,8 +272,9 @@ const normalize = (row: any): WarehouseReceipt => ({
 
 export const warehouseReceiptsApi = {
   // Create new warehouse receipt
-  createReceipt: async (data: CreateWarehouseReceiptRequest): Promise<WarehouseReceipt> => {
-    const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, data);
+  createReceipt: async (data: CreateWarehouseReceiptRequest, timeout?: number): Promise<WarehouseReceipt> => {
+    const config = timeout ? { timeout } : undefined;
+    const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, data, config);
     const receiptData = response?.data || response;
     
     return normalize(receiptData);

@@ -4,8 +4,8 @@ export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0',
   BACKEND_URL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3274',
   
-  // Timeout cho requests (ms)
-  TIMEOUT: Number(import.meta.env.VITE_API_TIMEOUT) || 10000,
+  // Timeout cho requests (ms) - Increased to 60 seconds for long-running operations
+  TIMEOUT: Number(import.meta.env.VITE_API_TIMEOUT) || 60000,
   
   // Headers mặc định
   DEFAULT_HEADERS: {
