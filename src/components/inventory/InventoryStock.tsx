@@ -14,6 +14,7 @@ import React from "react";
 import { productApi, ProductWithStock, Product, ProductStockLevel } from "@/api/product.api";
 import { Category } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
+import { warehouseApi } from "@/api";
 interface InventoryStockProps {
   warehouses: any[];
   categories: Category[];
@@ -29,6 +30,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const [products, setProducts] = useState<Product[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [allProducts, setAllProducts] = useState<Product[]>([]); // Store all products for filter options
+  const [wareHouses, setWareHouses] = useState(warehouses || []);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -112,6 +114,15 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     }
   }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, sortConfig, toast]);
 
+  const loadWarehouses = async () => {
+    try {
+      const response = await warehouseApi.getWarehouses();
+      setWareHouses(response.warehouses || []);
+    } catch (error) {
+      // Handle error silently
+    }
+  };
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -124,6 +135,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   // Load products when pagination, filters, or sort changes
   useEffect(() => {
     loadProducts();
+    loadWarehouses();
   }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, sortConfig, loadProducts]);
   const findCategoryByValue = (value?: string | null) => {
     if (!value) return undefined;
@@ -231,26 +243,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       .filter(Boolean) as [string, { id: string; name: string }][]
   ).values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, allProducts]);
-
-  const usedWarehouses = React.useMemo(() => {
-    // Get warehouses from allProducts.stockLevel to ensure all options are available
-    const warehouseIds = new Set(
-      allProducts.flatMap(p => (p.stockLevel || []).map(sl => sl.warehouse?.id).filter(Boolean))
-    );
-    return warehouses.filter(w => warehouseIds.has(w.id));
-  }, [warehouses, allProducts]);
-  
-  // const hasActiveStockFilter = filterStatus !== 'all' || filterWarehouse !== 'all';
   
   // Pagination variables for new pagination UI
   const displayLimit = itemsPerPage;
   const total = totalProducts || 0;
-  const filteredProducts = productsWithStock;
   
-  // Handle pagination - use filteredProducts for client-side pagination
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
@@ -407,7 +404,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
             <Combobox
               options={[
                 { label: "Tất cả kho", value: "all" },
-                ...usedWarehouses.map((warehouse) => ({
+                ...wareHouses.map((warehouse) => ({
                   label: warehouse.name,
                   value: warehouse.id
                 }))
@@ -549,25 +546,25 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : filteredProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canViewCostPrice ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     {productsWithStock.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={`${product.id}-${product.warehouse_id || 'no-warehouse'}`}>
+                products.map((product) => (
+                  <TableRow key={`${product.id}-${product.stockLevel[0]?.warehouse?.id || 'no-warehouse'}`}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell className="text-center">{product.categoryName || '-'}</TableCell>
+                    <TableCell className="text-center">{categories.find(category => category.id == product.category)?.name || '-'}</TableCell>
                     <TableCell className="text-center">{product.manufacturer || '-'}</TableCell>
                     <TableCell className="text-center">
                       <span className={`font-medium ${
                         product.stockLevel[0].stockStatus === 'out_of_stock' ? 'text-red-600' : 
                         product.stockLevel[0].stockStatus === 'low_stock' ? 'text-orange-600' : 'text-green-600'
                       }`}>
-                        {formatCurrency(product.current_stock)}
+                        {formatCurrency(product.stockLevel[0]?.quantity || 0)}
                       </span>
                     </TableCell>
                     {canViewCostPrice && (
@@ -593,13 +590,13 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                       </div>
                     </TableCell>
                     <TableCell className="text-center whitespace-nowrap">
-                      {product.warehouse_name || product.location || '-'}
+                      {product.stockLevel[0]?.warehouse?.name || '-'}
                     </TableCell>
                     <TableCell className=" text-center whitespace-nowrap">
                       {getStatusBadge(product.stockLevel)}
                     </TableCell>
                     <TableCell className="text-center">
-                      {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
+                      {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                   </TableRow>
                 ))
