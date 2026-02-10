@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Plus, Eye, Edit, Trash2, MoreHorizontal, FileText, Calendar, Download, FileDown } from "lucide-react";
+import { Search, Plus, Eye, Edit, Trash2, MoreHorizontal, FileText, Calendar, Download, FileDown, RotateCw, Loader } from "lucide-react";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { quotationApi, Quotation } from "@/api/quotation.api";
@@ -511,28 +511,31 @@ const QuotationsContent: React.FC = () => {
   };
   return (
     <div className="space-y-4 p-6 sm:p-6 md:p-7">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold text-foreground">Danh Sách Báo Giá</h1>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportToExcel}>
-            <Download className="h-4 w-4 mr-2" />
-            Xuất Excel
-          </Button>
-          <Button onClick={() => {
-            openDialog('create');
-            setShowCreateDialog(true);
-          }}>
-            <Plus className="h-4 w-4 mr-2" />
-            THÊM MỚI
-          </Button>
-        </div>
-      </div>
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Bộ lọc</CardTitle>
+          <CardTitle>
+            <div className="grid grid-cols-2 items-center">
+              <div>
+                Bộ lọc
+              </div>
+              <div className="flex items-center justify-end">
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={exportToExcel}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Xuất Excel
+                  </Button>
+                  <Button onClick={() => {
+                    openDialog('create');
+                    setShowCreateDialog(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    THÊM MỚI
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -607,9 +610,11 @@ const QuotationsContent: React.FC = () => {
                 />
               </div>
             </div>
-          </div>
-          <div className="mt-4">
-            <Button onClick={handleResetFilters} variant="outline">Đặt lại</Button>
+            <div className="flex items-end">
+              <Button onClick={handleResetFilters} variant="outline" disabled={loading}>
+                {!loading ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

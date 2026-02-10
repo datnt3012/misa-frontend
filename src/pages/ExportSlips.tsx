@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1350,15 +1350,6 @@ function ExportSlipsContent() {
             handleResetForm();
           }
         }}>
-          <DialogTrigger asChild>
-            <Button onClick={() => {
-              openDialog('create');
-              setShowCreateDialog(true);
-            }}>
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Tạo phiếu xuất
-            </Button>
-          </DialogTrigger>
                 <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Tạo phiếu xuất kho mới</DialogTitle>
@@ -1918,16 +1909,7 @@ function ExportSlipsContent() {
       </div>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Danh Sách Phiếu Xuất Kho
-              </CardTitle>
-              <CardDescription>
-                Tất cả phiếu xuất kho được tạo từ đơn hàng
-              </CardDescription>
-            </div>
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-2">
               {canDirectExport && (
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
@@ -2362,29 +2344,22 @@ function ExportSlipsContent() {
                 <Download className="w-4 h-4" />
                 Xuất Excel
               </Button>
-              <Label htmlFor="display-limit" className="text-sm font-medium">
-                Hiển thị:
-              </Label>
-              <Select value={displayLimit.toString()} onValueChange={(value) => {
-                setDisplayLimit(parseInt(value));
-                setCurrentPage(1); // Reset to first page when limit changes
-              }}>
-                <SelectTrigger className="w-20">
-                  <SelectValue placeholder="Số lượng" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
+              <div>
+                <Button onClick={() => {
+                  openDialog('create');
+                  setShowCreateDialog(true);
+                }}>
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  Tạo phiếu xuất
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-6 mb-6">
             {/* Search Bar */}
-            <div className="relative w-80">
+            <div className="relative w-full">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Tìm kiếm theo số phiếu, đơn hàng hoặc khách hàng..."
@@ -2426,8 +2401,26 @@ function ExportSlipsContent() {
               variant="outline"
               disabled={loading}
             >
-              {loading ? "Đang tải..." : "Đặt lại"}
+              {!loading ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
             </Button>
+            <div className="flex justify-end w-full items-center gap-2">
+              <Label htmlFor="display-limit" className="text-sm font-medium">
+                Hiển thị:
+              </Label>
+              <Select value={displayLimit.toString()} onValueChange={(value) => {
+                setDisplayLimit(parseInt(value));
+                setCurrentPage(1); // Reset to first page when limit changes
+              }}>
+                <SelectTrigger className="w-20">
+                  <SelectValue placeholder="Số lượng" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {/* Collapsible Filters Row */}
           {filtersCollapsed && (

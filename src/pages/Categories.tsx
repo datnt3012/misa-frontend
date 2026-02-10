@@ -280,49 +280,25 @@ const CategoriesContent: React.FC<CategoriesContentProps> = ({ embedded = false 
       loadingMessage="Đang tải danh sách loại sản phẩm..."
     >
       <div className={embedded ? "space-y-6" : "container mx-auto px-4 py-6 space-y-6"}>
-      {/* Header */}
-      {!embedded && (
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Quản lý Loại sản phẩm</h1>
-          <p className="text-muted-foreground">
-            Quản lý các loại sản phẩm trong hệ thống
-          </p>
-        </div>
-        {canCreate && (
-          <Button onClick={() => {
-            openDialog('create');
-            setIsAddDialogOpen(true);
-          }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Thêm loại sản phẩm
-          </Button>
-        )}
-      </div>
-      )}
-      {embedded && (
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-bold">Loại Sản Phẩm</h2>
-            <p className="text-muted-foreground">
-              Quản lý các loại sản phẩm trong hệ thống
-            </p>
-          </div>
-          {canCreate && (
-            <Button onClick={() => {
-            openDialog('create');
-            setIsAddDialogOpen(true);
-          }}>
-              <Plus className="w-4 h-4 mr-2" />
-              Thêm loại sản phẩm
-            </Button>
-          )}
-        </div>
-      )}
       {/* Filters */}
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg">Bộ lọc</CardTitle>
+          <CardTitle className="text-lg">
+            <div className="grid grid-cols-2 items-center">
+              <div>Bộ lọc</div>
+              <div className="flex items-center justify-end mb-4">
+                {canCreate && (
+                  <Button onClick={() => {
+                  openDialog('create');
+                  setIsAddDialogOpen(true);
+                }}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Thêm loại sản phẩm
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex flex-col sm:flex-row gap-4">

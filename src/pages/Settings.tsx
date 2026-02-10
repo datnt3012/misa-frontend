@@ -651,12 +651,6 @@ const SettingsContent = () => {
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            Cài Đặt Hệ Thống
-          </h1>
-          <p className="text-muted-foreground">Quản lý tài khoản và phân quyền hệ thống</p>
-        </div>
         <Tabs defaultValue="password" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="password" className="flex items-center gap-2">

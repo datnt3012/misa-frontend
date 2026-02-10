@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
@@ -895,22 +895,7 @@ const OrdersContent: React.FC = () => {
   const isInitialLoading = loading && orders.length === 0;
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
-        <div className="w-full mx-auto space-y-3 sm:space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Danh Sách Đơn Hàng</h1>
-            </div>
-            <Button
-              onClick={() => {
-                openDialog('create');
-                setShowCreateDialog(true);
-              }}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              THÊM MỚI
-            </Button>
-          </div>
+      <div className="w-full mx-auto space-y-3 sm:space-y-4">
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
@@ -975,8 +960,20 @@ const OrdersContent: React.FC = () => {
               variant="outline"
               disabled={loading}
             >
-              {loading ? "Đang tải..." : "Đặt lại"}
+              {!loading ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
             </Button>
+            <div className="flex ml-auto items-center">
+              <Button
+                onClick={() => {
+                  openDialog('create');
+                  setShowCreateDialog(true);
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                THÊM MỚI
+              </Button>
+            </div>
           </div>
           {/* Collapsible Filters Row */}
           {filtersCollapsed && (

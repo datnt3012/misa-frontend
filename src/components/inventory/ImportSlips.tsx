@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronsUpDown, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronsUpDown, ChevronDown, ChevronUp, Filter, RotateCw, Loader } from 'lucide-react';
 import * as XLSX from 'xlsx';
 // // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
 import { useAuth } from '@/hooks/useAuth';
@@ -1106,15 +1106,6 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
              }, 100);
            }
          }}>
-           <DialogTrigger asChild>
-             <Button onClick={() => {
-               openDialog('create');
-               setShowCreateDialog(true);
-             }}>
-               <PlusCircle className="w-4 h-4 mr-2" />
-               Tạo phiếu nhập
-             </Button>
-           </DialogTrigger>
             <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Tạo phiếu nhập kho mới</DialogTitle>
@@ -1487,16 +1478,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       </div>
       <Card className="shadow-sm">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Danh Sách Phiếu Nhập Kho
-              </CardTitle>
-              <CardDescription>
-                Tất cả phiếu nhập kho trong hệ thống
-              </CardDescription>
-            </div>
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-2">
               {canManageImports && (
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
@@ -1931,29 +1913,20 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 <Download className="w-4 h-4" />
                 Xuất Excel
               </Button>
-              <Label htmlFor="display-limit" className="text-sm font-medium">
-                Hiển thị:
-              </Label>
-              <Select value={displayLimit.toString()} onValueChange={(value) => {
-                setDisplayLimit(parseInt(value));
-                setCurrentPage(1); // Reset to first page when limit changes
+              <Button onClick={() => {
+                openDialog('create');
+                setShowCreateDialog(true);
               }}>
-                <SelectTrigger className="w-20">
-                  <SelectValue placeholder="Số lượng" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Tạo phiếu nhập
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="flex items-center gap-6 p-4">
             {/* Search Bar */}
-            <div className="relative w-80">
+            <div className="relative w-full">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Tìm kiếm theo số phiếu, đơn hàng hoặc khách hàng..."
@@ -1995,8 +1968,26 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               variant="outline"
               disabled={loading}
             >
-              {loading ? "Đang tải..." : "Đặt lại"}
+              {!loading ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
             </Button>
+            <div className="flex justify-end w-full items-center gap-2">
+              <Label htmlFor="display-limit" className="text-sm font-medium">
+                Hiển thị:
+              </Label>
+              <Select value={displayLimit.toString()} onValueChange={(value) => {
+                setDisplayLimit(parseInt(value));
+                setCurrentPage(1); // Reset to first page when limit changes
+              }}>
+                <SelectTrigger className="w-20">
+                  <SelectValue placeholder="Số lượng" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {/* Collapsible Filters Row */}
           {filtersCollapsed && (
