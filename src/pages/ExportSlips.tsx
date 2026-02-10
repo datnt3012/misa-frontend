@@ -112,7 +112,7 @@ function ExportSlipsContent() {
     setSortDirection('desc');
     setSortField('createdAt');
     setCompletedStartDate('');
-    setCompletedStartDate('');
+    setCompletedEndDate('');
   };
 
   // Export slip form state
