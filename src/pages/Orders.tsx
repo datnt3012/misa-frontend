@@ -818,6 +818,9 @@ const OrdersContent: React.FC = () => {
     setCompletedEndDate(undefined);
     setCreatorFilter("all");
     setFiltersCollapsed(false);
+    setpaymentMethodFilters("all");
+    setBankFilter("all");
+    setManufacturerFilter("all");
     setCurrentPage(1);
   };
   const handleMultiplePayments = () => {

@@ -275,7 +275,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     setSortDirection('desc');
     setSortField('createdAt');
     setCompletedStartDate('');
-    setCompletedStartDate('');
+    setCompletedEndDate('');
   };
 
   const loadImportSlips = async () => {
