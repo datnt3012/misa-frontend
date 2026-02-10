@@ -154,6 +154,8 @@ const OrdersContent: React.FC = () => {
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [paymentMethodFilters, setpaymentMethodFilters] = useState("all");
+  const [bankFilter, setBankFilter] = useState("all");
+  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   // Export delivery note states
   const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
   const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
@@ -217,6 +219,7 @@ const OrdersContent: React.FC = () => {
       if (creatorFilter !== 'all') params.createdBy = creatorFilter;
       if (manufacturerFilter !== 'all') params.manufacturers = manufacturerFilter;
       if (paymentMethodFilters !== 'all') params.paymentMethods = paymentMethodFilters;
+      if (paymentMethodFilters === 'bank_transfer' && bankFilter !== 'all') params.bank = bankFilter;
 
       const resp = await orderApi.getOrders(params);
       setOrders(resp.orders || []);
@@ -278,6 +281,7 @@ const OrdersContent: React.FC = () => {
     creatorFilter,
     manufacturerFilter,
     paymentMethodFilters,
+    bankFilter,
     toast]);
     
   // Load payments for orders and cache total paid amounts
@@ -504,6 +508,7 @@ const OrdersContent: React.FC = () => {
     creatorFilter,
     manufacturerFilter,
     paymentMethodFilters,
+    bankFilter,
   ]);
 
   useEffect(() => {
@@ -524,6 +529,7 @@ const OrdersContent: React.FC = () => {
   useEffect(() => {
     fetchCreators();
     fetchManufacturers();
+    fetchBanks();
   }, []);
 
   const fetchManufacturers = async () => {
@@ -533,6 +539,16 @@ const OrdersContent: React.FC = () => {
     } catch (error) {
       console.error('Error fetching manufacturers:', error);
       setManufacturers([]);
+    }
+  };
+
+  const fetchBanks = async () => {
+    try {
+      const data = await orderApi.getBanks();
+      setBanks(data || []);
+    } catch (error) {
+      console.error('Error fetching banks:', error);
+      setBanks([]);
     }
   };
   
@@ -1023,6 +1039,52 @@ const OrdersContent: React.FC = () => {
                   />
                 </div>
               </div>
+              {/* Payment Method Filter */}
+              <div className="flex items-center gap-2">
+                <Combobox
+                  options={[
+                    { label: "Tất cả phương thức thanh toán", value: "all" },
+                    ...[
+                      {id: 'cash', name: 'Tiền mặt'},
+                      {id: 'credit_card', name: 'Thẻ tín dụng'},
+                      {id: 'bank_transfer', name: 'Chuyển khoản'}
+                    ].map((pm) => ({
+                      label: pm.name,
+                      value: pm.id
+                    }))
+                  ]}
+                  value={paymentMethodFilters}
+                  onValueChange={(value) => {
+                    setpaymentMethodFilters(value);
+                    // Reset bank filter when payment method changes
+                    if (value !== 'bank_transfer') {
+                      setBankFilter('all');
+                    }
+                  }}
+                  placeholder="PTTT"
+                  searchPlaceholder="Tìm..."
+                  emptyMessage="Không có phương thức nào"
+                  className="w-40"
+                />
+                {/* Bank Filter - Only show when payment method is bank_transfer */}
+                {paymentMethodFilters === 'bank_transfer' && (
+                  <Combobox
+                    options={[
+                      { label: "Tất cả ngân hàng", value: "all" },
+                      ...banks.map((bank) => ({
+                        label: bank.name,
+                        value: bank.code
+                      }))
+                    ]}
+                    value={bankFilter}
+                    onValueChange={setBankFilter}
+                    placeholder="Ngân hàng"
+                    searchPlaceholder="Tìm..."
+                    emptyMessage="Không có NH"
+                    className="w-40"
+                  />
+                )}
+              </div>
               {/* Category Filter */}
               <Combobox
                 options={[
@@ -1034,30 +1096,10 @@ const OrdersContent: React.FC = () => {
                 ]}
                 value={categoryFilter}
                 onValueChange={setCategoryFilter}
-                placeholder="Chọn loại sản phẩm"
-                searchPlaceholder="Tìm loại sản phẩm..."
-                emptyMessage="Không có loại sản phẩm nào"
-                className="w-60"
-              />
-              {/* Category Filter */}
-              <Combobox
-                options={[
-                  { label: "Tất cả phương thức thanh toán", value: "all" },
-                  ...[
-                    {id: 'cash', name: 'Tiền mặt'},
-                    {id: 'credit_card', name: 'Thẻ tín dụng'},
-                    {id: 'bank_transfer', name: 'Chuyển khoản'}
-                  ].map((pm) => ({
-                    label: pm.name,
-                    value: pm.id
-                  }))
-                ]}
-                value={paymentMethodFilters}
-                onValueChange={setpaymentMethodFilters}
-                placeholder="Chọn phương thức thanh toán"
-                searchPlaceholder="Tìm phương thức thanh toán..."
-                emptyMessage="Không có phương thức thanh toán nào"
-                className="w-80"
+                placeholder="Loại sản phẩm"
+                searchPlaceholder="Tìm..."
+                emptyMessage="Không có loại"
+                className="w-40"
               />
               {/* Manifacturers Filter */}
               <Combobox

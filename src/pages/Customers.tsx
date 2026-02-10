@@ -310,7 +310,7 @@ const CustomersContent = () => {
       const totalSpent = ordersResponse.summary?.totalInitialPayment || 0;
       const totalDebt = ordersResponse.summary?.totalDebt || 0;
       const totalOrderAmount = ordersResponse.summary?.totalAmount || 0;
-      console.log('Fetched customer orders:', ordersResponse);
+
       setCustomerOrders(customerOrders.map(order => ({
         id: order.id,
         order_number: order.order_number,

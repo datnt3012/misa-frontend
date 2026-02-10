@@ -248,6 +248,7 @@ export const orderApi = {
     productIds?: string | string[];
     createdBy?: string;
     manufacturers?: string | string[];
+    bank?: string;
   }): Promise<{
     orders: Order[]; 
     total: number; 
@@ -325,6 +326,7 @@ export const orderApi = {
     }
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
+    if (params?.bank) queryParams.append('bank', params.bank);
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
