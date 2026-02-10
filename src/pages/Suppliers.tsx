@@ -271,131 +271,117 @@ const SuppliersContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Quản lý Nhà cung cấp</h1>
-          <p className="text-muted-foreground">
-            Quản lý thông tin các nhà cung cấp trong hệ thống
-          </p>
-        </div>
-        <Dialog open={showCreateDialog} onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (open) {
-            openDialog('create');
-          } else {
-            isClosingDialogRef.current = true;
-            closeDialog();
-            setTimeout(() => {
-              isClosingDialogRef.current = false;
-            }, 100);
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Thêm nhà cung cấp
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Thêm nhà cung cấp mới</DialogTitle>
-              <DialogDescription>
-                Nhập thông tin nhà cung cấp mới vào form bên dưới.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Tên nhà cung cấp <span className="text-red-500">*</span></Label>
-                <Input
-                  id="name"
-                  value={newSupplier.name}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
-                  placeholder="Nhập tên nhà cung cấp"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="code">Mã nhà cung cấp</Label>
-                <Input
-                  id="code"
-                  value={newSupplier.code}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, code: e.target.value })}
-                  placeholder="Nhập mã nhà cung cấp (tự động nếu để trống)"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone">Số điện thoại <span className="text-red-500">*</span></Label>
-                <Input
-                  id="phone"
-                  value={newSupplier.phoneNumber}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, phoneNumber: e.target.value })}
-                  placeholder="Nhập số điện thoại"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={newSupplier.email}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
-                  placeholder="Nhập email"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Địa chỉ <span className="text-red-500">*</span></Label>
-                <AddressFormSeparate
-                  value={{
-                    address: newSupplier.address,
-                    provinceCode: newSupplier.addressInfo?.provinceCode,
-                    districtCode: newSupplier.addressInfo?.districtCode,
-                    wardCode: newSupplier.addressInfo?.wardCode
-                  }}
-                  onChange={(data) => {
-                    setNewSupplier(prev => ({
-                      ...prev,
-                      address: data.address,
-                      addressInfo: {
-                        provinceCode: data.provinceCode,
-                        districtCode: data.districtCode,
-                        wardCode: data.wardCode
-                      }
-                    }));
-                  }}
-                  required={false}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                Hủy
-              </Button>
-              <Button onClick={handleCreateSupplier}>
-                Tạo nhà cung cấp
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
       {/* Search and Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="w-5 h-5" />
-            Tìm kiếm nhà cung cấp
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Tìm kiếm theo tên, mã, số điện thoại, email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+      <div className="grid grid-cols-2">
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <Input
+              placeholder="Tìm kiếm theo tên, mã, số điện thoại, email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex items-center justify-end">
+          <Dialog open={showCreateDialog} onOpenChange={(open) => {
+            setShowCreateDialog(open);
+            if (open) {
+              openDialog('create');
+            } else {
+              isClosingDialogRef.current = true;
+              closeDialog();
+              setTimeout(() => {
+                isClosingDialogRef.current = false;
+              }, 100);
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Thêm nhà cung cấp
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Thêm nhà cung cấp mới</DialogTitle>
+                <DialogDescription>
+                  Nhập thông tin nhà cung cấp mới vào form bên dưới.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Tên nhà cung cấp <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="name"
+                    value={newSupplier.name}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                    placeholder="Nhập tên nhà cung cấp"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="code">Mã nhà cung cấp</Label>
+                  <Input
+                    id="code"
+                    value={newSupplier.code}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, code: e.target.value })}
+                    placeholder="Nhập mã nhà cung cấp (tự động nếu để trống)"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Số điện thoại <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="phone"
+                    value={newSupplier.phoneNumber}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, phoneNumber: e.target.value })}
+                    placeholder="Nhập số điện thoại"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newSupplier.email}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
+                    placeholder="Nhập email"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Địa chỉ <span className="text-red-500">*</span></Label>
+                  <AddressFormSeparate
+                    value={{
+                      address: newSupplier.address,
+                      provinceCode: newSupplier.addressInfo?.provinceCode,
+                      districtCode: newSupplier.addressInfo?.districtCode,
+                      wardCode: newSupplier.addressInfo?.wardCode
+                    }}
+                    onChange={(data) => {
+                      setNewSupplier(prev => ({
+                        ...prev,
+                        address: data.address,
+                        addressInfo: {
+                          provinceCode: data.provinceCode,
+                          districtCode: data.districtCode,
+                          wardCode: data.wardCode
+                        }
+                      }));
+                    }}
+                    required={false}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                  Hủy
+                </Button>
+                <Button onClick={handleCreateSupplier}>
+                  Tạo nhà cung cấp
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
       {/* Suppliers Table */}
       <Card>
         <CardHeader>

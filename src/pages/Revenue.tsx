@@ -569,12 +569,6 @@ function RevenueContent() {
   }
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold">Báo Cáo Doanh Thu</h1>
-        <p className="text-muted-foreground">
-          Theo dõi và phân tích doanh thu theo thời gian
-        </p>
-      </div>
       {/* Filter Section */}
       <Card>
         <CardHeader>

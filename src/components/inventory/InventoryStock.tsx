@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
+import { Search, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, RotateCw, Loader } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,8 @@ import { productApi, ProductWithStock, Product, ProductStockLevel } from "@/api/
 import { Category } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
 import { warehouseApi } from "@/api";
+import { set } from "date-fns";
+import { se } from "date-fns/locale";
 interface InventoryStockProps {
   warehouses: any[];
   categories: Category[];
@@ -55,6 +57,14 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       'stock_updated_at': 'stockUpdatedAt',
     };
     return keyMap[key] || key;
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterCategory("all");
+    setFilterStatus("all");
+    setFilterWarehouse("all");
+    setCurrentPage(1);
   };
 
   // Load products from API with pagination
@@ -360,12 +370,12 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   // Loading state is now handled inline to prevent card remounting
   return (
     <Card>
-      <CardHeader>
+      {/* <CardHeader>
         <CardTitle>Báo Cáo Tồn Kho</CardTitle>
         <CardDescription>Theo dõi tình trạng tồn kho theo thời gian thực</CardDescription>
-      </CardHeader>
+      </CardHeader> */}
       <CardContent>
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col gap-4 mb-6 mt-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -415,6 +425,14 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               searchPlaceholder="Tìm kho..."
               emptyMessage="Không có kho nào"
             />
+            {/* Reset Filters Button */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
+              disabled={loadingProducts}
+            >
+              {!loadingProducts ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
+            </Button>
             <Button 
               variant="outline" 
               onClick={exportToExcel}
@@ -443,7 +461,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
             <span className="text-sm text-muted-foreground whitespace-nowrap">/ trang</span>
           </div>
           <div className="text-sm text-muted-foreground">
-            Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} sản phẩm
+            Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} sản phẩm tồn kho
           </div>
         </div>
         <div className="rounded-md border overflow-x-auto">

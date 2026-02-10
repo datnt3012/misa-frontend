@@ -1087,10 +1087,6 @@ const InventoryContent = () => {
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold text-foreground">Quản Lý Tồn Kho</h1>
-          <p className="text-muted-foreground">Theo dõi và quản lý hàng tồn kho</p>
-        </div>
         {/* Thống kê nhanh */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {errorStates.products ? (
@@ -1216,14 +1212,7 @@ const InventoryContent = () => {
             <PermissionGuard requiredPermissions={['WAREHOUSES_VIEW']}>
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <WarehouseIcon className="w-5 h-5" />
-                      Quản Lý Kho
-                    </CardTitle>
-                    <CardDescription>Tạo và quản lý các kho hàng</CardDescription>
-                  </div>
+                <div className="flex items-center justify-end">
                   {/* Add New Warehouse Button */}
                   {canManageWarehouses && (
                     <Button onClick={() => {

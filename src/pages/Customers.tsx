@@ -492,10 +492,6 @@ const CustomersContent = () => {
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
         <div className="mx-auto space-y-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold text-foreground">Quản Lý Khách Hàng</h1>
-          <p className="text-muted-foreground">Danh sách và thông tin chi tiết khách hàng</p>
-        </div>
         {/* Header Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="relative flex-1 max-w-sm">

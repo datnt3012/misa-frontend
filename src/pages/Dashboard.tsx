@@ -281,12 +281,6 @@ const DashboardContent = () => {
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
-        <div className="flex flex-col gap-2">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard Quản Lý</h1>
-            <p className="text-muted-foreground">Tổng quan hoạt động kinh doanh</p>
-          </div>
-        </div>
         {/* Thống kê tổng quan */}
         {/* Hàng 1: Tối đa 4 card, tự động co giãn */}
         <div className="flex flex-col md:flex-row md:flex-wrap gap-4">
