@@ -110,7 +110,9 @@ function ExportSlipsContent() {
     setFiltersCollapsed(false);
     setCurrentPage(1);
     setSortDirection('desc');
-    setSortField('createdAt')
+    setSortField('createdAt');
+    setCompletedStartDate('');
+    setCompletedStartDate('');
   };
 
   // Export slip form state
@@ -136,6 +138,7 @@ function ExportSlipsContent() {
       unit_price: number;
       total_price: number;
       current_stock?: number;
+      vat_percentage?: number;
     }>,
     expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
   });
@@ -319,6 +322,7 @@ function ExportSlipsContent() {
               receiver_address: orderResponse.receiverAddress || orderData.receiver_address || undefined,
               receiver_addressInfo: orderResponse.addressInfo || orderData.receiver_addressInfo || undefined,
               total_amount: orderResponse.total_amount || orderData?.total_amount || 0,
+              vat_total_amount: orderResponse.totalVatAmount || orderData.vat_total_amount || 0,
               order_items: orderResponse.order_items || orderData?.order_items || undefined
             };
           } catch (error) {
@@ -351,6 +355,7 @@ function ExportSlipsContent() {
             receiver_address: orderData.receiver_address,
             receiver_addressInfo: orderData.receiver_addressInfo,
             total_amount: orderData.total_amount || 0,
+            vat_total_amount: orderData.vat_total_amount || 0,
             order_items: orderData.order_items || undefined,
           } : undefined,
           export_slip_items: s.export_slip_items || [],
@@ -407,6 +412,7 @@ function ExportSlipsContent() {
             receiver_address: orderResponse.receiverAddress || detail.order?.receiver_address || undefined,
             receiver_addressInfo: orderResponse.addressInfo || detail.order?.receiver_addressInfo || undefined,
             total_amount: orderResponse.total_amount || detail.order?.total_amount || 0,
+            vat_total_amount: orderResponse.totalVatAmount || detail.order?.vat_total_amount || 0,
             order_items: orderResponse.order_items || detail.order?.order_items || undefined,
           };
         } catch (orderError) {
@@ -652,16 +658,19 @@ function ExportSlipsContent() {
       const items = [...prev.items];
       items[index] = { ...items[index], [field]: value };
       // Auto-calculate when product, quantity, or unit_price changes
-      if (field === 'product_id' || field === 'quantity' || field === 'unit_price') {
+      if (field === 'product_id' || field === 'quantity' || field === 'unit_price' || field === 'vat_percentage') {
         if (field === 'product_id') {
           const product = products.find(p => p.id === value);
           if (product) {
             items[index].product_code = product.code;
             items[index].product_name = product.name;
-            items[index].unit_price = product.price;
+            items[index].unit_price = selectedOrder ? selectedOrder.items?.find(order_item => (order_item.product_id == product.id))?.unit_price : product.price;
+            items[index].vat_percentage = selectedOrder ? (selectedOrder.items?.find(order_item => (order_item.product_id == product.id))?.vat_percentage ?? 0) : 0;
           }
         }
-        const subtotal = items[index].quantity * items[index].unit_price;
+
+        const vatSubtotal = (items[index].quantity * (items[index].unit_price * (items[index].vat_percentage / 100)))
+        const subtotal = (items[index].quantity * items[index].unit_price) + vatSubtotal;
         items[index].total_price = subtotal;
       }
       // Fetch stock level when product changes (warehouse is selected globally)
@@ -744,8 +753,10 @@ function ExportSlipsContent() {
       .filter(id => id); // Remove nulls and current row
     
     // If order is selected, filter to only show products from that order
-    if (exportSlipForm.order_id && selectedOrderForAllocation?.order_items) {
-      const orderProductIds = selectedOrderForAllocation.order_items.map(item => item.product_id);
+    // Check both 'items' and 'order_items' as backend may return either
+    if (exportSlipForm.order_id && selectedOrderForAllocation && (selectedOrderForAllocation.items || selectedOrderForAllocation.order_items)) {
+      const orderItems = selectedOrderForAllocation.items || selectedOrderForAllocation.order_items || [];
+      const orderProductIds = orderItems.map(item => item.product_id);
       return products.filter(product => 
         orderProductIds.includes(product.id) && !selectedProductIds.includes(product.id)
       );
@@ -759,6 +770,23 @@ function ExportSlipsContent() {
     const expensesTotal = exportSlipForm.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const subtotal = itemsSubtotal + expensesTotal;
     return { subtotal };
+  };
+  const handleResetForm = () => {
+    setSelectedOrder(null);
+    setSelectedWarehouse('');
+    setSelectedOrderForAllocation(null);
+    setExportSlipForm({
+      code: generateSlipCode(),
+      order_id: '',
+      customer_id: '',
+      customer_name: '',
+      customer_phone: '',
+      customer_email: '',
+      contract_code: '',
+      notes: '',
+      items: [],
+      expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
+    });
   };
   const createExportSlip = async () => {
     // Validate required notes field
@@ -809,7 +837,8 @@ function ExportSlipsContent() {
         product_id: item.product_id,
         requested_quantity: item.quantity,
         unit_price: item.unit_price,
-        warehouse_id: selectedWarehouse // Use the selected warehouse for all items
+        warehouse_id: selectedWarehouse,
+        vat_percentage: item.vat_percentage
       }));
       const response = await exportSlipsApi.createSlip({
         order_id: exportSlipForm.order_id || undefined, // Optional order ID
@@ -817,7 +846,7 @@ function ExportSlipsContent() {
         supplier_id: '', // Not needed for export slips
         code: code,
         notes: exportSlipForm.notes,
-        items: items
+        items: items,
       });
       toast({
         title: "Thành công",
@@ -829,18 +858,7 @@ function ExportSlipsContent() {
       setTimeout(() => {
         isClosingDialogRef.current = false;
       }, 100);
-      setExportSlipForm({
-        code: generateSlipCode(),
-        order_id: '',
-        customer_id: '',
-        customer_name: '',
-        customer_phone: '',
-        customer_email: '',
-        contract_code: '',
-        notes: '',
-        items: [],
-        expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
-      });
+      handleResetForm();
       setSelectedWarehouse('');
       setSelectedOrderForAllocation(null);
       setExportedQuantityByProduct({});
@@ -1328,9 +1346,8 @@ function ExportSlipsContent() {
             setTimeout(() => {
               isClosingDialogRef.current = false;
             }, 100);
-            // Reset allocation state when closing dialog
-            setSelectedOrderForAllocation(null);
-            setExportedQuantityByProduct({});
+            // Reset form when closing dialog (including clicking outside)
+            handleResetForm();
           }
         }}>
           <DialogTrigger asChild>
@@ -1412,6 +1429,11 @@ function ExportSlipsContent() {
                                   }));
                                   setSelectedOrderForAllocation(null);
                                   setExportedQuantityByProduct({});
+                                  setSelectedOrder(null);
+                                  setExportSlipForm(prev => ({
+                                    ...prev,
+                                    items: []
+                                  }));
                                 }}
                                 className="h-6 px-2 text-xs"
                               >
@@ -1432,6 +1454,7 @@ function ExportSlipsContent() {
                               // Auto-fill customer information from selected order
                               const selectedOrder = orders.find(order => order.id === value);
                               if (selectedOrder) {
+                                setSelectedOrder(selectedOrder);
                                 setExportSlipForm(prev => ({
                                   ...prev,
                                   order_id: value,
@@ -1439,8 +1462,8 @@ function ExportSlipsContent() {
                                   customer_name: selectedOrder.customer_name || selectedOrder.customer?.name || '',
                                   customer_phone: selectedOrder.customer_phone || selectedOrder.customer?.phone || '',
                                   customer_email: selectedOrder.customer_email || selectedOrder.customer?.email || '',
+                                  items: [],
                                 }));
-                                
                                 // Load full order details and calculate exported quantities
                                 try {
                                   const fullOrderData = await orderApi.getOrderIncludeDeleted(value);
@@ -1580,7 +1603,7 @@ function ExportSlipsContent() {
                       <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm max-h-[220px] overflow-y-auto">
                         <h4 className="font-semibold text-gray-900 mb-3">Trạng thái phân bổ</h4>
                         <div>
-                          {selectedOrderForAllocation.order_items?.map(item => {
+                          {selectedOrderForAllocation.items?.map(item => {
                             const exportedQuantity = exportedQuantityByProduct[item.product_id] || 0;
                             const remainingQuantity = item.quantity - exportedQuantity;
                             
@@ -1656,6 +1679,9 @@ function ExportSlipsContent() {
                                 Sản phẩm <span className="text-red-500">*</span>
                               </TableHead>
                               <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                                Thuế suất
+                              </TableHead>
+                              <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                                 Số lượng <span className="text-red-500">*</span>
                               </TableHead>
                               <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
@@ -1674,7 +1700,7 @@ function ExportSlipsContent() {
                                 className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                               >
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
-                                  <div className="space-y-1">
+                                  <div className="space-y-1 flex justify-center">
                                     <Combobox
                                       options={getAvailableProductsForRow(index).map((product) => ({
                                         label: `${product.name} (${product.code})`,
@@ -1687,6 +1713,8 @@ function ExportSlipsContent() {
                                       emptyMessage={getAvailableProductsForRow(index).length === 0 ? "Không còn sản phẩm nào để chọn" : "Không có sản phẩm nào"}
                                       className="w-[200px]"
                                     />
+                                    </div>
+                                  <div className="space-y-1 flex justify-center">
                                     {item.current_stock !== undefined && selectedWarehouse && (
                                       <div className="text-xs mt-1">
                                         {item.current_stock === 0 ? (
@@ -1705,8 +1733,22 @@ function ExportSlipsContent() {
                                     )}
                                   </div>
                                 </TableCell>
+                                <TableCell className="border-r border-slate-100 align-top pt-4 justify-items-center">
+                                  <div className="space-y-1 flex justify-center">
+                                    <NumberInput
+                                      value={
+                                        selectedOrder && item.product_id ?
+                                        (selectedOrder?.items?.find(order_item => (order_item.product_id == item.product_id))?.vat_percentage ?? 0) : (item.vat_percentage ?? 0)
+                                      }
+                                      onChange={(value) => updateItem(index, "vat_percentage", value)}
+                                      min={1}
+                                      className="w-20"
+                                      disabled={selectedOrder != null}
+                                    />
+                                  </div>
+                                </TableCell>
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
-                                  <div className="space-y-1">
+                                  <div className="space-y-1 flex justify-center">
                                     <NumberInput
                                       value={item.quantity}
                                       onChange={(value) => updateItem(index, "quantity", value)}
@@ -1716,16 +1758,22 @@ function ExportSlipsContent() {
                                   </div>
                                 </TableCell>
                                 <TableCell className="border-r border-slate-100 align-top pt-4">
-                                  <CurrencyInput
-                                    value={item.unit_price}
-                                    onChange={(value) => updateItem(index, "unit_price", value)}
-                                    className="w-32"
-                                  />
+                                  <div className="space-y-1 flex justify-center">
+                                    <CurrencyInput
+                                      value={
+                                        selectedOrder && item.product_id ?
+                                          (selectedOrder.items?.find(order_item => (order_item.product_id == item.product_id))?.unit_price ?? 0) : (item.unit_price ?? 0)
+                                      }
+                                      onChange={(value) => updateItem(index, "unit_price", value)}
+                                      className="w-32"
+                                      disabled={selectedOrder != null}
+                                    />
+                                  </div>
                                 </TableCell>
-                                <TableCell className="border-r border-slate-100 align-top pt-7">
-                                  {item.total_price.toLocaleString("vi-VN")}
+                                <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                                  {formatCurrency(item.total_price)}
                                 </TableCell>
-                                <TableCell className="align-top pt-4">
+                                <TableCell className="align-top pt-4 flex justify-center">
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1858,7 +1906,7 @@ function ExportSlipsContent() {
                     })()}
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                    <Button variant="outline" onClick={() => {setShowCreateDialog(false); handleResetForm();}} disabled={loading}>
                       Hủy
                     </Button>
                     <Button onClick={createExportSlip} disabled={loading}>
@@ -2577,10 +2625,10 @@ function ExportSlipsContent() {
                     <TableCell className="text-center min-w-[130px] font-semibold">
                       <div className="relative group">
                         <span className="cursor-help">
-                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.vat_percentage ? item.vat_total_price : item.actual_quantity * item.unit_price), 0) || 0)}
                         </span>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.vat_percentage ? item.vat_total_price : item.actual_quantity * item.unit_price), 0) || 0)}
                         </div>
                       </div>
                     </TableCell>
@@ -2688,13 +2736,15 @@ function ExportSlipsContent() {
                                 <div>
                                   <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
                                   <p className="text-sm font-medium text-green-600">
-                                      {formatCurrency((slipDetail?.order?.total_amount || slip.order?.total_amount) || 0)}
+                                      {
+                                        formatCurrency( (slipDetail?.order?.vat_total_amount || slip.order?.vat_total_amount) || 0)
+                                      }
                                   </p>
                                 </div>
                                 <div>
                                   <Label className="font-medium">Tổng giá trị thực xuất:</Label>
                                   <p className="text-sm font-medium text-blue-600">
-                                      {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0)}
+                                      {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.vat_percentage ? item.vat_total_price : item.actual_quantity * item.unit_price), 0) || 0)}                                      
                                   </p>
                                 </div>
                               </div>
@@ -2713,9 +2763,10 @@ function ExportSlipsContent() {
                                         <TableRow>
                                           <TableHead className="text-center">Tên sản phẩm</TableHead>
                                           <TableHead className="text-center">Mã SP</TableHead>
-                                            <TableHead className="text-center">Số lượng cần xuất</TableHead>
-                                            <TableHead className="text-center">Số lượng thực xuất</TableHead>
+                                          <TableHead className="text-center">Số lượng cần xuất</TableHead>
+                                          <TableHead className="text-center">Số lượng thực xuất</TableHead>
                                           <TableHead className="text-center">Đơn giá</TableHead>
+                                          <TableHead className="text-center">VAT (%)</TableHead>
                                           <TableHead className="text-center">Thành tiền</TableHead>
                                         </TableRow>
                                       </TableHeader>
@@ -2743,6 +2794,9 @@ function ExportSlipsContent() {
                                               const productCode = exportItem.product_code;
                                               const unitPrice = orderItem?.unit_price || exportItem.unit_price;
                                               
+                                              const vatPercentage = exportItem.vat_percentage || 0;
+                                              const vatTotalPrice = vatPercentage > 0 ? (actualQuantity * unitPrice * (vatPercentage / 100)) + (actualQuantity * unitPrice)  : exportItem.total_price;                                 
+
                                               return (
                                                 <TableRow key={index}>
                                                   <TableCell className="text-center font-medium">
@@ -2754,8 +2808,9 @@ function ExportSlipsContent() {
                                                   <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
                                                   <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
                                                   <TableCell className="text-center">{formatCurrency(unitPrice)}</TableCell>
+                                                  <TableCell className="text-center">{vatPercentage}</TableCell>
                                                   <TableCell className="text-center font-medium">
-                                                    {formatCurrency(actualQuantity * unitPrice)}
+                                                    {formatCurrency(vatTotalPrice)}
                                                   </TableCell>
                                                 </TableRow>
                                               );

@@ -482,7 +482,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
           <h4 className="font-semibold text-gray-900 mb-3">Trạng thái phân bổ</h4>
           <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2">
             {
-              order.order_items?.map(item => {
+              order.items?.map(item => {
                 // Lấy trực tiếp từ exportedQuantityByProduct đã tính từ API
                 const exportedQuantity = exportedQuantityByProduct[item.product_id] || 0;
                 const remainingQuantity = item.quantity - exportedQuantity;
@@ -535,7 +535,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
             <div>
               <Label className="font-medium">Tổng giá trị:</Label>
-              <p className="text-green-600 font-semibold">{formatCurrency(order.total_amount)}</p>
+              <p className="text-green-600 font-semibold">{order.totalVat ? formatCurrency(order.totalVatAmount) : formatCurrency(order.totalAmount)}</p>
             </div>
             <div>
               <Label className="font-medium">Ngày tạo:</Label>

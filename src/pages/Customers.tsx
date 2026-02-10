@@ -181,10 +181,12 @@ interface Order {
   debt_amount: number;
   created_at: string;
   order_type: string;
+  vat_total_amount?: number;
 }
 interface CustomerStats {
   total_orders: number;
   total_spent: number;
+  total_order_amount: number;
   current_debt: number;
 }
 const CustomersContent = () => {
@@ -193,7 +195,7 @@ const CustomersContent = () => {
   const [administrativeUnits, setAdministrativeUnits] = useState<AdministrativeUnit[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
-  const [customerStats, setCustomerStats] = useState<CustomerStats>({ total_orders: 0, total_spent: 0, current_debt: 0 });
+  const [customerStats, setCustomerStats] = useState<CustomerStats>({ total_orders: 0, total_spent: 0, total_order_amount: 0, current_debt: 0 });
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -307,6 +309,8 @@ const CustomersContent = () => {
       const totalOrders = customerOrders.length;
       const totalSpent = ordersResponse.summary?.totalInitialPayment || 0;
       const totalDebt = ordersResponse.summary?.totalDebt || 0;
+      const totalOrderAmount = ordersResponse.summary?.totalAmount || 0;
+
       setCustomerOrders(customerOrders.map(order => ({
         id: order.id,
         order_number: order.order_number,
@@ -315,12 +319,14 @@ const CustomersContent = () => {
         paid_amount: order.totalPaidAmount,
         debt_amount: order.remainingDebt,
         created_at: order.created_at,
+        vat_total_amount: order.totalVatAmount,
         order_type: 'bán hàng',
       })));
       // Calculate customer stats
       setCustomerStats({
         total_orders: totalOrders,
         total_spent: totalSpent,
+        total_order_amount: totalOrderAmount,
         current_debt: totalDebt,
       });
     } catch (error) {
@@ -1107,7 +1113,7 @@ const CustomersContent = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-green-600">
-                        {customerStats.total_spent.toLocaleString('vi-VN')}
+                        {customerStats.total_order_amount.toLocaleString('vi-VN')}
                       </div>
                     </CardContent>
                   </Card>
@@ -1163,7 +1169,7 @@ const CustomersContent = () => {
                                 {getStatusBadge(order.status)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {Number(order.total_amount).toLocaleString('vi-VN')}
+                                {Number(order.vat_total_amount).toLocaleString('vi-VN')}
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className="text-green-600">

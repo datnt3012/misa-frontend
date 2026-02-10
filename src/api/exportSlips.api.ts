@@ -9,6 +9,9 @@ export interface ExportSlipItem {
   actual_quantity: number;
   remaining_quantity: number;
   unit_price: number;
+  vat_percentage?: number;
+  vat_total_price?: number;
+  total_price?: number;
 }
 export interface ExportSlip {
   id: string;
@@ -60,12 +63,14 @@ export interface ExportSlip {
       wardName?: string;
     };
     total_amount: number;
+    vat_total_amount: number;
     order_items?: Array<{
       product_name: string;
       product_code: string;
       quantity: number;
       unit_price: number;
       total_price?: number;
+      vat_total_price?: number;
     }>;
   };
   creator_profile?: {
@@ -101,6 +106,9 @@ const normalizeItem = (it: any): ExportSlipItem => {
     actual_quantity: Number(it.actualQuantity ?? it.actual_quantity ?? 0),
     remaining_quantity: Number(it.remainingQuantity ?? it.remaining_quantity ?? 0),
     unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+    vat_percentage: it.vatPercentage ?? it.vat_percentage ?? undefined,
+    vat_total_price: Number(it.vatTotalPrice ?? it.vat_total_price ?? 0),
+    total_price: Number(it.totalPrice ?? it.total_price ?? 0),
   };
 };
 const normalize = (row: any): ExportSlip => {
@@ -144,6 +152,9 @@ const normalize = (row: any): ExportSlip => {
             actual_quantity: Number(detail.quantity ?? 0), // Same as requested for now
             remaining_quantity: 0, // Not available in warehouse receipts
             unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
+            vat_percentage: detail.vatPercentage ?? detail.vat_percentage ?? undefined,
+            vat_total_price: Number(detail.vatTotalPrice ?? detail.vat_total_price ?? 0),
+            total_price: Number(detail.totalPrice ?? detail.total_price ?? 0),
           };
         })
       : Array.isArray(row.export_slip_items)
@@ -187,6 +198,7 @@ const normalize = (row: any): ExportSlip => {
         };
       })(),
       total_amount: Number(row.order.total_amount ?? row.order.totalAmount ?? row.totalAmount ?? row.total_amount ?? 0),
+      vat_total_amount: Number(row.order.total_vat_amount ?? row.order.totalVatAmount ?? row.order.vat_total_amount ?? row.order.vatTotalAmount ?? 0),
       order_items: Array.isArray(row.order.order_items)
         ? row.order.order_items.map((oi: any) => ({
             product_name: oi.product_name ?? oi.productName,
@@ -194,6 +206,7 @@ const normalize = (row: any): ExportSlip => {
             quantity: Number(oi.quantity ?? 0),
             unit_price: Number(oi.unit_price ?? oi.unitPrice ?? 0),
             total_price: Number(oi.total_price ?? oi.totalPrice ?? oi.quantity * (oi.unit_price ?? oi.unitPrice ?? 0)),
+            vat_total_price: Number(oi.vat_total_price ?? oi.vatTotalPrice ?? 0),
           }))
         : undefined,
     } : undefined,
@@ -214,6 +227,7 @@ export interface CreateExportSlipRequest {
     requested_quantity: number;
     unit_price: number;
     warehouse_id?: string;
+    vat_percentage?: number;
   }>;
 }
 export const exportSlipsApi = {
@@ -231,7 +245,8 @@ export const exportSlipsApi = {
         productId: item.product_id,
         quantity: item.requested_quantity,
         unitPrice: item.unit_price.toString(),
-        warehouseId: item.warehouse_id || data.warehouse_id // Use item warehouse_id if available, fallback to main warehouse_id
+        warehouseId: item.warehouse_id || data.warehouse_id,
+        vatPercentage: item.vat_percentage || 0,
       }))
     };
     const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.CREATE, slipData);

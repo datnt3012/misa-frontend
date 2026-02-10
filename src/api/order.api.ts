@@ -15,6 +15,9 @@ export interface OrderItem {
   vat_percentage?: number;
   vat_total_price?: number;
   created_at: string;
+  category_id?: string;
+  category_name?: string;
+  vat_price?: number;
 }
 export interface Order {
   id: string;
@@ -245,6 +248,7 @@ export const orderApi = {
     productIds?: string | string[];
     createdBy?: string;
     manufacturers?: string | string[];
+    bank?: string;
   }): Promise<{
     orders: Order[]; 
     total: number; 
@@ -322,6 +326,7 @@ export const orderApi = {
     }
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
+    if (params?.bank) queryParams.append('bank', params.bank);
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
@@ -331,7 +336,7 @@ export const orderApi = {
     // Structure 1: { code: 200, data: { rows: [], summary: {} } }
     // Structure 2: { rows: [], summary: {} }
     const data = response?.data || response;
-    const normalizeItem = (it: any) => ({
+    const normalizeItem = (it: any): OrderItem => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
@@ -343,7 +348,7 @@ export const orderApi = {
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
       vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
-      vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
+      vat_total_price: Number(it.vat_total_price || it.vatTotalPrice || 0),
       vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
       created_at: it.created_at ?? it.createdAt ?? '',
     });
@@ -480,10 +485,9 @@ export const orderApi = {
   getOrder: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}`);
     const data = response?.data || response;
-    const normalizeItem = (it: any) => ({
+    const normalizeItem = (it: any): OrderItem => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
-      contract_code: it.contract_code ?? it.contractCode ?? '',
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
@@ -493,8 +497,10 @@ export const orderApi = {
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
       vat_percentage: it.vat_percentage ?? it.vatPercentage ?? undefined,
-      vat_total_price: Number(it.vat_total_price) ?? Number(it.vatTotalPrice) ?? undefined,
+      vat_total_price: Number(it.vat_total_price) || Number(it.vatTotalPrice) || undefined,
       vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
+      manufacturer: it.product?.manufacturer ?? '',
+      created_at: it.product?.created_at ?? it.product.createdAt ?? '',
     });
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
@@ -718,29 +724,36 @@ export const orderApi = {
   getOrderIncludeDeleted: async (id: string): Promise<Order> => {
     const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}?includeDeleted=true`);
     const data = response?.data || response;
-    const normalizeItem = (it: any) => ({
+    const normalizeItem = (it: any): OrderItem => ({
       id: it.id,
       order_id: it.order_id ?? it.orderId ?? '',
       product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
       product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
       product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-      manufacturer: it.product?.manufacturer ?? it.manufacturer ?? undefined,
+      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
+      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
       quantity: Number(it.quantity ?? 0),
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-      created_at: it.created_at ?? it.createdAt ?? '',
+      vat_percentage: it.vat_percentage ?? it.vatPercentage ?? undefined,
+      vat_total_price: Number(it.vat_total_price) || Number(it.vatTotalPrice) || undefined,
+      vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
+      manufacturer: it.product?.manufacturer ?? '',
+      created_at: it.product?.created_at ?? it.product.createdAt ?? '',
     });
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
       order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
-      customer_id: row.customerId ?? row.customer_id ?? '',
-      customer_name: row.customer_name ?? row.customerName ?? row.customer?.name ?? '',
-      customer_code: row.customer_code ?? row.customerCode ?? row.customer?.code ?? '',
-      customer_phone: row.customer_phone ?? row.customerPhone ?? row.customer?.phoneNumber ?? '',
-      customer_email: row.customer_email ?? row.customerEmail ?? row.customer?.email ?? '',
-      customer_address: row.customer_address ?? row.customerAddress ?? row.customer?.address ?? '',
-      customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
+      customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
+      customer_name: row.customer?.name ?? row.customer_name ?? '',
+      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
+      customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
+      customer_address: row.customer?.address ?? row.customer_address ?? '',
+      ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
+      ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
+      ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
+      ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
+        const ai = row.addressInfo ?? row.receiver_address_info;
         if (!ai) return undefined;
         return {
           provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
@@ -753,22 +766,63 @@ export const orderApi = {
           districtName: ai.district?.name,
           wardName: ai.ward?.name,
         };
+      })() } : {} as any),
+      customer_addressInfo: (() => {
+        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
+        if (!ai) return undefined;
+        return {
+          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
+          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+          province: ai.province,
+          district: ai.district,
+          ward: ai.ward,
+          provinceName: ai.province?.name ?? ai.provinceName,
+          districtName: ai.district?.name ?? ai.districtName,
+          wardName: ai.ward?.name ?? ai.wardName,
+        };
       })(),
       status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
-      total_amount: Number(row.total_amount ?? row.totalAmount ?? 0),
-      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0),
-      payment_method: row.payment_method ?? row.paymentMethod ?? 'cash',
+      totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
+      totalVatAmount: Number(row.totalVatAmount ?? row.total_vat_amount ?? 0),
+      totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
+      totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
+      remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
+      totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
+      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
+      payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
       paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
       debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
-      notes: row.notes ?? row.note ?? '',
+      notes: row.notes ?? row.note ?? row.description ?? '',
+      vat_type: row.vat_type ?? row.vatType ?? undefined,
       contract_code: row.contract_code ?? row.contractCode ?? undefined,
       purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
+      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
+      created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
+      creator_info: row.creator ? {
+        id: row.creator.id,
+        email: row.creator.email,
+        firstName: row.creator.firstName,
+        lastName: row.creator.lastName,
+      } : undefined,
+      tags: Array.isArray(row.tags) ? row.tags : undefined,
       created_at: row.created_at ?? row.createdAt ?? '',
       updated_at: row.updated_at ?? row.updatedAt ?? '',
-      deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,
       completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
-      created_by: row.created_by ?? row.createdBy ?? '',
+      // VAT company information
+      taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
+      companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
+      companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
+      vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
+      companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
+      expenses: Array.isArray(row.expenses)
+        ? row.expenses.map((exp: any) => ({
+            name: String(exp.name ?? "").trim(),
+            amount: Number(exp.amount ?? 0),
+            note: exp.note ?? null,
+          }))
+        : undefined,
       items: Array.isArray(row.details)
         ? row.details.map(normalizeItem)
         : Array.isArray(row.items)
@@ -776,15 +830,12 @@ export const orderApi = {
           : Array.isArray(row.order_items)
             ? row.order_items.map(normalizeItem)
             : [],
-      order_items: Array.isArray(row.details) ? row.details.map(normalizeItem) : Array.isArray(row.order_items) ? row.order_items.map(normalizeItem) : [],
       customer: row.customer ? {
         id: row.customer.id,
         code: row.customer.code,
         name: row.customer.name,
-        phone: row.customer.phoneNumber,
         email: row.customer.email,
-        address: row.customer.address,
-        addressInfo: row.customer.addressInfo,
+        phone: row.customer.phoneNumber ?? row.customer.phone,
       } : undefined,
       creator: row.creator ? {
         id: row.creator.id,
@@ -794,21 +845,9 @@ export const orderApi = {
         phoneNumber: row.creator.phoneNumber,
         avatarUrl: row.creator.avatarUrl,
       } : undefined,
-      tags: row.tags ?? [],
-      receiverName: row.receiverName ?? row.receiver_name,
-      receiverPhone: row.receiverPhone ?? row.receiver_phone,
-      receiverAddress: row.receiverAddress ?? row.receiver_address,
-      addressInfo: row.addressInfo ?? row.address_info,
-      expenses: Array.isArray(row.expenses)
-        ? row.expenses.map((exp: any) => ({
-            name: String(exp.name ?? "").trim(),
-            amount: Number(exp.amount ?? 0),
-            note: exp.note ?? null,
-          }))
-        : undefined,
-      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
     });
-    return normalizeOrder(data);
+    const normalizedOrder = normalizeOrder(data);
+    return normalizedOrder;
   },
   // Add item to order
   addOrderItem: async (orderId: string, data: CreateOrderItemRequest): Promise<OrderItem> => {
