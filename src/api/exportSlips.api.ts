@@ -161,7 +161,7 @@ const normalize = (row: any): ExportSlip => {
         ? row.export_slip_items.map(normalizeItem)
         : [],
     order: row.order ? {
-      order_number: row.order.order_number ?? row.order.orderNumber ?? '',
+      order_number: row.order.order_number ?? row.order.orderNumber ?? row.order.code ?? '',
       contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
       customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
       customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
