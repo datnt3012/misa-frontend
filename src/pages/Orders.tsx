@@ -36,6 +36,8 @@ import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/
 import apiClient from "@/lib/api";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { productApi } from "@/api/product.api";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { string } from "yup";
 
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
@@ -124,7 +126,7 @@ const OrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -207,7 +209,7 @@ const OrdersContent: React.FC = () => {
     try {
       setLoading(true);
       const params: any = { page: currentPage, limit: itemsPerPage };
-      if (statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter) params.status = statusFilter;
       if (categoryFilter !== 'all') params.categories = categoryFilter;
       if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (startDate) params.startDate = startDate;
@@ -808,7 +810,7 @@ const OrdersContent: React.FC = () => {
   };
   const handleResetFilters = () => {
     setSearchTerm("");
-    setStatusFilter("all");
+    setStatusFilter([]);
     setCategoryFilter("all");
     setStartDate(undefined);
     setEndDate(undefined);
@@ -898,6 +900,7 @@ const OrdersContent: React.FC = () => {
       <div className="w-full mx-auto space-y-3 sm:space-y-4">
       {/* Filters */}
       <Card>
+        {/* Search Box */}
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
@@ -911,19 +914,17 @@ const OrdersContent: React.FC = () => {
                 />
               </div>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Chọn trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                {ORDER_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {ORDER_STATUS_LABELS_VI[status]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Status Filter */}
+            <MultiSelect
+              className="w-60"
+              options={ORDER_STATUSES.map((status) => (
+                { value: status, label: ORDER_STATUS_LABELS_VI[status] }
+              ))}
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+              placeholder="Tất cả trạng thái"
+              selectAllLabel="Chọn tất cả"
+            />
             {/* Creator Filter */}
             <Combobox
               options={[
@@ -943,6 +944,7 @@ const OrdersContent: React.FC = () => {
               searchPlaceholder="Tìm người tạo..."
               emptyMessage="Không có người tạo nào"
               className="w-48"
+              multiple={true}
             />
             {/* Collapse Filter Button */}
             <Button
@@ -1055,19 +1057,20 @@ const OrdersContent: React.FC = () => {
                   ]}
                   value={paymentMethodFilters}
                   onValueChange={(value) => {
-                    setpaymentMethodFilters(value);
+                    setpaymentMethodFilters(value as string);
                     // Reset bank filter when payment method changes
-                    if (value !== 'bank_transfer') {
+                    if (typeof value === 'string' && value !== 'bank_transfer' && !value.includes('bank_transfer')) {
                       setBankFilter('all');
                     }
                   }}
-                  placeholder="PTTT"
+                  placeholder="Tất cả cách phương thức thanh toán"
                   searchPlaceholder="Tìm..."
                   emptyMessage="Không có phương thức nào"
                   className="w-40"
+                  multiple={true}
                 />
                 {/* Bank Filter - Only show when payment method is bank_transfer */}
-                {paymentMethodFilters === 'bank_transfer' && (
+                {(paymentMethodFilters === 'bank_transfer' || paymentMethodFilters.includes('bank_transfer')) && (
                   <Combobox
                     options={[
                       { label: "Tất cả ngân hàng", value: "all" },
@@ -1082,6 +1085,7 @@ const OrdersContent: React.FC = () => {
                     searchPlaceholder="Tìm..."
                     emptyMessage="Không có NH"
                     className="w-40"
+                    multiple={true}
                   />
                 )}
               </div>
@@ -1100,6 +1104,7 @@ const OrdersContent: React.FC = () => {
                 searchPlaceholder="Tìm..."
                 emptyMessage="Không có loại"
                 className="w-40"
+                multiple={true}
               />
               {/* Manifacturers Filter */}
               <Combobox
@@ -1116,6 +1121,7 @@ const OrdersContent: React.FC = () => {
                 searchPlaceholder="Tìm nhà sản xuất..."
                 emptyMessage="Không có nhà sản xuất nào"
                 className="w-60"
+                multiple={true}
               />
             </div>
           )}

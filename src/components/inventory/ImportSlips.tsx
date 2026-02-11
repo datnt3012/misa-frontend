@@ -31,6 +31,7 @@ import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
 import { generateImportSlipCode } from '@/utils/importSlipUtils';
 import { categoriesApi } from '@/api/categories.api';
+import { MultiSelect } from '../ui/multi-select';
 
 interface ImportSlip {
   id: string;
@@ -161,7 +162,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const [completedStartDate, setCompletedStartDate] = useState<string>('');
   const [completedEndDate, setCompletedEndDate] = useState<string>('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [sortField, setSortField] = useState<string>('createdAt');
@@ -267,7 +268,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     setStartDate(undefined);
     setEndDate(undefined);
     setWarehouseFilter("all");
-    setStatusFilter("all");
+    setStatusFilter([]);
     setCategoryFilter("all");
     setManufacturerFilter("all");
     setFiltersCollapsed(false);
@@ -295,7 +296,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       if(completedStartDate) {params.completedStartDate = completedStartDate;}
       if(completedEndDate) {params.completedEndDate = completedEndDate;}
       if(warehouseFilter != 'all') {params.warehouseId = warehouseFilter;}
-      if(statusFilter != 'all') {params.status = statusFilter;}
+      if(statusFilter) {params.status = statusFilter;}
       if(categoryFilter != 'all') {params.categories = categoryFilter;}
       if(manufacturerFilter != 'all') {params.manufacturers = manufacturerFilter;}
       const resp = await warehouseReceiptsApi.getReceipts(params);
@@ -1133,7 +1134,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             const supplier = suppliers.find(s => s?.id === value);
                             setNewSlip({
                               ...newSlip,
-                              supplier_id: value,
+                              supplier_id: value as string,
                               supplier_name: supplier?.name || '',
                               supplier_contact: supplier?.contact_phone || '',
                               supplier_email: supplier?.email || '',
@@ -1288,7 +1289,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             value: warehouse.id
                           }))}
                           value={newSlip.warehouse_id}
-                          onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}
+                          onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value as string})}
                           placeholder="Chọn kho nhập"
                           searchPlaceholder="Tìm kho..."
                           emptyMessage="Không có kho nào"
@@ -1329,7 +1330,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               if (selectedProduct.isForeignCurrency && selectedProduct.exchangeRate) {
                                 setNewItem({
                                   ...newItem,
-                                  product_id: value,
+                                  product_id: value as string,
                                   unit_price: selectedProduct.originalCostPrice || (selectedProduct.costPrice ? selectedProduct.costPrice / selectedProduct.exchangeRate : 0),
                                   isForeignCurrency: true,
                                   exchangeRate: selectedProduct.exchangeRate
@@ -1338,7 +1339,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                                 // Regular product without foreign currency
                                 setNewItem({
                                   ...newItem,
-                                  product_id: value,
+                                  product_id: value as string,
                                   unit_price: selectedProduct.costPrice || selectedProduct.unit_price || 0,
                                   isForeignCurrency: false,
                                   exchangeRate: 1
@@ -2019,23 +2020,24 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   }))
                 ]}
                 value={warehouseFilter}
-                onValueChange={setWarehouseFilter}
+                onValueChange={(value) => setWarehouseFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
                 placeholder="Lọc theo kho"
                 searchPlaceholder="Tìm kho..."
                 emptyMessage="Không có kho nào"
+                multiple={true}
               />
               {/* Status filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Lọc theo trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="pending">Chờ duyệt</SelectItem>
-                  <SelectItem value="approved">Đã duyệt</SelectItem>
-                  <SelectItem value="rejected">Đã từ chối</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={[
+                  { value: 'pending', label: 'Chờ duyệt' },
+                  { value: 'approved', label: 'Đã duyệt' },
+                  { value: 'rejected', label: 'Đã từ chối' },
+                ]}
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
+                placeholder="Tất cả trạng thái"
+                selectAllLabel="Chọn tất cả"
+              />
               {/* Category Filter */}
               <Combobox
                 options={[
@@ -2046,11 +2048,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   }))
                 ]}
                 value={categoryFilter}
-                onValueChange={setCategoryFilter}
+                onValueChange={(value) => setCategoryFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
                 placeholder="Chọn loại sản phẩm"
                 searchPlaceholder="Tìm loại sản phẩm..."
                 emptyMessage="Không có loại sản phẩm nào"
                 className="w-full"
+                multiple={true}
               />
               {/* Manifacturers Filter */}
               <Combobox
@@ -2062,16 +2065,17 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   }))
                 ]}
                 value={manufacturerFilter}
-                onValueChange={setManufacturerFilter}
+                onValueChange={(value) => setManufacturerFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
                 placeholder="Nhà sản xuất"
                 searchPlaceholder="Tìm nhà sản xuất..."
                 emptyMessage="Không có nhà sản xuất nào"
                 className="w-full"
+                multiple={true}
               />
             </div>
           )}
           {/* Import Slips Table */}
-          <div className="overflow-x-scroll overflow-y-auto w-full max-h-[calc(100vh-420px)]" style={{ scrollbarGutter: 'stable' }}>
+          <div className="overflow-x-scroll overflow-y-auto w-full max-h-[calc(100vh-420px)] mt-2" style={{ scrollbarGutter: 'stable' }}>
             <div className="table-wrapper" style={{ display: 'inline-block', minWidth: '100%' }}>
               <Table className="min-w-[1200px] w-full">
                 <TableHeader>

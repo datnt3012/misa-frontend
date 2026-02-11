@@ -41,7 +41,7 @@ const InventoryHistory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [filterWarehouse, setFilterWarehouse] = useState("all");
+  const [filterWarehouse, setFilterWarehouse] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [userCache, setUserCache] = useState<{ [key: string]: string }>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -108,10 +108,10 @@ const InventoryHistory = () => {
       }
       
       // Add warehouse filter if not "all"
-      if (filterWarehouse !== "all") {
-        params.warehouse_id = filterWarehouse;
+      if (filterWarehouse) {
+        params.warehouseId = filterWarehouse;
       }
-      
+          
       const response = await warehouseReceiptsApi.getReceipts(params);
       
       // Transform warehouse receipts to inventory movements
@@ -357,11 +357,12 @@ const InventoryHistory = () => {
                   }))
                 ]}
                 value={filterWarehouse}
-                onValueChange={(value) => { setFilterWarehouse(value); setCurrentPage(1); }}
+                onValueChange={(value) => { setFilterWarehouse(typeof value === 'string' ? value : (value as string[]).join(',')); setCurrentPage(1); }}
                 placeholder="Lọc theo kho"
                 searchPlaceholder="Tìm kho..."
                 emptyMessage="Không có kho nào"
                 className="w-[200px]"
+                multiple={true}
               />
             </div>
           </div>
