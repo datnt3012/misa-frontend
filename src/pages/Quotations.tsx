@@ -21,6 +21,7 @@ import { format, set } from "date-fns";
 import { ca, vi } from "date-fns/locale";
 import { getErrorMessage } from "@/lib/error-utils";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MultiSelect } from "@/components/ui/multi-select";
 import CreateQuotationForm from "@/components/quotations/CreateQuotationForm";
 import CreateOrderFromQuotation from "@/components/quotations/CreateOrderFromQuotation";
 import { ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
@@ -31,9 +32,9 @@ const QuotationsContent: React.FC = () => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState("all");
-  const [creatorFilter, setCreatorFilter] = useState("all");
+  const [creatorFilter, setCreatorFilter] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<string | undefined>();
   const [endDate, setEndDate] = useState<string | undefined>();
@@ -69,9 +70,9 @@ const QuotationsContent: React.FC = () => {
       setLoading(true);
       const params: any = { page: currentPage, limit: itemsPerPage };
       if (debouncedSearchTerm) params.code = debouncedSearchTerm;
-      if (statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter.length > 0) params.status = statusFilter.join(',');
       if (typeFilter !== 'all') params.type = typeFilter;
-      if (creatorFilter !== 'all') params.createdBy = creatorFilter;
+      if (creatorFilter.length > 0) params.createdBy = creatorFilter.join(',');
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       const resp = await quotationApi.getQuotations(params);
@@ -96,9 +97,9 @@ const QuotationsContent: React.FC = () => {
   }, [searchTerm]);
   const handleResetFilters = () => {
     setSearchTerm("");
-    setStatusFilter("all");
+    setStatusFilter([]);
     setTypeFilter("all");
-    setCreatorFilter("all");
+    setCreatorFilter([]);
     setStartDate(undefined);
     setEndDate(undefined);
     setCurrentPage(1);
@@ -553,17 +554,17 @@ const QuotationsContent: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Trạng thái</label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tất cả trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="pending">Chờ xử lý</SelectItem>
-                  <SelectItem value="completed">Hoàn thành</SelectItem>
-                  <SelectItem value="cancelled">Đã hủy</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={[
+                  { value: 'pending', label: 'Chờ xử lý' },
+                  { value: 'completed', label: 'Hoàn thành' },
+                  { value: 'cancelled', label: 'Đã hủy' }
+                ]}
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
+                placeholder="Tất cả trạng thái"
+                selectAllLabel="Chọn tất cả"
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Người tạo</label>
@@ -580,10 +581,25 @@ const QuotationsContent: React.FC = () => {
                   })
                 ]}
                 value={creatorFilter}
-                onValueChange={setCreatorFilter}
+                onValueChange={(value) => {
+                  if (typeof value === 'string') {
+                    if (value === 'all') {
+                      setCreatorFilter([]);
+                    } else {
+                      setCreatorFilter(value.split(',').filter(v => v));
+                    }
+                  } else {
+                    if (value.includes('all')) {
+                      setCreatorFilter([]);
+                    } else {
+                      setCreatorFilter(value as string[]);
+                    }
+                  }
+                }}
                 placeholder="Tất cả người tạo"
                 searchPlaceholder="Tìm người tạo..."
                 emptyMessage="Không có người tạo nào"
+                multiple={true}
               />
             </div>
             <div className="space-y-2">

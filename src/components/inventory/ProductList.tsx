@@ -909,6 +909,7 @@ const ProductList: React.FC<ProductListProps> = ({
               placeholder="Lọc theo loại"
               searchPlaceholder="Tìm loại sản phẩm..."
               emptyMessage="Không có loại sản phẩm nào"
+              multiple={true}
             />
             <div className="flex gap-2 sm:ml-auto">
               <Button 

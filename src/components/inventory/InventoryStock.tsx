@@ -17,6 +17,7 @@ import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConver
 import { warehouseApi } from "@/api";
 import { set } from "date-fns";
 import { se } from "date-fns/locale";
+import { MultiSelect } from "../ui/multi-select";
 interface InventoryStockProps {
   warehouses: any[];
   categories: Category[];
@@ -36,7 +37,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] =  useState<string[]>([]);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
@@ -62,7 +63,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const handleResetFilters = () => {
     setSearchTerm("");
     setFilterCategory("all");
-    setFilterStatus("all");
+    setFilterStatus([]);
     setFilterWarehouse("all");
     setCurrentPage(1);
   };
@@ -86,14 +87,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         params.warehouse = filterWarehouse;
       }
       // Apply status filter - convert UI filter to API format
-      if (filterStatus !== 'all') {
-        if (filterStatus === 'in-stock') {
-          params.stockStatus = 'in_stock';
-        } else if (filterStatus === 'low-stock') {
-          params.stockStatus = 'low_stock';
-        } else if (filterStatus === 'out-of-stock') {
-          params.stockStatus = 'out_of_stock';
-        }
+      if (filterStatus.length > 0) {
+        params.stockStatus = filterStatus;
       }
       // Add sort parameters
       if (sortConfig) {
@@ -161,7 +156,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   // Create products with stock information - one row per warehouse
   // Use useMemo to ensure it recalculates when products change
   const productsWithStock: ProductWithStockExtended[] = React.useMemo(() => {
-    const hasActiveStockFilter = filterStatus !== 'all' || filterWarehouse !== 'all';
+    const hasActiveStockFilter = filterStatus.length > 0 || filterWarehouse !== 'all';
     
     return products.flatMap(product => {
     const categoryId = getCategoryId(product.category);
@@ -264,12 +259,6 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   };
   const handleCategoryChange = (value: string) => {
     setFilterCategory(value);
-    setCurrentPage(1); // Reset to first page when filtering
-    // Clear products to prevent showing old data while loading
-    setProducts([]);
-  };
-  const handleStatusChange = (value: string) => {
-    setFilterStatus(value);
     setCurrentPage(1); // Reset to first page when filtering
     // Clear products to prevent showing old data while loading
     setProducts([]);
@@ -386,17 +375,17 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={filterStatus} onValueChange={handleStatusChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Lọc theo trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="in-stock">Còn hàng</SelectItem>
-                <SelectItem value="low-stock">Sắp hết</SelectItem>
-                <SelectItem value="out-of-stock">Hết hàng</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={[
+                { value: 'in_stock', label: 'Còn hàng' },
+                { value: 'low_stock', label: 'Sắp hết' },
+                { value: 'out_of_stock', label: 'Hết hàng' }
+              ]}
+              value={filterStatus}
+              onValueChange={(value) => setFilterStatus(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
+              placeholder="Tất cả trạng thái"
+              selectAllLabel="Chọn tất cả"
+            />
             <Combobox
               options={[
                 { label: "Tất cả loại", value: "all" },
@@ -410,6 +399,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               placeholder="Lọc theo loại"
               searchPlaceholder="Tìm loại sản phẩm..."
               emptyMessage="Không có loại sản phẩm nào"
+              multiple={true}
             />
             <Combobox
               options={[
@@ -424,6 +414,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               placeholder="Lọc theo kho"
               searchPlaceholder="Tìm kho..."
               emptyMessage="Không có kho nào"
+              multiple={true}
             />
             {/* Reset Filters Button */}
             <Button

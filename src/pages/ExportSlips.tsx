@@ -34,6 +34,7 @@ import { PermissionGuard } from '@/components/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import { set } from 'date-fns';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 function ExportSlipsContent() {
   const navigate = useNavigate();
@@ -89,8 +90,8 @@ function ExportSlipsContent() {
   const [completedStartDate, setCompletedStartDate] = useState<string>('');
   const [completedEndDate, setCompletedEndDate] = useState<string>('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -104,8 +105,8 @@ function ExportSlipsContent() {
     setStartDate(undefined);
     setEndDate(undefined);
     setWarehouseFilter("all");
-    setStatusFilter("all");
-    setCategoryFilter("all");
+    setStatusFilter([]);
+    setCategoryFilter([]);
     setManufacturerFilter("all");
     setFiltersCollapsed(false);
     setCurrentPage(1);
@@ -297,8 +298,8 @@ function ExportSlipsContent() {
       if(completedStartDate) {params.completedStartDate = completedStartDate;}
       if(completedEndDate) {params.completedEndDate = completedEndDate;}
       if(warehouseFilter != 'all') {params.warehouseId = warehouseFilter;}
-      if(statusFilter != 'all') {params.status = statusFilter;}
-      if(categoryFilter != 'all') {params.categories = categoryFilter;}
+      if(statusFilter) {params.status = statusFilter;}
+      if(categoryFilter) {params.categories = categoryFilter;}
       if(manufacturerFilter != 'all') {params.manufacturers = manufacturerFilter;}
 
       const resp = await exportSlipsApi.getSlips(params);
@@ -1448,7 +1449,7 @@ function ExportSlipsContent() {
                                 setSelectedOrder(selectedOrder);
                                 setExportSlipForm(prev => ({
                                   ...prev,
-                                  order_id: value,
+                                  order_id: value as string,
                                   customer_id: selectedOrder.customer_id || selectedOrder.customer?.id || '',
                                   customer_name: selectedOrder.customer_name || selectedOrder.customer?.name || '',
                                   customer_phone: selectedOrder.customer_phone || selectedOrder.customer?.phone || '',
@@ -1457,7 +1458,7 @@ function ExportSlipsContent() {
                                 }));
                                 // Load full order details and calculate exported quantities
                                 try {
-                                  const fullOrderData = await orderApi.getOrderIncludeDeleted(value);
+                                  const fullOrderData = await orderApi.getOrderIncludeDeleted(value as string);
                                   setSelectedOrderForAllocation(fullOrderData);
                                   
                                   // Update contract_code from order
@@ -1473,8 +1474,8 @@ function ExportSlipsContent() {
                                     const allSlips: Awaited<ReturnType<typeof exportSlipsApi.getSlips>>['slips'] = [];
                                     
                                     while (true) {
-                                      const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: value });
-                                      const slipsForOrder = response.slips.filter(slip => slip.order_id === value);
+                                      const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: value as string });
+                                      const slipsForOrder = response.slips.filter(slip => slip.order_id === value as string);
                                       allSlips.push(...slipsForOrder);
                                       
                                       if (response.slips.length < 100 || page > 10) {
@@ -1510,7 +1511,7 @@ function ExportSlipsContent() {
                                   setExportedQuantityByProduct({});
                                 }
                               } else {
-                                setExportSlipForm(prev => ({ ...prev, order_id: value }));
+                                setExportSlipForm(prev => ({ ...prev, order_id: value as string }));
                                 setSelectedOrderForAllocation(null);
                                 setExportedQuantityByProduct({});
                               }
@@ -1545,7 +1546,7 @@ function ExportSlipsContent() {
                                 const customer = customers.find(c => c.id === value);
                                 setExportSlipForm(prev => ({
                                   ...prev,
-                                  customer_id: value,
+                                  customer_id: value as string,
                                   customer_name: customer?.name || "",
                                   customer_phone: customer?.phoneNumber || "",
                                   customer_email: customer?.email || "",
@@ -1643,7 +1644,7 @@ function ExportSlipsContent() {
                             }))
                           ]}
                           value={selectedWarehouse}
-                          onValueChange={(value) => setSelectedWarehouse(value)}
+                          onValueChange={(value) => setSelectedWarehouse(value as string)}
                           placeholder="Chọn kho xuất hàng"
                           searchPlaceholder="Tìm kho..."
                           emptyMessage="Không có kho nào"
@@ -2452,25 +2453,26 @@ function ExportSlipsContent() {
                   }))
                 ]}
                 value={warehouseFilter}
-                onValueChange={setWarehouseFilter}
+                onValueChange={(value) => setWarehouseFilter(value as string)}
                 placeholder="Lọc theo kho"
                 searchPlaceholder="Tìm kho..."
                 emptyMessage="Không có kho nào"
+                multiple={true}
               />
               {/* Status filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Lọc theo trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="pending">Chờ duyệt</SelectItem>
-                  <SelectItem value="approved">Đã duyệt</SelectItem>
-                  <SelectItem value="picked">Đã lấy hàng</SelectItem>
-                  <SelectItem value="exported">Đã xuất kho</SelectItem>
-                  <SelectItem value="rejected">Đã từ chối</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={[
+                  { value: 'pending', label: 'Chờ xử lý' },
+                  { value: 'approved', label: 'Đã duyệt' },
+                  { value: 'picked', label: 'Đã lấy hàng' },
+                  { value: 'exported', label: 'Đã xuất kho' },
+                  { value: 'rejected', label: 'Đã từ chối' },
+                ]}
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
+                placeholder="Tất cả trạng thái"
+                selectAllLabel="Chọn tất cả"
+              />
               {/* Category Filter */}
               <Combobox
                 options={[
@@ -2481,11 +2483,12 @@ function ExportSlipsContent() {
                   }))
                 ]}
                 value={categoryFilter}
-                onValueChange={setCategoryFilter}
+                onValueChange={(value) => setCategoryFilter(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
                 placeholder="Chọn loại sản phẩm"
                 searchPlaceholder="Tìm loại sản phẩm..."
                 emptyMessage="Không có loại sản phẩm nào"
                 className="w-full"
+                multiple={true}
               />
               {/* Manifacturers Filter */}
               <Combobox
@@ -2497,11 +2500,12 @@ function ExportSlipsContent() {
                   }))
                 ]}
                 value={manufacturerFilter}
-                onValueChange={setManufacturerFilter}
+                onValueChange={(value) => setManufacturerFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
                 placeholder="Nhà sản xuất"
                 searchPlaceholder="Tìm nhà sản xuất..."
                 emptyMessage="Không có nhà sản xuất nào"
                 className="w-full"
+                multiple={true}
               />
             </div>
           )}
