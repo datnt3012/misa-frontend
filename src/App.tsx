@@ -10,8 +10,7 @@ import Inventory from "./pages/Inventory";
 import Categories from "./pages/Categories";
 import Orders from "./pages/Orders";
 import Quotations from "./pages/Quotations";
-import Customers from "./pages/Customers";
-import Suppliers from "./pages/Suppliers";
+import Relations from "./pages/Relations";
 import Revenue from "./pages/Revenue";
 import Settings from "./pages/Settings";
 import ExportImport from "./pages/ExportImport";
@@ -82,7 +81,7 @@ const App = () => (
               path="/customers" 
               element={
                 <ProtectedRoute>
-                  <Layout><Customers /></Layout>
+                  <Navigate to="/relations?tab=customers" replace />
                 </ProtectedRoute>
               } 
             />
@@ -90,7 +89,15 @@ const App = () => (
               path="/suppliers" 
               element={
                 <ProtectedRoute>
-                  <Layout><Suppliers /></Layout>
+                  <Navigate to="/relations?tab=suppliers" replace />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/relations" 
+              element={
+                <ProtectedRoute>
+                  <Layout><Relations /></Layout>
                 </ProtectedRoute>
               } 
             />

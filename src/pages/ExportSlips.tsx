@@ -1733,7 +1733,7 @@ function ExportSlipsContent() {
                                         (selectedOrder?.items?.find(order_item => (order_item.product_id == item.product_id))?.vat_percentage ?? 0) : (item.vat_percentage ?? 0)
                                       }
                                       onChange={(value) => updateItem(index, "vat_percentage", value)}
-                                      min={1}
+                                      min={0}
                                       className="w-20"
                                       disabled={selectedOrder != null}
                                     />

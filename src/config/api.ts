@@ -195,6 +195,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/warehouse-receipts/${id}`,
     DELETE: (id: string) => `/warehouse-receipts/${id}`,
     APPROVE: (id: string) => `/warehouse-receipts/${id}/approve`,
+    REJECT: (id: string) => `/warehouse-receipts/${id}/reject`,
     // Deprecated - Use IMPORT_IMPORT or IMPORT_EXPORT instead
     IMPORT_TEMPLATE: '/warehouse-receipts/import/template',
     IMPORT_EXCEL: '/warehouse-receipts/import/excel',

@@ -61,7 +61,8 @@ export interface WarehouseReceipt {
   order_id?: string;
   code: string; // slip number
   warehouse_id: string;
-  status: string; // draft | completed | approved
+  new_warehouse_id?: string; // Kho đích cho loại moving
+  status: string; // draft | completed | approved | pending | rejected
   notes: string;
   created_at: string;
   completed_at?: string;
@@ -73,8 +74,11 @@ export interface WarehouseReceipt {
   supplier_name?: string;
   supplier_contact?: string;
   description?: string;
-  type: string;   // import
+  type: string;   // import | export | moving
   items?: WarehouseReceiptItem[];
+  total_amount?: number;
+  is_foreign_currency?: boolean;
+  exchange_rate?: number | null;
   order?: {
     order_number: string;
     contract_code: string;
@@ -118,11 +122,12 @@ export interface WarehouseReceipt {
 
 export interface CreateWarehouseReceiptRequest {
   warehouseId: string;
-  supplierId: string; // Required by backend
-  code: string;
+  supplierId?: string; // Required for import/export, optional for moving
+  code?: string; // Tùy chọn (tự sinh nếu không có)
   description?: string;
   status?: string;
-  type: string;
+  type: string; // 'import' | 'export' | 'moving'
+  newWarehouseId?: string; // Bắt buộc cho loại moving (kho đích)
   details: Array<{
     productId: string;
     quantity: number;
@@ -130,6 +135,8 @@ export interface CreateWarehouseReceiptRequest {
     vatPercentage?: number;
   }>;
   isDeleted?: boolean;
+  isForeignCurrency?: boolean;
+  exchangeRate?: number | null;
 }
 
 // Helper function to normalize import job response
@@ -166,6 +173,7 @@ const normalize = (row: any): WarehouseReceipt => ({
   code: row.code ?? row.slip_number ?? '',
   order_id: row.orderId ?? row.order_id ?? '',
   warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
+  new_warehouse_id: row.newWarehouseId ?? row.new_warehouse_id ?? undefined, // Kho đích cho moving
   status: row.status ?? 'draft',
   notes: row.description ?? row.notes ?? undefined,
   created_at: row.createdAt ?? row.created_at ?? '',
@@ -179,6 +187,8 @@ const normalize = (row: any): WarehouseReceipt => ({
   supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
   description: row.description ?? undefined,
   type: row.type ?? 'import',
+  is_foreign_currency: row.isForeignCurrency ?? row.is_foreign_currency ?? false,
+  exchange_rate: row.exchangeRate ?? row.exchange_rate ?? null,
   items: Array.isArray(row.details)
     ? row.details.map((detail: any) => ({
         id: detail.id,
@@ -343,18 +353,16 @@ export const warehouseReceiptsApi = {
 
   // Approve warehouse receipt
   approveReceipt: async (id: string): Promise<WarehouseReceipt> => {
-    const response = await api.patch<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), {
-      status: 'approved'
-    });
+    const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.APPROVE(id));
     const receiptData = response?.data || response;
     
     return normalize(receiptData);
   },
 
   // Reject warehouse receipt
-  rejectReceipt: async (id: string): Promise<WarehouseReceipt> => {
-    const response = await api.patch<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), {
-      status: 'rejected'
+  rejectReceipt: async (id: string, reason?: string): Promise<WarehouseReceipt> => {
+    const response = await api.post<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.REJECT(id), {
+      reason: reason || ''
     });
     const receiptData = response?.data || response;
     

@@ -4,12 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin } from 'lucide-react';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { supplierApi, AddressInfo } from '@/api/supplier.api';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
@@ -51,7 +49,8 @@ interface UpdateSupplierRequest {
 }
 const SuppliersContent: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isListLoading, setIsListLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -71,6 +70,8 @@ const SuppliersContent: React.FC = () => {
   const { toast } = useToast();
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('suppliers');
   const isClosingDialogRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Format full address with ward/district/province names when available
   const formatAddress = (s: Supplier) => {
     const ai = s?.addressInfo || {};
@@ -86,7 +87,14 @@ const SuppliersContent: React.FC = () => {
   };
   // Load suppliers on component mount
   useEffect(() => {
-    loadSuppliers();
+    const initLoad = async () => {
+      try {
+        await loadSuppliers();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initLoad();
   }, []);
 
   // Read URL and auto-open dialog if present
@@ -113,11 +121,15 @@ const SuppliersContent: React.FC = () => {
       }
     }
   }, [getDialogState, suppliers, showEditDialog, editingSupplier, showCreateDialog, closeDialog]);
-  const loadSuppliers = async () => {
-    setLoading(true);
+  const loadSuppliers = async (keyword?: string) => {
+    setIsListLoading(true);
     try {
-      const response = await supplierApi.getSuppliers({ page: 1, limit: 1000 });
-      setSuppliers(response.suppliers || []);
+      const params: any = { page: 1, limit: 1000 };
+      if (keyword && keyword.trim()) {
+        params.keyword = keyword;
+      }
+      const response = await supplierApi.getSuppliers(params);
+      setSuppliers((response.suppliers || []) as Supplier[]);
     } catch (error) {
       toast({
         title: "Lỗi",
@@ -125,7 +137,7 @@ const SuppliersContent: React.FC = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setIsListLoading(false);
     }
   };
   const handleCreateSupplier = async () => {
@@ -261,24 +273,43 @@ const SuppliersContent: React.FC = () => {
     openDialog('edit', supplier.id);
     setShowEditDialog(true);
   };
-  // Filter suppliers based on search term
-  const filteredSuppliers = suppliers.filter(supplier =>
-    supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.contact_phone.includes(searchTerm) ||
-    supplier.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Search with debounce
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      loadSuppliers(searchTerm);
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Maintain focus on search input during search
+  useEffect(() => {
+    if (searchInputRef.current && searchTerm && document.activeElement !== searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchTerm]);
   return (
     <div className="min-h-screen bg-background space-y-4 p-6 sm:p-6 md:p-7">
       <div className="mx-auto space-y-6">
       {/* Search and Filters */}
       <div className="grid grid-cols-2">
         <div className="flex items-center gap-4">
-          <div className="flex-1">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
+              ref={searchInputRef}
               placeholder="Tìm kiếm theo tên, mã, số điện thoại, email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
             />
           </div>
         </div>
@@ -382,111 +413,83 @@ const SuppliersContent: React.FC = () => {
           </Dialog>
         </div>
       </div>
-      {/* Suppliers Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="w-5 h-5" />
-            Danh sách nhà cung cấp
-          </CardTitle>
-          <CardDescription>
-            Tổng cộng {filteredSuppliers.length} nhà cung cấp
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Đang tải dữ liệu...</p>
+      {/* Suppliers Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {suppliers.map((supplier) => (
+          <Card key={supplier.id} className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">{supplier.name}</CardTitle>
+                  <CardDescription className="font-mono text-sm">
+                    {supplier.code}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditSupplier(supplier)}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteSupplier(supplier)}
+                    disabled={supplier.isDeleted}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {supplier.contact_phone && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-4 w-4" />
+                  {supplier.contact_phone}
+                </div>
+              )}
+              {supplier.email && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  {supplier.email}
+                </div>
+              )}
+              {(supplier.address || supplier.addressInfo) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  <span className="truncate">{formatAddress(supplier)}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
+                <Badge variant={supplier.isDeleted ? "destructive" : "default"}>
+                  {supplier.isDeleted ? "Đã xóa" : "Hoạt động"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {isListLoading ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <div className="flex items-center justify-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              <p className="text-muted-foreground">Đang tải dữ liệu...</p>
             </div>
-          ) : filteredSuppliers.length === 0 ? (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                {searchTerm ? 'Không tìm thấy nhà cung cấp nào phù hợp với từ khóa tìm kiếm.' : 'Chưa có nhà cung cấp nào trong hệ thống.'}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mã</TableHead>
-                    <TableHead>Tên nhà cung cấp</TableHead>
-                    <TableHead>Số điện thoại</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Địa chỉ</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSuppliers.map((supplier) => (
-                    <TableRow key={supplier.id}>
-                      <TableCell className="font-mono text-center">{supplier.code}</TableCell>
-                      <TableCell className="font-medium text-center">{supplier.name}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-center gap-2">
-                          <Phone className="w-4 h-4 text-muted-foreground" />
-                          {supplier.contact_phone}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {supplier.email ? (
-                          <div className="flex justify-center gap-2">
-                            <Mail className="w-4 h-4 text-muted-foreground" />
-                            {supplier.email}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {(supplier.address || supplier.addressInfo) ? (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-muted-foreground" />
-                            <span className="max-w-48 truncate" title={formatAddress(supplier)}>
-                              {formatAddress(supplier)}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={supplier.isDeleted ? "destructive" : "default"}>
-                          {supplier.isDeleted ? "Đã xóa" : "Hoạt động"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditSupplier(supplier)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteSupplier(supplier)}
-                            disabled={supplier.isDeleted}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : suppliers.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <p className="text-muted-foreground">
+              {searchTerm ? "Không tìm thấy nhà cung cấp nào" : "Chưa có nhà cung cấp nào"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={(open) => {
         setShowEditDialog(open);
@@ -588,6 +591,7 @@ const SuppliersContent: React.FC = () => {
     </div>
   );
 };
+export { SuppliersContent };
 const Suppliers: React.FC = () => {
   return (
     <PermissionGuard requiredPermissions={['SUPPLIERS_VIEW']}>
