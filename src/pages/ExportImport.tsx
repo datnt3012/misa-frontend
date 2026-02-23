@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingDown, TrendingUp, History } from "lucide-react";
+import { TrendingDown, TrendingUp, History, ArrowRight } from "lucide-react";
 import ExportSlips from "@/pages/ExportSlips";
 import ImportSlips from "@/components/inventory/ImportSlips";
+import MovingSlips from "@/components/inventory/MovingSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
 import { useToast } from "@/hooks/use-toast";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -15,7 +16,7 @@ const ExportImportContent = () => {
   // Initialize tab from URL or default to 'exports'
   const getTabFromUrl = () => {
     const tab = searchParams.get('tab');
-    return tab && ['exports', 'imports', 'history'].includes(tab) ? tab : 'exports';
+    return tab && ['exports', 'imports', 'moving', 'history'].includes(tab) ? tab : 'exports';
   };
   
   const [activeTab, setActiveTab] = useState(() => getTabFromUrl());
@@ -48,7 +49,7 @@ const ExportImportContent = () => {
       <div className="max-w-full mx-auto space-y-4">
         {/* Tabs for different sections */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="exports" className="flex items-center gap-2">
               <TrendingDown className="w-4 h-4" />
               Xuất kho
@@ -57,9 +58,13 @@ const ExportImportContent = () => {
               <TrendingUp className="w-4 h-4" />
               Nhập kho
             </TabsTrigger>
+            <TabsTrigger value="moving" className="flex items-center gap-2">
+              <ArrowRight className="w-4 h-4" />
+              Chuyển kho
+            </TabsTrigger>
             <TabsTrigger value="history" className="flex items-center gap-2">
               <History className="w-4 h-4" />
-              Lịch sử xuất nhập kho
+              Lịch sử
             </TabsTrigger>
           </TabsList>
 
@@ -76,6 +81,13 @@ const ExportImportContent = () => {
               canManageImports={canManageImports}
               canApproveImports={canApproveImports}
             />
+          </TabsContent>
+
+          {/* Moving Management Tab */}
+          <TabsContent value="moving" className="space-y-6">
+            <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
+              <MovingSlips />
+            </PermissionGuard>
           </TabsContent>
 
           {/* History Tab */}

@@ -2369,7 +2369,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
             <DialogDescription>
               Nhà cung cấp: {selectedSlip?.supplier_name} | 
               Ngày nhập: {selectedSlip && format(new Date(selectedSlip.completed_at), 'dd/MM/yyyy')} | 
-              Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name} ({getWarehouseById(selectedSlip?.warehouse_id)?.code})
+              Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name || selectedSlip?.warehouses?.name || '-'} ({getWarehouseById(selectedSlip?.warehouse_id)?.code || selectedSlip?.warehouses?.code || '-'})
             </DialogDescription>
           </DialogHeader>
           {/* Additional Information Section */}
