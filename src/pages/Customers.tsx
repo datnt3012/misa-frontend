@@ -39,6 +39,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -49,7 +50,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
-import { vi } from "date-fns/locale";
+import { is, vi } from "date-fns/locale";
+import { Checkbox } from "@/components/ui/checkbox";
 interface CustomerVatInfo {
   taxCode?: string | null;
   companyName?: string | null;
@@ -80,6 +82,7 @@ interface Customer {
   districtName?: string;
   wardName?: string;
   vatInfo?: CustomerVatInfo;
+  isSupplier?: boolean;
 }
 interface CustomerFormVatInfoState {
   taxCode: string;
@@ -107,6 +110,7 @@ interface CustomerFormState {
   administrativeUnitId?: string;
   addressInfo: CustomerFormAddressState;
   vatInfo: CustomerFormVatInfoState;
+  isSupplier?: boolean;
 }
 const createEmptyAddressInfo = (): CustomerFormAddressState => ({
   administrativeUnitId: "",
@@ -134,6 +138,7 @@ const createEmptyCustomerFormState = (): CustomerFormState => ({
   administrativeUnitId: "none",
   addressInfo: createEmptyAddressInfo(),
   vatInfo: createEmptyVatInfoState(),
+  isSupplier: false,
 });
 const populateVatInfoState = (info?: CustomerVatInfo | null): CustomerFormVatInfoState => ({
   taxCode: info?.taxCode ?? "",
@@ -201,10 +206,12 @@ const CustomersContent = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCustomerDetailOpen, setIsCustomerDetailOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isListLoading, setIsListLoading] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast();
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('customers');
   const isClosingDialogRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   // Format full address with ward/district/province names when available
   const formatAddress = (c: any) => {
     const ai = c?.addressInfo || {};
@@ -224,12 +231,17 @@ const CustomersContent = () => {
   // Check permissions
   const { hasPermission } = usePermissions();
   const canReadCustomers = hasPermission('CUSTOMERS_READ');
-  const canManageCustomers = hasPermission('CUSTOMERS_MANAGE');
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Load customers data
-  const loadCustomers = async () => {
+  const loadCustomers = async (keyword?: string) => {
     try {
-      setIsLoading(true);
-      const resp = await customerApi.getCustomers({ page: 1, limit: 1000 });
+      setIsListLoading(true);
+      const params: any = { page: 1, limit: 1000 };
+      if (keyword && keyword.trim()) {
+        params.keyword = keyword;
+      }
+      const resp = await customerApi.getCustomers(params);
       setCustomers(resp.customers || []);
     } catch (error) {
       toast({
@@ -238,7 +250,7 @@ const CustomersContent = () => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsListLoading(false);
     }
   };
   // Load provinces data (administrative units = provinces)
@@ -269,9 +281,40 @@ const CustomersContent = () => {
   };
   // Load data when permissions are available
   useEffect(() => {
-    loadCustomers();
+    const initLoad = async () => {
+      try {
+        await loadCustomers();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initLoad();
     loadAdministrativeUnits();
   }, [canReadCustomers]);
+
+  // Search with debounce
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      loadCustomers(searchTerm);
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Maintain focus on search input during search
+  useEffect(() => {
+    if (searchInputRef.current && searchTerm && document.activeElement !== searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchTerm]);
   // Read URL and auto-open dialog if present
   useEffect(() => {
     if (isClosingDialogRef.current) {
@@ -379,20 +422,33 @@ const CustomersContent = () => {
       });
     }
   };
-  const handleEditCustomer = (customer: Customer) => {
-    setEditingCustomer(customer);
-    setEditCustomer({
-      customer_code: customer.customer_code || "",
-      name: customer.name || "",
-      phone: customer.phoneNumber || "",
-      email: customer.email || "",
-      address: customer.address || "",
-      vatRate: customer.vatRate,
-      addressInfo: buildAddressInfoState(customer.addressInfo),
-      vatInfo: populateVatInfoState(customer.vatInfo),
-    });
-    openDialog('edit', customer.id);
-    setIsEditDialogOpen(true);
+  const handleEditCustomer = async (customer: Customer) => {
+    try {
+      setIsListLoading(true);
+      const fresh = await customerApi.getCustomer(customer.id);
+      setEditingCustomer(fresh);
+      setEditCustomer({
+        customer_code: fresh.customer_code || "",
+        name: fresh.name || "",
+        phone: fresh.phoneNumber || "",
+        email: fresh.email || "",
+        address: fresh.address || "",
+        vatRate: fresh.vatRate,
+        addressInfo: buildAddressInfoState(fresh.addressInfo),
+        vatInfo: populateVatInfoState(fresh.vatInfo),
+        isSupplier: fresh.isSupplier || false,
+      });
+      openDialog('edit', fresh.id);
+      setIsEditDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải thông tin khách hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setIsListLoading(false);
+    }
   };
   const handleUpdateCustomer = async () => {
     if (!editingCustomer) return;
@@ -414,6 +470,7 @@ const CustomersContent = () => {
       }
       if (vatInfoPayload) { updatePayload.vatInfo = vatInfoPayload; }
       if (vatInfoPayload) { updatePayload.vatInfo = vatInfoPayload; }
+      if (editCustomer.isSupplier !== undefined) { updatePayload.isSupplier = editCustomer.isSupplier; }
       await customerApi.updateCustomer(editingCustomer.id, updatePayload);
       // Reload customers to get updated data
       await loadCustomers();
@@ -458,11 +515,43 @@ const CustomersContent = () => {
       });
     }
   };
-  const handleViewCustomerDetail = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    fetchCustomerOrders(customer.id);
-    openDialog('view', customer.id);
-    setIsCustomerDetailOpen(true);
+  const handleToggleIsSupplier = async (customer: Customer, checked: boolean) => {
+    try {
+      await customerApi.updateCustomer(customer.id, { isSupplier: checked });
+      setCustomers(customers.map(c => 
+        c.id === customer.id ? { ...c, isSupplier: checked } : c
+      ));
+      toast({
+        title: "Thành công",
+        description: checked 
+          ? `Đã cập nhật "${customer.name}" thành nhà cung cấp`
+          : `Đã cập nhật "${customer.name}" không còn là nhà cung cấp`,
+      });
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể cập nhật thông tin nhà cung cấp",
+        variant: "destructive",
+      });
+    }
+  };
+  const handleViewCustomerDetail = async (customer: Customer) => {
+    try {
+      setIsListLoading(true);
+      const fresh = await customerApi.getCustomer(customer.id);
+      setSelectedCustomer(fresh);
+      await fetchCustomerOrders(fresh.id);
+      openDialog('view', fresh.id);
+      setIsCustomerDetailOpen(true);
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể tải chi tiết khách hàng",
+        variant: "destructive",
+      });
+    } finally {
+      setIsListLoading(false);
+    }
   };
   const getStatusBadge = (status: string) => {
     const config = getOrderStatusConfig(status);
@@ -472,20 +561,8 @@ const CustomersContent = () => {
       </Badge>
     );
   };
-  const filteredCustomers = customers.filter(customer => {
-    const name = (customer.name || '').toString();
-    const code = (customer.customer_code || customer.code || '').toString();
-    const phone = (customer.phoneNumber || '').toString();
-    const email = (customer.email || '').toString();
-    const q = (searchTerm || '').toLowerCase();
-    return (
-      name.toLowerCase().includes(q) ||
-      code.toLowerCase().includes(q) ||
-      phone.includes(searchTerm) ||
-      email.toLowerCase().includes(q)
-    );
-  });
-  // Show loading if loading
+
+  // Show loading if initial loading
   if (isLoading) {
     return <div>Đang tải danh sách khách hàng...</div>;
   }
@@ -497,6 +574,7 @@ const CustomersContent = () => {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
+              ref={searchInputRef}
               placeholder="Tìm kiếm khách hàng..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -704,7 +782,7 @@ const CustomersContent = () => {
         </div>
         {/* Customer List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCustomers.map((customer) => (
+          {customers.map((customer) => (
             <Card key={customer.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -768,11 +846,24 @@ const CustomersContent = () => {
                   <Calendar className="h-4 w-4" />
                   Tham gia: {customer.createdAt && customer.createdAt !== '' ? format(new Date(customer.createdAt), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
                 </div>
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Checkbox
+                    id={`supplier-${customer.id}`}
+                    checked={customer.isSupplier || false}
+                    onCheckedChange={(checked) => handleToggleIsSupplier(customer, !!checked)}
+                  />
+                  <label
+                    htmlFor={`supplier-${customer.id}`}
+                    className="text-sm cursor-pointer select-none"
+                  >
+                    Khách hàng này cũng là nhà cung cấp
+                  </label>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
-        {isLoading ? (
+        {isListLoading ? (
           <Card>
             <CardContent className="py-10 text-center">
               <div className="flex items-center justify-center space-x-2">
@@ -781,7 +872,7 @@ const CustomersContent = () => {
               </div>
             </CardContent>
           </Card>
-        ) : filteredCustomers.length === 0 && (
+        ) : customers.length === 0 && (
           <Card>
             <CardContent className="py-10 text-center">
               <p className="text-muted-foreground">
@@ -819,6 +910,18 @@ const CustomersContent = () => {
                   onChange={(e) => setEditCustomer(prev => ({ ...prev, customer_code: e.target.value }))}
                   placeholder="Mã khách hàng"
                 />
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="edit-is-supplier"
+                    checked={editCustomer.isSupplier || false}
+                    onCheckedChange={(checked) => setEditCustomer(prev => ({ ...prev, isSupplier: checked as boolean }))}
+                  />
+                  <Label htmlFor="edit-is-supplier" className="text-sm font-normal cursor-pointer">
+                    Khách hàng này cũng là nhà cung cấp
+                  </Label>
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-name">Tên khách hàng <span className="text-red-500">*</span></Label>
@@ -1197,6 +1300,8 @@ const CustomersContent = () => {
   );
 
 };
+
+export { CustomersContent };
 
 const Customers = () => {
     return (

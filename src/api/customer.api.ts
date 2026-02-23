@@ -50,6 +50,7 @@ export interface Customer {
   vatRate?: number; // VAT rate mặc định (%)
   vatInfo?: VatInfo;
   userId?: string;
+  isSupplier?: boolean;
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
@@ -93,12 +94,12 @@ export const customerApi = {
   getCustomers: async (params?: {
     page?: number;
     limit?: number;
-    search?: string;
+    keyword?: string;
   }): Promise<{ customers: Customer[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.search) queryParams.append('search', params.search);
+    if (params?.keyword) queryParams.append('keyword', params.keyword);
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.CUSTOMERS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.CUSTOMERS.LIST;
@@ -182,6 +183,7 @@ const normalizeCustomer = (row: any): Customer => {
       provinceCode: ai.provinceCode ?? ai.province_code ?? ai.province?.code,
       districtCode: ai.districtCode ?? ai.district_code ?? ai.district?.code,
       wardCode: ai.wardCode ?? ai.ward_code ?? ai.ward?.code,
+      isSupplier: ai.is_supplier ?? ai.isSupplier ?? false,
       isDeleted: ai.isDeleted ?? false,
       createdAt: ai.createdAt ?? ai.created_at ?? '',
       updatedAt: ai.updatedAt ?? ai.updated_at ?? '',
@@ -256,6 +258,7 @@ const normalizeCustomer = (row: any): Customer => {
     vatInfo: normalizeVatInfo(row.vatInfo ?? row.vat_info),
     userId: row.userId ?? null,
     isDeleted: row.isDeleted ?? false,
+    isSupplier: row.isSupplier ?? row.is_supplier ?? false,
     createdAt: row.createdAt ?? row.created_at ?? '',
     updatedAt: row.updatedAt ?? row.updated_at ?? '',
     deletedAt: row.deletedAt ?? row.deleted_at ?? null,
