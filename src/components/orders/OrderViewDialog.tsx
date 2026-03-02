@@ -457,20 +457,26 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                   </div>
                 </CardContent>
               </Card>
-              {/* Customer Information */}
+              {/* Customer/Supplier Information */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Thông tin khách hàng</CardTitle>
+                  <CardTitle className="text-lg">
+                    {(orderDetails as any)?.type === 'purchase' ? 'Thông tin nhà cung cấp' : 'Thông tin khách hàng'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Tên khách hàng:</label>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        {(orderDetails as any)?.type === 'purchase' ? 'Tên nhà cung cấp:' : 'Tên khách hàng:'}
+                      </label>
                       <div className="text-base font-semibold">{orderDetails.customer_name}</div>
                     </div>
                     {orderDetails.customer_code && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
+                        <label className="text-sm font-medium text-muted-foreground">
+                          {(orderDetails as any)?.type === 'purchase' ? 'Mã nhà cung cấp:' : 'Mã khách hàng:'}
+                        </label>
                         <div className="text-base">{orderDetails.customer_code}</div>
                       </div>
                     )}
@@ -549,8 +555,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                   </CardContent>
                 </Card>
               )}
-              {/* Receiver Information */}
-              {(orderDetails.receiverName || orderDetails.receiverPhone || orderDetails.receiverAddress) && (
+              {/* Receiver Information - Only show for sale orders */}
+              {(orderDetails as any)?.type !== 'purchase' && (orderDetails.receiverName || orderDetails.receiverPhone || orderDetails.receiverAddress) && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Thông tin người nhận</CardTitle>
@@ -901,10 +907,10 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                   <div className="bg-gray-50 rounded-md p-3">
                                     <p className="text-sm text-gray-700">
                                       {item.notes.split('\n').map((line, index) => (
-                                        <React.Fragment key={index}>
+                                        <span key={index}>
                                           {line}
                                           {index < item.notes.split('\n').length - 1 && <br />}
-                                        </React.Fragment>
+                                        </span>
                                       ))}
                                     </p>
                                   </div>

@@ -219,7 +219,6 @@ const normalize = (row: any): ExportSlip => {
 export interface CreateExportSlipRequest {
   order_id: string;
   warehouse_id: string;
-  supplier_id: string;
   code: string;
   notes?: string;
   items: Array<{
@@ -235,7 +234,6 @@ export const exportSlipsApi = {
   createSlip: async (data: CreateExportSlipRequest): Promise<ExportSlip> => {
     const slipData = {
       warehouseId: data.warehouse_id,
-      supplierId: data.supplier_id,
       orderId: data.order_id,
       code: data.code,
       type: 'export',

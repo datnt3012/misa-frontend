@@ -15,6 +15,7 @@ import { Trash2, Plus, Edit2, X, Check } from "lucide-react";
 // Tag management is not available in this dialog
 import { orderApi, Order, OrderItem } from "@/api/order.api";
 import { customerApi } from "@/api/customer.api";
+import { supplierApi } from "@/api/supplier.api";
 import { productApi } from "@/api/product.api";
 import { orderTagsApi, OrderTag } from "@/api/orderTags.api";
 import { warehouseApi } from "@/api/warehouse.api";
@@ -46,6 +47,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [editingItems, setEditingItems] = useState<{[key: string]: Partial<OrderItem>}>({});
   const [availableTags, setAvailableTags] = useState<OrderTag[]>([]);
   const [editingExpenses, setEditingExpenses] = useState<Array<{ name: string; amount: number; note?: string }>>([]);
@@ -66,6 +68,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       setProducts([]);
       setWarehouses([]);
       setCustomers([]);
+      setSuppliers([]);
       setEditingItems({});
       setAvailableTags([]);
       setEditingExpenses([]);
@@ -78,6 +81,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       loadTags();
       loadWarehouses();
       loadCustomers();
+      loadSuppliers();
     } else if (!open) {
       // Reset loading and error when dialog closes to prevent UI blocking
       setLoading(false);
@@ -139,6 +143,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     } catch (error) {
       // Fallback to empty array if API fails
       setCustomers([]);
+    }
+  };
+
+  const loadSuppliers = async () => {
+    try {
+      const response = await supplierApi.getSuppliers({ page: 1, limit: 1000 });
+      setSuppliers(response.suppliers || []);
+    } catch (error) {
+      // Fallback to empty array if API fails
+      setSuppliers([]);
     }
   };
 
@@ -415,17 +429,17 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               <div className="space-y-3">
                 <div>
                   <Combobox
-                    options={customers.map(customer => ({
-                      label: `${customer.name} (${customer.customer_code || customer.code || ''})`,
-                      value: customer.id
+                    options={((orderDetails as any)?.type === 'purchase' ? suppliers : customers).map(entity => ({
+                      label: `${entity.name} (${entity.customer_code || entity.code || ''})`,
+                      value: entity.id
                     }))}
                     value={editValue || orderDetails?.customer_id || ''}
                     onValueChange={(selectedCustomerId) => {
                       setEditValues(prev => ({ ...prev, [field]: selectedCustomerId }));
                     }}
-                    placeholder="Chọn khách hàng"
-                    searchPlaceholder="Tìm khách hàng..."
-                    emptyMessage="Không có khách hàng nào"
+                    placeholder={(orderDetails as any)?.type === 'purchase' ? "Chọn nhà cung cấp" : "Chọn khách hàng"}
+                    searchPlaceholder={(orderDetails as any)?.type === 'purchase' ? "Tìm nhà cung cấp..." : "Tìm khách hàng..."}
+                    emptyMessage={(orderDetails as any)?.type === 'purchase' ? "Không có nhà cung cấp nào" : "Không có khách hàng nào"}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -824,16 +838,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Customer Information */}
+            {/* Customer/Supplier Information */}
             <div className="space-y-4">
               {renderEditableField('contractCode', 'Mã hợp đồng', orderDetails?.contract_code || '')}
-              {renderEditableField('customerId', 'Khách hàng', customerDetails?.name || orderDetails?.customer_name || '')}
+              {renderEditableField('customerId', (orderDetails as any)?.type === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng', customerDetails?.name || orderDetails?.customer_name || '')}
               <div>
-                <label className="text-sm font-medium text-muted-foreground">SĐT khách hàng:</label>
+                <label className="text-sm font-medium text-muted-foreground">{(orderDetails as any)?.type === 'purchase' ? 'SĐT nhà cung cấp:' : 'SĐT khách hàng:'}</label>
                 <div className="text-base">{orderDetails?.customer?.phone || orderDetails?.customer_phone || 'Không có số điện thoại'}</div>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Mã khách hàng:</label>
+                <label className="text-sm font-medium text-muted-foreground">{(orderDetails as any)?.type === 'purchase' ? 'Mã nhà cung cấp:' : 'Mã khách hàng:'}</label>
                 <div className="text-base">{orderDetails?.customer?.code || orderDetails?.customer_code || 'Chưa có mã'}</div>
               </div>
               <div>
@@ -841,7 +855,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <div className="text-base">{orderDetails?.customer?.email || 'Chưa có email'}</div>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Nhãn khách hàng:</label>
+                <label className="text-sm font-medium text-muted-foreground">{(orderDetails as any)?.type === 'purchase' ? 'Nhãn nhà cung cấp:' : 'Nhãn khách hàng:'}</label>
                 <div className="flex gap-2 flex-wrap mt-1">
                   {getOtherTags().length > 0 ? (
                     getOtherTags().map((tag: any) => (
@@ -860,7 +874,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
               {renderEditableField('note', 'Ghi chú', orderDetails?.notes, 'textarea')}
             </div>
 
-            {/* Shipping Information */}
+            {/* Shipping Information - Only show for sale orders */}
+            {(orderDetails as any)?.type !== 'purchase' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <span className="text-lg">🚚</span>
@@ -879,6 +894,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 )}
               </div>
             </div>
+            )}
 
             <Separator />
 
@@ -1418,7 +1434,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Loại đơn hàng:</span>
-                  <span>{orderDetails?.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng'}</span>
+                  <span>{(orderDetails as any)?.type === 'purchase' ? 'Mua hàng' : (orderDetails?.order_type === 'sale' ? 'Bán hàng' : 'Trả hàng')}</span>
                 </div>
                 {orderDetails?.vat_type && orderDetails.vat_type !== 'none' && (
                   <div className="flex justify-between">

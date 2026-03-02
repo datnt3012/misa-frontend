@@ -117,7 +117,6 @@ export interface WarehouseReceipt {
       total_price?: number;
     }>;
   };
-  total_amount: number;
 }
 
 export interface CreateWarehouseReceiptRequest {
@@ -126,6 +125,7 @@ export interface CreateWarehouseReceiptRequest {
   code?: string; // Tùy chọn (tự sinh nếu không có)
   description?: string;
   status?: string;
+  orderId?: string; // Order ID if created from order
   type: string; // 'import' | 'export' | 'moving'
   newWarehouseId?: string; // Bắt buộc cho loại moving (kho đích)
   details: Array<{
@@ -133,6 +133,7 @@ export interface CreateWarehouseReceiptRequest {
     quantity: number;
     unitPrice: number;
     vatPercentage?: number;
+    warehouseId?: string;
   }>;
   isDeleted?: boolean;
   isForeignCurrency?: boolean;
@@ -230,7 +231,7 @@ const normalize = (row: any): WarehouseReceipt => ({
       }))
     : undefined,
   order: row.order ? {
-    order_number: row.order.order_number ?? row.order.orderNumber ?? '',
+    order_number: row.order.order_number ?? row.order.orderNumber ?? row.order.code ?? '',
     contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
     customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
     customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,

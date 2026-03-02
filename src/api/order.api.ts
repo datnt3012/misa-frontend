@@ -1,7 +1,5 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
-import { number } from 'yup';
-import { title } from 'process';
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -41,6 +39,7 @@ export interface Order {
   };
   status: 'new' | 'pending' | 'picking' | 'picked' | 'delivered' | 'delivery_failed' | 'completed' | 'cancelled';
   order_type: 'sale' | 'return';
+  type?: 'sale' | 'purchase';
   total_amount: number;
   // Aggregated summary fields from backend (already include expenses)
   totalAmount?: number;
@@ -133,6 +132,7 @@ export interface CreateOrderRequest {
   note?: string;
   status?: string;
   orderType?: string;
+  type?: 'sale' | 'purchase';
   // VAT Information
   vatRate?: number; // VAT rate (optional, nếu không có sẽ lấy từ customer)
   taxCode?: string;
@@ -249,6 +249,7 @@ export const orderApi = {
     createdBy?: string;
     manufacturers?: string | string[];
     bank?: string;
+    type?: 'sale' | 'purchase';
   }): Promise<{
     orders: Order[]; 
     total: number; 
@@ -327,6 +328,7 @@ export const orderApi = {
     if (params?.includeDeleted) queryParams.append('includeDeleted', 'true');
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
     if (params?.bank) queryParams.append('bank', params.bank);
+    if (params?.type) queryParams.append('type', params.type);
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
@@ -396,6 +398,7 @@ export const orderApi = {
       })(),
       status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
+      type: row.type ?? undefined,
       totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
       totalVatAmount: Number(row.total_vat_amount ?? row.totalVatAmount ?? 0),
       totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
@@ -545,6 +548,7 @@ export const orderApi = {
       })(),
       status: row.status ?? 'new',
       order_type: row.order_type ?? row.type ?? 'sale',
+      type: row.type ?? undefined,
       totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
       totalVatAmount: Number(row.totalVatAmount ?? row.total_vat_amount ?? 0),
       totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),

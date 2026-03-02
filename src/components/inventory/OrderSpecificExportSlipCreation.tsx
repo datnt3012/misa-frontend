@@ -16,11 +16,13 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { Package, Plus, CheckCircle, Clock, Bell, Trash2 } from "lucide-react";
 import { orderApi, type Order, type OrderItem } from "@/api/order.api";
 import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.api";
+import { warehouseReceiptsApi, type CreateWarehouseReceiptRequest } from "@/api/warehouseReceipts.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
 import { Loading } from "@/components/ui/loading";
 interface OrderSpecificExportSlipCreationProps {
   orderId: string;
+  orderType?: string;
   onExportSlipCreated?: () => void;
 }
 interface ExportSlipFormItem {
@@ -38,8 +40,10 @@ interface ExportSlipForm {
 }
 export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCreationProps> = ({ 
   orderId,
+  orderType,
   onExportSlipCreated 
 }) => {
+  const isPurchaseOrder = orderType == 'purchase';
   const [order, setOrder] = useState<Order | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [exportSlips, setExportSlips] = useState<ExportSlipForm[]>([]);
@@ -61,7 +65,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
-    const code = `XK${dateStr}${timeStr}`.slice(0, 20);
+    const prefix = isPurchaseOrder ? 'IMP' : 'EXP';
+    const code = `${prefix}${dateStr}${timeStr}`.slice(0, 20);
     return code;
   };
   
@@ -181,21 +186,15 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       // Lấy thông tin tất cả các phiếu xuất kho đã tạo từ đơn hàng này (nếu có)
       let exportedQuantityByProduct: Record<string, number> = {};
       try {
-        // Lấy tất cả các phiếu xuất kho của đơn hàng này
-        let page = 1;
-        const allSlips: Awaited<ReturnType<typeof exportSlipsApi.getSlips>>['slips'] = [];
-        
-        while (true) {
-          const response = await exportSlipsApi.getSlips({ page, limit: 1000, orderId: orderId, status: 'pending,approved,picked,exported' });
-          const slipsForOrder = response.slips.filter(slip => slip.order_id === orderId);
-          allSlips.push(...slipsForOrder);
-          
-          // Nếu không còn phiếu nào hoặc đã lấy hết
-          if (response.slips.length < 100 || page > 10) {
-            break;
-          }
-          page++;
-        }
+        // Lấy tất cả các phiếu xuất kho của đơn hàng này - sử dụng API với orderId filter
+        const response = await warehouseReceiptsApi.getReceipts({ 
+          page: 1, 
+          limit: 1000, 
+          orderId: orderId, 
+          status: 'pending,approved,picked,exported', 
+          type: isPurchaseOrder ? 'import' : 'export' 
+        });
+        const allSlips = response.receipts || [];
         
         // Tính tổng số lượng đã xuất từ tất cả các phiếu (loại trừ phiếu có trạng thái 'cancelled')
         allSlips.forEach(slip => {
@@ -204,8 +203,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             return;
           }
           
-          if (slip.export_slip_items && Array.isArray(slip.export_slip_items)) {
-            slip.export_slip_items.forEach(slipItem => {
+          if (slip.items && Array.isArray(slip.items)) {
+            slip.items.forEach(slipItem => {
               // Kiểm tra product_id hợp lệ (không rỗng và không undefined)
               const productId = slipItem.product_id;
               if (!productId || productId.trim() === '') {
@@ -218,8 +217,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                 return; // Bỏ qua item không có product_id
               }
               const current = exportedQuantityByProduct[productId] || 0;
-              // Dùng requested_quantity để tính tổng số lượng đã xuất
-              exportedQuantityByProduct[productId] = current + (slipItem.requested_quantity || 0);
+              // Dùng quantity để tính tổng số lượng đã xuất
+              exportedQuantityByProduct[productId] = current + (slipItem.quantity || 0);
             });
           }
         });
@@ -265,7 +264,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
     if (exportSlips.length === 0) {
       toast({
         title: "Lỗi",
-        description: "Vui lòng thêm ít nhất một phiếu xuất kho",
+        description: isPurchaseOrder ? "Vui lòng thêm ít nhất một phiếu nhập kho" : "Vui lòng thêm ít nhất một phiếu xuất kho",
         variant: "destructive",
       });
       return;
@@ -276,7 +275,9 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       if (!slip.warehouse_id) {
         toast({
           title: "Lỗi",
-          description: `Vui lòng chọn kho cho phiếu xuất kho "${slip.slipCode}"`,
+          description: isPurchaseOrder 
+            ? `Vui lòng chọn kho cho phiếu nhập kho "${slip.slipCode}"`
+            : `Vui lòng chọn kho cho phiếu xuất kho "${slip.slipCode}"`,
           variant: "destructive",
         });
         return;
@@ -288,7 +289,9 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       if (validItems.length === 0) {
         toast({
           title: "Lỗi",
-          description: `Vui lòng thêm ít nhất một sản phẩm cho phiếu xuất kho "${slip.slipCode}"`,
+          description: isPurchaseOrder 
+            ? `Vui lòng thêm ít nhất một sản phẩm cho phiếu nhập kho "${slip.slipCode}"`
+            : `Vui lòng thêm ít nhất một sản phẩm cho phiếu xuất kho "${slip.slipCode}"`,
           variant: "destructive",
         });
         return;
@@ -304,41 +307,74 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         orderItemsMap.set(item.product_id, item);
       });
       
-      // Create all export slips
-      const results = await Promise.all(exportSlips.map(async (slip) => {
-        // Filter items with product_id and quantity > 0
-        const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
+      if (isPurchaseOrder) {
+        // Create import slips using warehouseReceiptsApi
+        const results = await Promise.all(exportSlips.map(async (slip) => {
+          const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
+          const code = slip.slipCode?.trim() || generateSlipCode();
+          
+          const createRequest: CreateWarehouseReceiptRequest = {
+            warehouseId: slip.warehouse_id,
+            supplierId: order.customer_id, // Use customer_id as supplier_id for purchase orders
+            orderId: order.id,
+            code: code,
+            description: slip.notes.trim() || undefined,
+            status: 'pending',
+            type: 'import',
+            details: validItems.map(item => {
+              const orderItem = orderItemsMap.get(item.product_id);
+              return {
+                productId: item.product_id,
+                quantity: item.quantity,
+                unitPrice: orderItem?.unit_price || 0,
+                vatPercentage: orderItem?.vat_percentage || 0,
+                warehouseId: slip.warehouse_id,
+              };
+            })
+          };
+          
+          return await warehouseReceiptsApi.createReceipt(createRequest);
+        }));
         
-        // Generate code if not provided or use provided code
-        const code = slip.slipCode?.trim() || generateSlipCode();
+        toast({
+          title: "Thành công",
+          description: `Đã tạo ${results.length} phiếu nhập kho cho đơn hàng ${order.order_number}.`,
+        });
+      } else {
+        // Create export slips using exportSlipsApi
+        const results = await Promise.all(exportSlips.map(async (slip) => {
+          const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
+          const code = slip.slipCode?.trim() || generateSlipCode();
+          
+          const createRequest: CreateExportSlipRequest = {
+            order_id: order.id,
+            warehouse_id: slip.warehouse_id,
+            supplier_id: '',
+            code: code,
+            notes: slip.notes.trim() || undefined,
+            items: validItems.map(item => {
+              const orderItem = orderItemsMap.get(item.product_id);
+              return {
+                product_id: item.product_id,
+                requested_quantity: item.quantity,
+                unit_price: orderItem?.unit_price || 0,
+                warehouse_id: slip.warehouse_id
+              };
+            })
+          };
+          
+          return await exportSlipsApi.createSlip(createRequest);
+        }));
         
-        const createRequest: CreateExportSlipRequest = {
-          order_id: order.id,
-          warehouse_id: slip.warehouse_id,
-          supplier_id: '', // Empty string for supplier_id
-          code: code,
-          notes: slip.notes.trim() || undefined,
-          items: validItems.map(item => {
-            const orderItem = orderItemsMap.get(item.product_id);
-            return {
-              product_id: item.product_id,
-              requested_quantity: item.quantity,
-              unit_price: orderItem?.unit_price || 0,
-              warehouse_id: slip.warehouse_id
-            };
-          })
-        };
-        
-        return await exportSlipsApi.createSlip(createRequest);
-      }));
+        toast({
+          title: "Thành công",
+          description: `Đã tạo ${results.length} phiếu xuất kho cho đơn hàng ${order.order_number}. Thông báo đã được gửi đến Quản lý kho.`,
+        });
+      }
       
-      toast({
-        title: "Thành công",
-        description: `Đã tạo ${results.length} phiếu xuất kho cho đơn hàng ${order.order_number}. Thông báo đã được gửi đến Quản lý kho.`,
-      });
       onExportSlipCreated?.();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || "Không thể tạo phiếu xuất kho";
+      const errorMessage = error.response?.data?.message || error.message || (isPurchaseOrder ? "Không thể tạo phiếu nhập kho" : "Không thể tạo phiếu xuất kho");
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -392,12 +428,12 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Tạo phiếu xuất kho
+            {isPurchaseOrder ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            Bạn không có quyền tạo phiếu xuất kho
+            {isPurchaseOrder ? 'Bạn không có quyền tạo phiếu nhập kho' : 'Bạn không có quyền tạo phiếu xuất kho'}
           </div>
         </CardContent>
       </Card>
@@ -409,7 +445,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Tạo phiếu xuất kho
+            {isPurchaseOrder ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -426,7 +462,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Tạo phiếu xuất kho
+            {isPurchaseOrder ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -442,40 +478,49 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Package className="w-5 h-5" />
-          Tạo phiếu xuất kho từ đơn hàng
+          {isPurchaseOrder ? 'Tạo phiếu nhập kho từ đơn hàng' : 'Tạo phiếu xuất kho từ đơn hàng'}
         </CardTitle>
-        <CardDescription className="space-y-2">
-          <div className="space-y-1">Đơn hàng: {order.order_number} - {order.customer_name}</div>
-          <div className="space-y-1">Hợp đồng: {order.contract_code || 'Không có'}</div>
-          {/* Status Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
-              <div>
-                <h4 className="font-semibold text-blue-900">Trạng thái phiếu xuất kho</h4>
-                <div className="text-sm text-blue-800 mt-2 space-y-1">
-                  <p><strong>Chờ:</strong> Phiếu được tạo, chưa ảnh hưởng tồn kho</p>
-                  <p><strong>Đã lấy hàng:</strong> Thủ kho xác nhận</p>
-                  <p><strong>Đã xuất kho:</strong> Hàng đã rời khỏi kho, bắt đầu trừ tồn kho và hoàn tất quy trình</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* Notification Info */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <Bell className="w-4 h-4 text-green-600 mt-0.5" />
-              <div className="text-sm text-green-800">
-                <p className="font-medium mb-1">Thông báo tự động:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>Khi tạo phiếu → Gửi thông báo đến Quản lý kho</li>
-                  <li>Khi đổi trạng thái → Gửi thông báo đến Thủ kho và người tạo phiếu</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </CardDescription>
+        <CardDescription>Đơn hàng: {order.order_number} - {order.customer_name}</CardDescription>
+        <CardDescription>Hợp đồng: {order.contract_code || 'Không có'}</CardDescription>
       </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Status Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-blue-900">{isPurchaseOrder ? 'Trạng thái phiếu nhập kho' : 'Trạng thái phiếu xuất kho'}</h4>
+              <div className="text-sm text-blue-800 mt-2 space-y-1">
+                {isPurchaseOrder ? (
+                  <>
+                    <p><strong>Nháp:</strong> Phiếu được tạo, chưa ảnh hưởng tồn kho</p>
+                    <p><strong>Hoàn thành:</strong> Hàng đã nhập vào kho, bắt đầu cộng tồn kho</p>
+                  </>
+                ) : (
+                  <>
+                    <p><strong>Chờ:</strong> Phiếu được tạo, chưa ảnh hưởng tồn kho</p>
+                    <p><strong>Đã lấy hàng:</strong> Thủ kho xác nhận</p>
+                    <p><strong>Đã xuất kho:</strong> Hàng đã rời khỏi kho, bắt đầu trừ tồn kho và hoàn tất quy trình</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Notification Info */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <div className="flex items-start gap-2">
+            <Bell className="w-4 h-4 text-green-600 mt-0.5" />
+            <div className="text-sm text-green-800">
+              <p className="font-medium mb-1">Thông báo tự động:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>Khi tạo phiếu → Gửi thông báo đến Quản lý kho</li>
+                <li>Khi đổi trạng thái → Gửi thông báo đến Thủ kho và người tạo phiếu</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </CardContent>
       <CardContent className="space-y-6">
         {/* Allocation status */}
         <div className="p-4 sticky -top-8 z-10 bg-white -mx-6 -mt-6 mb-6 shadow-sm">
@@ -553,7 +598,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
               <Card key={slip.id} className="border-2">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Phiếu xuất kho #{slipIndex + 1}</CardTitle>
+                    <CardTitle className="text-lg">{isPurchaseOrder ? 'Phiếu nhập kho' : 'Phiếu xuất kho'} #{slipIndex + 1}</CardTitle>
                     <Button
                       variant="destructive"
                       size="sm"
@@ -567,16 +612,16 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                 <CardContent className="space-y-4">
                   {/* Slip Code */}
                   <div>
-                    <Label htmlFor={`slip-code-${slip.id}`}>Mã phiếu xuất kho</Label>
+                    <Label htmlFor={`slip-code-${slip.id}`}>{isPurchaseOrder ? 'Mã phiếu nhập kho' : 'Mã phiếu xuất kho'}</Label>
                     <Input
                       id={`slip-code-${slip.id}`}
                       value={slip.slipCode}
                       onChange={(e) => updateExportSlip(slip.id, 'slipCode', e.target.value)}
-                      placeholder="Nhập mã phiếu xuất kho (tùy chọn)"
+                      placeholder={isPurchaseOrder ? 'Nhập mã phiếu nhập kho (tùy chọn)' : 'Nhập mã phiếu xuất kho (tùy chọn)'}
                       maxLength={20}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Để trống để tự động tạo mã phiếu xuất kho
+                      {isPurchaseOrder ? 'Để trống để tự động tạo mã phiếu nhập kho' : 'Để trống để tự động tạo mã phiếu xuất kho'}
                     </p>
                   </div>
                   
@@ -593,7 +638,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                       ]}
                       value={slip.warehouse_id}
                       onValueChange={(value) => updateExportSlip(slip.id, 'warehouse_id', value)}
-                      placeholder="Chọn kho xuất hàng"
+                      placeholder={isPurchaseOrder ? 'Chọn kho nhập hàng' : 'Chọn kho xuất hàng'}
                       searchPlaceholder="Tìm kho..."
                       emptyMessage="Không có kho nào"
                       className="w-full"
@@ -713,7 +758,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                       id={`notes-${slip.id}`}
                       value={slip.notes}
                       onChange={(e) => updateExportSlip(slip.id, 'notes', e.target.value)}
-                      placeholder="Nhập ghi chú cho phiếu xuất kho..."
+                      placeholder={isPurchaseOrder ? 'Nhập ghi chú cho phiếu nhập kho...' : 'Nhập ghi chú cho phiếu xuất kho...'}
                       rows={2}
                     />
                   </div>
@@ -728,7 +773,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             onClick={addExportSlip}
           >
             <Plus className="w-4 h-4 mr-2" />
-            Thêm phiếu xuất kho
+            {isPurchaseOrder ? 'Thêm phiếu nhập kho' : 'Thêm phiếu xuất kho'}
           </Button>
         </div>
         
@@ -748,7 +793,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
               ) : (
                 <>
                   <Plus className="w-4 h-4 mr-2" />
-                  Tạo tất cả phiếu xuất kho ({exportSlips.length})
+                  {isPurchaseOrder ? `Tạo tất cả phiếu nhập kho (${exportSlips.length})` : `Tạo tất cả phiếu xuất kho (${exportSlips.length})`}
                 </>
               )}
             </Button>
