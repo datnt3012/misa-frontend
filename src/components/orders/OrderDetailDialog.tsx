@@ -954,7 +954,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orderDetails?.items && orderDetails.items.length > 0 ? (
+                  {(orderDetails?.items && orderDetails.items.length > 0) || pendingNewItems.length > 0 ? (
                     <>
                       {orderDetails.items.map((item: OrderItem, index: number) => {
                         const isEditing = !!editingItems[item.id || ''];
@@ -966,7 +966,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                               {isEditing ? (
                                 <Combobox
                                   options={products.map((product) => {
-                                    const isProductAlreadyUsed = orderDetails.items.some(
+                                    const isProductAlreadyUsed = orderDetails.items?.some(
                                       (existingItem: OrderItem) =>
                                         existingItem.product_id === product.id && existingItem.id !== item.id
                                     );
@@ -1088,7 +1088,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                             <Combobox
                               options={products
                                 .filter(product =>
-                                  !orderDetails.items.some(
+                                  !orderDetails.items?.some(
                                     (existingItem: OrderItem) => existingItem.product_id === product.id
                                   ) &&
                                   !pendingNewItems.some(
