@@ -276,7 +276,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
       if (addressInfo) {
         const normalizedInfo = {
           provinceCode: addressInfo.provinceCode || undefined,
-          districtCode: addressInfo.districtCode || undefined,
+          districtCode: addressInfo.districtCode ?? null,
           wardCode: addressInfo.wardCode || undefined,
         };
         if (field === 'receiverAddress') {
@@ -932,7 +932,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                     <TableHead>Tên SP</TableHead>
                     <TableHead className="text-center">Thuế suất</TableHead>
                     <TableHead className="text-center">SL</TableHead>
-                    <TableHead className="text-center">Giá</TableHead>
+                    <TableHead className="text-center">Đơn giá</TableHead>
                     <TableHead className="text-center">Tổng</TableHead>
                     <TableHead className="w-24">Thao tác</TableHead>
                   </TableRow>
@@ -1012,7 +1012,13 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                               )}
                             </TableCell>
                             <TableCell className="text-center font-medium">
-                              {formatCurrency(isEditing ? editedItem.total_price : item.total_price)}
+                              {
+                                formatCurrency(
+                                  isEditing ? 
+                                    (editedItem.vat_percentage ? editedItem.vat_total_price : editedItem.total_price) 
+                                  : (item.vat_percentage ? item.vat_total_price : item.total_price)
+                                )
+                              }
                             </TableCell>
                             <TableCell>
                               {isEditing ? (
@@ -1151,7 +1157,7 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                       const allItems = [...existingItems, ...pendingNewItems];
 
                       const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
-                      const totalProductAmount = allItems.reduce((sum: number, item: any) => sum + ((item.total_price || 0)), 0);
+                      const totalProductAmount = allItems.reduce((sum: number, item: any) => sum + ((item.vat_percentage ? (Number(item.vat_total_price)) : Number(item.total_price)) || 0), 0);
 
                       const expensesTotal = (orderDetails?.expenses || []).reduce(
                         (sum: number, exp: any) => sum + (Number(exp.amount) || 0),

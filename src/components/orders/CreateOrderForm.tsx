@@ -109,18 +109,12 @@ const buildShippingInfoFromCustomer = (customer?: Customer) => ({
   shipping_recipient_phone: customer?.phoneNumber ?? "",
   shipping_address: customer?.address ?? "",
   shipping_addressInfo: {
-    provinceCode:
-      customer?.addressInfo?.provinceCode ?? customer?.addressInfo?.province?.code ?? "",
-    districtCode:
-      customer?.addressInfo?.districtCode ?? customer?.addressInfo?.district?.code ?? "",
-    wardCode:
-      customer?.addressInfo?.wardCode ?? customer?.addressInfo?.ward?.code ?? "",
-    provinceName:
-      customer?.addressInfo?.provinceName ?? customer?.addressInfo?.province?.name ?? "",
-    districtName:
-      customer?.addressInfo?.districtName ?? customer?.addressInfo?.district?.name ?? "",
-    wardName:
-      customer?.addressInfo?.wardName ?? customer?.addressInfo?.ward?.name ?? "",
+    provinceCode: String(customer?.addressInfo?.provinceCode ?? customer?.addressInfo?.province?.code ?? "") || "",
+    districtCode: customer?.addressInfo?.districtCode ?? customer?.addressInfo?.district?.code ?? "",
+    wardCode: String(customer?.addressInfo?.wardCode ?? customer?.addressInfo?.ward?.code ?? "") || "",
+    provinceName: customer?.addressInfo?.provinceName ?? customer?.addressInfo?.province?.name ?? "",
+    districtName: customer?.addressInfo?.districtName ?? customer?.addressInfo?.district?.name ?? "",
+    wardName: customer?.addressInfo?.wardName ?? customer?.addressInfo?.ward?.name ?? "",
   },
 });
 const hasCustomerVatInfo = (info?: VatInfo | null) => {
@@ -247,7 +241,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         address: newOrder.shipping_address?.trim() || undefined,
         addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
           provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
-          districtCode: newOrder.shipping_addressInfo.districtCode || undefined,
+          districtCode: newOrder.shipping_addressInfo.districtCode ?? null,
           wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
         } : undefined,
       };
@@ -377,7 +371,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     });
   };
   const calculateTotals = () => {
-    const itemsSubtotal = newOrder.items.reduce((sum, item) => sum + item.total_price, 0);
+    const itemsSubtotal = newOrder.items.reduce((sum, item) => sum + (item.vat_percentage ? (item.total_price + (item.total_price * item.vat_percentage / 100)) : item.total_price), 0);
     const expensesTotal = newOrder.expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     const subtotal = itemsSubtotal + expensesTotal;
     const debt = subtotal - (newOrder.initial_payment || 0);
@@ -400,7 +394,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           address: newOrder.shipping_address?.trim() || undefined,
           addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
             provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
-            districtCode: newOrder.shipping_addressInfo.districtCode || undefined,
+            districtCode: newOrder.shipping_addressInfo.districtCode ?? null,
             wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
           } : undefined,
         };
@@ -489,16 +483,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         receiverAddress: newOrder.shipping_address || undefined,
         addressInfo: (() => {
           const addrInfo = newOrder.shipping_addressInfo;
-          // Send addressInfo if we have at least one valid code (not empty string)
-          const hasProvinceCode = addrInfo?.provinceCode && addrInfo.provinceCode.trim() !== "";
-          const hasDistrictCode = addrInfo?.districtCode && addrInfo.districtCode.trim() !== "";
-          const hasWardCode = addrInfo?.wardCode && addrInfo.wardCode.trim() !== "";
+          // Ensure codes are strings for validation
+          const provinceCodeStr = addrInfo?.provinceCode !== undefined && addrInfo?.provinceCode !== null 
+            ? String(addrInfo.provinceCode) 
+            : undefined;
+          const wardCodeStr = addrInfo?.wardCode !== undefined && addrInfo?.wardCode !== null 
+            ? String(addrInfo.wardCode) 
+            : undefined;
+          // districtCode: check for null (V2) or valid string
+          const hasProvinceCode = provinceCodeStr !== undefined && provinceCodeStr.trim() !== "";
+          const hasDistrictCode = addrInfo?.districtCode !== undefined && addrInfo?.districtCode !== null && typeof addrInfo.districtCode === 'string' && addrInfo.districtCode.trim() !== "";
+          const hasWardCode = wardCodeStr !== undefined && wardCodeStr.trim() !== "";
           // Send addressInfo if we have any valid address codes or if we have receiverAddress
           if (hasProvinceCode || hasDistrictCode || hasWardCode || (newOrder.shipping_address && newOrder.shipping_address.trim() !== "")) {
             return {
-              provinceCode: hasProvinceCode ? addrInfo.provinceCode : undefined,
-              districtCode: hasDistrictCode ? addrInfo.districtCode : undefined,
-              wardCode: hasWardCode ? addrInfo.wardCode : undefined
+              provinceCode: hasProvinceCode ? provinceCodeStr : undefined,
+              districtCode: hasDistrictCode ? addrInfo.districtCode : null,
+              wardCode: hasWardCode ? wardCodeStr : undefined
             };
           }
           return undefined;
@@ -637,17 +638,29 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                       const customer = customers.find(c => c.id === value);
                       const vatInfo = buildVatInfoFromCustomer(customer);
                       const shippingInfo = buildShippingInfoFromCustomer(customer);
-                      setNewOrder(prev => ({
-                        ...prev,
-                        customer_id: value,
-                        customer_name: customer?.name || "",
-                        customer_code: customer?.customer_code || "",
-                        customer_phone: customer?.phoneNumber || "",
-                        customer_email: customer?.email || "",
-                        ...vatInfo,
-                        ...shippingInfo,
-                      }));
-                      setShippingAddressVersion((v) => v + 1);
+                      
+                      setNewOrder(prev => {
+                        const newState = {
+                          ...prev,
+                          customer_id: value,
+                          customer_name: customer?.name || "",
+                          customer_code: customer?.customer_code || "",
+                          customer_phone: customer?.phoneNumber || "",
+                          customer_email: customer?.email || "",
+                          ...vatInfo,
+                          ...shippingInfo,
+                        };
+                        
+                        // Only trigger AddressFormSeparate re-mount if province changed
+                        const currentProvinceCode = prev.shipping_addressInfo?.provinceCode;
+                        const newProvinceCode = shippingInfo.shipping_addressInfo?.provinceCode;
+                        
+                        if (currentProvinceCode !== newProvinceCode) {
+                          setShippingAddressVersion(v => v + 1);
+                        }
+                        
+                        return newState;
+                      });
                     }}
                     placeholder="Chọn khách hàng hoặc nhập mới"
                     searchPlaceholder="Tìm khách hàng..."

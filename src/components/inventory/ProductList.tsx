@@ -879,12 +879,12 @@ const ProductList: React.FC<ProductListProps> = ({
   };
   return (
     <Card>
-      <CardHeader>
+      {/* <CardHeader>
         <CardTitle>Danh Sách Sản Phẩm</CardTitle>
         <CardDescription>Quản lý thông tin sản phẩm trong hệ thống</CardDescription>
-      </CardHeader>
+      </CardHeader> */}
       <CardContent>
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col gap-4 mb-6 mt-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -909,8 +909,349 @@ const ProductList: React.FC<ProductListProps> = ({
               placeholder="Lọc theo loại"
               searchPlaceholder="Tìm loại sản phẩm..."
               emptyMessage="Không có loại sản phẩm nào"
+              multiple={true}
             />
             <div className="flex gap-2 sm:ml-auto">
+              <Button 
+                variant="outline" 
+                onClick={exportToExcel}
+                className="w-full sm:w-auto"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Xuất Excel
+              </Button>
+              {canManageProducts && (
+                <Dialog open={isImportDialogOpen} onOpenChange={handleImportDialogToggle}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full sm:w-auto">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Nhập từ Excel
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[1200px]">
+                    <DialogHeader>
+                      <DialogTitle>Nhập Sản Phẩm Từ Excel</DialogTitle>
+                      <DialogDescription>
+                        Tải file Excel mẫu hoặc chọn file để nhập sản phẩm
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={downloadProductImportTemplate}
+                          className="flex-1"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Tải File Mẫu
+                        </Button>
+                      </div>
+                      <div>
+                        <Label htmlFor="import-file">Chọn file Excel</Label>
+                        <Input
+                          id="import-file"
+                          type="file"
+                          accept=".xlsx,.xls"
+                          disabled={isImporting || isJobActive}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setImportFile(file);
+                              setImportErrors([]);
+                              setImportSummary(null);
+                            } else {
+                              setImportFile(null);
+                            }
+                          }}
+                        />
+                      </div>
+                      {importFile && (
+                        <div className="text-sm text-muted-foreground">
+                          Đã chọn: {importFile.name}
+                        </div>
+                      )}
+                    {activeImportJob && (
+                      <div className="rounded-md border border-border/60 bg-muted/10 p-3 space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium">
+                           <span>Trạng thái: {getJobStatusLabel(activeImportJob)}</span>
+                          <span>{Math.round(activeImportJob.percent ?? 0)}%</span>
+                        </div>
+                        <Progress value={activeImportJob.percent ?? 0} />
+                        <div className="text-xs text-muted-foreground">
+                          Đã xử lý {activeImportJob.processedRows ?? 0}/{activeImportJob.totalRows || '...'} dòng · Thành công {activeImportJob.imported ?? 0} · Lỗi {activeImportJob.failed ?? 0}
+                        </div>
+                      </div>
+                    )}
+                    {importSummary && (
+                      <div className="rounded-md border border-muted/40 bg-muted/10 p-3 text-sm text-muted-foreground">
+                        Đã xử lý {importSummary.processedRows ?? importSummary.totalRows} / {importSummary.totalRows || '...'} dòng: thành công {importSummary.imported}, lỗi {importSummary.failed}.
+                      </div>
+                    )}
+                    {importErrors.length > 0 && (
+                      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                        <p className="text-sm font-medium text-destructive">Chi tiết lỗi:</p>
+                        <ul className="text-sm text-destructive space-y-1 max-h-40 overflow-y-auto">
+                          {importErrors.slice(0, 5).map((error, index) => (
+                            <li key={`${error.row ?? 'unknown'}-${error.code ?? 'no-code'}-${index}`}>
+                              Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
+                            </li>
+                          ))}
+                        </ul>
+                        {importErrors.length > 5 && (
+                          <p className="text-xs text-destructive/80">
+                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra lịch sử để xem đầy đủ.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    </div>
+                    {canManageProducts && (
+                      <Card className="mb-6">
+                        <CardHeader className="pb-2">
+                          <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
+                            <TabsList className="grid w-full grid-cols-2">
+                              <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
+                              <TabsTrigger value="history">Lịch sử ({jobHistoryPagination?.total || completedJobs.length})</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="running" className="mt-4 space-y-3">
+                              {runningJobs.length === 0 ? (
+                                console.log('No running jobs'),
+                                <p className="text-sm text-muted-foreground">
+                                  Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
+                                </p>
+                              ) : (
+                                console.log('Running jobs:', runningJobs),
+                                runningJobs.map((job) => (
+                                  <div
+                                    key={job.jobId}
+                                    onClick={() => handleJobCardSelect(job.jobId)}
+                                    className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
+                                      activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between text-sm font-medium">
+                                      <span>Job #{job.jobId.slice(-6)}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
+                                        {(job.status === 'queued' || job.status === 'processing') && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCancelJob(job.jobId);
+                                            }}
+                                            disabled={cancellingJobId === job.jobId}
+                                          >
+                                            {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Progress value={job.percent ?? 0} />
+                                    <div className="text-xs text-muted-foreground">
+                                      Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                                    </div>
+                                    {job.errors && job.errors.length > 0 && (
+                                      <div className="text-xs text-destructive space-y-1">
+                                        {job.errors.slice(-2).map((error, index) => (
+                                          <div key={`${job.jobId}-err-${index}`}>
+                                            Dòng {error.row ?? 'N/A'}: {error.reason}
+                                          </div>
+                                        ))}
+                                        {job.errors.length > 2 && (
+                                          <div className="text-[10px] text-destructive/80">
+                                            ... và {job.errors.length - 2} lỗi khác
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </TabsContent>
+                            <TabsContent value="history" className="mt-4 space-y-3">
+                              {/* Job History Controls */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-muted-foreground">Sắp xếp:</span>
+                                  <Select value={jobHistorySort} onValueChange={(value: 'newest' | 'oldest') => {
+                                    setJobHistorySort(value);
+                                    setJobHistoryPage(1); // Reset to first page when sorting changes
+                                    onRefreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: value === 'newest' ? 'DESC' : 'ASC',
+                                      page: 1,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Chọn sắp xếp" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="newest">Mới nhất</SelectItem>
+                                      <SelectItem value="oldest">Cũ nhất</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-muted-foreground">Hiển thị:</span>
+                                  <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
+                                      const newLimit = parseInt(value);
+                                      setJobHistoryItemsPerPage(newLimit);
+                                      setJobHistoryPage(1); // Reset to first page when limit changes
+                                      onRefreshImportJobs({
+                                        onlyActive: false,
+                                        sortBy: 'createdAt',
+                                        sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                        page: 1,
+                                        limit: newLimit
+                                      });
+                                  }}>
+                                    <SelectTrigger className="w-20">
+                                      <SelectValue placeholder="Số lượng" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="3">3</SelectItem>
+                                      <SelectItem value="5">5</SelectItem>
+                                      <SelectItem value="10">10</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              {completedJobs.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
+                              ) : (
+                                <>
+                                  {/* Job History Items */}
+                                  <div className="space-y-3">
+                                    {completedJobs.map((job) => (
+                                      <div
+                                        key={job.jobId}
+                                        onClick={() => handleJobCardSelect(job.jobId)}
+                                        className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
+                                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span>Job #{job.jobId.slice(-6)}</span>
+                                          <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
+                                            {getJobStatusLabel(job)}
+                                          </Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                                          {job.startedAt && (
+                                            <span className="ml-2">
+                                              · {new Date(job.startedAt).toLocaleString('vi-VN')}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {job.errors && job.errors.length > 0 && (
+                                          <div className="space-y-1">
+                                            <div
+                                              className="flex items-center gap-1 text-xs text-destructive cursor-pointer hover:text-destructive/80"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleJobErrors(job.jobId);
+                                              }}
+                                            >
+                                              {expandedJobErrors.has(job.jobId) ? (
+                                                <ChevronDown className="w-3 h-3" />
+                                              ) : (
+                                                <ChevronRight className="w-3 h-3" />
+                                              )}
+                                              {job.errors.length} lỗi
+                                            </div>
+                                            {expandedJobErrors.has(job.jobId) && (
+                                              <div className="ml-4 space-y-1 text-xs text-destructive/90">
+                                                {job.errors.map((error, index) => (
+                                                  <div key={`${job.jobId}-error-${index}`}>
+                                                    Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* Job History Pagination */}
+                                  {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
+                                    <div className="flex items-center justify-center pt-4 border-t">
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            const newPage = Math.max(1, jobHistoryPage - 1);
+                                            setJobHistoryPage(newPage);
+                                            onRefreshImportJobs({
+                                              onlyActive: false,
+                                              sortBy: 'createdAt',
+                                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                              page: newPage,
+                                              limit: jobHistoryItemsPerPage
+                                            });
+                                          }}
+                                          disabled={jobHistoryPage === 1}
+                                        >
+                                          Trước
+                                        </Button>
+                                        <span className="text-sm text-muted-foreground">
+                                          Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
+                                        </span>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            const newPage = jobHistoryPage + 1;
+                                            setJobHistoryPage(newPage);
+                                            onRefreshImportJobs({
+                                              onlyActive: false,
+                                              sortBy: 'createdAt',
+                                              sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                              page: newPage,
+                                              limit: jobHistoryItemsPerPage
+                                            });
+                                          }}
+                                          disabled={jobHistoryPage >= jobHistoryPagination.totalPages}
+                                        >
+                                          Sau
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </TabsContent>
+                          </Tabs>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleImportDialogToggle(false)}
+                        disabled={isImporting}
+                      >
+                        Đóng
+                      </Button>
+                      <Button 
+                        onClick={handleImportProducts}
+                        disabled={isImportActionDisabled}
+                      >
+                        {isImporting ? 'Đang tải lên...' : isJobActive ? 'Đang xử lý...' : 'Bắt đầu Import'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
               {canManageProducts && (
                 <Dialog open={isAddProductDialogOpen} onOpenChange={setIsAddProductDialogOpen}>
                   <DialogTrigger asChild>
@@ -1137,349 +1478,9 @@ const ProductList: React.FC<ProductListProps> = ({
                   </DialogContent>
                 </Dialog>
               )}
-              <Button 
-                variant="outline" 
-                onClick={exportToExcel}
-                className="w-full sm:w-auto"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Xuất Excel
-              </Button>
-              {canManageProducts && (
-                <Dialog open={isImportDialogOpen} onOpenChange={handleImportDialogToggle}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      <Upload className="w-4 h-4 mr-2" />
-                      Nhập từ Excel
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                      <DialogTitle>Nhập Sản Phẩm Từ Excel</DialogTitle>
-                      <DialogDescription>
-                        Tải file Excel mẫu hoặc chọn file để nhập sản phẩm
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={downloadProductImportTemplate}
-                          className="flex-1"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Tải File Mẫu
-                        </Button>
-                      </div>
-                      <div>
-                        <Label htmlFor="import-file">Chọn file Excel</Label>
-                        <Input
-                          id="import-file"
-                          type="file"
-                          accept=".xlsx,.xls"
-                          disabled={isImporting || isJobActive}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setImportFile(file);
-                              setImportErrors([]);
-                              setImportSummary(null);
-                            } else {
-                              setImportFile(null);
-                            }
-                          }}
-                        />
-                      </div>
-                      {importFile && (
-                        <div className="text-sm text-muted-foreground">
-                          Đã chọn: {importFile.name}
-                        </div>
-                      )}
-                    {activeImportJob && (
-                      <div className="rounded-md border border-border/60 bg-muted/10 p-3 space-y-2">
-                        <div className="flex items-center justify-between text-sm font-medium">
-                           <span>Trạng thái: {getJobStatusLabel(activeImportJob)}</span>
-                          <span>{Math.round(activeImportJob.percent ?? 0)}%</span>
-                        </div>
-                        <Progress value={activeImportJob.percent ?? 0} />
-                        <div className="text-xs text-muted-foreground">
-                          Đã xử lý {activeImportJob.processedRows ?? 0}/{activeImportJob.totalRows || '...'} dòng · Thành công {activeImportJob.imported ?? 0} · Lỗi {activeImportJob.failed ?? 0}
-                        </div>
-                      </div>
-                    )}
-                    {importSummary && (
-                      <div className="rounded-md border border-muted/40 bg-muted/10 p-3 text-sm text-muted-foreground">
-                        Đã xử lý {importSummary.processedRows ?? importSummary.totalRows} / {importSummary.totalRows || '...'} dòng: thành công {importSummary.imported}, lỗi {importSummary.failed}.
-                      </div>
-                    )}
-                    {importErrors.length > 0 && (
-                      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-2">
-                        <p className="text-sm font-medium text-destructive">Chi tiết lỗi:</p>
-                        <ul className="text-sm text-destructive space-y-1 max-h-40 overflow-y-auto">
-                          {importErrors.slice(0, 5).map((error, index) => (
-                            <li key={`${error.row ?? 'unknown'}-${error.code ?? 'no-code'}-${index}`}>
-                              Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
-                            </li>
-                          ))}
-                        </ul>
-                        {importErrors.length > 5 && (
-                          <p className="text-xs text-destructive/80">
-                            Hiển thị 5 lỗi đầu tiên. Vui lòng kiểm tra lịch sử để xem đầy đủ.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleImportDialogToggle(false)}
-                        disabled={isImporting}
-                      >
-                        Đóng
-                      </Button>
-                      <Button 
-                        onClick={handleImportProducts}
-                        disabled={isImportActionDisabled}
-                      >
-                        {isImporting ? 'Đang tải lên...' : isJobActive ? 'Đang xử lý...' : 'Bắt đầu Import'}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
             </div>
           </div>
         </div>
-        {canManageProducts && (
-          <Card className="mb-6">
-            <CardHeader className="pb-2">
-              <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
-                  <TabsTrigger value="history">Lịch sử ({jobHistoryPagination?.total || completedJobs.length})</TabsTrigger>
-                </TabsList>
-                <TabsContent value="running" className="mt-4 space-y-3">
-                  {runningJobs.length === 0 ? (
-                    console.log('No running jobs'),
-                    <p className="text-sm text-muted-foreground">
-                      Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
-                    </p>
-                  ) : (
-                    console.log('Running jobs:', runningJobs),
-                    runningJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        onClick={() => handleJobCardSelect(job.jobId)}
-                        className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
-                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-sm font-medium">
-                           <span>Job #{job.jobId.slice(-6)}</span>
-                           <div className="flex items-center gap-2">
-                             <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
-                             {(job.status === 'queued' || job.status === 'processing') && (
-                               <Button
-                                 variant="ghost"
-                                 size="sm"
-                                 onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCancelJob(job.jobId);
-                                }}
-                                disabled={cancellingJobId === job.jobId}
-                              >
-                                {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        <Progress value={job.percent ?? 0} />
-                        <div className="text-xs text-muted-foreground">
-                          Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
-                        </div>
-                        {job.errors && job.errors.length > 0 && (
-                          <div className="text-xs text-destructive space-y-1">
-                            {job.errors.slice(-2).map((error, index) => (
-                              <div key={`${job.jobId}-err-${index}`}>
-                                Dòng {error.row ?? 'N/A'}: {error.reason}
-                              </div>
-                            ))}
-                            {job.errors.length > 2 && (
-                              <div className="text-[10px] text-destructive/80">
-                                ... và {job.errors.length - 2} lỗi khác
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </TabsContent>
-                <TabsContent value="history" className="mt-4 space-y-3">
-                  {/* Job History Controls */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Sắp xếp:</span>
-                      <Select value={jobHistorySort} onValueChange={(value: 'newest' | 'oldest') => {
-                        setJobHistorySort(value);
-                        setJobHistoryPage(1); // Reset to first page when sorting changes
-                        onRefreshImportJobs({
-                          onlyActive: false,
-                          sortBy: 'createdAt',
-                          sortOrder: value === 'newest' ? 'DESC' : 'ASC',
-                          page: 1,
-                          limit: jobHistoryItemsPerPage
-                        });
-                      }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Chọn sắp xếp" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="newest">Mới nhất</SelectItem>
-                          <SelectItem value="oldest">Cũ nhất</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Hiển thị:</span>
-                      <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
-                          const newLimit = parseInt(value);
-                          setJobHistoryItemsPerPage(newLimit);
-                          setJobHistoryPage(1); // Reset to first page when limit changes
-                          onRefreshImportJobs({
-                            onlyActive: false,
-                            sortBy: 'createdAt',
-                            sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                            page: 1,
-                            limit: newLimit
-                          });
-                      }}>
-                        <SelectTrigger className="w-20">
-                          <SelectValue placeholder="Số lượng" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="3">3</SelectItem>
-                          <SelectItem value="5">5</SelectItem>
-                          <SelectItem value="10">10</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  {completedJobs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
-                  ) : (
-                    <>
-                      {/* Job History Items */}
-                      <div className="space-y-3">
-                        {completedJobs.map((job) => (
-                          <div
-                            key={job.jobId}
-                            onClick={() => handleJobCardSelect(job.jobId)}
-                            className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
-                              activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>Job #{job.jobId.slice(-6)}</span>
-                              <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
-                                {getJobStatusLabel(job)}
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
-                              {job.startedAt && (
-                                <span className="ml-2">
-                                  · {new Date(job.startedAt).toLocaleString('vi-VN')}
-                                </span>
-                              )}
-                            </div>
-                            {job.errors && job.errors.length > 0 && (
-                              <div className="space-y-1">
-                                <div
-                                  className="flex items-center gap-1 text-xs text-destructive cursor-pointer hover:text-destructive/80"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleJobErrors(job.jobId);
-                                  }}
-                                >
-                                  {expandedJobErrors.has(job.jobId) ? (
-                                    <ChevronDown className="w-3 h-3" />
-                                  ) : (
-                                    <ChevronRight className="w-3 h-3" />
-                                  )}
-                                  {job.errors.length} lỗi
-                                </div>
-                                {expandedJobErrors.has(job.jobId) && (
-                                  <div className="ml-4 space-y-1 text-xs text-destructive/90">
-                                    {job.errors.map((error, index) => (
-                                      <div key={`${job.jobId}-error-${index}`}>
-                                        Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      {/* Job History Pagination */}
-                      {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
-                        <div className="flex items-center justify-center pt-4 border-t">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const newPage = Math.max(1, jobHistoryPage - 1);
-                                setJobHistoryPage(newPage);
-                                onRefreshImportJobs({
-                                  onlyActive: false,
-                                  sortBy: 'createdAt',
-                                  sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                  page: newPage,
-                                  limit: jobHistoryItemsPerPage
-                                });
-                              }}
-                              disabled={jobHistoryPage === 1}
-                            >
-                              Trước
-                            </Button>
-                            <span className="text-sm text-muted-foreground">
-                              Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const newPage = jobHistoryPage + 1;
-                                setJobHistoryPage(newPage);
-                                onRefreshImportJobs({
-                                  onlyActive: false,
-                                  sortBy: 'createdAt',
-                                  sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                  page: newPage,
-                                  limit: jobHistoryItemsPerPage
-                                });
-                              }}
-                              disabled={jobHistoryPage >= jobHistoryPagination.totalPages}
-                            >
-                              Sau
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
         {/* Edit Product Dialog */}
         {canManageProducts && (
           <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>

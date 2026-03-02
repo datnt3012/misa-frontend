@@ -552,150 +552,149 @@ const RolePermissionsManager: React.FC<RolePermissionsManagerProps> = ({ onRoleU
       loadingMessage="Đang tải dữ liệu quản lý quyền vai trò..."
     >
       <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Quản lý quyền vai trò</h2>
-          <p className="text-muted-foreground">Tùy chỉnh quyền truy cập cho từng vai trò trong hệ thống</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Tạo vai trò mới
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Tạo vai trò mới</DialogTitle>
-              <DialogDescription>
-                Tạo vai trò mới và cấu hình quyền truy cập
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="role-name">Tên vai trò <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="role-name"
-                    value={newRole.name}
-                    onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Nhập tên vai trò"
-                    minLength={2}
-                    maxLength={100}
-                  />
-                  {newRole.name && (
-                    <p className="text-sm text-muted-foreground">
-                      Mã vai trò sẽ là: <code className="bg-muted px-1 rounded">
-                        {newRole.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}
-                      </code>
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="role-description">Mô tả</Label>
-                  <Input
-                    id="role-description"
-                    value={newRole.description}
-                    onChange={(e) => setNewRole(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Mô tả vai trò"
-                  />
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <Label className="text-base font-medium">Quyền truy cập</Label>
-                <div className="space-y-4 mt-4">
-                  {Object.entries(getPermissionCategories()).map(([category, categoryPermissions]) => (
-                    <Card key={category}>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            {React.createElement(getResourceIcon(category), { className: "w-4 h-4" })}
-                            {getModuleDisplayName(category)}
-                          </CardTitle>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => selectAllPermissions(category)}
-                            >
-                              Chọn tất cả
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => deselectAllPermissions(category)}
-                            >
-                              Bỏ chọn tất cả
-                            </Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="grid grid-cols-2 gap-3">
-                          {categoryPermissions
-                            .sort((a, b) => {
-                              // Sort by permission type: VIEW, READ, MANAGE, etc.
-                              const getPermissionOrder = (code: string) => {
-                                if (code.includes('_VIEW')) return 1;
-                                if (code.includes('_READ')) return 2;
-                                if (code.includes('_MANAGE')) return 3;
-                                if (code.includes('_CREATE')) return 4;
-                                if (code.includes('_UPDATE')) return 5;
-                                if (code.includes('_DELETE')) return 6;
-                                if (code.includes('_APPROVE')) return 7;
-                                if (code.includes('_EXPORT')) return 8;
-                                return 9;
-                              };
-                              const orderA = getPermissionOrder(a.code);
-                              const orderB = getPermissionOrder(b.code);
-                              if (orderA !== orderB) {
-                                return orderA - orderB;
-                              }
-                              // If same order, sort by name
-                              return a.name.localeCompare(b.name);
-                            })
-                            .map((permission) => {
-                              const frontendKey = convertBackendToFrontend(permission);
-                              return (
-                                <div key={permission.id} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`new-${permission.id}`}
-                                    checked={newRole.permissions.includes(frontendKey)}
-                                    onCheckedChange={() => togglePermission(frontendKey)}
-                                  />
-                                  <Label htmlFor={`new-${permission.id}`} className="text-sm">
-                                    {permission.name}
-                                  </Label>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                Hủy
-              </Button>
-              <Button onClick={handleCreateRole} disabled={loading}>
-                {loading ? "Đang tạo..." : "Tạo vai trò"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
       {/* Roles List */}
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách vai trò</CardTitle>
-          <CardDescription>
-            Quản lý và cấu hình quyền cho các vai trò trong hệ thống
-          </CardDescription>
+          <CardTitle>
+            <div className="grid grid-cols-2 gap-4 md:flex md:items-center md:justify-between">
+              <div>
+                Danh sách vai trò
+              </div>
+              {/* Header */}
+              <div className="flex items-center justify-end">
+                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Tạo vai trò mới
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Tạo vai trò mới</DialogTitle>
+                      <DialogDescription>
+                        Tạo vai trò mới và cấu hình quyền truy cập
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="role-name">Tên vai trò <span className="text-red-500">*</span></Label>
+                          <Input
+                            id="role-name"
+                            value={newRole.name}
+                            onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Nhập tên vai trò"
+                            minLength={2}
+                            maxLength={100}
+                          />
+                          {newRole.name && (
+                            <p className="text-sm text-muted-foreground">
+                              Mã vai trò sẽ là: <code className="bg-muted px-1 rounded">
+                                {newRole.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}
+                              </code>
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="role-description">Mô tả</Label>
+                          <Input
+                            id="role-description"
+                            value={newRole.description}
+                            onChange={(e) => setNewRole(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Mô tả vai trò"
+                          />
+                        </div>
+                      </div>
+                      <Separator />
+                      <div>
+                        <Label className="text-base font-medium">Quyền truy cập</Label>
+                        <div className="space-y-4 mt-4">
+                          {Object.entries(getPermissionCategories()).map(([category, categoryPermissions]) => (
+                            <Card key={category}>
+                              <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    {React.createElement(getResourceIcon(category), { className: "w-4 h-4" })}
+                                    {getModuleDisplayName(category)}
+                                  </CardTitle>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => selectAllPermissions(category)}
+                                    >
+                                      Chọn tất cả
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => deselectAllPermissions(category)}
+                                    >
+                                      Bỏ chọn tất cả
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="pt-0">
+                                <div className="grid grid-cols-2 gap-3">
+                                  {categoryPermissions
+                                    .sort((a, b) => {
+                                      // Sort by permission type: VIEW, READ, MANAGE, etc.
+                                      const getPermissionOrder = (code: string) => {
+                                        if (code.includes('_VIEW')) return 1;
+                                        if (code.includes('_READ')) return 2;
+                                        if (code.includes('_MANAGE')) return 3;
+                                        if (code.includes('_CREATE')) return 4;
+                                        if (code.includes('_UPDATE')) return 5;
+                                        if (code.includes('_DELETE')) return 6;
+                                        if (code.includes('_APPROVE')) return 7;
+                                        if (code.includes('_EXPORT')) return 8;
+                                        return 9;
+                                      };
+                                      const orderA = getPermissionOrder(a.code);
+                                      const orderB = getPermissionOrder(b.code);
+                                      if (orderA !== orderB) {
+                                        return orderA - orderB;
+                                      }
+                                      // If same order, sort by name
+                                      return a.name.localeCompare(b.name);
+                                    })
+                                    .map((permission) => {
+                                      const frontendKey = convertBackendToFrontend(permission);
+                                      return (
+                                        <div key={permission.id} className="flex items-center space-x-2">
+                                          <Checkbox
+                                            id={`new-${permission.id}`}
+                                            checked={newRole.permissions.includes(frontendKey)}
+                                            onCheckedChange={() => togglePermission(frontendKey)}
+                                          />
+                                          <Label htmlFor={`new-${permission.id}`} className="text-sm">
+                                            {permission.name}
+                                          </Label>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                        Hủy
+                      </Button>
+                      <Button onClick={handleCreateRole} disabled={loading}>
+                        {loading ? "Đang tạo..." : "Tạo vai trò"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

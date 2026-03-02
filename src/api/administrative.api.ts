@@ -16,6 +16,15 @@ export interface AdministrativeUnit {
   deletedAt?: string;
 }
 
+// Get administrative version from environment
+const getAdministrativeVersion = (): number => {
+  const version = import.meta.env.VITE_ADMINISTRATIVE_VERSION;
+  if (version === '2') {
+    return 2;
+  }
+  return 1; // Default to version 1
+};
+
 export interface CreateAdministrativeUnitRequest {
   name: string;
   code: string;
@@ -48,6 +57,7 @@ export const administrativeApi = {
     isDeleted?: boolean;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
+    version?: number; // 1 or 2 for administrative API version
   }): Promise<{ administrativeUnits: AdministrativeUnit[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
@@ -63,6 +73,10 @@ export const administrativeApi = {
     if (params?.isDeleted !== undefined) queryParams.append('isDeleted', params.isDeleted.toString());
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    
+    // Add version parameter - use provided version or fall back to env config
+    const version = params?.version ?? getAdministrativeVersion();
+    if (version) queryParams.append('version', version.toString());
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ADMINISTRATIVE?.LIST || '/administrative'}?${queryParams.toString()}`

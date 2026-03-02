@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronDown } from 'lucide-react';
+import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronsUpDown, ChevronDown, ChevronUp, Filter, RotateCw, Loader } from 'lucide-react';
 import * as XLSX from 'xlsx';
 // // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
 import { useAuth } from '@/hooks/useAuth';
@@ -30,7 +30,9 @@ import { supplierApi, Supplier } from '@/api/supplier.api';
 import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
 import { generateImportSlipCode } from '@/utils/importSlipUtils';
-import { stockLevelsApi } from '@/api/stockLevels.api';
+import { categoriesApi } from '@/api/categories.api';
+import { MultiSelect } from '../ui/multi-select';
+
 interface ImportSlip {
   id: string;
   slip_number: string;
@@ -39,11 +41,11 @@ interface ImportSlip {
   total_amount: number;
   status: string;
   notes: string;
-  import_date: string;
   created_at: string;
-  approved_at: string;
-  approved_by: string;
+  completed_at: string;
+  updated_at: string;
   created_by: string;
+  approved_by: string;
   warehouse_id: string;
   warehouses?: {
     name: string;
@@ -89,15 +91,10 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<string>('created_at');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [total, setTotal] = useState<number>(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState<ImportSlip | null>(null);
   const [slipItems, setSlipItems] = useState<ImportSlipItem[]>([]);
@@ -156,6 +153,24 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const previousJobStatusesRef = React.useRef<Record<string, WarehouseReceiptImportJobStatus>>({});
   const [isPollingActive, setIsPollingActive] = useState(false);
   const { toast } = useToast();
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [completedStartDate, setCompletedStartDate] = useState<string>('');
+  const [completedEndDate, setCompletedEndDate] = useState<string>('');
+  const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [manufacturerFilter, setManufacturerFilter] = useState("all");
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [total, setTotal] = useState<number>(0);
+
   const getWarehouseById = (id?: string) => {
     if (!id) return undefined;
     return warehouses.find(w => w.id === id);
@@ -174,6 +189,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     loadProducts();
     loadSuppliers();
     loadWarehouses();
+    fetchCategories();
+    fetchManufacturers();
     // Load active jobs on mount
     refreshImportJobs({ onlyActive: true });
     // Load job history on mount
@@ -184,7 +201,20 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, [displayLimit, currentPage, debouncedSearchTerm, sortField, sortDirection]);
+  }, [displayLimit, 
+    currentPage, 
+    debouncedSearchTerm,
+    startDate,
+    endDate,
+    completedStartDate,
+    completedEndDate,
+    warehouseFilter,
+    statusFilter,
+    categoryFilter,
+    manufacturerFilter,
+    sortField, 
+    sortDirection,
+  ]);
   
   // Load job history when tab is activated or parameters change
   useEffect(() => {
@@ -232,31 +262,63 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     }
   }, [showCreateDialog]);
 
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setWarehouseFilter("all");
+    setStatusFilter([]);
+    setCategoryFilter("all");
+    setManufacturerFilter("all");
+    setFiltersCollapsed(false);
+    setCurrentPage(1);
+    setSortDirection('desc');
+    setSortField('createdAt');
+    setCompletedStartDate('');
+    setCompletedEndDate('');
+  };
+
   const loadImportSlips = async () => {
     try {
       setLoading(true);
-      const resp = await warehouseReceiptsApi.getReceipts({ 
+      const params: any = { 
         page: currentPage, 
         limit: displayLimit, 
         type: 'import',
         search: debouncedSearchTerm || undefined
-      });
+      }
+      if(sortField) {params.sortBy = sortField;}
+      if(sortDirection) {params.sortOrder = sortDirection;}
+      if(debouncedSearchTerm) {params.search = debouncedSearchTerm;}
+      if(startDate) {params.startDate = startDate;}
+      if(endDate) {params.endDate = endDate;}
+      if(completedStartDate) {params.completedStartDate = completedStartDate;}
+      if(completedEndDate) {params.completedEndDate = completedEndDate;}
+      if(warehouseFilter != 'all') {params.warehouseId = warehouseFilter;}
+      if(statusFilter) {params.status = statusFilter;}
+      if(categoryFilter != 'all') {params.categories = categoryFilter;}
+      if(manufacturerFilter != 'all') {params.manufacturers = manufacturerFilter;}
+      const resp = await warehouseReceiptsApi.getReceipts(params);
       const list = (resp.receipts || []).map((r: any) => ({
         id: r.id,
         slip_number: r.code,
-        supplier_name: r.supplier_name || '',
-        supplier_contact: r.supplier_contact || '',
-        total_amount: r.total_amount || 0,
+        supplier_name: r.supplier_name,
+        supplier_contact: r.supplier_contact,
+        total_amount: r.total_amount,
         status: r.status,
-        notes: r.description || '',
-        import_date: r.created_at,
+        notes: r.notes,
         created_at: r.created_at,
-        approved_at: r.approved_at || '',
-        approved_by: '',
-        created_by: '',
+        completed_at: r.completed_at,
+        updated_at: r.updated_at,
+        created_by: r.created_by,
+        approved_by: r.approved_by,
         warehouse_id: r.warehouse_id,
-        warehouses: undefined,
-      }));
+        warehouses: {
+          name: r.warehouses?.name,
+          code: r.warehouses?.code,
+        }
+    }));
       setImportSlips(list);
       // Update pagination state
       setTotal(resp.total || 0);
@@ -291,6 +353,24 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       const resp = await warehouseApi.getWarehouses({ page: 1, limit: 1000 });
       setWarehouses(resp.warehouses || []);
     } catch (error) {
+    }
+  };
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesApi.getCategories({ page: 1, limit: 1000 });
+      // Filter out deleted categories
+      const activeCategories = response.categories.filter(cat => cat.isActive);
+      setCategories(activeCategories);
+    } catch (error) {
+    }
+  };
+  const fetchManufacturers = async () => {
+    try {
+      const data = await productApi.getManufacturers();
+      setManufacturers(data || []);
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+      setManufacturers([]);
     }
   };
   const createOrSelectSupplier = async (supplierName: string, supplierContact: string, supplierEmail?: string, supplierAddress?: string) => {
@@ -570,40 +650,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       return `${amount.toLocaleString('vi-VN')}`;
     }
   };
-  // Sort import slips (client-side sorting since API doesn't support it yet, but filtering is done by API via search parameter)
-  const filteredAndSortedSlips = importSlips.sort((a, b) => {
-      let aValue: any, bValue: any;
-      switch (sortField) {
-        case 'slip_number':
-          aValue = a.slip_number;
-          bValue = b.slip_number;
-          break;
-        case 'supplier_name':
-          aValue = a.supplier_name;
-          bValue = b.supplier_name;
-          break;
-        case 'total_amount':
-          aValue = a.total_amount || 0;
-          bValue = b.total_amount || 0;
-          break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        case 'created_at':
-        default:
-          aValue = new Date(a.created_at);
-          bValue = new Date(b.created_at);
-          break;
-      }
-      if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = bValue.toLowerCase();
-      }
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -614,8 +661,12 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     setCurrentPage(1); // Reset to first page when sorting changes
   };
   const getSortIcon = (field: string) => {
-    if (sortField !== field) return null;
-    return sortDirection === 'asc' ? '↑' : '↓';
+    if (sortField !== field) {
+      return <ChevronsUpDown className="w-4 h-4 text-gray-400" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="w-4 h-4 text-gray-600" />
+      : <ChevronDown className="w-4 h-4 text-gray-600" />;
   };
   const downloadImportTemplate = async () => {
     try {
@@ -667,8 +718,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       // Chuyển sang tab "Đang chạy" để user có thể thấy job
       setJobStatusTab('running');
       
-      // Close dialog và reset form
-      setIsImportDialogOpen(false);
+      //reset form
+      // setIsImportDialogOpen(false);
       setImportFile(null);
       setImportErrors([]);
       setImportSummary(null);
@@ -1004,7 +1055,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         'Nhà cung cấp': slip.supplier_name,
         'Liên hệ': slip.supplier_contact || '',
         'Kho nhập': warehouse?.name || 'N/A',
-        'Ngày nhập': slip.import_date ? format(new Date(slip.import_date), 'dd/MM/yyyy') : '',
+        'Ngày nhập': slip.completed_at ? format(new Date(slip.completed_at), 'dd/MM/yyyy') : '',
         'Tổng tiền (VND)': slip.total_amount,
         'Trạng thái': statusText,
         'Ngày tạo': slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : '',
@@ -1042,12 +1093,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     });
   };
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-         <div className="mt-6 ml-7">
-           <h1 className="text-3xl font-bold">Quản lý phiếu nhập kho</h1>
-           <p className="mt-1 text-sm text-muted-foreground">Quản lý các phiếu nhập kho và phê duyệt</p>
-         </div>
+    <div className="space-y-4 mt-4">
+      <div className="flex justify-end items-center">
          <Dialog open={showCreateDialog} onOpenChange={(open) => {
            setShowCreateDialog(open);
            if (open) {
@@ -1060,15 +1107,6 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
              }, 100);
            }
          }}>
-           <DialogTrigger asChild>
-             <Button onClick={() => {
-               openDialog('create');
-               setShowCreateDialog(true);
-             }}>
-               <PlusCircle className="w-4 h-4 mr-2" />
-               Tạo phiếu nhập
-             </Button>
-           </DialogTrigger>
             <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Tạo phiếu nhập kho mới</DialogTitle>
@@ -1096,7 +1134,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             const supplier = suppliers.find(s => s?.id === value);
                             setNewSlip({
                               ...newSlip,
-                              supplier_id: value,
+                              supplier_id: value as string,
                               supplier_name: supplier?.name || '',
                               supplier_contact: supplier?.contact_phone || '',
                               supplier_email: supplier?.email || '',
@@ -1251,7 +1289,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                             value: warehouse.id
                           }))}
                           value={newSlip.warehouse_id}
-                          onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value})}
+                          onValueChange={(value) => setNewSlip({...newSlip, warehouse_id: value as string})}
                           placeholder="Chọn kho nhập"
                           searchPlaceholder="Tìm kho..."
                           emptyMessage="Không có kho nào"
@@ -1292,7 +1330,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               if (selectedProduct.isForeignCurrency && selectedProduct.exchangeRate) {
                                 setNewItem({
                                   ...newItem,
-                                  product_id: value,
+                                  product_id: value as string,
                                   unit_price: selectedProduct.originalCostPrice || (selectedProduct.costPrice ? selectedProduct.costPrice / selectedProduct.exchangeRate : 0),
                                   isForeignCurrency: true,
                                   exchangeRate: selectedProduct.exchangeRate
@@ -1301,7 +1339,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                                 // Regular product without foreign currency
                                 setNewItem({
                                   ...newItem,
-                                  product_id: value,
+                                  product_id: value as string,
                                   unit_price: selectedProduct.costPrice || selectedProduct.unit_price || 0,
                                   isForeignCurrency: false,
                                   exchangeRate: 1
@@ -1439,341 +1477,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
             </DialogContent>
           </Dialog>
       </div>
-      {/* Import Job History Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
-              <TabsTrigger value="history">Lịch sử ({jobHistoryPagination?.total || completedJobs.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="running" className="mt-4 space-y-3">
-              {runningJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
-                </p>
-              ) : (
-                runningJobs.map((job) => (
-                  <div
-                    key={job.jobId}
-                    onClick={() => handleJobCardSelect(job.jobId)}
-                    className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
-                      activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-sm font-medium">
-                      <span>Job #{job.jobId.slice(-6)}</span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
-                        {(job.status === 'queued' || job.status === 'processing') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCancelJob(job.jobId);
-                            }}
-                            disabled={cancellingJobId === job.jobId}
-                          >
-                            {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <Progress value={job.percent ?? 0} />
-                    <div className="text-xs text-muted-foreground">
-                      Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
-                    </div>
-                    {job.errors && job.errors.length > 0 && (
-                      <div className="text-xs text-destructive space-y-1">
-                        {job.errors.slice(-2).map((error, index) => (
-                          <div key={`${job.jobId}-err-${index}`}>
-                            Dòng {error.row ?? 'N/A'}: {error.reason}
-                          </div>
-                        ))}
-                        {job.errors.length > 2 && (
-                          <div className="text-[10px] text-destructive/80">
-                            ... và {job.errors.length - 2} lỗi khác
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </TabsContent>
-            <TabsContent value="history" className="mt-4 space-y-3">
-              {/* Job History Controls */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-sm font-medium whitespace-nowrap">Sắp xếp:</span>
-                  <Select value={jobHistorySort} onValueChange={(value: 'newest' | 'oldest') => {
-                    setJobHistorySort(value);
-                    setJobHistoryPage(1);
-                    refreshImportJobs({
-                      onlyActive: false,
-                      sortBy: 'createdAt',
-                      sortOrder: value === 'newest' ? 'DESC' : 'ASC',
-                      page: 1,
-                      limit: jobHistoryItemsPerPage
-                    });
-                  }}>
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="Chọn sắp xếp" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">Mới nhất</SelectItem>
-                      <SelectItem value="oldest">Cũ nhất</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-sm font-medium whitespace-nowrap">Hiển thị:</span>
-                  <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
-                    const newLimit = parseInt(value);
-                    setJobHistoryItemsPerPage(newLimit);
-                    setJobHistoryPage(1);
-                    refreshImportJobs({
-                      onlyActive: false,
-                      sortBy: 'createdAt',
-                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                      page: 1,
-                      limit: newLimit
-                    });
-                  }}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue placeholder="Số lượng" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {completedJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
-              ) : (
-                <>
-                  {/* Job History Items */}
-                  <div className="space-y-3">
-                    {completedJobs.map((job) => (
-                      <div
-                        key={job.jobId}
-                        onClick={() => handleJobCardSelect(job.jobId)}
-                        className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
-                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>Job #{job.jobId.slice(-6)}</span>
-                          <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
-                            {getJobStatusLabel(job)}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
-                          {job.createdAt && (
-                            <span className="ml-2">
-                              · {new Date(job.createdAt).toLocaleString('vi-VN')}
-                            </span>
-                          )}
-                        </div>
-                        {job.errors && job.errors.length > 0 && (
-                          <div className="space-y-1">
-                            <div
-                              className="flex items-center gap-1 text-xs text-destructive cursor-pointer hover:text-destructive/80"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleJobErrors(job.jobId);
-                              }}
-                            >
-                              {expandedJobErrors.has(job.jobId) ? (
-                                <ChevronDown className="w-3 h-3" />
-                              ) : (
-                                <ChevronRight className="w-3 h-3" />
-                              )}
-                              {job.errors.length} lỗi
-                            </div>
-                            {expandedJobErrors.has(job.jobId) && (
-                              <div className="ml-4 space-y-1 text-xs text-destructive/90">
-                                {job.errors.map((error, index) => (
-                                  <div key={`${job.jobId}-error-${index}`}>
-                                    Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Job History Pagination */}
-                  {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
-                    <div className="flex flex-col items-center pt-4 border-t">
-                      <div className="text-sm text-muted-foreground mb-4">
-                        Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
-                      </div>
-                      <Pagination>
-                        <PaginationContent>
-                          <PaginationItem>
-                            <PaginationPrevious 
-                              href="#" 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (jobHistoryPage > 1) {
-                                  const newPage = jobHistoryPage - 1;
-                                  setJobHistoryPage(newPage);
-                                  refreshImportJobs({
-                                    onlyActive: false,
-                                    sortBy: 'createdAt',
-                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                    page: newPage,
-                                    limit: jobHistoryItemsPerPage
-                                  });
-                                }
-                              }}
-                              className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
-                            />
-                          </PaginationItem>
-                          {/* Show first page */}
-                          {jobHistoryPage > 3 && (
-                            <>
-                              <PaginationItem>
-                                <PaginationLink 
-                                  href="#" 
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setJobHistoryPage(1);
-                                    refreshImportJobs({
-                                      onlyActive: false,
-                                      sortBy: 'createdAt',
-                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                      page: 1,
-                                      limit: jobHistoryItemsPerPage
-                                    });
-                                  }}
-                                >
-                                  1
-                                </PaginationLink>
-                              </PaginationItem>
-                              {jobHistoryPage > 4 && (
-                                <PaginationItem>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              )}
-                            </>
-                          )}
-                          {/* Show pages around current page */}
-                          {Array.from({ length: Math.min(5, jobHistoryPagination.totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (jobHistoryPagination.totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (jobHistoryPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (jobHistoryPage >= jobHistoryPagination.totalPages - 2) {
-                              pageNum = jobHistoryPagination.totalPages - 4 + i;
-                            } else {
-                              pageNum = jobHistoryPage - 2 + i;
-                            }
-                            if (pageNum < 1 || pageNum > jobHistoryPagination.totalPages) return null;
-                            return (
-                              <PaginationItem key={pageNum}>
-                                <PaginationLink 
-                                  href="#" 
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setJobHistoryPage(pageNum);
-                                    refreshImportJobs({
-                                      onlyActive: false,
-                                      sortBy: 'createdAt',
-                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                      page: pageNum,
-                                      limit: jobHistoryItemsPerPage
-                                    });
-                                  }}
-                                  isActive={jobHistoryPage === pageNum}
-                                >
-                                  {pageNum}
-                                </PaginationLink>
-                              </PaginationItem>
-                            );
-                          })}
-                          {/* Show last page */}
-                          {jobHistoryPage < jobHistoryPagination.totalPages - 2 && (
-                            <>
-                              {jobHistoryPage < jobHistoryPagination.totalPages - 3 && (
-                                <PaginationItem>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              )}
-                              <PaginationItem>
-                                <PaginationLink 
-                                  href="#" 
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setJobHistoryPage(jobHistoryPagination.totalPages);
-                                    refreshImportJobs({
-                                      onlyActive: false,
-                                      sortBy: 'createdAt',
-                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                      page: jobHistoryPagination.totalPages,
-                                      limit: jobHistoryItemsPerPage
-                                    });
-                                  }}
-                                >
-                                  {jobHistoryPagination.totalPages}
-                                </PaginationLink>
-                              </PaginationItem>
-                            </>
-                          )}
-                          <PaginationItem>
-                            <PaginationNext 
-                              href="#" 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (jobHistoryPage < jobHistoryPagination.totalPages) {
-                                  const newPage = jobHistoryPage + 1;
-                                  setJobHistoryPage(newPage);
-                                  refreshImportJobs({
-                                    onlyActive: false,
-                                    sortBy: 'createdAt',
-                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
-                                    page: newPage,
-                                    limit: jobHistoryItemsPerPage
-                                  });
-                                }
-                              }}
-                              className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
-                            />
-                          </PaginationItem>
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
-                  )}
-                </>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
       <Card className="shadow-sm">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Danh Sách Phiếu Nhập Kho
-              </CardTitle>
-              <CardDescription>
-                Tất cả phiếu nhập kho trong hệ thống
-              </CardDescription>
-            </div>
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-2">
               {canManageImports && (
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
@@ -1783,7 +1489,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                       Nhập từ Excel
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px]">
+                  <DialogContent className="sm:max-w-[1200px]">
                     <DialogHeader>
                       <DialogTitle>Nhập Phiếu Nhập Kho Từ Excel</DialogTitle>
                       <DialogDescription>
@@ -1852,6 +1558,331 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         </Alert>
                       )}
                     </div>
+                    <div>
+                      {/* Import Job History Card */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Tiến Trình nhập từ Excel</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <Tabs value={jobStatusTab} onValueChange={(value) => setJobStatusTab(value as 'running' | 'history')}>
+                            <TabsList className="grid w-full grid-cols-2">
+                              <TabsTrigger value="running">Đang chạy ({runningJobs.length})</TabsTrigger>
+                              <TabsTrigger value="history">Lịch sử ({jobHistoryPagination?.total || completedJobs.length})</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="running" className="mt-4 space-y-3">
+                              {runningJobs.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                  Không có tiến trình nhập nào đang chạy. Bạn có thể bắt đầu nhập bằng nút "Nhập từ Excel".
+                                </p>
+                              ) : (
+                                runningJobs.map((job) => (
+                                  <div
+                                    key={job.jobId}
+                                    onClick={() => handleJobCardSelect(job.jobId)}
+                                    className={`rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 cursor-pointer transition ${
+                                      activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between text-sm font-medium">
+                                      <span>Job #{job.jobId.slice(-6)}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="secondary">{getJobStatusLabel(job)}</Badge>
+                                        {(job.status === 'queued' || job.status === 'processing') && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCancelJob(job.jobId);
+                                            }}
+                                            disabled={cancellingJobId === job.jobId}
+                                          >
+                                            {cancellingJobId === job.jobId ? 'Đang hủy...' : 'Hủy'}
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Progress value={job.percent ?? 0} />
+                                    <div className="text-xs text-muted-foreground">
+                                      Đã xử lý {job.processedRows ?? 0}/{job.totalRows || '...'} dòng · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                                    </div>
+                                    {job.errors && job.errors.length > 0 && (
+                                      <div className="text-xs text-destructive space-y-1">
+                                        {job.errors.slice(-2).map((error, index) => (
+                                          <div key={`${job.jobId}-err-${index}`}>
+                                            Dòng {error.row ?? 'N/A'}: {error.reason}
+                                          </div>
+                                        ))}
+                                        {job.errors.length > 2 && (
+                                          <div className="text-[10px] text-destructive/80">
+                                            ... và {job.errors.length - 2} lỗi khác
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </TabsContent>
+                            <TabsContent value="history" className="mt-4 space-y-3">
+                              {/* Job History Controls */}
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  <span className="text-sm font-medium whitespace-nowrap">Sắp xếp:</span>
+                                  <Select value={jobHistorySort} onValueChange={(value: 'newest' | 'oldest') => {
+                                    setJobHistorySort(value);
+                                    setJobHistoryPage(1);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: value === 'newest' ? 'DESC' : 'ASC',
+                                      page: 1,
+                                      limit: jobHistoryItemsPerPage
+                                    });
+                                  }}>
+                                    <SelectTrigger className="w-[140px]">
+                                      <SelectValue placeholder="Chọn sắp xếp" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="newest">Mới nhất</SelectItem>
+                                      <SelectItem value="oldest">Cũ nhất</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  <span className="text-sm font-medium whitespace-nowrap">Hiển thị:</span>
+                                  <Select value={jobHistoryItemsPerPage.toString()} onValueChange={(value) => {
+                                    const newLimit = parseInt(value);
+                                    setJobHistoryItemsPerPage(newLimit);
+                                    setJobHistoryPage(1);
+                                    refreshImportJobs({
+                                      onlyActive: false,
+                                      sortBy: 'createdAt',
+                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                      page: 1,
+                                      limit: newLimit
+                                    });
+                                  }}>
+                                    <SelectTrigger className="w-20">
+                                      <SelectValue placeholder="Số lượng" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="3">3</SelectItem>
+                                      <SelectItem value="5">5</SelectItem>
+                                      <SelectItem value="10">10</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              {completedJobs.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Chưa có lịch sử nhập.</p>
+                              ) : (
+                                <>
+                                  {/* Job History Items */}
+                                  <div className="space-y-3">
+                                    {completedJobs.map((job) => (
+                                      <div
+                                        key={job.jobId}
+                                        onClick={() => handleJobCardSelect(job.jobId)}
+                                        className={`rounded-md border border-border/60 p-3 space-y-1 text-sm cursor-pointer ${
+                                          activeJobId === job.jobId ? 'border-primary shadow-sm' : ''
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span>Job #{job.jobId.slice(-6)}</span>
+                                          <Badge variant={job.status === 'completed' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>
+                                            {getJobStatusLabel(job)}
+                                          </Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Tổng: {job.totalRows ?? 0} · Thành công {job.imported ?? 0} · Lỗi {job.failed ?? 0}
+                                          {job.createdAt && (
+                                            <span className="ml-2">
+                                              · {new Date(job.createdAt).toLocaleString('vi-VN')}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {job.errors && job.errors.length > 0 && (
+                                          <div className="space-y-1">
+                                            <div
+                                              className="flex items-center gap-1 text-xs text-destructive cursor-pointer hover:text-destructive/80"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleJobErrors(job.jobId);
+                                              }}
+                                            >
+                                              {expandedJobErrors.has(job.jobId) ? (
+                                                <ChevronDown className="w-3 h-3" />
+                                              ) : (
+                                                <ChevronRight className="w-3 h-3" />
+                                              )}
+                                              {job.errors.length} lỗi
+                                            </div>
+                                            {expandedJobErrors.has(job.jobId) && (
+                                              <div className="ml-4 space-y-1 text-xs text-destructive/90">
+                                                {job.errors.map((error, index) => (
+                                                  <div key={`${job.jobId}-error-${index}`}>
+                                                    Dòng {error.row ?? 'N/A'}{error.code ? ` (Mã: ${error.code})` : ''}: {error.reason}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* Job History Pagination */}
+                                  {jobHistoryPagination && jobHistoryPagination.totalPages > 1 && (
+                                    <div className="flex flex-col items-center pt-4 border-t">
+                                      <div className="text-sm text-muted-foreground mb-4">
+                                        Trang {jobHistoryPage} / {jobHistoryPagination.totalPages}
+                                      </div>
+                                      <Pagination>
+                                        <PaginationContent>
+                                          <PaginationItem>
+                                            <PaginationPrevious 
+                                              href="#" 
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                if (jobHistoryPage > 1) {
+                                                  const newPage = jobHistoryPage - 1;
+                                                  setJobHistoryPage(newPage);
+                                                  refreshImportJobs({
+                                                    onlyActive: false,
+                                                    sortBy: 'createdAt',
+                                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                    page: newPage,
+                                                    limit: jobHistoryItemsPerPage
+                                                  });
+                                                }
+                                              }}
+                                              className={jobHistoryPage === 1 ? "pointer-events-none opacity-50" : ""}
+                                            />
+                                          </PaginationItem>
+                                          {/* Show first page */}
+                                          {jobHistoryPage > 3 && (
+                                            <>
+                                              <PaginationItem>
+                                                <PaginationLink 
+                                                  href="#" 
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setJobHistoryPage(1);
+                                                    refreshImportJobs({
+                                                      onlyActive: false,
+                                                      sortBy: 'createdAt',
+                                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                      page: 1,
+                                                      limit: jobHistoryItemsPerPage
+                                                    });
+                                                  }}
+                                                >
+                                                  1
+                                                </PaginationLink>
+                                              </PaginationItem>
+                                              {jobHistoryPage > 4 && (
+                                                <PaginationItem>
+                                                  <PaginationEllipsis />
+                                                </PaginationItem>
+                                              )}
+                                            </>
+                                          )}
+                                          {/* Show pages around current page */}
+                                          {Array.from({ length: Math.min(5, jobHistoryPagination.totalPages) }, (_, i) => {
+                                            let pageNum;
+                                            if (jobHistoryPagination.totalPages <= 5) {
+                                              pageNum = i + 1;
+                                            } else if (jobHistoryPage <= 3) {
+                                              pageNum = i + 1;
+                                            } else if (jobHistoryPage >= jobHistoryPagination.totalPages - 2) {
+                                              pageNum = jobHistoryPagination.totalPages - 4 + i;
+                                            } else {
+                                              pageNum = jobHistoryPage - 2 + i;
+                                            }
+                                            if (pageNum < 1 || pageNum > jobHistoryPagination.totalPages) return null;
+                                            return (
+                                              <PaginationItem key={pageNum}>
+                                                <PaginationLink 
+                                                  href="#" 
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setJobHistoryPage(pageNum);
+                                                    refreshImportJobs({
+                                                      onlyActive: false,
+                                                      sortBy: 'createdAt',
+                                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                      page: pageNum,
+                                                      limit: jobHistoryItemsPerPage
+                                                    });
+                                                  }}
+                                                  isActive={jobHistoryPage === pageNum}
+                                                >
+                                                  {pageNum}
+                                                </PaginationLink>
+                                              </PaginationItem>
+                                            );
+                                          })}
+                                          {/* Show last page */}
+                                          {jobHistoryPage < jobHistoryPagination.totalPages - 2 && (
+                                            <>
+                                              {jobHistoryPage < jobHistoryPagination.totalPages - 3 && (
+                                                <PaginationItem>
+                                                  <PaginationEllipsis />
+                                                </PaginationItem>
+                                              )}
+                                              <PaginationItem>
+                                                <PaginationLink 
+                                                  href="#" 
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setJobHistoryPage(jobHistoryPagination.totalPages);
+                                                    refreshImportJobs({
+                                                      onlyActive: false,
+                                                      sortBy: 'createdAt',
+                                                      sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                      page: jobHistoryPagination.totalPages,
+                                                      limit: jobHistoryItemsPerPage
+                                                    });
+                                                  }}
+                                                >
+                                                  {jobHistoryPagination.totalPages}
+                                                </PaginationLink>
+                                              </PaginationItem>
+                                            </>
+                                          )}
+                                          <PaginationItem>
+                                            <PaginationNext 
+                                              href="#" 
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                if (jobHistoryPage < jobHistoryPagination.totalPages) {
+                                                  const newPage = jobHistoryPage + 1;
+                                                  setJobHistoryPage(newPage);
+                                                  refreshImportJobs({
+                                                    onlyActive: false,
+                                                    sortBy: 'createdAt',
+                                                    sortOrder: jobHistorySort === 'newest' ? 'DESC' : 'ASC',
+                                                    page: newPage,
+                                                    limit: jobHistoryItemsPerPage
+                                                  });
+                                                }
+                                              }}
+                                              className={jobHistoryPage === jobHistoryPagination.totalPages ? "pointer-events-none opacity-50" : ""}
+                                            />
+                                          </PaginationItem>
+                                        </PaginationContent>
+                                      </Pagination>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </TabsContent>
+                          </Tabs>
+                        </CardContent>
+                      </Card>
+                    </div>
                     <DialogFooter>
                       <Button
                         variant="outline"
@@ -1883,6 +1914,64 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 <Download className="w-4 h-4" />
                 Xuất Excel
               </Button>
+              <Button onClick={() => {
+                openDialog('create');
+                setShowCreateDialog(true);
+              }}>
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Tạo phiếu nhập
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="flex items-center gap-6 p-4">
+            {/* Search Bar */}
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm kiếm theo số phiếu, đơn hàng hoặc khách hàng..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {/* Created Date Filters */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Ngày tạo:</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={startDate || ""}
+                onChange={(e) => setStartDate(e.target.value || undefined)}
+              />
+              <label className="text-sm font-medium">-</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={endDate || ""}
+                onChange={(e) => setEndDate(e.target.value || undefined)}
+              />
+            </div>
+            {/* Collapse Filter Button */}
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            >
+              <Filter className="w-4 h-4" />
+              {filtersCollapsed ? "Thu gọn" : "Mở rộng"}
+              {filtersCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+            {/* Reset Filters Button */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
+              disabled={loading}
+            >
+              {!loading ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
+            </Button>
+            <div className="flex justify-end w-full items-center gap-2">
               <Label htmlFor="display-limit" className="text-sm font-medium">
                 Hiển thị:
               </Label>
@@ -1901,174 +1990,259 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               </Select>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Search Bar */}
-          <div className="flex gap-4 mb-6 p-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Tìm kiếm theo số phiếu, nhà cung cấp, kho hoặc ghi chú..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+          {/* Collapsible Filters Row */}
+          {filtersCollapsed && (
+            <div className="grid grid-cols-3 gap-3 gap-y-6 justify-items-center items-center p-4">
+              {/* Created Date Filters */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">Ngày nhập kho:</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={completedStartDate || ""}
+                  onChange={(e) => setCompletedStartDate(e.target.value || undefined)}
+                />
+                <label className="text-sm font-medium">-</label>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={completedEndDate || ""}
+                  onChange={(e) => setCompletedEndDate(e.target.value || undefined)}
+                />
+              </div>
+              {/* Warehouse filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả kho", value: "all" },
+                  ...warehouses.map((warehouse) => ({
+                    label: warehouse.name,
+                    value: warehouse.id
+                  }))
+                ]}
+                value={warehouseFilter}
+                onValueChange={(value) => setWarehouseFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
+                placeholder="Lọc theo kho"
+                searchPlaceholder="Tìm kho..."
+                emptyMessage="Không có kho nào"
+                multiple={true}
+              />
+              {/* Status filter */}
+              <MultiSelect
+                options={[
+                  { value: 'pending', label: 'Chờ duyệt' },
+                  { value: 'approved', label: 'Đã duyệt' },
+                  { value: 'rejected', label: 'Đã từ chối' },
+                ]}
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
+                placeholder="Tất cả trạng thái"
+                selectAllLabel="Chọn tất cả"
+              />
+              {/* Category Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả loại sản phẩm", value: "all" },
+                  ...categories.map((category) => ({
+                    label: category.name,
+                    value: category.id
+                  }))
+                ]}
+                value={categoryFilter}
+                onValueChange={(value) => setCategoryFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
+                placeholder="Chọn loại sản phẩm"
+                searchPlaceholder="Tìm loại sản phẩm..."
+                emptyMessage="Không có loại sản phẩm nào"
+                className="w-full"
+                multiple={true}
+              />
+              {/* Manifacturers Filter */}
+              <Combobox
+                options={[
+                  { label: "Tất cả nhà sản xuất", value: "all" },
+                  ...manufacturers.map((m) => ({
+                    label: m,
+                    value: m
+                  }))
+                ]}
+                value={manufacturerFilter}
+                onValueChange={(value) => setManufacturerFilter(typeof value === 'string' ? value : (value as string[]).join(','))}
+                placeholder="Nhà sản xuất"
+                searchPlaceholder="Tìm nhà sản xuất..."
+                emptyMessage="Không có nhà sản xuất nào"
+                className="w-full"
+                multiple={true}
               />
             </div>
-          </div>
-          <div className="overflow-x-auto w-full">
-            <Table className="min-w-[1200px] w-full">
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead 
-                    className="font-semibold text-center min-w-[120px] cursor-pointer hover:bg-gray-50 select-none"
-                    onClick={() => handleSort('slip_number')}
-                  >
-                    <div className="flex items-center gap-1 justify-center">
-                      Số phiếu
-                      {getSortIcon('slip_number')}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="font-semibold text-center min-w-[180px] cursor-pointer hover:bg-gray-50 select-none"
-                    onClick={() => handleSort('supplier_name')}
-                  >
-                    <div className="flex items-center gap-1 justify-center">
-                      Nhà cung cấp
-                      {getSortIcon('supplier_name')}
-                    </div>
-                  </TableHead>
-                  <TableHead className="font-semibold text-center min-w-[150px]">Kho nhập</TableHead>
-                  <TableHead className="font-semibold text-center min-w-[110px]">Ngày nhập</TableHead>
-                  <TableHead 
-                    className="font-semibold text-center min-w-[130px] cursor-pointer hover:bg-gray-50 select-none"
-                    onClick={() => handleSort('total_amount')}
-                  >
-                    <div className="flex items-center gap-1 justify-center">
-                      Tổng tiền (VNĐ)
-                      {getSortIcon('total_amount')}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="font-semibold text-center min-w-[120px] cursor-pointer hover:bg-gray-50 select-none"
-                    onClick={() => handleSort('status')}
-                  >
-                    <div className="flex items-center gap-1 justify-center">
-                      Trạng thái
-                      {getSortIcon('status')}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="font-semibold text-center min-w-[150px] cursor-pointer hover:bg-gray-50 select-none"
-                    onClick={() => handleSort('created_at')}
-                  >
-                    <div className="flex items-center gap-1 justify-center">
-                      Ngày tạo
-                      {getSortIcon('created_at')}
-                    </div>
-                  </TableHead>
-                  <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
-                  <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAndSortedSlips.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
-                      {searchTerm ? 'Không tìm thấy phiếu nhập kho nào' : 'Chưa có phiếu nhập kho nào'}
-                    </TableCell>
+          )}
+          {/* Import Slips Table */}
+          <div className="overflow-x-scroll overflow-y-auto w-full max-h-[calc(100vh-420px)] mt-2" style={{ scrollbarGutter: 'stable' }}>
+            <div className="table-wrapper" style={{ display: 'inline-block', minWidth: '100%' }}>
+              <Table className="min-w-[1200px] w-full">
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead 
+                      className="font-semibold text-center min-w-[120px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('code')}
+                    >
+                      <div className="flex items-center gap-1 justify-center">
+                        Số phiếu
+                        {getSortIcon('code')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="font-semibold text-center min-w-[180px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('supplier')}
+                    >
+                      <div className="flex items-center gap-1 justify-center">
+                        Nhà cung cấp
+                        {getSortIcon('supplier')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="font-semibold text-center min-w-[180px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('warehouse')}>
+                      <div className="flex items-center gap-1 justify-center">
+                        Kho nhập
+                        {getSortIcon('warehouse')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="font-semibold text-center min-w-[180px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('completedAt')}>
+                      <div className="flex items-center gap-1 justify-center">
+                        ngày nhập
+                        {getSortIcon('completedAt')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="font-semibold text-center min-w-[130px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('totalAmount')}
+                    >
+                      <div className="flex items-center gap-1 justify-center">
+                        Tổng tiền (VNĐ)
+                        {getSortIcon('totalAmount')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="font-semibold text-center min-w-[120px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center gap-1 justify-center">
+                        Trạng thái
+                        {getSortIcon('status')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="font-semibold text-center min-w-[150px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('createdAt')}
+                    >
+                      <div className="flex items-center gap-1 justify-center">
+                        Ngày tạo
+                        {getSortIcon('createdAt')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
+                    <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
                   </TableRow>
-                ) : (
-                  filteredAndSortedSlips.map((slip) => (
-                    <TableRow key={slip.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="font-medium text-primary text-center">
-                      <div className="truncate" title={slip.slip_number}>{slip.slip_number}</div>
-                    </TableCell>
-                    <TableCell className="font-medium text-center">
-                      <div className="truncate" title={slip.supplier_name || ''}>{slip.supplier_name || '-'}</div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="inline-flex items-center px-2 py-1 rounded-md bg-secondary/50 text-secondary-foreground text-xs font-medium">
-                        {getWarehouseById(slip.warehouse_id)?.name || 'N/A'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-center">{format(new Date(slip.import_date), 'dd/MM/yyyy')}</TableCell>
-                    <TableCell className="text-center font-semibold">
-                      <div className="relative group">
-                        <span className="cursor-help">
-                          {formatCurrencyShort(slip.total_amount)}
+                </TableHeader>
+                <TableBody>
+                  {importSlips.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8">
+                        {searchTerm ? 'Không tìm thấy phiếu nhập kho nào' : 'Chưa có phiếu nhập kho nào'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    importSlips.map((slip) => (
+                      <TableRow key={slip.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="font-medium text-primary text-center">
+                        <div className="truncate" title={slip.slip_number}>{slip.slip_number}</div>
+                      </TableCell>
+                      <TableCell className="font-medium text-center">
+                        <div className="truncate" title={slip.supplier_name || ''}>{slip.supplier_name || '-'}</div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-secondary/50 text-secondary-foreground text-xs font-medium">
+                          {getWarehouseById(slip.warehouse_id)?.name || 'N/A'}
                         </span>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                          {formatCurrency(slip.total_amount)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-center">{slip?.completed_at ? format(new Date(slip.completed_at), 'dd/MM/yyyy HH:mm') : '-'}</TableCell>
+                      <TableCell className="text-center font-semibold">
+                        <div className="relative group">
+                          <span className="cursor-help">
+                            {formatCurrencyShort(slip.total_amount)}
+                          </span>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                            {formatCurrency(slip.total_amount)}
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">{getStatusBadge(slip.status)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm text-center">{slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
-                    <TableCell className="text-sm text-center">
-                      <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
-                        {slip.notes || '-'}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center justify-center space-x-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            openDialog('view', slip.id);
-                            setSelectedSlip(slip);
-                            loadSlipItems(slip.id);
-                            loadInventoryHistory(slip.id);
-                          }}
-                          className="h-8 px-2 text-xs whitespace-nowrap"
-                        >
-                          <Package className="w-3 h-3 mr-1" />
-                          Chi tiết
-                        </Button>
-                        {canApproveImports && slip.status === 'pending' && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => approveImportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
-                            >
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Duyệt
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => rejectImportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
-                            >
-                              <XCircle className="w-3 h-3 mr-1" />
-                              Từ chối
-                            </Button>
-                          </>
-                        )}
-                        {canApproveImports && slip.status === 'rejected' && (
+                      </TableCell>
+                      <TableCell className="text-center">{getStatusBadge(slip.status)}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm text-center">{slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy HH:mm') : '-'}</TableCell>
+                      <TableCell className="text-sm text-center">
+                        <div className="truncate max-w-xs mx-auto" title={slip.notes || ''}>
+                          {slip.notes || '-'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex items-center justify-center space-x-1">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => deleteImportSlip(slip.id)}
-                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                            onClick={() => {
+                              openDialog('view', slip.id);
+                              setSelectedSlip(slip);
+                              loadSlipItems(slip.id);
+                              loadInventoryHistory(slip.id);
+                            }}
+                            className="h-8 px-2 text-xs whitespace-nowrap"
                           >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Xóa
+                            <Package className="w-3 h-3 mr-1" />
+                            Chi tiết
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                          {canApproveImports && slip.status === 'pending' && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => approveImportSlip(slip.id)}
+                                className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Duyệt
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => rejectImportSlip(slip.id)}
+                                className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                              >
+                                <XCircle className="w-3 h-3 mr-1" />
+                                Từ chối
+                              </Button>
+                            </>
+                          )}
+                          {canApproveImports && slip.status === 'rejected' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => deleteImportSlip(slip.id)}
+                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                            >
+                              <Trash2 className="w-3 h-3 mr-1" />
+                              Xóa
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex flex-col items-center mt-4 pt-4 border-t px-4">
+          {totalPages > 0 && (
+            <div className="flex flex-col items-center mt-4 pt-4 border-t px-4 mb-4">
               <div className="text-sm text-muted-foreground mb-4">
                 Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} phiếu nhập kho
               </div>
@@ -2194,7 +2368,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
             <DialogTitle>Chi tiết phiếu nhập - {selectedSlip?.slip_number}</DialogTitle>
             <DialogDescription>
               Nhà cung cấp: {selectedSlip?.supplier_name} | 
-              Ngày nhập: {selectedSlip && format(new Date(selectedSlip.import_date), 'dd/MM/yyyy')} | 
+              Ngày nhập: {selectedSlip && format(new Date(selectedSlip.completed_at), 'dd/MM/yyyy')} | 
               Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name} ({getWarehouseById(selectedSlip?.warehouse_id)?.code})
             </DialogDescription>
           </DialogHeader>
@@ -2220,11 +2394,11 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               </div>
             </div>
             <div className="space-y-2">
-              {selectedSlip?.approved_at && (
+              {selectedSlip?.completed_at && (
                 <div>
                   <Label className="font-medium text-sm">Ngày duyệt:</Label>
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(selectedSlip.approved_at), 'dd/MM/yyyy HH:mm')}
+                    {format(new Date(selectedSlip.completed_at), 'dd/MM/yyyy HH:mm')}
                   </p>
                 </div>
               )}

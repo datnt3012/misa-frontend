@@ -6,14 +6,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
+import { Search, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, RotateCw, Loader } from "lucide-react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
-import { productApi, ProductWithStock, Product } from "@/api/product.api";
+import { productApi, ProductWithStock, Product, ProductStockLevel } from "@/api/product.api";
 import { Category } from "@/api/categories.api";
 import { convertPermissionCodesInMessage } from "@/utils/permissionMessageConverter";
+import { warehouseApi } from "@/api";
+import { set } from "date-fns";
+import { se } from "date-fns/locale";
+import { MultiSelect } from "../ui/multi-select";
 interface InventoryStockProps {
   warehouses: any[];
   categories: Category[];
@@ -29,15 +33,17 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   const [products, setProducts] = useState<Product[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [allProducts, setAllProducts] = useState<Product[]>([]); // Store all products for filter options
+  const [wareHouses, setWareHouses] = useState(warehouses || []);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] =  useState<string[]>([]);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterWarehouse, setFilterWarehouse] = useState("all");
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
   // Map UI sort keys to API sort keys
   const mapSortKeyToAPI = (key: string): string => {
     const keyMap: Record<string, string> = {
@@ -52,6 +58,14 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       'stock_updated_at': 'stockUpdatedAt',
     };
     return keyMap[key] || key;
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterCategory("all");
+    setFilterStatus([]);
+    setFilterWarehouse("all");
+    setCurrentPage(1);
   };
 
   // Load products from API with pagination
@@ -73,24 +87,24 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         params.warehouse = filterWarehouse;
       }
       // Apply status filter - convert UI filter to API format
-      if (filterStatus !== 'all') {
-        if (filterStatus === 'in-stock') {
-          params.stockStatus = 'in_stock';
-        } else if (filterStatus === 'low-stock') {
-          params.stockStatus = 'low_stock';
-        } else if (filterStatus === 'out-of-stock') {
-          params.stockStatus = 'out_of_stock';
-        }
+      if (filterStatus.length > 0) {
+        params.stockStatus = filterStatus;
       }
       // Add sort parameters
       if (sortConfig) {
         params.sortBy = mapSortKeyToAPI(sortConfig.key);
         params.sortOrder = sortConfig.direction;
       }
+      else {
+        // Default sort by stock updated time desc
+        params.sortBy = 'stockUpdatedAt';
+        params.sortOrder = 'desc';
+      }
       
       const response = await productApi.getProducts(params);
       setProducts(response.products || []);
       setTotalProducts(response.total || 0);
+      setTotalPages(response.totalPages || 0);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Không thể tải danh sách sản phẩm';
       toast({
@@ -105,6 +119,15 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     }
   }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, sortConfig, toast]);
 
+  const loadWarehouses = async () => {
+    try {
+      const response = await warehouseApi.getWarehouses();
+      setWareHouses(response.warehouses || []);
+    } catch (error) {
+      // Handle error silently
+    }
+  };
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -114,28 +137,10 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Load all products for filter options (without filters, just first page to get categories and warehouses)
-  const loadAllProductsForOptions = React.useCallback(async () => {
-    try {
-      const response = await productApi.getProducts({ 
-        page: 1, 
-        limit: 1000 
-      });
-      setAllProducts(response.products || []);
-    } catch (error: any) {
-      // Silently fail - filter options will be empty
-      setAllProducts([]);
-    }
-  }, []);
-
-  // Load all products for filter options on mount
-  useEffect(() => {
-    loadAllProductsForOptions();
-  }, [loadAllProductsForOptions]);
-
   // Load products when pagination, filters, or sort changes
   useEffect(() => {
     loadProducts();
+    loadWarehouses();
   }, [currentPage, itemsPerPage, debouncedSearchTerm, filterCategory, filterStatus, filterWarehouse, sortConfig, loadProducts]);
   const findCategoryByValue = (value?: string | null) => {
     if (!value) return undefined;
@@ -147,52 +152,19 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
   };
   const getCategoryId = (value?: string | null) => findCategoryByValue(value)?.id || (value ?? '') as string;
   const getCategoryName = (value?: string | null) => findCategoryByValue(value)?.name || (value ?? '') as string;
-  
-  // Helper function to check if a stock level matches the status filter
-  const matchesStatusFilter = (quantity: number, lowStockThreshold: number | null | undefined, statusFilter: string): boolean => {
-    if (statusFilter === 'all') return true;
-    
-    const threshold = lowStockThreshold != null ? Number(lowStockThreshold) : null;
-    
-    if (statusFilter === 'out-of-stock') {
-      return quantity === 0;
-    }
-    
-    if (statusFilter === 'low-stock') {
-      // low_stock: 0 < quantity <= lowStockThreshold (chỉ khi product có lowStockThreshold)
-      return threshold != null && threshold > 0 && quantity > 0 && quantity <= threshold;
-    }
-    
-    if (statusFilter === 'in-stock') {
-      // in_stock: quantity > lowStockThreshold (nếu có threshold) hoặc quantity > 0 (nếu không có threshold)
-      if (threshold != null && threshold > 0) {
-        return quantity > threshold;
-      }
-      return quantity > 0;
-    }
-    
-    return true;
-  };
 
   // Create products with stock information - one row per warehouse
   // Use useMemo to ensure it recalculates when products change
   const productsWithStock: ProductWithStockExtended[] = React.useMemo(() => {
-    const hasActiveStockFilter = filterStatus !== 'all' || filterWarehouse !== 'all';
+    const hasActiveStockFilter = filterStatus.length > 0 || filterWarehouse !== 'all';
     
     return products.flatMap(product => {
     const categoryId = getCategoryId(product.category);
     const categoryName = getCategoryName(product.category);
       
       // Get stock levels from product.stockLevel (from API)
+      // Status filtering is handled by API, so no client-side filtering needed
       let productStockLevels = product.stockLevel || [];
-      
-      // Filter stock levels by status if status filter is active
-      if (filterStatus !== 'all') {
-        const threshold = product.lowStockThreshold != null ? Number(product.lowStockThreshold) : null;
-        productStockLevels = productStockLevels.filter(stock => {
-          return matchesStatusFilter(stock.quantity, threshold, filterStatus);
-        });
-      }
       
       // Filter stock levels by warehouse if warehouse filter is active
       if (filterWarehouse !== 'all') {
@@ -227,44 +199,34 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       category: categoryId,
       categoryName,
       current_stock: stock.quantity,
-        location: stock.warehouse ? `${stock.warehouse.name}${stock.warehouse.code ? ` (${stock.warehouse.code})` : ''}` : 'Không xác định',
+      location: stock.warehouse ? `${stock.warehouse.name}${stock.warehouse.code ? ` (${stock.warehouse.code})` : ''}` : 'Không xác định',
       updated_at: stock.updatedAt,
-        warehouse_id: stock.warehouse?.id || '',
+      warehouse_id: stock.warehouse?.id || '',
       warehouse_name: stock.warehouse?.name || '',
-        warehouse_code: stock.warehouse?.code || '',
-        // Use lowStockThreshold from product
-        lowStockThreshold: (() => {
-          const threshold = product.lowStockThreshold;
-          if (threshold == null) return null;
-          const num = Number(threshold);
-          return isNaN(num) ? null : num;
-        })()
+      warehouse_code: stock.warehouse?.code || '',
+      lowStockThreshold: (() => {
+        const threshold = product.lowStockThreshold;
+        if (threshold == null) return null;
+        const num = Number(threshold);
+        return isNaN(num) ? null : num;
+      })()
     }));
   });
   }, [products, categories, filterStatus, filterWarehouse]);
-  const getStatusBadge = (stock: number, lowStockThreshold?: number | null) => {
-    // out_of_stock: quantity = 0
-    if (stock === 0) {
+  const getStatusBadge = (stock: ProductStockLevel[]) => {
+    if (stock[0].stockStatus === 'out_of_stock') {
       return <Badge variant="destructive" className="whitespace-nowrap">Hết hàng</Badge>;
     }
-    
-    // low_stock: 0 < quantity <= lowStockThreshold (chỉ khi product có lowStockThreshold)
-    if (lowStockThreshold != null && lowStockThreshold > 0 && stock > 0 && stock <= lowStockThreshold) {
+
+    if (stock[0].stockStatus === 'low_stock') {
       return <Badge variant="outline" className="text-orange-600 border-orange-600 whitespace-nowrap">Sắp hết</Badge>;
     }
-    
-    // in_stock: quantity > lowStockThreshold (nếu có threshold) hoặc quantity > 0 (nếu không có threshold)
-    // If no threshold or stock > threshold, show "Còn hàng"
+
+    if (stock[0].stockStatus === 'in_stock') {
       return <Badge variant="secondary" className="text-green-600 border-green-600 whitespace-nowrap">Còn hàng</Badge>;
+    }
   };
-  // Filter productsWithStock - status and warehouse are already filtered by API
-  // Category is already filtered by products API
-  // Only need to filter by search term (client-side for instant feedback)
-  const filteredProducts = productsWithStock.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.code.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+
   // Get unique categories and warehouses for filters from all data (not filtered)
   // This ensures filter options don't change when filters are applied
   const uniqueCategories = React.useMemo(() => {
@@ -286,59 +248,17 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       .filter(Boolean) as [string, { id: string; name: string }][]
   ).values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, allProducts]);
-
-  const usedWarehouses = React.useMemo(() => {
-    // Get warehouses from allProducts.stockLevel to ensure all options are available
-    const warehouseIds = new Set(
-      allProducts.flatMap(p => (p.stockLevel || []).map(sl => sl.warehouse?.id).filter(Boolean))
-    );
-    return warehouses.filter(w => warehouseIds.has(w.id));
-  }, [warehouses, allProducts]);
-  // Products are already sorted by API, so use filteredProducts directly
-  // Note: search term filtering is still done client-side for instant feedback
-  const sortedProducts = filteredProducts;
-  // Pagination logic
-  // When status or warehouse filter is active, use client-side pagination
-  // Otherwise, use API pagination (products are already paginated from API)
-  const hasActiveStockFilter = filterStatus !== 'all' || filterWarehouse !== 'all';
   
-  let totalItems: number;
-  let totalPages: number;
-  let paginatedProducts: ProductWithStockExtended[];
+  // Pagination variables for new pagination UI
+  const displayLimit = itemsPerPage;
+  const total = totalProducts || 0;
   
-  if (hasActiveStockFilter) {
-    // Client-side pagination: paginate sortedProducts
-    totalItems = sortedProducts.length;
-    totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-    paginatedProducts = sortedProducts.slice(startIndex, endIndex);
-  } else {
-    // API pagination: products are already paginated from API
-    // Use totalProducts from API for pagination info
-    totalItems = totalProducts || 0;
-    totalPages = Math.ceil(totalItems / itemsPerPage);
-    // Products are already paginated from API, so use sortedProducts directly
-    paginatedProducts = sortedProducts;
-  }
-  
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
   };
   const handleCategoryChange = (value: string) => {
     setFilterCategory(value);
-    setCurrentPage(1); // Reset to first page when filtering
-    // Clear products to prevent showing old data while loading
-    setProducts([]);
-  };
-  const handleStatusChange = (value: string) => {
-    setFilterStatus(value);
     setCurrentPage(1); // Reset to first page when filtering
     // Clear products to prevent showing old data while loading
     setProducts([]);
@@ -385,7 +305,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
     }
   };
   const exportToExcel = () => {
-    const exportData = sortedProducts.map((product, index) => {
+    const exportData = productsWithStock.map((product, index) => {
       const exportItem: any = {
         'STT': index + 1,
         'Mã sản phẩm': product.code,
@@ -436,32 +356,15 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
       description: `Đã xuất ${exportData.length} sản phẩm ra file Excel`,
     });
   };
-  if (loadingProducts) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Báo Cáo Tồn Kho</CardTitle>
-          <CardDescription>Đang tải dữ liệu tồn kho...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Đang tải dữ liệu tồn kho...</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Loading state is now handled inline to prevent card remounting
   return (
     <Card>
-      <CardHeader>
+      {/* <CardHeader>
         <CardTitle>Báo Cáo Tồn Kho</CardTitle>
         <CardDescription>Theo dõi tình trạng tồn kho theo thời gian thực</CardDescription>
-      </CardHeader>
+      </CardHeader> */}
       <CardContent>
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col gap-4 mb-6 mt-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -472,17 +375,17 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={filterStatus} onValueChange={handleStatusChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Lọc theo trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="in-stock">Còn hàng</SelectItem>
-                <SelectItem value="low-stock">Sắp hết</SelectItem>
-                <SelectItem value="out-of-stock">Hết hàng</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={[
+                { value: 'in_stock', label: 'Còn hàng' },
+                { value: 'low_stock', label: 'Sắp hết' },
+                { value: 'out_of_stock', label: 'Hết hàng' }
+              ]}
+              value={filterStatus}
+              onValueChange={(value) => setFilterStatus(Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []))}
+              placeholder="Tất cả trạng thái"
+              selectAllLabel="Chọn tất cả"
+            />
             <Combobox
               options={[
                 { label: "Tất cả loại", value: "all" },
@@ -496,11 +399,12 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               placeholder="Lọc theo loại"
               searchPlaceholder="Tìm loại sản phẩm..."
               emptyMessage="Không có loại sản phẩm nào"
+              multiple={true}
             />
             <Combobox
               options={[
                 { label: "Tất cả kho", value: "all" },
-                ...usedWarehouses.map((warehouse) => ({
+                ...wareHouses.map((warehouse) => ({
                   label: warehouse.name,
                   value: warehouse.id
                 }))
@@ -510,7 +414,16 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               placeholder="Lọc theo kho"
               searchPlaceholder="Tìm kho..."
               emptyMessage="Không có kho nào"
+              multiple={true}
             />
+            {/* Reset Filters Button */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
+              disabled={loadingProducts}
+            >
+              {!loadingProducts ? (<RotateCw className="h-4 w-4" />) : (<Loader className="h-4 w-4" />)}
+            </Button>
             <Button 
               variant="outline" 
               onClick={exportToExcel}
@@ -539,7 +452,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
             <span className="text-sm text-muted-foreground whitespace-nowrap">/ trang</span>
           </div>
           <div className="text-sm text-muted-foreground">
-            Hiển thị {startIndex + 1}-{Math.min(endIndex, totalItems)} trong tổng số {totalItems} sản phẩm
+            Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} sản phẩm tồn kho
           </div>
         </div>
         <div className="rounded-md border overflow-x-auto">
@@ -633,7 +546,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loadingProducts ? (
+              {loadingProducts && products.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canViewCostPrice ? 9 : 8} className="text-center py-8">
                     <div className="flex items-center justify-center space-x-2">
@@ -642,25 +555,25 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : paginatedProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canViewCostPrice ? 9 : 8} className="text-center py-8 text-muted-foreground">
-                    {sortedProducts.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
+                    {productsWithStock.length === 0 ? "Chưa có sản phẩm nào" : "Không có sản phẩm nào trong trang này"}
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedProducts.map((product) => (
-                  <TableRow key={`${product.id}-${product.warehouse_id || 'no-warehouse'}`}>
+                products.map((product) => (
+                  <TableRow key={`${product.id}-${product.stockLevel[0]?.warehouse?.id || 'no-warehouse'}`}>
                     <TableCell className="font-medium">{product.code}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell className="text-center">{product.categoryName || '-'}</TableCell>
+                    <TableCell className="text-center">{categories.find(category => category.id == product.category)?.name || '-'}</TableCell>
                     <TableCell className="text-center">{product.manufacturer || '-'}</TableCell>
                     <TableCell className="text-center">
                       <span className={`font-medium ${
-                        product.current_stock === 0 ? 'text-red-600' : 
-                        product.current_stock < 10 ? 'text-orange-600' : 'text-green-600'
+                        product.stockLevel[0].stockStatus === 'out_of_stock' ? 'text-red-600' : 
+                        product.stockLevel[0].stockStatus === 'low_stock' ? 'text-orange-600' : 'text-green-600'
                       }`}>
-                        {formatCurrency(product.current_stock)}
+                        {formatCurrency(product.stockLevel[0]?.quantity || 0)}
                       </span>
                     </TableCell>
                     {canViewCostPrice && (
@@ -686,13 +599,13 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                       </div>
                     </TableCell>
                     <TableCell className="text-center whitespace-nowrap">
-                      {product.warehouse_name || product.location || '-'}
+                      {product.stockLevel[0]?.warehouse?.name || '-'}
                     </TableCell>
                     <TableCell className=" text-center whitespace-nowrap">
-                      {getStatusBadge(product.current_stock, product.lowStockThreshold)}
+                      {getStatusBadge(product.stockLevel)}
                     </TableCell>
                     <TableCell className="text-center">
-                      {product.updated_at ? new Date(product.updated_at).toLocaleDateString('vi-VN') : '-'}
+                      {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString('vi-VN') : '-'}
                     </TableCell>
                   </TableRow>
                 ))
@@ -701,8 +614,11 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
           </Table>
         </div>
         {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex justify-center mt-6">
+        {totalPages > 0 && (
+          <div className="flex flex-col items-center mt-4 pt-4 border-t">
+            <div className="text-sm text-muted-foreground mb-4">
+              Hiển thị {((currentPage - 1) * displayLimit) + 1} - {Math.min(currentPage * displayLimit, total)} trong tổng số {total} sản phẩm
+            </div>
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
@@ -710,7 +626,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     href="#" 
                     onClick={(e) => {
                       e.preventDefault();
-                      if (currentPage > 1) handlePageChange(currentPage - 1);
+                      if (currentPage > 1) setCurrentPage(currentPage - 1);
                     }}
                     className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
                   />
@@ -723,7 +639,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         href="#" 
                         onClick={(e) => {
                           e.preventDefault();
-                          handlePageChange(1);
+                          setCurrentPage(1);
                         }}
                       >
                         1
@@ -755,7 +671,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         href="#" 
                         onClick={(e) => {
                           e.preventDefault();
-                          handlePageChange(pageNum);
+                          setCurrentPage(pageNum);
                         }}
                         isActive={currentPage === pageNum}
                       >
@@ -777,7 +693,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                         href="#" 
                         onClick={(e) => {
                           e.preventDefault();
-                          handlePageChange(totalPages);
+                          setCurrentPage(totalPages);
                         }}
                       >
                         {totalPages}
@@ -790,7 +706,7 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
                     href="#" 
                     onClick={(e) => {
                       e.preventDefault();
-                      if (currentPage < totalPages) handlePageChange(currentPage + 1);
+                      if (currentPage < totalPages) setCurrentPage(currentPage + 1);
                     }}
                     className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
                   />

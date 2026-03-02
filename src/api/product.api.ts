@@ -8,6 +8,7 @@ export interface ProductStockLevel {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  stockStatus?: string | null;
   warehouse: {
     id: string;
     code: string | null;
@@ -43,7 +44,7 @@ export interface Product {
    isForeignCurrency?: boolean;
    exchangeRate?: number;
    originalCostPrice?: number;
-   stockLevel?: ProductStockLevel[]; // New field from API
+   stockLevel?: ProductStockLevel[];
 }
 export interface ProductWithStock extends Product {
   current_stock: number;
@@ -130,6 +131,7 @@ const normalizeProductStockLevel = (row: any): ProductStockLevel => {
     createdAt: row.createdAt ?? row.created_at ?? '',
     updatedAt: row.updatedAt ?? row.updated_at ?? '',
     deletedAt: row.deletedAt ?? row.deleted_at ?? undefined,
+    stockStatus: row.stockStatus ?? row.stock_status ?? '',
     warehouse: row.warehouse ? {
       id: row.warehouse.id,
       code: row.warehouse.code ?? null,
@@ -211,7 +213,7 @@ export const productApi = {
     stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC' | 'asc' | 'desc';
-  }): Promise<{ products: Product[]; total: number; page: number; limit: number }> => {
+  }): Promise<{ products: Product[]; summary:object; total: number; page: number; limit: number; totalPages: number; }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -231,17 +233,21 @@ export const productApi = {
     if (data && Array.isArray(data.rows)) {
       return {
         products: data.rows.map(normalizeProduct),
+        summary: data.summary || {},
         total: Number(data.count ?? data.rows.length ?? 0),
         page: Number(data.page ?? params?.page ?? 1),
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
+        totalPages: Number(data.totalPage ?? data.rows.totalPage ?? 0)
       };
     }
     // Fallback if API already returns expected shape
     return {
       products: (response?.products || []).map(normalizeProduct),
+      summary: (response?.summary || {}),
       total: Number(response?.total ?? 0),
       page: Number(response?.page ?? params?.page ?? 1),
       limit: Number(response?.limit ?? params?.limit ?? 0),
+      totalPages: Number(response?.totalPage ?? 0),
     };
   },
   // Get product by ID
@@ -436,5 +442,16 @@ export const productApi = {
     }
     const blob = await response.blob();
     return { blob, filename };
+  },
+  // Get all manufacturers
+  getManufacturers: async (): Promise<string[]> => {
+    const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.MANUFACTURERS);
+    const data = response?.data || response;
+    // Backend returns { code, message, data: [...] }
+    if (data && Array.isArray(data.data)) {
+      return data.data;
+    }
+    // Fallback if data is directly an array
+    return Array.isArray(data) ? data : [];
   }
 };
