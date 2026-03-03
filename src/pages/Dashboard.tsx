@@ -1139,7 +1139,8 @@ const DashboardContent = () => {
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-medium">{o.order_number}</span>
                         {(() => {
-                          const statusConfig = getOrderStatusConfig(o.status);
+                          const statusCode = typeof o.status === 'object' ? o.status?.code : o.status;
+                          const statusConfig = getOrderStatusConfig(statusCode);
                           return (
                             <Badge variant={statusConfig.variant} className={statusConfig.className}>
                               {statusConfig.label}

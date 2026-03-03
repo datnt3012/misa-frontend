@@ -1534,22 +1534,22 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="py-3 border-r border-slate-200 text-center">
                             {(() => {
                               const completedAt = order.completed_at || order.updated_at;
-                              const showCompleted = ['delivered','completed'].includes(order.status);
+                              const showCompleted = ['delivered','completed'].includes(order.status?.code);
                               return showCompleted && completedAt
                                 ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm')
                                 : '-';
                             })()}
                           </TableCell>
                           {/* Status Column */}
-                          <TableCell className="py-4 border-r border-slate-200 min-w-[88px] sm:min-w-[104px]">
+                          <TableCell className="py-4 border-r border-slate-200 min-w-[120px] sm:min-w-[140px]">
                             <Select
-                              value={order.status || 'pending'}
+                              value={typeof order.status === 'object' ? order.status?.code : order.status || 'pending'}
                               onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
                               disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
                             >
-                              <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
-                                <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
-                                  {getStatusBadge(order.status, order.type === 'purchase')}
+                              <SelectTrigger className="min-w-[120px] sm:min-w-[140px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
+                                <div className="cursor-pointer inline-flex whitespace-nowrap text-xs sm:text-sm">
+                                  {getStatusBadge(typeof order.status === 'object' ? order.status?.code : order.status, order.type === 'purchase')}
                                 </div>
                               </SelectTrigger>
                               <SelectContent className="min-w-[128px] sm:min-w-[144px]">

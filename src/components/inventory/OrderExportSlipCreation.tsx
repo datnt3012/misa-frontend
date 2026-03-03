@@ -286,7 +286,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 </div>
                 <div>
                   <Label className="font-medium">Trạng thái:</Label>
-                  <div>{getStatusBadge(selectedOrder.status)}</div>
+                  <div>{getStatusBadge(typeof selectedOrder.status === 'object' ? selectedOrder.status?.code : selectedOrder.status)}</div>
                 </div>
                 <div>
                   <Label className="font-medium">Tổng giá trị:</Label>
@@ -397,7 +397,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                         <TableRow key={order.id}>
                           <TableCell className="font-medium">{order.order_number}</TableCell>
                           <TableCell>{order.customer_name}</TableCell>
-                          <TableCell>{getStatusBadge(order.status)}</TableCell>
+                          <TableCell>{getStatusBadge(typeof order.status === 'object' ? order.status?.code : order.status)}</TableCell>
                           <TableCell className="text-right font-semibold">
                             {formatCurrency(order.total_amount)}
                           </TableCell>
@@ -458,7 +458,7 @@ export const OrderExportSlipCreation: React.FC<OrderExportSlipCreationProps> = (
                 </div>
                 <div>
                   <span className="font-medium text-gray-600">Trạng thái:</span>
-                  <span className="ml-2">{selectedOrder ? getStatusBadge(selectedOrder.status) : ''}</span>
+                  <span className="ml-2">{selectedOrder ? getStatusBadge(typeof selectedOrder.status === 'object' ? selectedOrder.status?.code : selectedOrder.status) : ''}</span>
                 </div>
                 <div>
                   <span className="font-medium text-gray-600">Tổng giá trị:</span>

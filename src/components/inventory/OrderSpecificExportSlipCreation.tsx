@@ -576,7 +576,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             </div>
             <div>
               <Label className="font-medium">Trạng thái:</Label>
-              <div>{getStatusBadge(order.status)}</div>
+              <div>{getStatusBadge(typeof order.status === 'object' ? order.status?.code : order.status)}</div>
             </div>
             <div>
               <Label className="font-medium">Tổng giá trị:</Label>

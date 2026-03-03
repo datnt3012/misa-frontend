@@ -21,7 +21,7 @@ import { orderTagsApi, OrderTag } from "@/api/orderTags.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
-import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 
 interface OrderDetailDialogProps {
    order: any;
@@ -506,8 +506,8 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
     );
   };
 
-  const getStatusBadge = (status: string) => {
-    const config = getOrderStatusConfig(status);
+  const getStatusBadge = (status: string, isPurchaseOrder: boolean = false) => {
+    const config = getOrderStatusConfig(status, isPurchaseOrder);
     return (
       <Badge variant={config.variant} className={config.className}>
         {config.label}
@@ -1406,16 +1406,16 @@ export const OrderDetailDialog: React.FC<OrderDetailDialogProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground whitespace-nowrap">Trạng thái xử lý:</span>
                   <div className="ml-auto">
-                    <Select value={(orderDetails as any)?.order_status || orderDetails?.status || 'pending'} onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}>
-                      <SelectTrigger className="w-auto min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent">
-                        <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
-                          {getStatusBadge((orderDetails as any)?.order_status || orderDetails?.status || 'pending')}
+                    <Select value={(orderDetails as any)?.order_status || (typeof orderDetails?.status === 'object' ? orderDetails?.status?.code : orderDetails?.status) || 'pending'} onValueChange={(newStatus) => handleUpdateStatusDirect(newStatus)}>
+                      <SelectTrigger className="w-auto min-w-[120px] sm:min-w-[140px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-end">
+                        <div className="cursor-pointer inline-flex whitespace-nowrap text-xs sm:text-sm">
+                          {getStatusBadge((orderDetails as any)?.order_status || (typeof orderDetails?.status === 'object' ? orderDetails?.status?.code : orderDetails?.status) || 'pending', orderDetails?.type === 'purchase')}
                         </div>
                       </SelectTrigger>
                       <SelectContent>
-                        {ORDER_STATUSES.map((status) => (
+                        {(orderDetails?.type === 'purchase' ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((status) => (
                           <SelectItem key={status} value={status}>
-                            {ORDER_STATUS_LABELS_VI[status]}
+                            {(orderDetails?.type === 'purchase' ? PURCHASE_ORDER_STATUS_LABELS_VI : ORDER_STATUS_LABELS_VI)[status]}
                           </SelectItem>
                         ))}
                       </SelectContent>

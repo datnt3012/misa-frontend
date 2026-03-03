@@ -357,7 +357,7 @@ const CustomersContent = () => {
       setCustomerOrders(customerOrders.map(order => ({
         id: order.id,
         order_number: order.order_number,
-        status: order.status,
+        status: typeof order.status === 'object' ? order.status?.code : order.status,
         total_amount: order.totalAmount,
         paid_amount: order.totalPaidAmount,
         debt_amount: order.remainingDebt,
@@ -1265,7 +1265,7 @@ const CustomersContent = () => {
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                {getStatusBadge(order.status)}
+                                {getStatusBadge(typeof order.status === 'object' ? order.status?.code : order.status || 'pending')}
                               </TableCell>
                               <TableCell className="text-right">
                                 {Number(order.vat_total_amount).toLocaleString('vi-VN')}

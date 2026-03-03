@@ -37,7 +37,7 @@ export interface Order {
     districtName?: string;
     wardName?: string;
   };
-  status: 'new' | 'pending' | 'picking' | 'picked' | 'delivered' | 'delivery_failed' | 'completed' | 'cancelled';
+  status: 'new' | 'pending' | 'picking' | 'picked' | 'delivered' | 'delivery_failed' | 'completed' | 'cancelled' | { code: string; name: string };
   order_type: 'sale' | 'return';
   type?: 'sale' | 'purchase';
   total_amount: number;

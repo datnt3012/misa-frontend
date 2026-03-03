@@ -274,7 +274,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
         id: 'creation',
         action: 'create',
         title: 'Tạo đơn hàng',
-        new_status: orderDetails.status,
+        new_status: typeof orderDetails.status === 'object' ? orderDetails.status?.code : orderDetails.status,
         notes: `Đơn hàng ${orderDetails.order_number} được tạo`,
         changed_at: orderDetails.created_at,
         user_profile: orderDetails.creator_info ? {
@@ -287,7 +287,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
           id: `payment-${payment.id}`,
           action: 'payment',
           title: 'Thanh toán',
-          new_status: orderDetails.status,
+          new_status: typeof orderDetails.status === 'object' ? orderDetails.status?.code : orderDetails.status,
           notes: `Thanh toán ${formatCurrency(payment.amount)} bằng ${getPaymentMethodLabel(payment.payment_method)}${payment.notes ? ` - ${payment.notes}` : ''}`,
           changed_at: payment.payment_date,
           new_paid_amount: payment.amount,
@@ -302,7 +302,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
             id: 'update',
             action: 'update',
             title: 'Cập nhật đơn hàng',
-            new_status: orderDetails.status,
+            new_status: typeof orderDetails.status === 'object' ? orderDetails.status?.code : orderDetails.status,
             notes: `Đơn hàng được cập nhật`,
             changed_at: orderDetails.updated_at,
             user_profile: { full_name: 'Hệ thống' }
@@ -335,8 +335,8 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
   const formatDateTime = (dateString: string) => {
     return format(new Date(dateString), "dd/MM/yyyy HH:mm", { locale: vi });
   };
-  const getStatusBadge = (status: string) => {
-    const config = getOrderStatusConfig(status);
+  const getStatusBadge = (status: string, isPurchaseOrder: boolean = false) => {
+    const config = getOrderStatusConfig(status, isPurchaseOrder);
     return (
       <Badge variant={config.variant} className={config.className}>
         {config.label}
@@ -416,7 +416,7 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Trạng thái:</label>
-                      <div>{getStatusBadge(orderDetails.status)}</div>
+                      <div>{getStatusBadge(typeof orderDetails.status === 'object' ? orderDetails.status?.code : orderDetails.status, (orderDetails as any)?.type === 'purchase')}</div>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Ngày tạo:</label>
@@ -869,16 +869,16 @@ export const OrderViewDialog: React.FC<OrderViewDialogProps> = ({
                                 {item.old_status && item.new_status && item.old_status !== item.new_status && (
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm">Thay đổi trạng thái:</span>
-                                    {getStatusBadge(item.old_status)}
+                                    {getStatusBadge(item.old_status, (orderDetails as any)?.type === 'purchase')}
                                     <span>→</span>
-                                    {getStatusBadge(item.new_status)}
+                                    {getStatusBadge(item.new_status, (orderDetails as any)?.type === 'purchase')}
                                   </div>
                                 )}
                                 {/* Show status if only new_status exists and no old_status */}
                                 {item.new_status && !item.old_status && (
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm">Trạng thái:</span>
-                                    {getStatusBadge(item.new_status)}
+                                    {getStatusBadge(item.new_status, (orderDetails as any)?.type === 'purchase')}
                                   </div>
                                 )}
                                 {/* Show payment amount change */}
