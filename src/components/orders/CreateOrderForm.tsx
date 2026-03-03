@@ -16,6 +16,7 @@ import { Trash2, Plus, ShoppingCart, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { customerApi, VatInfo, Customer } from "@/api/customer.api";
+import { Supplier, supplierApi } from "@/api/supplier.api";
 import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
@@ -174,6 +175,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
@@ -216,13 +218,15 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   }, []);
   const loadData = async () => {
     try {
-      const [customersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
+      const [customersRes, suppliersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
         customerApi.getCustomers({ page: 1, limit: 1000 }),
+        supplierApi.getSuppliers({ page: 1, limit: 1000 }),
         productApi.getProducts({ page: 1, limit: 1000 }),
         warehouseApi.getWarehouses({ page: 1, limit: 1000 }),
         orderApi.getBanks()
       ]);
       setCustomers(customersRes.customers || []);
+      setSuppliers(suppliersRes.suppliers || []);
       setProducts(productsRes.products || []);
       setWarehouses(warehousesRes.warehouses || []);
       setBanks(banksRes || []);
@@ -655,10 +659,13 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   <Combobox
                     options={[
                       { label: orderType === 'sale' ? "Chọn khách hàng cũ" : "Chọn nhà cung cấp cũ", value: "__new__" },
-                      ...customers.map(customer => ({
+                      ...(orderType === 'sale' ? customers.map(customer => ({
                         label: `${customer.name} (${customer.customer_code})`,
                         value: customer.id
-                      }))
+                      })) : suppliers.map(supplier => ({
+                        label: `${supplier.name} (${supplier.code})`,
+                        value: supplier.id
+                      })))
                     ]}
                     value={newOrder.customer_id}
                     onValueChange={(value) => {
@@ -671,35 +678,48 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                         }));
                         return;
                       }
-                      // Handle existing customer selection
-                      const customer = customers.find(c => c.id === stringValue);
-                      const vatInfo = buildVatInfoFromCustomer(customer);
-                      const shippingInfo = buildShippingInfoFromCustomer(customer);
                       
-                      setNewOrder(prev => {
-                        const newState = {
-                          ...prev,
-                          customer_id: stringValue || "",
-                          customer_name: customer?.name || "",
-                          customer_code: customer?.customer_code || "",
-                          customer_phone: customer?.phoneNumber || "",
-                          customer_email: customer?.email || "",
-                          ...vatInfo,
-                          ...shippingInfo,
-                        };
+                      // Handle existing customer/supplier selection
+                      if (orderType === 'sale') {
+                        const customer = customers.find(c => c.id === stringValue);
+                        const vatInfo = buildVatInfoFromCustomer(customer);
+                        const shippingInfo = buildShippingInfoFromCustomer(customer);
                         
-                        // Only trigger AddressFormSeparate re-mount if province changed (for sale orders)
-                        if (orderType === 'sale') {
+                        setNewOrder(prev => {
+                          const newState = {
+                            ...prev,
+                            customer_id: stringValue || "",
+                            customer_name: customer?.name || "",
+                            customer_code: customer?.customer_code || "",
+                            customer_phone: customer?.phoneNumber || "",
+                            customer_email: customer?.email || "",
+                            ...vatInfo,
+                            ...shippingInfo,
+                          };
+                          
+                          // Only trigger AddressFormSeparate re-mount if province changed (for sale orders)
                           const currentProvinceCode = prev.shipping_addressInfo?.provinceCode;
                           const newProvinceCode = shippingInfo.shipping_addressInfo?.provinceCode;
                           
                           if (currentProvinceCode !== newProvinceCode) {
                             setShippingAddressVersion(v => v + 1);
                           }
-                        }
+                          
+                          return newState;
+                        });
+                      } else {
+                        // Purchase order - auto-fill supplier information
+                        const supplier = suppliers.find(s => s.id === stringValue);
                         
-                        return newState;
-                      });
+                        setNewOrder(prev => ({
+                          ...prev,
+                          customer_id: stringValue || "",
+                          customer_name: supplier?.name || "",
+                          customer_code: supplier?.code || "",
+                          customer_phone: supplier?.contact_phone || "",
+                          customer_email: supplier?.email || "",
+                        }));
+                      }
                     }}
                     placeholder={orderType === 'sale' ? "Chọn khách hàng hoặc nhập mới" : "Chọn nhà cung cấp hoặc nhập mới"}
                     searchPlaceholder={orderType === 'sale' ? "Tìm khách hàng..." : "Tìm nhà cung cấp..."}
@@ -759,7 +779,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </div>
             </CardContent>
           </Card>
-          {/* VAT Information */}
+          {/* VAT Information - Only show for sale orders */}
+          {orderType === 'sale' && (
           <Card ref={vatCardRef}>
             <CardHeader>
               <CardTitle>Thông tin VAT</CardTitle>
@@ -815,6 +836,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </div>
             </CardContent>
           </Card>
+          )}
           {/* Shipping Information - Only show for sale orders */}
           {orderType === 'sale' && (
           <Card ref={shippingCardRef}>

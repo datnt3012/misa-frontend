@@ -1242,7 +1242,7 @@ const OrdersContent: React.FC = () => {
                     onClick={() => handleSort("customer_name")}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      Khách hàng
+                      {orderType === 'purchase' ? 'Nhà cung cấp': 'Khách hàng'}
                       {getSortIcon("customer_name")}
                     </div>
                   </TableHead>

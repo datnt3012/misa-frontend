@@ -4,8 +4,8 @@ export const ORDER_STATUSES = [
   'pending',
   'picking',
   'picked',
-  'delivered',
-  'delivery_failed',
+  // 'delivered',
+  // 'delivery_failed',
   'completed',
   'cancelled',
 ] as const;
@@ -31,8 +31,8 @@ export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {
   pending: 'Chờ xử lý',
   picking: 'Đang lấy hàng',
   picked: 'Đã lấy hàng',
-  delivered: 'Đã giao hàng',
-  delivery_failed: 'Giao hàng thất bại',
+  // delivered: 'Đã giao hàng',
+  // delivery_failed: 'Giao hàng thất bại',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
@@ -54,8 +54,8 @@ export const ORDER_STATUS_VARIANTS: Record<OrderStatus, "default" | "secondary" 
   pending: 'secondary',
   picking: 'default',
   picked: 'default',
-  delivered: 'default',
-  delivery_failed: 'destructive',
+  // delivered: 'default',
+  // delivery_failed: 'destructive',
   completed: 'default',
   cancelled: 'destructive',
 };
@@ -77,8 +77,8 @@ export const ORDER_STATUS_CLASSES: Partial<Record<OrderStatus, string>> = {
   pending: 'bg-[#1976D2] text-white border-blue-500',
   picking: 'bg-[#FB8C00] text-white border-orange-500',
   picked: 'bg-[#8E24AA] text-white border-purple-500',
-  delivered: 'bg-[#2E7D32] text-white border-green-500',
-  delivery_failed: 'bg-[#D32F2F] text-white border-red-500',
+  // delivered: 'bg-[#2E7D32] text-white border-green-500',
+  // delivery_failed: 'bg-[#D32F2F] text-white border-red-500',
   completed: 'bg-[#1B5E20] text-white border-green-500',
   cancelled: 'bg-[#757575] text-white border-gray-500',
 };
