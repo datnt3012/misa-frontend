@@ -1147,7 +1147,7 @@ const OrdersContent: React.FC = () => {
             </div>
             <div>
               <div className="text-2xl font-bold text-red-600">{formatCurrency(totals.debtAmount)}</div>
-              <div className="text-sm text-muted-foreground">Còn nợ</div>
+              <div className="text-sm text-muted-foreground">{orderType === 'sale' ? 'Còn nợ' : 'Còn phải trả'}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-orange-600">{formatCurrency(totals.totalExpenses)}</div>
