@@ -425,7 +425,7 @@ const MovingSlips: React.FC = () => {
               {/* Warehouse Selection */}
               <div className="grid grid-cols-3 gap-4 items-center">
                 <div className="space-y-2 w-full">
-                  <Label>Kho Nguồn *</Label>
+                  <Label>Kho Nguồn <span className="text-red-500">*</span></Label>
                   <Select value={newSlip.source_warehouse_id || ''} onValueChange={(value) => setNewSlip({...newSlip, source_warehouse_id: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn kho nguồn" />
@@ -440,7 +440,7 @@ const MovingSlips: React.FC = () => {
                 </div>
                 <div className="space-y-2 w-full flex justify-center"><ArrowRight className="inline w-6 h-6 mx-2" /></div>
                 <div className="space-y-2 w-full">
-                  <Label>Kho Đích *</Label>
+                  <Label>Kho Đích <span className="text-red-500">*</span></Label>
                   <Select value={newSlip.destination_warehouse_id || ''} onValueChange={(value) => setNewSlip({...newSlip, destination_warehouse_id: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn kho đích" />
@@ -491,12 +491,6 @@ const MovingSlips: React.FC = () => {
                           </TableHead>
                           <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
                             Số lượng <span className="text-red-500">*</span>
-                          </TableHead>
-                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                            Đơn giá
-                          </TableHead>
-                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                            Thành tiền
                           </TableHead>
                           <TableHead className="font-semibold text-slate-700"></TableHead>
                         </TableRow>
@@ -550,18 +544,6 @@ const MovingSlips: React.FC = () => {
                                   className="w-20 text-center"
                                 />
                               </div>
-                            </TableCell>
-                            <TableCell className="border-r border-slate-100 align-top pt-4">
-                              <div className="space-y-1 flex justify-center">
-                                <CurrencyInput
-                                  value={item.unit_price || 0}
-                                  onChange={(value) => updateItem(index, 'unit_price', value)}
-                                  className="w-32 text-center"
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
-                              {(item.total_price || 0).toLocaleString('vi-VN')} ₫
                             </TableCell>
                             <TableCell className="align-top pt-4 flex justify-center">
                               <Button
