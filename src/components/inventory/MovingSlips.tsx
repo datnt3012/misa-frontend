@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Search, ChevronRight, Filter, RotateCw, Loader, ArrowRight, AlertCircle } from 'lucide-react';
+import { Plus, PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Search, ChevronRight, Filter, RotateCw, Loader, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/hooks/use-toast';
@@ -21,11 +21,15 @@ import { format } from 'date-fns';
 import { warehouseReceiptsApi, type WarehouseReceipt as WarehouseReceiptType } from '@/api/warehouseReceipts.api';
 import { productApi } from '@/api/product.api';
 import { warehouseApi } from '@/api/warehouse.api';
+import { stockLevelsApi } from '@/api/stockLevels.api';
 import { NumberInput } from '@/components/ui/number-input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 
 interface MovingSlipItem {
   id?: string;
   product_id: string;
+  product_code?: string;
+  product_name?: string;
   product?: {
     id: string;
     code: string;
@@ -35,6 +39,9 @@ interface MovingSlipItem {
     unit?: string;
   };
   quantity: number;
+  unit_price: number;
+  total_price: number;
+  current_stock?: number;
   notes?: string;
 }
 
@@ -83,12 +90,6 @@ const MovingSlips: React.FC = () => {
   const [newSlip, setNewSlip] = useState({
     source_warehouse_id: undefined as string | undefined,
     destination_warehouse_id: undefined as string | undefined,
-    notes: ''
-  });
-  
-  const [newItem, setNewItem] = useState({
-    product_id: '',
-    quantity: 0,
     notes: ''
   });
 
@@ -148,51 +149,104 @@ const MovingSlips: React.FC = () => {
         destination_warehouse_id: undefined,
         notes: ''
       });
-      setNewItem({
-        product_id: '',
-        quantity: 0,
-        notes: ''
-      });
       setSlipItems([]);
     }
   }, [showCreateDialog]);
 
-  // Add item to slip
-  const handleAddItem = () => {
-    if (!newItem.product_id || newItem.quantity <= 0) {
-      toast({
-        title: 'Lỗi',
-        description: 'Vui lòng chọn sản phẩm và nhập số lượng',
-        variant: 'destructive'
+  // Update stock levels when source warehouse changes
+  useEffect(() => {
+    if (newSlip.source_warehouse_id && slipItems.length > 0) {
+      slipItems.forEach((item, index) => {
+        if (item.product_id) {
+          fetchStockLevel(index, item.product_id, newSlip.source_warehouse_id!);
+        }
       });
-      return;
     }
+  }, [newSlip.source_warehouse_id]);
 
-    const product = products.find(p => p.id === newItem.product_id);
-    if (product) {
-      const newItemData: MovingSlipItem = {
-        product_id: newItem.product_id,
-        product: {
-          id: product.id,
-          code: product.code || '',
-          name: product.name || '',
-          unit: product.unit
-        },
-        quantity: newItem.quantity,
-        notes: newItem.notes
-      };
-      setSlipItems([...slipItems, newItemData]);
-      setNewItem({
-        product_id: '',
-        quantity: 0,
-        notes: ''
-      });
-    }
+  // Add item to slip
+  const addItem = () => {
+    setSlipItems(prev => [...prev, {
+      product_id: '',
+      product_code: '',
+      product_name: '',
+      quantity: 1,
+      unit_price: 0,
+      total_price: 0,
+      notes: ''
+    }]);
   };
 
   // Remove item from slip
-  const handleRemoveItem = (index: number) => {
-    setSlipItems(slipItems.filter((_, i) => i !== index));
+  const removeItem = (index: number) => {
+    setSlipItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Update item in slip
+  const updateItem = (index: number, field: keyof MovingSlipItem, value: any) => {
+    setSlipItems(prev => {
+      const items = [...prev];
+      items[index] = { ...items[index], [field]: value };
+
+      // Auto-fill product info when product_id changes
+      if (field === 'product_id' && value) {
+        const product = products.find(p => p.id === value);
+        if (product) {
+          items[index].product_code = product.code || '';
+          items[index].product_name = product.name || '';
+          items[index].product = {
+            id: product.id,
+            code: product.code || '',
+            name: product.name || '',
+            unit: product.unit
+          };
+          items[index].unit_price = product.price || product.costPrice || 0;
+        }
+        // Fetch stock level when product changes and source warehouse is selected
+        if (value && newSlip.source_warehouse_id) {
+          fetchStockLevel(index, value, newSlip.source_warehouse_id);
+        }
+      }
+
+      // Recalculate total price when quantity or unit_price changes
+      if (field === 'quantity' || field === 'unit_price') {
+        items[index].total_price = (items[index].quantity || 0) * (items[index].unit_price || 0);
+      }
+
+      return items;
+    });
+  };
+
+  // Get available products for a row (exclude already selected products)
+  const getAvailableProductsForRow = (currentIndex: number) => {
+    const selectedProductIds = slipItems
+      .map((item, index) => index !== currentIndex ? item.product_id : null)
+      .filter(id => id);
+    return products.filter(product => !selectedProductIds.includes(product.id));
+  };
+
+  // Fetch stock level for a product in source warehouse
+  const fetchStockLevel = async (index: number, productId: string, warehouseId: string) => {
+    if (!productId || !warehouseId) return;
+    try {
+      const stockLevels = await stockLevelsApi.getStockLevels({
+        productId,
+        warehouseId,
+        limit: 1
+      });
+      const currentStock = stockLevels.stockLevels.length > 0 ? stockLevels.stockLevels[0].quantity : 0;
+      setSlipItems(prev => {
+        const items = [...prev];
+        items[index].current_stock = currentStock;
+        return items;
+      });
+    } catch (error) {
+      setSlipItems(prev => {
+        const items = [...prev];
+        items[index].current_stock = 0;
+        return items;
+      });
+    }
   };
 
   // Create moving slip
@@ -235,7 +289,7 @@ const MovingSlips: React.FC = () => {
           details: slipItems.map(item => ({
             productId: item.product_id,
             quantity: item.quantity,
-            unitPrice: 0 // Moving doesn't require unit price
+            unitPrice: item.unit_price || 0
           }))
         };
 
@@ -249,7 +303,7 @@ const MovingSlips: React.FC = () => {
     } catch (error: any) {
       toast({
         title: 'Lỗi',
-        description: error.message || 'Không thể tạo phiếu chuyển kho',
+        description: error.response?.data?.message || error.message || 'Không thể tạo phiếu chuyển kho',
         variant: 'destructive'
       });
     } finally {
@@ -271,7 +325,7 @@ const MovingSlips: React.FC = () => {
     } catch (error: any) {
       toast({
         title: 'Lỗi',
-        description: error.message || 'Không thể duyệt phiếu',
+        description: error.response?.data?.message || error.message || 'Không thể duyệt phiếu',
         variant: 'destructive'
       });
     } finally {
@@ -351,19 +405,15 @@ const MovingSlips: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Phiếu Chuyển Kho</h2>
-          <p className="text-muted-foreground">Quản lý phiếu chuyển hàng giữa các kho</p>
-        </div>
+      <div className="flex justify-end items-center">
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2 mt-4">
               <PlusCircle className="w-4 h-4" />
               Tạo Phiếu Chuyển
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Tạo Phiếu Chuyển Kho</DialogTitle>
               <DialogDescription>
@@ -373,8 +423,8 @@ const MovingSlips: React.FC = () => {
 
             <div className="space-y-4">
               {/* Warehouse Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <div className="space-y-2 w-full">
                   <Label>Kho Nguồn *</Label>
                   <Select value={newSlip.source_warehouse_id || ''} onValueChange={(value) => setNewSlip({...newSlip, source_warehouse_id: value})}>
                     <SelectTrigger>
@@ -388,7 +438,8 @@ const MovingSlips: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 w-full flex justify-center"><ArrowRight className="inline w-6 h-6 mx-2" /></div>
+                <div className="space-y-2 w-full">
                   <Label>Kho Đích *</Label>
                   <Select value={newSlip.destination_warehouse_id || ''} onValueChange={(value) => setNewSlip({...newSlip, destination_warehouse_id: value})}>
                     <SelectTrigger>
@@ -404,16 +455,6 @@ const MovingSlips: React.FC = () => {
                 </div>
               </div>
 
-              {/* Show direction */}
-              {sourceWarehouse && destWarehouse && (
-                <Alert>
-                  <ArrowRight className="h-4 w-4" />
-                  <AlertDescription>
-                    {sourceWarehouse.name} <ArrowRight className="inline w-4 h-4 mx-2" /> {destWarehouse.name}
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {/* Notes */}
               <div className="space-y-2">
                 <Label>Ghi Chú</Label>
@@ -426,74 +467,118 @@ const MovingSlips: React.FC = () => {
               </div>
 
               {/* Add Items */}
-              <div className="space-y-4 border-t pt-4">
-                <h4 className="font-semibold">Thêm Sản Phẩm</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Sản Phẩm *</Label>
-                    <Combobox
-                      options={products.map(p => ({ label: `${p.code} - ${p.name}`, value: p.id }))}
-                      value={newItem.product_id}
-                      onValueChange={(value) => setNewItem({...newItem, product_id: value as string})}
-                      placeholder="Chọn sản phẩm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Số Lượng *</Label>
-                    <NumberInput
-                      value={newItem.quantity}
-                      onChange={(value) => setNewItem({...newItem, quantity: value})}
-                      placeholder="Nhập số lượng"
-                      min={0}
-                      step={1}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      onClick={handleAddItem}
-                      variant="outline"
-                      className="w-full"
-                      type="button"
-                    >
-                      <PlusCircle className="w-4 h-4" />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex justify-between items-center">
+                    <span>Sản phẩm</span>
+                    <Button onClick={addItem} size="sm">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Thêm sản phẩm
                     </Button>
-                  </div>
-                </div>
-
-                {/* Items List */}
-                {slipItems.length > 0 && (
-                  <div className="mt-4">
-                    <Table>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {slipItems.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Chưa có sản phẩm nào. Click "Thêm sản phẩm" để bắt đầu.
+                    </div>
+                  ) : (
+                    <Table className="border border-border/30 rounded-lg overflow-hidden">
                       <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-center">Sản Phẩm</TableHead>
-                            <TableHead className="text-center">Số Lượng</TableHead>
-                            <TableHead className="text-center">Đơn Vị</TableHead>
-                            <TableHead className="text-center"></TableHead>
+                        <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Sản phẩm <span className="text-red-500">*</span>
+                          </TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Số lượng <span className="text-red-500">*</span>
+                          </TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Đơn giá
+                          </TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Thành tiền
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {slipItems.map((item, index) => (
+                          <TableRow
+                            key={index}
+                            className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
+                          >
+                            <TableCell className="border-r border-slate-100 align-top pt-4">
+                              <div className="space-y-1 flex justify-center">
+                                <Combobox
+                                  options={getAvailableProductsForRow(index).map((product) => ({
+                                    label: `${product.name} (${product.code})`,
+                                    value: product.id
+                                  }))}
+                                  value={item.product_id}
+                                  onValueChange={(value) => updateItem(index, 'product_id', value)}
+                                  placeholder="Chọn sản phẩm"
+                                  searchPlaceholder="Tìm sản phẩm..."
+                                  emptyMessage={getAvailableProductsForRow(index).length === 0 ? 'Không còn sản phẩm nào để chọn' : 'Không có sản phẩm nào'}
+                                  className="w-[200px] text-center"
+                                />
+                              </div>
+                              <div className="space-y-1 flex justify-center">
+                                {item.current_stock !== undefined && newSlip.source_warehouse_id && (
+                                  <div className="text-xs mt-1">
+                                    {item.current_stock === 0 ? (
+                                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
+                                        Hết hàng tại kho này
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-gray-600">
+                                        Tồn kho: {item.current_stock}
+                                      </span>
+                                    )}
+                                    {item.quantity > item.current_stock && item.current_stock > 0 && (
+                                      <span className="text-red-500 ml-1">⚠️</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="border-r border-slate-100 align-top pt-4">
+                              <div className="space-y-1 flex justify-center">
+                                <NumberInput
+                                  value={item.quantity}
+                                  onChange={(value) => updateItem(index, 'quantity', value)}
+                                  min={1}
+                                  className="w-20 text-center"
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="border-r border-slate-100 align-top pt-4">
+                              <div className="space-y-1 flex justify-center">
+                                <CurrencyInput
+                                  value={item.unit_price || 0}
+                                  onChange={(value) => updateItem(index, 'unit_price', value)}
+                                  className="w-32 text-center"
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                              {(item.total_price || 0).toLocaleString('vi-VN')} ₫
+                            </TableCell>
+                            <TableCell className="align-top pt-4 flex justify-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeItem(index)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {slipItems.map((item, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell className="text-center">{item.product?.code} - {item.product?.name}</TableCell>
-                              <TableCell className="text-center">{item.quantity}</TableCell>
-                              <TableCell className="text-center">{item.product?.unit || '-'}</TableCell>
-                              <TableCell className="text-center">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleRemoveItem(idx)}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
+                        ))}
+                      </TableBody>
                     </Table>
-                  </div>
-                )}
-              </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             <DialogFooter>
