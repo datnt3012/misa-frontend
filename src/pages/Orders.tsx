@@ -706,7 +706,6 @@ const OrdersContent: React.FC = () => {
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-      // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `delivery_note_${order.order_number}.pdf`;
       const parsedFilename = getFilenameFromContentDisposition(contentDisposition);
@@ -1621,7 +1620,7 @@ const OrdersContent: React.FC = () => {
                                  className="cursor-pointer hover:bg-muted"
                                >
                                  <Download className="w-4 h-4 mr-2" />
-                                 Xuất biên bản giao hàng
+                                 {order.type === 'purchase' ? 'Xuất biên bản mua hàng' : 'Xuất biên bản giao hàng'}
                                </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleCreateExportSlip(order)}
