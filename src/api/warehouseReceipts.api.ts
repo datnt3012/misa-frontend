@@ -62,6 +62,7 @@ export interface WarehouseReceipt {
   code: string; // slip number
   warehouse_id: string;
   new_warehouse_id?: string; // Kho đích cho loại moving
+  movingReceiptId?: string; // ID của phiếu gốc (dùng để nhóm phiếu chuyển đi và chuyển đến)
   status: string; // draft | completed | approved | pending | rejected
   notes: string;
   created_at: string;
@@ -175,6 +176,7 @@ const normalize = (row: any): WarehouseReceipt => ({
   order_id: row.orderId ?? row.order_id ?? '',
   warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
   new_warehouse_id: row.newWarehouseId ?? row.new_warehouse_id ?? undefined, // Kho đích cho moving
+  movingReceiptId: row.movingReceiptId ?? row.moving_receipt_id ?? undefined, // ID của phiếu gốc
   status: row.status ?? 'draft',
   notes: row.description ?? row.notes ?? undefined,
   created_at: row.createdAt ?? row.created_at ?? '',
@@ -326,7 +328,11 @@ export const warehouseReceiptsApi = {
 
     const filterByType = (receipts: WarehouseReceipt[]) => {
       if (params?.type) {
-        return receipts.filter((receipt) => (receipt.type || '').toLowerCase() === params.type?.toLowerCase());
+        // Support comma-separated types (e.g., 'stock_transfer_out,stock_transfer_in')
+        const types = params.type.split(',').map(t => t.trim().toLowerCase());
+        return receipts.filter((receipt) => 
+          types.includes((receipt.type || '').toLowerCase())
+        );
       }
       return receipts;
     };

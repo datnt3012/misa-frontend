@@ -20,9 +20,10 @@ import { warehouseReceiptsApi, type CreateWarehouseReceiptRequest } from "@/api/
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
 import { Loading } from "@/components/ui/loading";
-interface OrderSpecificExportSlipCreationProps {
+interface OrderSpecificSlipCreationProps {
   orderId: string;
   orderType?: string;
+  slipType?: string; // Custom slip type: 'import' | 'export' | 'sale_return' | 'purchase_return'
   onExportSlipCreated?: () => void;
 }
 interface ExportSlipFormItem {
@@ -38,12 +39,29 @@ interface ExportSlipForm {
   items: ExportSlipFormItem[];
   notes: string;
 }
-export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCreationProps> = ({ 
+export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps> = ({ 
   orderId,
   orderType,
+  slipType,
   onExportSlipCreated 
 }) => {
+  // Determine if it's a purchase order
   const isPurchaseOrder = orderType == 'purchase';
+  // Determine slip type: use slipType if provided, otherwise derive from orderType
+  const effectiveSlipType = slipType || (isPurchaseOrder ? 'import' : 'export');
+  const isReturnSlip = slipType === 'sale_return' || slipType === 'purchase_return';
+  // Determine if we're creating import slips (vs export slips)
+  const isImportSlip = effectiveSlipType === 'import' || effectiveSlipType === 'purchase_return';
+  
+  // Helper for display labels
+  const getSlipTypeLabel = (isImport: boolean, isReturn: boolean) => {
+    if (isReturn) return isImport ? 'Trả hàng NCC' : 'Hoàn hàng';
+    return isImport ? 'Nhập kho' : 'Xuất kho';
+  };
+  const getSlipTypeLabelLower = (isImport: boolean, isReturn: boolean) => {
+    if (isReturn) return isImport ? 'trả hàng NCC' : 'hoàn hàng';
+    return isImport ? 'nhập kho' : 'xuất kho';
+  };
   const [order, setOrder] = useState<Order | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [exportSlips, setExportSlips] = useState<ExportSlipForm[]>([]);
@@ -59,13 +77,13 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
     loadOrder();
     loadWarehouses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [orderId, slipType]);
   
   const generateSlipCode = () => {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
-    const prefix = isPurchaseOrder ? 'IMP' : 'EXP';
+    const prefix = isImportSlip ? 'IMP' : 'EXP';
     const code = `${prefix}${dateStr}${timeStr}`.slice(0, 20);
     return code;
   };
@@ -186,13 +204,23 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       // Lấy thông tin tất cả các phiếu xuất kho đã tạo từ đơn hàng này (nếu có)
       let exportedQuantityByProduct: Record<string, number> = {};
       try {
+        // Determine the receipt type to fetch based on effectiveSlipType
+        // For return slips, we may need to fetch all types or specific return types
+        let receiptType: string | undefined;
+        if (effectiveSlipType === 'import' || effectiveSlipType === 'purchase_return') {
+          receiptType = 'import';
+        } else if (effectiveSlipType === 'export') {
+          receiptType = 'export';
+        }
+        // For return slips ('return'), we fetch all receipts and filter on client side
+        
         // Lấy tất cả các phiếu xuất kho của đơn hàng này - sử dụng API với orderId filter
         const response = await warehouseReceiptsApi.getReceipts({ 
           page: 1, 
           limit: 1000, 
           orderId: orderId, 
           status: 'pending,approved,picked,exported', 
-          type: isPurchaseOrder ? 'import' : 'export' 
+          type: receiptType
         });
         const allSlips = response.receipts || [];
         
@@ -264,7 +292,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
     if (exportSlips.length === 0) {
       toast({
         title: "Lỗi",
-        description: isPurchaseOrder ? "Vui lòng thêm ít nhất một phiếu nhập kho" : "Vui lòng thêm ít nhất một phiếu xuất kho",
+        description: isImportSlip ? "Vui lòng thêm ít nhất một phiếu nhập kho" : "Vui lòng thêm ít nhất một phiếu xuất kho",
         variant: "destructive",
       });
       return;
@@ -275,8 +303,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       if (!slip.warehouse_id) {
         toast({
           title: "Lỗi",
-          description: isPurchaseOrder 
-            ? `Vui lòng chọn kho cho phiếu nhập kho "${slip.slipCode}"`
+          description: isImportSlip 
+            ? `Vui lòng chọn kho cho phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)} "${slip.slipCode}"`
             : `Vui lòng chọn kho cho phiếu xuất kho "${slip.slipCode}"`,
           variant: "destructive",
         });
@@ -289,8 +317,8 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       if (validItems.length === 0) {
         toast({
           title: "Lỗi",
-          description: isPurchaseOrder 
-            ? `Vui lòng thêm ít nhất một sản phẩm cho phiếu nhập kho "${slip.slipCode}"`
+          description: isImportSlip 
+            ? `Vui lòng thêm ít nhất một sản phẩm cho phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)} "${slip.slipCode}"`
             : `Vui lòng thêm ít nhất một sản phẩm cho phiếu xuất kho "${slip.slipCode}"`,
           variant: "destructive",
         });
@@ -307,7 +335,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         orderItemsMap.set(item.product_id, item);
       });
       
-      if (isPurchaseOrder) {
+      if (isImportSlip) {
         // Create import slips using warehouseReceiptsApi
         const results = await Promise.all(exportSlips.map(async (slip) => {
           const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
@@ -320,7 +348,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             code: code,
             description: slip.notes.trim() || undefined,
             status: 'pending',
-            type: 'import',
+            type: effectiveSlipType,
             details: validItems.map(item => {
               const orderItem = orderItemsMap.get(item.product_id);
               return {
@@ -374,7 +402,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       
       onExportSlipCreated?.();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || (isPurchaseOrder ? "Không thể tạo phiếu nhập kho" : "Không thể tạo phiếu xuất kho");
+      const errorMessage = error.response?.data?.message || error.message || (isImportSlip ? "Không thể tạo phiếu nhập kho" : "Không thể tạo phiếu xuất kho");
       toast({
         title: "Lỗi",
         description: errorMessage,
@@ -414,11 +442,18 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-  // Get available order items (products that haven't been fully exported)
+  // Get available order items based on slip type
+  // For normal slips: show products that haven't been fully exported (exportedQuantity < orderQuantity)
+  // For return slips: show products that have been exported at least once (exportedQuantity > 0)
   const getAvailableOrderItems = () => {
     if (!order) return [];
     return (order.items || []).filter(item => {
       const exportedQuantity = exportedQuantityByProduct[item.product_id] || 0;
+      if (isReturnSlip) {
+        // For return slips: only show products that have been exported/imported at least once
+        return exportedQuantity > 0;
+      }
+      // For normal slips: show products that haven't been fully exported
       return exportedQuantity < item.quantity;
     });
   };
@@ -428,12 +463,12 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            {isPurchaseOrder ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
+            {getSlipTypeLabel(isImportSlip, isReturnSlip)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            {isPurchaseOrder ? 'Bạn không có quyền tạo phiếu nhập kho' : 'Bạn không có quyền tạo phiếu xuất kho'}
+            {isReturnSlip ? `Bạn không có quyền tạo phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)}` : `Bạn không có quyền tạo phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)}`}
           </div>
         </CardContent>
       </Card>
@@ -445,7 +480,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            {isPurchaseOrder ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
+            {getSlipTypeLabel(isImportSlip, isReturnSlip)}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -462,7 +497,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            {isPurchaseOrder ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
+            {getSlipTypeLabel(isImportSlip, isReturnSlip)}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -478,7 +513,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Package className="w-5 h-5" />
-          {isPurchaseOrder ? 'Tạo phiếu nhập kho từ đơn hàng' : 'Tạo phiếu xuất kho từ đơn hàng'}
+          {`Tạo phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)} từ đơn hàng`}
         </CardTitle>
         <CardDescription>Đơn hàng: {order.order_number} - {order.customer_name}</CardDescription>
         <CardDescription>Hợp đồng: {order.contract_code || 'Không có'}</CardDescription>
@@ -489,9 +524,9 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
           <div className="flex items-start gap-3">
             <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-blue-900">{isPurchaseOrder ? 'Trạng thái phiếu nhập kho' : 'Trạng thái phiếu xuất kho'}</h4>
+              <h4 className="font-semibold text-blue-900">{`Trạng thái phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)}`}</h4>
               <div className="text-sm text-blue-800 mt-2 space-y-1">
-                {isPurchaseOrder ? (
+                {isImportSlip ? (
                   <>
                     <p><strong>Nháp:</strong> Phiếu được tạo, chưa ảnh hưởng tồn kho</p>
                     <p><strong>Hoàn thành:</strong> Hàng đã nhập vào kho, bắt đầu cộng tồn kho</p>
@@ -598,7 +633,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
               <Card key={slip.id} className="border-2">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{isPurchaseOrder ? 'Phiếu nhập kho' : 'Phiếu xuất kho'} #{slipIndex + 1}</CardTitle>
+                    <CardTitle className="text-lg">{getSlipTypeLabel(isImportSlip, isReturnSlip)} #{slipIndex + 1}</CardTitle>
                     <Button
                       variant="destructive"
                       size="sm"
@@ -612,16 +647,16 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                 <CardContent className="space-y-4">
                   {/* Slip Code */}
                   <div>
-                    <Label htmlFor={`slip-code-${slip.id}`}>{isPurchaseOrder ? 'Mã phiếu nhập kho' : 'Mã phiếu xuất kho'}</Label>
+                    <Label htmlFor={`slip-code-${slip.id}`}>{getSlipTypeLabel(isImportSlip, isReturnSlip)}</Label>
                     <Input
                       id={`slip-code-${slip.id}`}
                       value={slip.slipCode}
                       onChange={(e) => updateExportSlip(slip.id, 'slipCode', e.target.value)}
-                      placeholder={isPurchaseOrder ? 'Nhập mã phiếu nhập kho (tùy chọn)' : 'Nhập mã phiếu xuất kho (tùy chọn)'}
+                      placeholder={`Nhập mã phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)} (tùy chọn)`}
                       maxLength={20}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      {isPurchaseOrder ? 'Để trống để tự động tạo mã phiếu nhập kho' : 'Để trống để tự động tạo mã phiếu xuất kho'}
+                      {`Để trống để tự động tạo mã phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)}`}
                     </p>
                   </div>
                   
@@ -638,7 +673,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                       ]}
                       value={slip.warehouse_id}
                       onValueChange={(value) => updateExportSlip(slip.id, 'warehouse_id', value)}
-                      placeholder={isPurchaseOrder ? 'Chọn kho nhập hàng' : 'Chọn kho xuất hàng'}
+                      placeholder={isImportSlip ? 'Chọn kho nhập hàng' : 'Chọn kho xuất hàng'}
                       searchPlaceholder="Tìm kho..."
                       emptyMessage="Không có kho nào"
                       className="w-full"
@@ -758,7 +793,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
                       id={`notes-${slip.id}`}
                       value={slip.notes}
                       onChange={(e) => updateExportSlip(slip.id, 'notes', e.target.value)}
-                      placeholder={isPurchaseOrder ? 'Nhập ghi chú cho phiếu nhập kho...' : 'Nhập ghi chú cho phiếu xuất kho...'}
+                      placeholder={`Nhập ghi chú cho phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)}...`}
                       rows={2}
                     />
                   </div>
@@ -773,7 +808,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
             onClick={addExportSlip}
           >
             <Plus className="w-4 h-4 mr-2" />
-            {isPurchaseOrder ? 'Thêm phiếu nhập kho' : 'Thêm phiếu xuất kho'}
+            {`Thêm phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)}`}
           </Button>
         </div>
         
@@ -793,7 +828,7 @@ export const OrderSpecificExportSlipCreation: React.FC<OrderSpecificExportSlipCr
               ) : (
                 <>
                   <Plus className="w-4 h-4 mr-2" />
-                  {isPurchaseOrder ? `Tạo tất cả phiếu nhập kho (${exportSlips.length})` : `Tạo tất cả phiếu xuất kho (${exportSlips.length})`}
+                  {`Tạo tất cả phiếu ${getSlipTypeLabelLower(isImportSlip, isReturnSlip)} (${exportSlips.length})`}
                 </>
               )}
             </Button>

@@ -27,7 +27,7 @@ import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpecificExportSlipCreation";
+import { OrderSpecificSlipCreation } from "@/components/inventory/OrderSpecificSlipCreation";
 import { format, set } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
@@ -155,6 +155,7 @@ const OrdersContent: React.FC = () => {
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
+  const [selectedSlipType, setSelectedSlipType] = useState<string | undefined>(undefined);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [manufacturers, setManufacturers] = useState<string[]>([]);
@@ -401,8 +402,9 @@ const OrdersContent: React.FC = () => {
   }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
 
   // Handle creating export slip
-  const handleCreateExportSlip = (order: any) => {
+  const handleCreateExportSlip = (order: any, slipType?: string) => {
     setSelectedOrderForExport(order);
+    setSelectedSlipType(slipType);
     setShowExportSlipDialog(true);
   };
 
@@ -1623,11 +1625,18 @@ const OrdersContent: React.FC = () => {
                                  {order.type === 'purchase' ? 'Xuất biên bản mua hàng' : 'Xuất biên bản giao hàng'}
                                </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  onClick={() => handleCreateExportSlip(order)}
+                                  onClick={() => handleCreateExportSlip(order, order.type === 'purchase' ? 'import' : 'export')}
                                   className="cursor-pointer hover:bg-muted"
                                 >
                                   <Package className="w-4 h-4 mr-2" />
                                   {order.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleCreateExportSlip(order, order.type === 'purchase' ? 'purchase_return' : 'sale_return')}
+                                  className="cursor-pointer hover:bg-muted"
+                                >
+                                  <RotateCw className="w-4 h-4 mr-2" />
+                                  {order.type === 'purchase' ? 'Tạo phiếu trả hàng NCC' : 'Tạo phiếu hoàn hàng'}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => {
@@ -1859,10 +1868,25 @@ const OrdersContent: React.FC = () => {
       <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedOrderForExport?.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}</DialogTitle>
+            <DialogTitle>{
+              selectedOrderForExport ? (
+                selectedSlipType === 'import' ? 'Tạo phiếu nhập kho' :
+                selectedSlipType === 'export' ? 'Tạo phiếu xuất kho' :
+                selectedSlipType === 'sale_return' ? 'Tạo phiếu hoàn hàng' :
+                selectedSlipType === 'purchase_return' ? 'Tạo phiếu trả hàng NCC' :
+                (selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho')
+              ) : 'Tạo phiếu'
+            }</DialogTitle>
             <DialogDescription>
               {selectedOrderForExport ? (
-                <>{selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'} cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong></>
+                <>
+                  {selectedSlipType === 'import' ? 'Tạo phiếu nhập kho' :
+                   selectedSlipType === 'export' ? 'Tạo phiếu xuất kho' :
+                   selectedSlipType === 'sale_return' ? 'Tạo phiếu hoàn hàng' :
+                   selectedSlipType === 'purchase_return' ? 'Tạo phiếu trả hàng NCC' :
+                   (selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho')
+                  } cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong>
+                </>
               ) : (
                 'Chọn đơn hàng để tạo phiếu'
               )}
@@ -1870,17 +1894,27 @@ const OrdersContent: React.FC = () => {
           </DialogHeader>
           <div className="py-4">
             {selectedOrderForExport && (
-              <OrderSpecificExportSlipCreation 
+              <OrderSpecificSlipCreation 
                 orderId={selectedOrderForExport.id}
                 orderType={selectedOrderForExport.type}
+                slipType={selectedSlipType}
                 onExportSlipCreated={() => {
                   setShowExportSlipDialog(false);
                   const orderNumber = selectedOrderForExport.order_number;
-                  const isPurchase = selectedOrderForExport.type === 'purchase';
+                  // Determine slip type label
+                  const getSlipTypeLabel = (type?: string) => {
+                    if (type === 'import') return 'phiếu nhập kho';
+                    if (type === 'export') return 'phiếu xuất kho';
+                    if (type === 'sale_return') return 'phiếu hoàn hàng';
+                    if (type === 'purchase_return') return 'phiếu trả hàng NCC';
+                    return selectedOrderForExport.type === 'purchase' ? 'phiếu nhập kho' : 'phiếu xuất kho';
+                  };
+                  const slipTypeLabel = getSlipTypeLabel(selectedSlipType);
                   setSelectedOrderForExport(null);
+                  setSelectedSlipType(undefined);
                   toast({
                     title: "Thành công",
-                    description: `Đã tạo ${isPurchase ? 'phiếu nhập kho' : 'phiếu xuất kho'} cho đơn hàng ${orderNumber}`,
+                    description: `Đã tạo ${slipTypeLabel} cho đơn hàng ${orderNumber}`,
                   });
                   // Backend cập nhật trạng thái đơn hàng sau khi tạo phiếu xuất kho,
                   // cần refetch danh sách để hiển thị đúng trạng thái mới

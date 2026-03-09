@@ -1980,6 +1980,15 @@ function ExportSlipsContent() {
                     </div>
                   </TableHead>
                   <TableHead
+                    className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
+                    onClick={() => handleSort('orderCode')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Loại phiếu
+                      {getSortIcon('orderCode')}
+                    </div>
+                  </TableHead>
+                  <TableHead
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[180px]"
                     onClick={() => handleSort('customerName')}
                   >
@@ -2061,6 +2070,9 @@ function ExportSlipsContent() {
                     </TableCell>
                     <TableCell className="text-center min-w-[120px]">
                       <div className="truncate" title={slip.order?.order_number || ''}>{slip.order?.order_number || '-'}</div>
+                    </TableCell>
+                    <TableCell className="text-center min-w-[120px]">
+                      <div className="truncate">{'-'}</div>
                     </TableCell>
                     <TableCell className="text-center min-w-[180px]">
                       <div className="truncate" title={slip.order?.customer_name || ''}>{slip.order?.customer_name || '-'}</div>
