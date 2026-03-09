@@ -186,6 +186,7 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/export-slips/${id}`,
     APPROVE: (id: string) => `/export-slips/${id}/approve`,
     COMPLETE: (id: string) => `/export-slips/${id}/complete`,
+    EXPORT: (id: string, type: string) => `/warehouse-receipts/${id}/export?type=${type}`,
   },
 
   // Warehouse Receipts (Import Slips)
@@ -211,6 +212,8 @@ export const API_ENDPOINTS = {
     // Job Status APIs (shared for both import and export)
     IMPORT_STATUS_LIST: '/warehouse-receipts/import/status',
     IMPORT_STATUS: (jobId: string) => `/warehouse-receipts/import/status/${jobId}`,
+    // Export APIs
+    EXPORT: (id: string, type: string) => `/warehouse-receipts/${id}/export?type=${type}`,
   },
   
   // Payments
