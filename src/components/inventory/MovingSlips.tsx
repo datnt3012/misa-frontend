@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Plus, PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Search, ChevronRight, Filter, RotateCw, Loader, ArrowRight, AlertCircle } from 'lucide-react';
+import { Plus, PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Search, ChevronRight, Filter, RotateCw, Loader, ArrowRight, AlertCircle, Printer, FileDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/hooks/use-toast';
@@ -348,6 +348,35 @@ const MovingSlips: React.FC = () => {
       toast({
         title: 'Lỗi',
         description: error.message || 'Không thể từ chối phiếu',
+        variant: 'destructive'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Export slip
+  const handleExportSlip = async (slip: MovingSlip, type: 'pdf' | 'xlsx') => {
+    try {
+      setSubmitting(true);
+      const { blob, filename } = await warehouseReceiptsApi.exportReceipt(slip.id, type);
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      toast({
+        title: 'Thành công',
+        description: `Đã xuất ${type.toUpperCase()} thành công`
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Lỗi',
+        description: error.message || 'Không thể xuất phiếu',
         variant: 'destructive'
       });
     } finally {
@@ -843,30 +872,51 @@ const MovingSlips: React.FC = () => {
                 </Table>
               </div>
 
-              {selectedSlip.status === 'pending' && (
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRejectSlip(selectedSlip)}
-                    disabled={submitting}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <XCircle className="w-3 h-3 mr-1" />
-                    {submitting ? 'Đang xử lý...' : 'Từ chối'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleApproveSlip(selectedSlip)}
-                    disabled={submitting}
-                    className="text-green-600"
-                  >
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    {submitting ? 'Đang xử lý...' : 'Duyệt Phiếu'}
-                  </Button>
-                </DialogFooter>
-              )}
+              {/* Action Buttons */}
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExportSlip(selectedSlip, 'pdf')}
+                  disabled={submitting}
+                >
+                  <Printer className="w-3 h-3 mr-1" />
+                  In PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExportSlip(selectedSlip, 'xlsx')}
+                  disabled={submitting}
+                >
+                  <FileDown className="w-3 h-3 mr-1" />
+                  Xuất Excel
+                </Button>
+                {selectedSlip.status === 'pending' && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRejectSlip(selectedSlip)}
+                      disabled={submitting}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <XCircle className="w-3 h-3 mr-1" />
+                      {submitting ? 'Đang xử lý...' : 'Từ chối'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApproveSlip(selectedSlip)}
+                      disabled={submitting}
+                      className="text-green-600"
+                    >
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      {submitting ? 'Đang xử lý...' : 'Duyệt Phiếu'}
+                    </Button>
+                  </>
+                )}
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

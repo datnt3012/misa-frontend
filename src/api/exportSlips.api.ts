@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import apiClient from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 export interface ExportSlipItem {
   id: string;
@@ -366,5 +367,46 @@ export const exportSlipsApi = {
       status: 'cancelled',
       description: notes
     });
+  },
+  // Helper function to extract filename from Content-Disposition header (RFC 5987)
+  getFilenameFromContentDisposition: (cd: string | null): string | null => {
+    if (!cd) {
+      return null;
+    }
+    
+    // Ưu tiên filename*="UTF-8''..." (có dấu ngoặc kép)
+    const utf8QuotedMatch = cd.match(/filename\*=\"UTF-8''(.*?)\"/i);
+    if (utf8QuotedMatch && utf8QuotedMatch[1]) {
+      return decodeURIComponent(utf8QuotedMatch[1]);
+    }
+    
+    // Thử filename*=UTF-8''... (không có dấu ngoặc kép)
+    const utf8Match = cd.match(/filename\*=UTF-8''(.*?)(?:;|$)/i);
+    if (utf8Match && utf8Match[1]) {
+      return decodeURIComponent(utf8Match[1]);
+    }
+    
+    // Fallback filename="..."
+    const asciiMatch = cd.match(/filename=\"(.*?)\"/i);
+    if (asciiMatch && asciiMatch[1]) {
+      return asciiMatch[1];
+    }
+    
+    return null;
+  },
+  // Export slip to PDF or XLSX
+  exportSlip: async (id: string, type: 'pdf' | 'xlsx'): Promise<{ blob: Blob; filename: string }> => {
+    const response = await apiClient.get(API_ENDPOINTS.EXPORT_SLIPS.EXPORT(id, type), {
+      responseType: 'blob',
+    });
+    const blob = response.data;
+    // Extract filename from Content-Disposition header
+    const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition'];
+    let filename = `export-slip-${id}.${type}`;
+    const parsedFilename = exportSlipsApi.getFilenameFromContentDisposition(contentDisposition);
+    if (parsedFilename) {
+      filename = parsedFilename;
+    }
+    return { blob, filename };
   },
 };
