@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronsUpDown, ChevronDown, ChevronUp, Filter, RotateCw, Loader } from 'lucide-react';
+import { PlusCircle, Package, CheckCircle, Clock, X, XCircle, Trash2, Download, Upload, Search, ChevronRight, ChevronsUpDown, ChevronDown, ChevronUp, Filter, RotateCw, Loader, Printer, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 // // import { supabase } from '@/integrations/supabase/client'; // Removed - using API instead // Removed - using API instead
 import { useAuth } from '@/hooks/useAuth';
@@ -96,6 +96,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const [categories, setCategories] = useState<any[]>([]);
   const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState<ImportSlip | null>(null);
@@ -1032,6 +1033,35 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
 
   const handleJobCardSelect = (jobId: string) => {
     setActiveJobId(activeJobId === jobId ? null : jobId);
+  };
+
+  // Export slip to PDF or XLSX
+  const handleExportSlip = async (slip: ImportSlip, type: 'pdf' | 'xlsx') => {
+    try {
+      setExporting(true);
+      const { blob, filename } = await warehouseReceiptsApi.exportReceipt(slip.id, type);
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      toast({
+        title: 'Thành công',
+        description: `Đã xuất ${type.toUpperCase()} thành công`
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Lỗi',
+        description: error.message || 'Không thể xuất phiếu',
+        variant: 'destructive'
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Filter jobs by type and status
@@ -2015,13 +2045,35 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         }
       }}>
         <DialogContent className="max-w-[130vh] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Chi tiết phiếu nhập - {selectedSlip?.slip_number}</DialogTitle>
-            <DialogDescription>
-              Nhà cung cấp: {selectedSlip?.supplier_name} | 
-              Ngày nhập: {selectedSlip?.completed_at ? format(new Date(selectedSlip.completed_at), 'dd/MM/yyyy') : '-'} | 
-              Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name || selectedSlip?.warehouses?.name || '-'} ({getWarehouseById(selectedSlip?.warehouse_id)?.code || selectedSlip?.warehouses?.code || '-'})
-            </DialogDescription>
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle>Chi tiết phiếu nhập - {selectedSlip?.slip_number}</DialogTitle>
+              <DialogDescription>
+                Nhà cung cấp: {selectedSlip?.supplier_name} | 
+                Ngày nhập: {selectedSlip?.completed_at ? format(new Date(selectedSlip.completed_at), 'dd/MM/yyyy') : '-'} | 
+                Kho nhập: {getWarehouseById(selectedSlip?.warehouse_id)?.name || selectedSlip?.warehouses?.name || '-'} ({getWarehouseById(selectedSlip?.warehouse_id)?.code || selectedSlip?.warehouses?.code || '-'})
+              </DialogDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selectedSlip && handleExportSlip(selectedSlip, 'pdf')}
+                disabled={exporting}
+              >
+                <Printer className="w-3 h-3 mr-1" />
+                In PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selectedSlip && handleExportSlip(selectedSlip, 'xlsx')}
+                disabled={exporting}
+              >
+                <FileDown className="w-3 h-3 mr-1" />
+                Xuất Excel
+              </Button>
+            </div>
           </DialogHeader>
           {/* Additional Information Section */}
           <div className="grid grid-cols-1 gap-4 p-4 bg-muted/30 rounded-lg">

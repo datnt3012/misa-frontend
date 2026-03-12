@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -57,6 +57,7 @@ function ExportSlipsContent() {
   const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -471,6 +472,35 @@ function ExportSlipsContent() {
         description: error.response?.data?.message || error.message || "Không thể từ chối phiếu xuất kho",
         variant: "destructive",
       });
+    }
+  };
+
+  // Export slip to PDF or XLSX
+  const handleExportSlip = async (slipId: string, type: 'pdf' | 'xlsx') => {
+    try {
+      setExporting(true);
+      const { blob, filename } = await exportSlipsApi.exportSlip(slipId, type);
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      toast({
+        title: 'Thành công',
+        description: `Đã xuất ${type.toUpperCase()} thành công`
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Lỗi',
+        description: error.message || 'Không thể xuất phiếu',
+        variant: 'destructive'
+      });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -2132,11 +2162,33 @@ function ExportSlipsContent() {
                               </Button>
                             </DialogTrigger>
                           <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
-                              <DialogDescription>
-                                Thông tin chi tiết phiếu {slipDetail?.code || slip.code}
-                              </DialogDescription>
+                            <DialogHeader className="flex flex-row items-center justify-between">
+                              <div>
+                                <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
+                                <DialogDescription>
+                                  Thông tin chi tiết phiếu {slipDetail?.code || slip.code}
+                                </DialogDescription>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleExportSlip(slip.id, 'pdf')}
+                                  disabled={exporting}
+                                >
+                                  <Printer className="w-3 h-3 mr-1" />
+                                  In PDF
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleExportSlip(slip.id, 'xlsx')}
+                                  disabled={exporting}
+                                >
+                                  <FileDown className="w-3 h-3 mr-1" />
+                                  Xuất Excel
+                                </Button>
+                              </div>
                             </DialogHeader>
                             {loadingSlipDetail ? (
                               <div className="flex items-center justify-center py-8">

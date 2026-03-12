@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import apiClient from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
 
 export type WarehouseReceiptImportJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
@@ -386,6 +387,47 @@ export const warehouseReceiptsApi = {
     return {
       message: response?.message || (hard ? 'Phiếu nhập kho đã được xóa vĩnh viễn' : 'Phiếu nhập kho đã được xóa')
     };
+  },
+
+  // Helper function to extract filename from Content-Disposition header (RFC 5987)
+  getFilenameFromContentDisposition: (cd: string | null): string | null => {
+    if (!cd) return null;
+    
+    // Ưu tiên filename*="UTF-8''..." (có dấu ngoặc kép)
+    const utf8QuotedMatch = cd.match(/filename\*=\"UTF-8''(.*?)\"/i);
+    if (utf8QuotedMatch && utf8QuotedMatch[1]) {
+      return decodeURIComponent(utf8QuotedMatch[1]);
+    }
+    
+    // Thử filename*=UTF-8''... (không có dấu ngoặc kép)
+    const utf8Match = cd.match(/filename\*=UTF-8''(.*?)(?:;|$)/i);
+    if (utf8Match && utf8Match[1]) {
+      return decodeURIComponent(utf8Match[1]);
+    }
+    
+    // Fallback filename="..."
+    const asciiMatch = cd.match(/filename=\"(.*?)\"/i);
+    if (asciiMatch && asciiMatch[1]) {
+      return asciiMatch[1];
+    }
+    
+    return null;
+  },
+
+  // Export warehouse receipt (PDF or XLSX)
+  exportReceipt: async (id: string, type: 'pdf' | 'xlsx'): Promise<{ blob: Blob; filename: string }> => {
+    const response = await apiClient.get(API_ENDPOINTS.WAREHOUSE_RECEIPTS.EXPORT(id, type), {
+      responseType: 'blob',
+    });
+    const blob = response.data;
+    // Extract filename from Content-Disposition header
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `warehouse-receipt-${id}.${type}`;
+    const parsedFilename = warehouseReceiptsApi.getFilenameFromContentDisposition(contentDisposition);
+    if (parsedFilename) {
+      filename = parsedFilename;
+    }
+    return { blob, filename };
   },
 
   // Download import template (Deprecated - Use downloadImportTemplate or downloadExportTemplate instead)
