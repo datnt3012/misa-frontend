@@ -160,7 +160,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
 
   const loadOrder = async (id: string) => {
     try {
-      const orderData = await orderApi.getOrderIncludeDeleted(id);
+      const orderData = await orderApi.getOrder(id, { includeDeleted: true });
       setOrder(orderData);
       
       // For import orders (purchase), populate supplier fields

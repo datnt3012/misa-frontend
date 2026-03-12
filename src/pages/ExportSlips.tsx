@@ -312,7 +312,7 @@ function ExportSlipsContent() {
         // Việc fetch theo ID đảm bảo luôn lấy được dữ liệu, không phụ thuộc vào pagination
         if (s.order_id && (!orderData || !orderData.contract_code)) {
           try {
-            const orderResponse = await orderApi.getOrderIncludeDeleted(s.order_id);
+            const orderResponse = await orderApi.getOrder(s.order_id, { includeDeleted: true });
             // Merge dữ liệu: ưu tiên dữ liệu mới từ API, fallback về dữ liệu cũ nếu có
             orderData = {
               order_number: orderResponse.order_number || orderData?.order_number || '',
@@ -336,6 +336,7 @@ function ExportSlipsContent() {
         return {
           id: s.id || '',
           code: s.code || '',
+          type: s.type || '',
           order_id: s.order_id || '',
           warehouse_id: s.warehouse_id || undefined,
           warehouse_name: s.warehouse_name || undefined,
@@ -402,7 +403,7 @@ function ExportSlipsContent() {
       // Sử dụng getOrderIncludeDeleted theo ID để không phụ thuộc vào pagination
       if (detail.order_id && (!detail.order || !detail.order.contract_code)) {
         try {
-          const orderResponse = await orderApi.getOrderIncludeDeleted(detail.order_id);
+          const orderResponse = await orderApi.getOrder(detail.order_id, { includeDeleted: true });
           // Merge dữ liệu: ưu tiên dữ liệu mới từ API, fallback về dữ liệu cũ nếu có
           detail.order = {
             order_number: orderResponse.order_number || detail.order?.order_number || '',
@@ -845,7 +846,6 @@ function ExportSlipsContent() {
       const response = await exportSlipsApi.createSlip({
         order_id: exportSlipForm.order_id || undefined, // Optional order ID
         warehouse_id: selectedWarehouse, // Use selected warehouse
-        supplier_id: '', // Not needed for export slips
         code: code,
         notes: exportSlipForm.notes,
         items: items,
@@ -2072,7 +2072,13 @@ function ExportSlipsContent() {
                       <div className="truncate" title={slip.order?.order_number || ''}>{slip.order?.order_number || '-'}</div>
                     </TableCell>
                     <TableCell className="text-center min-w-[120px]">
-                      <div className="truncate">{'-'}</div>
+                      <div className="truncate">
+                        {
+                          slip.type !== undefined ? (
+                            slip.type == 'export' ? 'Phiếu xuất' : slip.type == 'import' ? 'Phiếu nhập' : 'Phiếu hoàn' ) 
+                            : '-'
+                        }
+                      </div>
                     </TableCell>
                     <TableCell className="text-center min-w-[180px]">
                       <div className="truncate" title={slip.order?.customer_name || ''}>{slip.order?.customer_name || '-'}</div>

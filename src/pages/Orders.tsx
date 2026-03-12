@@ -15,6 +15,8 @@ import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { usersApi } from "@/api/users.api";
+import { exportSlipsApi } from "@/api/exportSlips.api";
+import { warehouseReceiptsApi } from "@/api/warehouseReceipts.api";
 import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
 import { paymentsApi } from "@/api/payments.api";
 import { useAuth } from "@/hooks/useAuth";
@@ -174,6 +176,9 @@ const OrdersContent: React.FC = () => {
   // Cache for total payments per order
   const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
   const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
+  // Cache for linked slips (export/import slips) per order
+  const [orderHasLinkedSlipsCache, setOrderHasLinkedSlipsCache] = useState<Record<string, boolean>>({});
+  const [checkingLinkedSlips, setCheckingLinkedSlips] = useState<Set<string>>(new Set());
   // Bulk payment preview state - moved to MultiplePaymentDialog
   // Summary state from API
   const [summary, setSummary] = useState<{
@@ -212,7 +217,7 @@ const OrdersContent: React.FC = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const params: any = { page: currentPage, limit: itemsPerPage };
+      const params: any = { page: currentPage, limit: itemsPerPage, includeAllocationStatus: true };
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter !== 'all') params.categories = categoryFilter;
       if (debouncedSearchTerm) params.search = debouncedSearchTerm;
@@ -332,6 +337,60 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
+
+  // Check if an order has linked export or import slips with valid status
+  // For export slips: status must be 'picked' or 'exported'
+  // For import slips: status must be 'approved'
+  const checkOrderHasLinkedSlips = useCallback(async (orderId: string) => {
+    // Return cached result if already checked
+    if (orderHasLinkedSlipsCache[orderId] !== undefined) {
+      return orderHasLinkedSlipsCache[orderId];
+    }
+    // Skip if already checking
+    if (checkingLinkedSlips.has(orderId)) {
+      return false;
+    }
+    // Mark as checking
+    setCheckingLinkedSlips(prev => {
+      const newSet = new Set(prev);
+      newSet.add(orderId);
+      return newSet;
+    });
+    try {
+      // Check for export slips with status 'picked' or 'exported'
+      const exportSlipsResponse = await exportSlipsApi.getSlips({ orderId, limit: 100 });
+      const validExportSlips = exportSlipsResponse?.slips?.filter(
+        (slip: any) => slip.status === 'picked' || slip.status === 'exported'
+      ) || [];
+      const hasValidExportSlips = validExportSlips.length > 0;
+      
+      if (hasValidExportSlips) {
+        setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: true }));
+        return true;
+      }
+      
+      // Check for import slips (warehouse receipts) with status 'approved'
+      const importSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100 });
+      const validImportSlips = importSlipsResponse?.receipts?.filter(
+        (receipt: any) => receipt.status === 'approved'
+      ) || [];
+      const hasValidImportSlips = validImportSlips.length > 0;
+      
+      const hasLinked = hasValidExportSlips || hasValidImportSlips;
+      setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: hasLinked }));
+      return hasLinked;
+    } catch (error) {
+      // On error, assume no linked slips
+      setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: false }));
+      return false;
+    } finally {
+      setCheckingLinkedSlips(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  }, [orderHasLinkedSlipsCache, checkingLinkedSlips]);
 
   // Debounce search term
   useEffect(() => {
@@ -536,6 +595,18 @@ const OrdersContent: React.FC = () => {
     fetchManufacturers();
     fetchBanks();
   }, []);
+
+  // Check for linked slips when orders are loaded
+  useEffect(() => {
+    if (!orders || orders.length === 0) return;
+    
+    // Check each order that hasn't been checked yet
+    orders.forEach(order => {
+      if (order.id && orderHasLinkedSlipsCache[order.id] === undefined && !checkingLinkedSlips.has(order.id)) {
+        checkOrderHasLinkedSlips(order.id);
+      }
+    });
+  }, [orders, orderHasLinkedSlipsCache, checkingLinkedSlips, checkOrderHasLinkedSlips]);
 
   const fetchManufacturers = async () => {
     try {
@@ -1364,7 +1435,7 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
                               {order.items?.map((item: any, index: number) => (
-                                <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex flex-col items-center justify-center gap-1">
                                   <div className="font-medium text-slate-900 truncate w-full" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
                                 </div>
                               ))}
@@ -1389,11 +1460,13 @@ const OrdersContent: React.FC = () => {
                            {/* Price Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                               <div className="divide-y divide-slate-100">
-                                {order.items?.map((item: any, index: number) => (
-                                  <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
-                                    <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
+                                {order.items?.map((item: any, index: number) => {
+                                 return (
+                                   <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] text-center flex items-center justify-center">
+                                     <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
                                   </div>
-                                ))}
+                                );
+                              })}
                                 {(!order.items || order.items.length === 0) && (
                                   <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                                 )}
@@ -1402,11 +1475,19 @@ const OrdersContent: React.FC = () => {
                            {/* Quantity Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                              <div className="divide-y divide-slate-100">
-                               {order.items?.map((item: any, index: number) => (
-                                 <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
-                                   <div className="font-medium text-slate-900">{item.quantity || 0}</div>
-                                 </div>
-                               ))}
+                               {order.items?.map((item: any, index: number) => {
+                                 const allocation = order.allocationStatus?.allocations?.find((a: any) => a.productId === item.product_id);
+                                 return (
+                                   <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex flex-col items-center justify-center gap-1">
+                                     <div className="font-medium text-slate-900">{item.quantity || 0}</div>
+                                     {allocation?.returnedQuantity > 0 && (
+                                       <div className="text-xs text-red-500 whitespace-nowrap">
+                                         - {allocation.returnedQuantity}
+                                       </div>
+                                     )}
+                                   </div>
+                                 );
+                               })}
                                {(!order.items || order.items.length === 0) && (
                                  <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                                )}
@@ -1450,6 +1531,11 @@ const OrdersContent: React.FC = () => {
                                  (order as any).totalAmount ?? order.total_amount ?? 0
                                )}
                              </div>
+                             {(order.allocationStatus?.totals?.returnedValue > 0) && (
+                               <div className="text-xs text-red-500">
+                                 - {formatVndNoSymbol(order.allocationStatus?.totals?.returnedValue || 0)}
+                               </div>
+                             )}
                            </TableCell>
                            {/* Vat Price Column - use backend aggregated vatPercentage * totalVat */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
@@ -1458,6 +1544,11 @@ const OrdersContent: React.FC = () => {
                                  (order as any).totalVat ?? order.total_vat ?? 0
                                )}
                              </div>
+                            {(order.allocationStatus?.totals?.deductionVat > 0) && (
+                              <div className="text-xs text-red-500">
+                                - {formatVndNoSymbol(order.allocationStatus?.totals?.deductionVat || 0)}
+                              </div>
+                            )}
                            </TableCell>
                            {/* Total VAT Price Column - use backend aggregated vatTotalAmount*/}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
@@ -1467,6 +1558,11 @@ const OrdersContent: React.FC = () => {
                                  (order as any).totalVatAmount ?? order.total_vat_amount ?? 0
                                )}
                              </div>
+                            {(order.allocationStatus?.totals?.deductionAmount > 0) && (
+                              <div className="text-xs text-red-500">
+                                - {formatVndNoSymbol(order.allocationStatus?.totals?.deductionAmount || 0)}
+                              </div>
+                            )}
                            </TableCell>
                            {/* Payment Column - use backend totalPaidAmount / remainingDebt */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
@@ -1495,10 +1591,11 @@ const OrdersContent: React.FC = () => {
                                       order.paid_amount ??
                                       order.initial_payment ??
                                       0;
+                                    const returnedAmount = order.allocationStatus?.totals?.deductionAmount ?? 0;
                                     const debtAmount =
                                       (order as any).remainingDebt ??
                                       order.remainingDebt ??
-                                      Math.max(0, totalAmount - paidAmount);
+                                      Math.max(0, totalAmount - paidAmount - returnedAmount);
                                     return formatVndNoSymbol(debtAmount);
                                   })()}
                                 </div>
@@ -1631,6 +1728,7 @@ const OrdersContent: React.FC = () => {
                                   <Package className="w-4 h-4 mr-2" />
                                   {order.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
                                 </DropdownMenuItem>
+                                {(orderHasLinkedSlipsCache[order.id] !== false) && (
                                 <DropdownMenuItem 
                                   onClick={() => handleCreateExportSlip(order, order.type === 'purchase' ? 'purchase_return' : 'sale_return')}
                                   className="cursor-pointer hover:bg-muted"
@@ -1638,6 +1736,7 @@ const OrdersContent: React.FC = () => {
                                   <RotateCw className="w-4 h-4 mr-2" />
                                   {order.type === 'purchase' ? 'Tạo phiếu trả hàng NCC' : 'Tạo phiếu hoàn hàng'}
                                 </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setOrderToDelete(order);

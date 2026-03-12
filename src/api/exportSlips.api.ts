@@ -15,7 +15,8 @@ export interface ExportSlipItem {
 }
 export interface ExportSlip {
   id: string;
-  code: string; // slip number
+  code: string;
+  type: string;
   order_id: string;
   warehouse_id?: string;
   warehouse_name?: string;
@@ -115,6 +116,7 @@ const normalize = (row: any): ExportSlip => {
   return {
     id: row.id || '',
     code: row.code ?? row.slip_number ?? '',
+    type: row.type ?? '',
     order_id: row.orderId ?? row.order_id ?? '',
     warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? undefined,
     warehouse_name: row.warehouse?.name ?? row.warehouseName ?? row.warehouse_name ?? undefined,
@@ -267,7 +269,7 @@ export const exportSlipsApi = {
     if (params?.categories) queryParams.append('categories', params.categories);
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers);
 
-    queryParams.append('type', 'export'); // Filter for export type only
+    queryParams.append('type', 'export, sale_return_note'); // Filter for export type only
     const url = `${API_ENDPOINTS.WAREHOUSE_RECEIPTS.LIST}?${queryParams.toString()}`;
     const response = await api.get<any>(url);
     const data = response?.data || response;
