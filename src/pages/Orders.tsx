@@ -15,7 +15,6 @@ import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { usersApi } from "@/api/users.api";
-import { exportSlipsApi } from "@/api/exportSlips.api";
 import { warehouseReceiptsApi } from "@/api/warehouseReceipts.api";
 import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
 import { paymentsApi } from "@/api/payments.api";
@@ -358,8 +357,8 @@ const OrdersContent: React.FC = () => {
     });
     try {
       // Check for export slips with status 'picked' or 'exported'
-      const exportSlipsResponse = await exportSlipsApi.getSlips({ orderId, limit: 100 });
-      const validExportSlips = exportSlipsResponse?.slips?.filter(
+      const exportSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100, type: 'export,purchase_return_note' });
+      const validExportSlips = exportSlipsResponse?.receipts?.filter(
         (slip: any) => slip.status === 'picked' || slip.status === 'exported'
       ) || [];
       const hasValidExportSlips = validExportSlips.length > 0;

@@ -15,7 +15,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Package, Plus, CheckCircle, Clock, Bell, Trash2 } from "lucide-react";
 import { orderApi, type Order, type OrderItem, type OrderAllocationStatus } from "@/api/order.api";
-import { exportSlipsApi, type CreateExportSlipRequest } from "@/api/exportSlips.api";
 import { warehouseReceiptsApi, type CreateWarehouseReceiptRequest } from "@/api/warehouseReceipts.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
@@ -93,7 +92,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
   const addExportSlip = () => {
     const newSlip: ExportSlipForm = {
       id: `slip-${Date.now()}-${Math.random()}`,
-      slipCode: generateSlipCode(),
+      slipCode: '',
       warehouse_id: warehouses.length > 0 ? warehouses[0].id : '',
       items: [],
       notes: ''
@@ -300,15 +299,14 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
         // Create return slips using warehouseReceiptsApi with new return note types
         const results = await Promise.all(exportSlips.map(async (slip) => {
           const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
-          const code = slip.slipCode?.trim() || generateSlipCode();
           
           // Map slip type to new API type: sale_return -> sale_return_note, purchase_return -> purchase_return_note
           const apiType = slipType === 'purchase_return' ? 'purchase_return_note' : 'sale_return_note';
           
-          const createRequest: CreateWarehouseReceiptRequest = {
+          // Only include code if user entered it, otherwise let backend generate
+          const createRequest: any = {
             warehouseId: slip.warehouse_id,
             orderId: order.id,
-            code: code,
             description: slip.notes.trim() || undefined,
             status: 'pending',
             type: apiType,
@@ -322,6 +320,12 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
             })
           };
           
+          // Add code only if provided
+          const code = slip.slipCode?.trim();
+          if (code) {
+            createRequest.code = code;
+          }
+          
           return await warehouseReceiptsApi.createReceipt(createRequest);
         }));
         
@@ -331,18 +335,20 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
         });
       } else if (isImportSlip) {
         // Create import slips using warehouseReceiptsApi
+        // Map slip type to API type: purchase_return -> purchase_return_note
+        const apiType = effectiveSlipType === 'purchase_return' ? 'purchase_return_note' : effectiveSlipType;
+        
         const results = await Promise.all(exportSlips.map(async (slip) => {
           const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
-          const code = slip.slipCode?.trim() || generateSlipCode();
           
-          const createRequest: CreateWarehouseReceiptRequest = {
+          // Only include code if user entered it, otherwise let backend generate
+          const createRequest: any = {
             warehouseId: slip.warehouse_id,
             supplierId: order.customer_id, // Use customer_id as supplier_id for purchase orders
             orderId: order.id,
-            code: code,
             description: slip.notes.trim() || undefined,
             status: 'pending',
-            type: effectiveSlipType,
+            type: apiType,
             details: validItems.map(item => {
               const orderItem = orderItemsMap.get(item.product_id);
               return {
@@ -355,6 +361,12 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
             })
           };
           
+          // Add code only if provided
+          const code = slip.slipCode?.trim();
+          if (code) {
+            createRequest.code = code;
+          }
+          
           return await warehouseReceiptsApi.createReceipt(createRequest);
         }));
         
@@ -363,28 +375,35 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
           description: `Đã tạo ${results.length} phiếu nhập kho cho đơn hàng ${order.order_number}.`,
         });
       } else {
-        // Create export slips using exportSlipsApi
+        // Create export slips using warehouseReceiptsApi
         const results = await Promise.all(exportSlips.map(async (slip) => {
           const validItems = slip.items.filter(item => item.product_id && item.quantity > 0);
-          const code = slip.slipCode?.trim() || generateSlipCode();
           
-          const createRequest: CreateExportSlipRequest = {
-            order_id: order.id,
-            warehouse_id: slip.warehouse_id,
-            code: code,
-            notes: slip.notes.trim() || undefined,
-            items: validItems.map(item => {
+          // Only include code if user entered it, otherwise let backend generate
+          const createRequest: any = {
+            orderId: order.id,
+            warehouseId: slip.warehouse_id,
+            description: slip.notes.trim() || undefined,
+            type: 'export',
+            status: 'pending',
+            details: validItems.map(item => {
               const orderItem = orderItemsMap.get(item.product_id);
               return {
-                product_id: item.product_id,
-                requested_quantity: item.quantity,
-                unit_price: orderItem?.unit_price || 0,
-                warehouse_id: slip.warehouse_id
+                productId: item.product_id,
+                quantity: item.quantity,
+                unitPrice: orderItem?.unit_price || 0,
+                warehouseId: slip.warehouse_id
               };
             })
           };
           
-          return await exportSlipsApi.createSlip(createRequest);
+          // Add code only if provided
+          const code = slip.slipCode?.trim();
+          if (code) {
+            createRequest.code = code;
+          }
+          
+          return await warehouseReceiptsApi.createReceipt(createRequest);
         }));
         
         toast({
@@ -578,6 +597,9 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
               const allocatedQuantity = alloc?.allocatedQuantity ?? 0;
               const returnedQuantity = alloc?.returnedQuantity ?? 0;
               const remainingQuantity = alloc?.remainingQuantity ?? 0;
+
+              // Debug log
+              console.log('Allocation for product:', item.product_id, alloc);
               
               return (
                 <div
@@ -597,7 +619,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                         </div>
                         {returnedQuantity > 0 ? (
                           <Badge variant="default" className="bg-blue-100 text-blue-800 w-fit">
-                            Đã hoàn: {remainingQuantity}
+                            Đã hoàn: {returnedQuantity}
                           </Badge>
                         ) : (
                           <Badge variant="default" className="bg-green-100 text-green-800 w-fit">

@@ -20,8 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { exportSlipsApi, type ExportSlip } from '@/api/exportSlips.api';
-import { warehouseReceiptsApi, type WarehouseReceiptImportJobSnapshot, type WarehouseReceiptImportJobStatus } from '@/api/warehouseReceipts.api';
+import { warehouseReceiptsApi, type WarehouseReceipt, type WarehouseReceiptImportJobSnapshot, type WarehouseReceiptImportJobStatus } from '@/api/warehouseReceipts.api';
 import { orderApi, type Order } from '@/api/order.api';
 import { customerApi, type Customer } from '@/api/customer.api';
 import { productApi } from '@/api/product.api';
@@ -36,16 +35,18 @@ import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import { set } from 'date-fns';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { SlipCreatingDialog } from '@/components/inventory/SlipCreatingDialog';
+import { SlipDetailDialog } from '@/components/inventory/SlipDetailDialog';
 
 function ExportSlipsContent() {
   const navigate = useNavigate();
-  const [exportSlips, setExportSlips] = useState<ExportSlip[]>([]);
+  const [exportSlips, setExportSlips] = useState<WarehouseReceipt[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [addressCache, setAddressCache] = useState<Record<string, string>>({});
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedSlip, setSelectedSlip] = useState<ExportSlip | null>(null);
-  const [slipDetail, setSlipDetail] = useState<ExportSlip | null>(null);
+  const [selectedSlip, setSelectedSlip] = useState<WarehouseReceipt | null>(null);
+  const [slipDetail, setSlipDetail] = useState<WarehouseReceipt | null>(null);
   const [loadingSlipDetail, setLoadingSlipDetail] = useState(false);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState<Order | null>(null);
   const [exportedQuantityByProduct, setExportedQuantityByProduct] = useState<Record<string, number>>({});
@@ -92,6 +93,7 @@ function ExportSlipsContent() {
   const [completedStartDate, setCompletedStartDate] = useState<string>('');
   const [completedEndDate, setCompletedEndDate] = useState<string>('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all' | 'export' | 'return'
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
@@ -107,6 +109,7 @@ function ExportSlipsContent() {
     setStartDate(undefined);
     setEndDate(undefined);
     setWarehouseFilter("all");
+    setTypeFilter("all");
     setStatusFilter([]);
     setCategoryFilter([]);
     setManufacturerFilter("all");
@@ -125,7 +128,7 @@ function ExportSlipsContent() {
     return `EXP${timestamp}${random}`;
   };
   const [exportSlipForm, setExportSlipForm] = useState({
-    code: generateSlipCode(),
+    code: '',
     order_id: '',
     customer_id: '',
     customer_name: '',
@@ -230,6 +233,7 @@ function ExportSlipsContent() {
     completedEndDate,
     warehouseFilter,
     statusFilter,
+    typeFilter,
     categoryFilter,
     manufacturerFilter,
     sortField, 
@@ -281,7 +285,7 @@ function ExportSlipsContent() {
       loadOrders();
       // Generate new slip code when opening dialog
       if (!exportSlipForm.code || exportSlipForm.code.trim() === '') {
-        setExportSlipForm(prev => ({ ...prev, code: generateSlipCode() }));
+        // Don't auto-generate code - leave empty for user to enter
       }
     }
   }, [showCreateDialog]);
@@ -301,13 +305,17 @@ function ExportSlipsContent() {
       if(completedEndDate) {params.completedEndDate = completedEndDate;}
       if(warehouseFilter != 'all') {params.warehouseId = warehouseFilter;}
       if(statusFilter) {params.status = statusFilter;}
+      // Set type filter: 'all' shows export+returns, 'export' shows only export, 'return' shows only purchase return notes
+      if(typeFilter === 'export') {params.type = 'export';}
+      else if(typeFilter === 'return') {params.type = 'purchase_return_note';}
+      else {params.type = 'export,purchase_return_note';}
       if(categoryFilter) {params.categories = categoryFilter;}
       if(manufacturerFilter != 'all') {params.manufacturers = manufacturerFilter;}
 
-      const resp = await exportSlipsApi.getSlips(params);
+      const resp = await warehouseReceiptsApi.getReceipts(params);
       // If order data is missing or incomplete, we'll need to fetch it separately
       // Sử dụng getOrderIncludeDeleted theo ID để không phụ thuộc vào pagination
-      const slips = await Promise.all((resp.slips || []).map(async (s) => {
+      const receipts = await Promise.all((resp.receipts || []).map(async (s) => {
         let orderData = s.order;
         // Nếu thiếu order data hoặc thiếu contract_code, fetch lại từ API theo ID
         // Việc fetch theo ID đảm bảo luôn lấy được dữ liệu, không phụ thuộc vào pagination
@@ -362,16 +370,16 @@ function ExportSlipsContent() {
             vat_total_amount: orderData.vat_total_amount || 0,
             order_items: orderData.order_items || undefined,
           } : undefined,
-          export_slip_items: s.export_slip_items || [],
+          details: s.details || [],
         };
       }));
-      setExportSlips(slips);
+      setExportSlips(receipts);
       // Update pagination state
       setTotal(resp.total || 0);
       setTotalPages(Math.ceil((resp.total || 0) / displayLimit));
-      // Update address cache for slips that now have addressInfo
+      // Update address cache for receipts that now have addressInfo
       const newCache: Record<string, string> = {};
-      for (const slip of slips) {
+      for (const slip of receipts) {
         if (slip.order?.receiver_address && slip.order?.receiver_addressInfo) {
           const fullAddress = formatFullAddress(slip.order.receiver_address, slip.order.receiver_addressInfo);
           newCache[slip.id] = fullAddress;
@@ -398,7 +406,7 @@ function ExportSlipsContent() {
   const loadSlipDetail = async (slipId: string) => {
     try {
       setLoadingSlipDetail(true);
-      const detail = await exportSlipsApi.getSlip(slipId);
+      const detail = await warehouseReceiptsApi.getReceipt(slipId);
       
       // Nếu có order_id nhưng thiếu thông tin order hoặc thiếu contract_code, fetch thêm từ order API
       // Sử dụng getOrderIncludeDeleted theo ID để không phụ thuộc vào pagination
@@ -479,7 +487,7 @@ function ExportSlipsContent() {
   const handleExportSlip = async (slipId: string, type: 'pdf' | 'xlsx') => {
     try {
       setExporting(true);
-      const { blob, filename } = await exportSlipsApi.exportSlip(slipId, type);
+      const { blob, filename } = await warehouseReceiptsApi.exportReceipt(slipId, type);
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -510,17 +518,17 @@ function ExportSlipsContent() {
       let response;
       switch (newStatus) {
         case 'picked':
-          response = await exportSlipsApi.markAsPicked(slipId, notes);
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked', description: notes });
           break;
         case 'exported':
-          response = await exportSlipsApi.markAsExported(slipId, notes);
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported', description: notes });
           break;
         default:
           throw new Error('Trạng thái không hợp lệ');
       }
       toast({
         title: "Thành công",
-        description: response.message || `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
+        description: response ? `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}` : `Đã cập nhật trạng thái thành ${newStatus === 'picked' ? 'Đã lấy hàng' : 'Đã xuất kho'}`,
       });
       fetchExportSlips();
     } catch (error: any) {
@@ -534,10 +542,10 @@ function ExportSlipsContent() {
   // Direct export (Admin/Giám đốc only)
   const handleDirectExport = async (slipId: string, notes: string = '') => {
     try {
-      const response = await exportSlipsApi.directExport(slipId, notes);
+      const response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported', description: notes });
       toast({
         title: "Thành công",
-        description: response.message || "Đã xuất kho trực tiếp",
+        description: response ? "Đã xuất kho trực tiếp" : "Đã xuất kho trực tiếp",
       });
       fetchExportSlips();
     } catch (error: any) {
@@ -554,13 +562,13 @@ function ExportSlipsContent() {
       let response;
       switch (newStatus) {
         case 'picked':
-          response = await exportSlipsApi.markAsPicked(slipId, notes);
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked', description: notes });
           break;
         case 'exported':
-          response = await exportSlipsApi.markAsExported(slipId, notes);
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported', description: notes });
           break;
         case 'cancelled':
-          response = await exportSlipsApi.markAsCancelled(slipId, notes);
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled', description: notes });
           break;
         default:
           throw new Error('Trạng thái không hợp lệ');
@@ -809,7 +817,7 @@ function ExportSlipsContent() {
     setSelectedWarehouse('');
     setSelectedOrderForAllocation(null);
     setExportSlipForm({
-      code: generateSlipCode(),
+      code: '',
       order_id: '',
       customer_id: '',
       customer_name: '',
@@ -863,23 +871,32 @@ function ExportSlipsContent() {
     }
     setLoading(true);
     try {
-      // Generate code if not provided or use provided code
-      const code = exportSlipForm.code?.trim() || generateSlipCode();
       // Prepare items with warehouse_id for each item (using selected warehouse)
-      const items = exportSlipForm.items.map(item => ({
-        product_id: item.product_id,
-        requested_quantity: item.quantity,
-        unit_price: item.unit_price,
-        warehouse_id: selectedWarehouse,
-        vat_percentage: item.vat_percentage
+      const details = exportSlipForm.items.map(item => ({
+        productId: item.product_id,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+        warehouseId: selectedWarehouse,
+        vatPercentage: item.vat_percentage
       }));
-      const response = await exportSlipsApi.createSlip({
-        order_id: exportSlipForm.order_id || undefined, // Optional order ID
-        warehouse_id: selectedWarehouse, // Use selected warehouse
-        code: code,
-        notes: exportSlipForm.notes,
-        items: items,
-      });
+      
+      // Only include code if user entered it, otherwise let backend generate
+      const requestData: any = {
+        orderId: exportSlipForm.order_id || undefined,
+        warehouseId: selectedWarehouse,
+        description: exportSlipForm.notes,
+        type: 'export',
+        status: 'pending',
+        details: details,
+      };
+      
+      // Add code only if provided
+      const code = exportSlipForm.code?.trim();
+      if (code) {
+        requestData.code = code;
+      }
+      
+      const response = await warehouseReceiptsApi.createReceipt(requestData);
       toast({
         title: "Thành công",
         description: `Đã tạo phiếu xuất kho ${response.code || code} thành công`,
@@ -1305,19 +1322,26 @@ function ExportSlipsContent() {
   const exportToExcel = () => {
     // Prepare data for export
     const exportData = exportSlips.map((slip, index) => {
-      // Get product details for each slip
+      // Get product details for each slip - use details only
+      const slipItems = slip.details || [];
       const productDetails = slip.order?.order_items?.map((item) => {
-        const exportItem = slip.export_slip_items?.find(
-          ei => ei.product_code === item.product_code
+        const exportItem: any = slipItems.find(
+          (ei: any) => ei.product?.code === item.product_code || ei.product_code === item.product_code
         );
         return {
           'Mã SP': item.product_code,
           'Tên sản phẩm': item.product_name,
           'SL Yêu cầu': item.quantity,
           'Đơn giá': item.unit_price,
-          'Thành tiền': (exportItem?.actual_quantity || 0) * item.unit_price,
+          'Thành tiền': (exportItem?.quantity || exportItem?.actual_quantity || 0) * item.unit_price,
         };
-      }) || [];
+      }) || slipItems.map((item: any) => ({
+        'Mã SP': item.product?.code || item.product_code,
+        'Tên sản phẩm': item.product?.name || item.product_name,
+        'SL Yêu cầu': item.quantity,
+        'Đơn giá': item.unitPrice || item.unit_price,
+        'Thành tiền': (item.quantity * (item.unitPrice || item.unit_price)),
+      })) || [];
       return {
         'STT': index + 1,
         'Số phiếu': slip.code,
@@ -1329,7 +1353,7 @@ function ExportSlipsContent() {
                      slip.status === 'picked' ? 'Đã lấy hàng' :
                      slip.status === 'exported' ? 'Đã xuất kho' :
                      slip.status === 'cancelled' ? 'Hủy lấy hàng' : slip.status,
-        'Tổng giá trị': slip.export_slip_items?.reduce((sum, item) => sum + (item.actual_quantity * item.unit_price), 0) || 0,
+        'Tổng giá trị': slip.details?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0,
         'Ngày tạo': slip.created_at ? new Date(slip.created_at).toLocaleString('vi-VN') : '',
         'Chi tiết sản phẩm': productDetails.map(p => `${p['Tên sản phẩm']} (${p['SL Yêu cầu']})`).join('; '),
       };
@@ -1935,6 +1959,17 @@ function ExportSlipsContent() {
                 emptyMessage="Không có kho nào"
                 multiple={true}
               />
+              {/* Type filter */}
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Tất cả loại phiếu" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả loại phiếu</SelectItem>
+                  <SelectItem value="export">Phiếu xuất</SelectItem>
+                  <SelectItem value="return">Phiếu hoàn</SelectItem>
+                </SelectContent>
+              </Select>
               {/* Status filter */}
               <MultiSelect
                 options={[
@@ -2011,11 +2046,11 @@ function ExportSlipsContent() {
                   </TableHead>
                   <TableHead
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
-                    onClick={() => handleSort('orderCode')}
+                    onClick={() => handleSort('type')}
                   >
                     <div className="flex items-center gap-1">
                       Loại phiếu
-                      {getSortIcon('orderCode')}
+                      {getSortIcon('type')}
                     </div>
                   </TableHead>
                   <TableHead
@@ -2116,10 +2151,10 @@ function ExportSlipsContent() {
                     <TableCell className="text-center min-w-[130px] font-semibold">
                       <div className="relative group">
                         <span className="cursor-help">
-                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.vat_percentage ? item.vat_total_price : item.actual_quantity * item.unit_price), 0) || 0)}
+                          {formatCurrency(slip.details?.reduce((sum, item) => sum + (parseFloat(item.vatTotalPrice) || item.quantity * parseFloat(item.unitPrice)), 0) || 0)}
                         </span>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                          {formatCurrency(slip.export_slip_items?.reduce((sum, item) => sum + (item.vat_percentage ? item.vat_total_price : item.actual_quantity * item.unit_price), 0) || 0)}
+                          {formatCurrency(slip.details?.reduce((sum, item) => sum + (parseFloat(item.vatTotalPrice) || item.quantity * parseFloat(item.unitPrice)), 0) || 0)}
                         </div>
                       </div>
                     </TableCell>
@@ -2141,227 +2176,18 @@ function ExportSlipsContent() {
                     <TableCell className="text-center min-w-[180px]">
                       <div className="flex space-x-2 justify-center">
                         {/* Chi tiết button - always show */}
-                        <Dialog open={selectedSlip?.id === slip.id} onOpenChange={(open) => {
-                            if (open) {
-                              openDialog('view', slip.id);
-                              setSelectedSlip(slip);
-                              loadSlipDetail(slip.id);
-                            } else {
-                              isClosingDialogRef.current = true;
-                              closeDialog();
-                              setSelectedSlip(null);
-                              setSlipDetail(null);
-                              setTimeout(() => {
-                                isClosingDialogRef.current = false;
-                              }, 100);
-                            }
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <FileText className="w-4 h-4" />
-                              </Button>
-                            </DialogTrigger>
-                          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader className="flex flex-row items-center justify-between">
-                              <div>
-                                <DialogTitle>Chi tiết phiếu xuất kho</DialogTitle>
-                                <DialogDescription>
-                                  Thông tin chi tiết phiếu {slipDetail?.code || slip.code}
-                                </DialogDescription>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleExportSlip(slip.id, 'pdf')}
-                                  disabled={exporting}
-                                >
-                                  <Printer className="w-3 h-3 mr-1" />
-                                  In PDF
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleExportSlip(slip.id, 'xlsx')}
-                                  disabled={exporting}
-                                >
-                                  <FileDown className="w-3 h-3 mr-1" />
-                                  Xuất Excel
-                                </Button>
-                              </div>
-                            </DialogHeader>
-                            {loadingSlipDetail ? (
-                              <div className="flex items-center justify-center py-8">
-                                <p>Đang tải chi tiết phiếu xuất kho...</p>
-                              </div>
-                            ) : (
-                            <div className="space-y-6">
-                              {/* Basic Info */}
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label className="font-medium">Số phiếu:</Label>
-                                    <p className="text-sm">{slipDetail?.code || slip.code}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Số hợp đồng:</Label>
-                                    <p className="text-sm">{slipDetail?.order?.contract_code || slip.order?.contract_code}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Đơn hàng:</Label>
-                                    <p className="text-sm">{slipDetail?.order?.order_number || slip.order?.order_number}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Khách hàng:</Label>
-                                    <p className="text-sm">{slipDetail?.order?.customer_name || slip.order?.customer_name}</p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Trạng thái:</Label>
-                                    <div className="text-sm">{getStatusBadge(slipDetail?.status || slip.status)}</div>
-                                </div>
-                                {(slipDetail?.warehouse_name || slip.warehouse_name) && (
-                                  <div>
-                                    <Label className="font-medium">Kho xuất:</Label>
-                                    <p className="text-sm">{slipDetail?.warehouse_name || slip.warehouse_name}</p>
-                                  </div>
-                                )}
-                                  {(slipDetail?.order?.customer_address || slip.order?.customer_address) && (
-                                  <div className="col-span-2">
-                                    <Label className="font-medium">Địa chỉ giao hàng:</Label>
-                                    <p className="text-sm">
-                                      {/* {console.log(slipDetail?.order || slip.order)} */}
-                                      {(() => {
-                                          const orderData = slipDetail?.order || slip.order;
-                                          if (orderData) {
-                                            const fullReceiverAddress = formatFullAddress(orderData.receiver_address, orderData.receiver_addressInfo);
-                                        return fullReceiverAddress;
-                                          }
-                                          return '-';
-                                      })()}
-                                    </p>
-                                  </div>
-                                )}
-                                  {(slipDetail?.order?.customer_phone || slip.order?.customer_phone) && (
-                                  <div>
-                                    <Label className="font-medium">Số điện thoại:</Label>
-                                      <p className="text-sm">{slipDetail?.order?.customer_phone || slip.order?.customer_phone}</p>
-                                  </div>
-                                )}
-                                <div>
-                                  <Label className="font-medium">Tổng giá trị đơn hàng:</Label>
-                                  <p className="text-sm font-medium text-green-600">
-                                      {
-                                        formatCurrency( (slipDetail?.order?.vat_total_amount || slip.order?.vat_total_amount) || 0)
-                                      }
-                                  </p>
-                                </div>
-                                <div>
-                                  <Label className="font-medium">Tổng giá trị thực xuất:</Label>
-                                  <p className="text-sm font-medium text-blue-600">
-                                      {formatCurrency((slipDetail?.export_slip_items || slip.export_slip_items)?.reduce((sum, item) => sum + (item.vat_percentage ? item.vat_total_price : item.actual_quantity * item.unit_price), 0) || 0)}                                      
-                                  </p>
-                                </div>
-                              </div>
-                              {/* Product List */}
-                                {((slipDetail?.order?.order_items && slipDetail.order.order_items.length > 0) || (slipDetail?.export_slip_items && slipDetail.export_slip_items.length > 0) || 
-                                  (slip.order?.order_items && slip.order.order_items.length > 0) || (slip.export_slip_items && slip.export_slip_items.length > 0)) && (
-                                <div>
-                                  <Label className="font-medium block mb-3">
-                                      {(slipDetail?.order?.order_items || slip.order?.order_items) && (slipDetail?.order?.order_items?.length || slip.order?.order_items?.length) > 0
-                                      ? "Danh sách sản phẩm cần xuất:"
-                                      : "Danh sách sản phẩm đã xuất:"}
-                                  </Label>
-                                  <div className="border rounded-md overflow-hidden">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="text-center">Tên sản phẩm</TableHead>
-                                          <TableHead className="text-center">Mã SP</TableHead>
-                                          <TableHead className="text-center">Số lượng cần xuất</TableHead>
-                                          <TableHead className="text-center">Số lượng thực xuất</TableHead>
-                                          <TableHead className="text-center">Đơn giá</TableHead>
-                                          <TableHead className="text-center">VAT (%)</TableHead>
-                                          <TableHead className="text-center">Thành tiền</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                          {(() => {
-                                            // Lấy export_slip_items (chỉ những item thực sự được xuất)
-                                            const exportSlipItems = slipDetail?.export_slip_items || slip.export_slip_items || [];
-                                            
-                                            // Lấy order_items để lấy requestedQuantity
-                                            const orderItems = slipDetail?.order?.order_items || slip.order?.order_items || [];
-                                            
-                                            // Chỉ hiển thị những item có trong export_slip_items
-                                            return exportSlipItems.map((exportItem, index) => {
-                                              // Tìm order_item tương ứng để lấy requestedQuantity từ đơn hàng
-                                              const orderItem = orderItems.find(
-                                                item => item.product_code === exportItem.product_code
-                                              );
-                                              
-                                              // Ưu tiên lấy requestedQuantity từ order_item, nếu không có thì dùng từ exportItem
-                                              const requestedQuantity = orderItem?.quantity || exportItem.requested_quantity || exportItem.actual_quantity;
-                                              const actualQuantity = exportItem.actual_quantity;
-                                              
-                                              // Lấy thông tin sản phẩm từ order_item nếu có, nếu không thì dùng từ exportItem
-                                              const productName = orderItem?.product_name || exportItem.product_name;
-                                              const productCode = exportItem.product_code;
-                                              const unitPrice = orderItem?.unit_price || exportItem.unit_price;
-                                              
-                                              const vatPercentage = exportItem.vat_percentage || 0;
-                                              const vatTotalPrice = vatPercentage > 0 ? (actualQuantity * unitPrice * (vatPercentage / 100)) + (actualQuantity * unitPrice)  : exportItem.total_price;                                 
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            openDialog('view', slip.id);
+                            setSelectedSlip(slip);
+                            setShowDetailDialog(true);
+                          }}
+                        >
+                          <FileText className="w-4 h-4" />
+                        </Button>
 
-                                              return (
-                                                <TableRow key={index}>
-                                                  <TableCell className="text-center font-medium">
-                                                    <div className="truncate" title={productName}>{productName}</div>
-                                                  </TableCell>
-                                                  <TableCell className="text-center">
-                                                    <div className="truncate" title={productCode}>{productCode}</div>
-                                                  </TableCell>
-                                                  <TableCell className="text-center font-medium text-green-600">{requestedQuantity}</TableCell>
-                                                  <TableCell className="text-center font-medium text-blue-600">{actualQuantity}</TableCell>
-                                                  <TableCell className="text-center">{formatCurrency(unitPrice)}</TableCell>
-                                                  <TableCell className="text-center">{vatPercentage}</TableCell>
-                                                  <TableCell className="text-center font-medium">
-                                                    {formatCurrency(vatTotalPrice)}
-                                                  </TableCell>
-                                                </TableRow>
-                                              );
-                                            });
-                                          })()}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Notes */}
-                              {(slipDetail?.notes || slip.notes) && (
-                                <div>
-                                  <Label className="font-medium">Ghi chú:</Label>
-                                  <div className="mt-1 p-3 bg-gray-50 rounded-md">
-                                    <p className="text-sm">{slipDetail?.notes || slip.notes}</p>
-                                  </div>
-                                </div>
-                              )}
-                              {(slipDetail?.approval_notes || slip.approval_notes) && (
-                                <div>
-                                  <Label className="font-medium">Ghi chú duyệt:</Label>
-                                  <div className="mt-1 p-3 bg-blue-50 rounded-md">
-                                    <p className="text-sm">{slipDetail?.approval_notes || slip.approval_notes}</p>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Documents - Temporarily disabled */}
-                              <div>
-                                <Label className="font-medium block mb-3">Tài liệu đính kèm:</Label>
-                                <div className="text-sm text-muted-foreground">
-                                  Chưa có tài liệu đính kèm nào
-                                </div>
-                              </div>
-                            </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
                         {/* Approval buttons - Only show when status is pending and user has permission */}
                         {canApproveExports && slip.status === 'pending' && (
                           <>
@@ -2515,9 +2341,22 @@ function ExportSlipsContent() {
           )}
         </CardContent>
       </Card>
+      {/* SlipDetailDialog for viewing slip details */}
+      <SlipDetailDialog
+        open={showDetailDialog}
+        onOpenChange={(open) => {
+          setShowDetailDialog(open);
+          if (!open) {
+            setSelectedSlip(null);
+          }
+        }}
+        slipId={selectedSlip?.id || ''}
+        slipType="export"
+      />
     </div>
   );
 }
+
 export default function ExportSlips() {
   return (
     <PermissionGuard 

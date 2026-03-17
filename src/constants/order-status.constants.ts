@@ -7,6 +7,8 @@ export const ORDER_STATUSES = [
   // 'delivered',
   // 'delivery_failed',
   'completed',
+  'partially_returned',
+  'fully_returned',
   'cancelled',
 ] as const;
 
@@ -20,6 +22,8 @@ export const PURCHASE_ORDER_STATUSES = [
   'partially_imported',
   'imported',
   'completed',
+  'partially_returned',
+  'fully_returned',
   'cancelled',
 ] as const;
 
@@ -34,6 +38,8 @@ export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {
   // delivered: 'Đã giao hàng',
   // delivery_failed: 'Giao hàng thất bại',
   completed: 'Hoàn thành',
+  partially_returned: 'Hoàn một phần',
+  fully_returned: 'Hoàn toàn bộ',
   cancelled: 'Đã hủy',
 };
 
@@ -45,6 +51,8 @@ export const PURCHASE_ORDER_STATUS_LABELS_VI: Record<PurchaseOrderStatus, string
   partially_imported: 'Đã nhập kho một phần',
   imported: 'Đã nhập kho',
   completed: 'Hoàn thành',
+  partially_returned: 'Hoàn một phần',
+  fully_returned: 'Hoàn toàn bộ',
   cancelled: 'Đã hủy',
 };
 
@@ -57,6 +65,8 @@ export const ORDER_STATUS_VARIANTS: Record<OrderStatus, "default" | "secondary" 
   // delivered: 'default',
   // delivery_failed: 'destructive',
   completed: 'default',
+  partially_returned: 'default',
+  fully_returned: 'default',
   cancelled: 'destructive',
 };
 
@@ -68,6 +78,8 @@ export const PURCHASE_ORDER_STATUS_VARIANTS: Record<PurchaseOrderStatus, "defaul
   partially_imported: 'default',
   imported: 'default',
   completed: 'default',
+  partially_returned: 'default',
+  fully_returned: 'default',
   cancelled: 'destructive',
 };
 
@@ -80,6 +92,8 @@ export const ORDER_STATUS_CLASSES: Partial<Record<OrderStatus, string>> = {
   // delivered: 'bg-[#2E7D32] text-white border-green-500',
   // delivery_failed: 'bg-[#D32F2F] text-white border-red-500',
   completed: 'bg-[#1B5E20] text-white border-green-500',
+  partially_returned: 'bg-[#FF9800] text-white border-orange-400',
+  fully_returned: 'bg-[#FF6633] text-white border-orange-400',
   cancelled: 'bg-[#757575] text-white border-gray-500',
 };
 
@@ -91,6 +105,8 @@ export const PURCHASE_ORDER_STATUS_CLASSES: Partial<Record<PurchaseOrderStatus, 
   partially_imported: 'bg-[#8E24AA] text-white border-purple-500',
   imported: 'bg-[#2E7D32] text-white border-green-500',
   completed: 'bg-[#1B5E20] text-white border-green-500',
+  partially_returned: 'bg-[#FF9800] text-white border-orange-400',
+  fully_returned: 'bg-[#FF6633] text-white border-orange-400',
   cancelled: 'bg-[#757575] text-white border-gray-500',
 };
 

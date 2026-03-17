@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Bell, Package, CheckCircle, Clock, AlertCircle, XCircle } from "lucide-react";
-import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
+import { warehouseReceiptsApi, type WarehouseReceipt } from "@/api/warehouseReceipts.api";
 
 interface ExportSlipNotification {
   id: string;
