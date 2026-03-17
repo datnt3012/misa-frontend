@@ -31,11 +31,12 @@ import { AddressFormSeparate } from '@/components/common/AddressFormSeparate';
 import { convertPermissionCodesInMessage } from '@/utils/permissionMessageConverter';
 import { generateImportSlipCode } from '@/utils/importSlipUtils';
 import { categoriesApi } from '@/api/categories.api';
-import { MultiSelect } from '../ui/multi-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { SlipCreatingDialog } from '@/components/inventory/SlipCreatingDialog';
 
 interface ImportSlip {
   id: string;
+  type: string;
   slip_number: string;
   order_number?: string;
   supplier_name: string;
@@ -62,6 +63,8 @@ interface ImportSlipItem {
    quantity: number;
    unit_price: number;
    total_price: number;
+   vat_percentage?: string | number;
+   vat_total_price?: string | number;
    po_number: string;
    notes: string;
    isForeignCurrency?: boolean;
@@ -166,6 +169,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all' | 'import' | 'return'
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -213,6 +217,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     warehouseFilter,
     statusFilter,
     categoryFilter,
+    typeFilter,
     manufacturerFilter,
     sortField, 
     sortDirection,
@@ -287,7 +292,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       const params: any = { 
         page: currentPage, 
         limit: displayLimit, 
-        type: 'import',
+        type: 'import, sale_return_note',
         search: debouncedSearchTerm || undefined
       }
       if(sortField) {params.sortBy = sortField;}
@@ -301,9 +306,14 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       if(statusFilter) {params.status = statusFilter;}
       if(categoryFilter != 'all') {params.categories = categoryFilter;}
       if(manufacturerFilter != 'all') {params.manufacturers = manufacturerFilter;}
+      // Set type filter: 'all' shows import+returns, 'import' shows only import, 'return' shows only sale return notes
+      if(typeFilter === 'import') {params.type = 'import';}
+      else if(typeFilter === 'return') {params.type = 'sale_return_note';}
+      else {params.type = 'import,sale_return_note';}
       const resp = await warehouseReceiptsApi.getReceipts(params);
       const list = (resp.receipts || []).map((r: any) => ({
         id: r.id,
+        type: r.type,
         slip_number: r.code,
         order_number: r.order?.order_number || '',
         supplier_name: r.supplier_name,
@@ -404,16 +414,20 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     try {
       // Get the specific receipt with details by ID
       const receipt = await warehouseReceiptsApi.getReceipt(slipId);
-      if (receipt && receipt.items) {
+      // The normalized response uses 'items' instead of 'details'
+      const receiptDetails = receipt.items || receipt.details;
+      if (receiptDetails) {
         // Transform items to match ImportSlipItem interface
-        const transformedItems = receipt.items.map(item => ({
+        const transformedItems = receiptDetails.map((item: any) => ({
           id: item.id,
-          product_id: item.product_id,
+          product_id: item.product?.id || item.product_id,
           product_code: item.product?.code || '',
           product_name: item.product?.name || '',
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
+          unit_price: item.unitPrice || item.unit_price,
+          total_price: item.totalPrice || item.total_price,
+          vat_percentage: item.vatPercentage || item.vat_percentage || '0',
+          vat_total_price: item.vatTotalPrice || item.vat_total_price || item.total_price,
           po_number: item.po_number || '',
           notes: item.notes || ''
         }));
@@ -593,8 +607,8 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         toast({ title: 'Lỗi', description: 'Không tìm thấy phiếu nhập kho', variant: 'destructive' });
         return;
       }
-      // Check if receipt has items
-      if (!receipt.items || receipt.items.length === 0) {
+      // Check if receipt has details
+      if (!receipt.details || receipt.details.length === 0) {
         toast({ title: 'Lỗi', description: 'Phiếu nhập kho không có sản phẩm nào', variant: 'destructive' });
         return;
       }
@@ -1695,6 +1709,17 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 emptyMessage="Không có kho nào"
                 multiple={true}
               />
+              {/* Type filter */}
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Tất cả loại phiếu" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả loại phiếu</SelectItem>
+                  <SelectItem value="import">Phiếu nhập</SelectItem>
+                  <SelectItem value="return">Phiếu hoàn</SelectItem>
+                </SelectContent>
+              </Select>
               {/* Status filter */}
               <MultiSelect
                 options={[
@@ -1769,6 +1794,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     </TableHead>
                     <TableHead 
                       className="font-semibold text-center min-w-[180px] cursor-pointer hover:bg-gray-50 select-none"
+                      onClick={() => handleSort('type')}
+                    >
+                      <div className="flex items-center gap-1 justify-center">
+                        Loại phiếu
+                        {getSortIcon('type')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="font-semibold text-center min-w-[180px] cursor-pointer hover:bg-gray-50 select-none"
                       onClick={() => handleSort('supplier')}
                     >
                       <div className="flex items-center gap-1 justify-center">
@@ -1836,6 +1870,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                         </TableCell>
                         <TableCell className="font-medium text-primary text-center">
                           <div className="truncate" title={slip.order_number}>{slip.order_number}</div>
+                        </TableCell>
+                        <TableCell className="font-medium text-primary text-center">
+                          <div className="truncate" title={slip.type}>
+                            {
+                              slip.type !== undefined ? (
+                                slip.type == 'export' ? 'Phiếu xuất' : slip.type == 'import' ? 'Phiếu nhập' : 'Phiếu hoàn' ) 
+                                : '-'
+                            }
+                          </div>
                         </TableCell>
                         <TableCell className="font-medium text-center">
                           <div className="truncate" title={slip.supplier_name || ''}>{slip.supplier_name || '-'}</div>
@@ -2112,13 +2155,21 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
               {selectedSlip?.approved_by && (
                 <div>
                   <Label className="font-medium text-sm">Người duyệt:</Label>
-                  <p className="text-sm text-muted-foreground">{selectedSlip.approved_by}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {typeof selectedSlip.approved_by === 'object' && selectedSlip.approved_by !== null ? 
+                      (selectedSlip.approved_by.firstName ? `${selectedSlip.approved_by.firstName} ${selectedSlip.approved_by.lastName || ''}` : selectedSlip.approved_by.username || selectedSlip.approved_by.email) : 
+                      String(selectedSlip.approved_by)}
+                  </p>
                 </div>
               )}
               {selectedSlip?.created_by && (
                 <div>
                   <Label className="font-medium text-sm">Người tạo:</Label>
-                  <p className="text-sm text-muted-foreground">{selectedSlip.created_by}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {typeof selectedSlip.created_by === 'object' && selectedSlip.created_by !== null ? 
+                      (selectedSlip.created_by.firstName ? `${selectedSlip.created_by.firstName} ${selectedSlip.created_by.lastName || ''}` : selectedSlip.created_by.username || selectedSlip.created_by.email) : 
+                      String(selectedSlip.created_by)}
+                  </p>
                 </div>
               )}
             </div>
@@ -2132,7 +2183,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                   <TableHead className="text-center">Tên sản phẩm</TableHead>
                   <TableHead className="text-center">Số lượng</TableHead>
                   <TableHead className="text-center">Đơn giá</TableHead>
+                  <TableHead className="text-center">VAT (%)</TableHead>
                   <TableHead className="text-center">Thành tiền</TableHead>
+                  <TableHead className="text-center">Tổng (VAT)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2146,7 +2199,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                     </TableCell>
                     <TableCell className="text-center">{item.quantity}</TableCell>
                     <TableCell className="text-center">{formatCurrency(item.unit_price)}</TableCell>
+                    <TableCell className="text-center">{item.vat_percentage || '0'}%</TableCell>
                     <TableCell className="text-center">{formatCurrency(item.total_price)}</TableCell>
+                    <TableCell className="text-center font-medium">{formatCurrency(Number(item.vat_total_price))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -2158,8 +2213,15 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 <p className="text-sm text-muted-foreground">{selectedSlip.notes}</p>
               </div>
             )}
-          <div className="text-right mt-4">
-            <strong>Tổng tiền: {selectedSlip && formatCurrency(selectedSlip.total_amount)}</strong>
+          <div className="text-right mt-4 space-y-1">
+            <div>
+              <span className="text-muted-foreground">Tổng tiền: </span>
+              <strong>{selectedSlip && formatCurrency(selectedSlip.total_amount)} VNĐ</strong>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Tổng tiền (VAT): </span>
+              <strong className="text-lg">{formatCurrency(slipItems.reduce((sum, item) => sum + (parseFloat(String(item.vat_total_price)) || 0), 0))} VNĐ</strong>
+            </div>
           </div>
           {/* Inventory History Section */}
           {inventoryHistory.length > 0 && (

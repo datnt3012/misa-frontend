@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingDown, TrendingUp, History, ArrowRight } from "lucide-react";
 import ExportSlips from "@/pages/ExportSlips";
-import ImportSlips from "@/components/inventory/ImportSlips";
+import ImportSlips from "@/pages/ImportSlips";
 import MovingSlips from "@/components/inventory/MovingSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
 import { useToast } from "@/hooks/use-toast";

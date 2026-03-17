@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,6 +50,8 @@ interface MovingSlip {
   code: string;
   warehouse_id: string;
   new_warehouse_id?: string;
+  movingReceiptId?: string; // ID của phiếu gốc (dùng để nhóm phiếu chuyển đi và chuyển đến)
+  type?: string; // stock_transfer_out | stock_transfer_in
   status: string;
   notes?: string;
   created_at: string;
@@ -73,6 +75,33 @@ const MovingSlips: React.FC = () => {
   // State
   const [loading, setLoading] = useState(false);
   const [slips, setSlips] = useState<MovingSlip[]>([]);
+  
+  // Group slips by movingReceiptId - slips with same movingReceiptId are shown in one row
+  const groupedSlips = useMemo(() => {
+    const groups: { [key: string]: MovingSlip[] } = {};
+    
+    slips.forEach(slip => {
+      const groupKey = slip.movingReceiptId || slip.id; // Use movingReceiptId if available, otherwise use own id
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(slip);
+    });
+    
+    // Convert to array with group info
+    return Object.entries(groups).map(([groupKey, groupSlips]) => ({
+      groupKey,
+      slips: groupSlips,
+      // Use the first slip's info for display
+      primarySlip: groupSlips[0],
+      // Count total items across all slips in group
+      totalItems: groupSlips.reduce((sum, s) => sum + (s.items?.length || 0), 0),
+      // Check if all slips in group have the same status
+      allSameStatus: groupSlips.every(s => s.status === groupSlips[0].status),
+      // Get the status of the group (use the most relevant status)
+      status: groupSlips[0].status
+    }));
+  }, [slips]);
   const [currentPage, setCurrentPage] = useState(1);
   const [displayLimit] = useState(10);
   const [total, setTotal] = useState(0);
@@ -117,7 +146,7 @@ const MovingSlips: React.FC = () => {
       const params: any = {
         page: currentPage,
         limit: displayLimit,
-        type: 'moving',
+        type: 'stock_transfer_out,stock_transfer_in',
         search: searchTerm || undefined
       };
       if (statusFilter.length > 0) params.status = statusFilter.join(',');
@@ -281,7 +310,7 @@ const MovingSlips: React.FC = () => {
     try {
       setSubmitting(true);
         const createData = {
-          type: 'moving',
+          type: 'stock_transfer_out,stock_transfer_in',
           status: 'pending',
           warehouseId: newSlip.source_warehouse_id,
           newWarehouseId: newSlip.destination_warehouse_id,
@@ -682,60 +711,114 @@ const MovingSlips: React.FC = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-center">Số Phiếu</TableHead>
-                  <TableHead className="text-center">Kho Nguồn</TableHead>
-                  <TableHead className="text-center">Kho Đích</TableHead>
-                  <TableHead className="text-center">Số Lượng SP</TableHead>
+                  <TableHead className="text-center">Kho Chuyển</TableHead>
                   <TableHead className="text-center">Trạng Thái</TableHead>
                   <TableHead className="text-center">Người Tạo</TableHead>
                   <TableHead className="text-center">Ngày Tạo</TableHead>
+                  <TableHead className="text-center">Ngày Chuyển</TableHead>
                   <TableHead className="text-center"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {slips.map((slip) => (
-                  <TableRow key={slip.id}>
-                    <TableCell className="font-medium text-center">{slip.code}</TableCell>
-                    <TableCell className="text-center">{warehouses.find(w => w.id === slip.warehouse_id)?.name || '-'}</TableCell>
-                    <TableCell className="text-center">{slip.new_warehouse_id ? warehouses.find(w => w.id === slip.new_warehouse_id)?.name || '-' : '-'}</TableCell>
-                    <TableCell className="text-center">{slip.items?.length || 0}</TableCell>
-                    <TableCell className="text-center">{getStatusBadge(slip.status)}</TableCell>
-                    <TableCell className="text-center">{slip.created_by_name || slip.created_by}</TableCell>
-                    <TableCell className="text-center">
-                      {slip.created_at ? format(new Date(slip.created_at), 'dd/MM/yyyy') : '-'}
+                {groupedSlips.map((group) => (
+                  <TableRow key={group.groupKey}>
+                    <TableCell className="font-medium text-center">
+                      <div className="flex flex-col items-center">
+                        {group.slips.map(s => (
+                          <span key={s.id} className={group.slips.length > 1 ? "text-sm" : ""}>{s.code}</span>
+                        ))}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center space-x-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewSlip(slip)}
-                          className="h-8 px-2 text-xs whitespace-nowrap"
-                        >
-                          <Package className="w-3 h-3 mr-1" />
-                          Chi tiết
-                        </Button>
-                        {hasPermission('WAREHOUSE_RECEIPTS_APPROVE') && slip.status === 'pending' && (
-                          <>
+                      <div className="flex flex-col items-center gap-1">
+                        {group.slips
+                          .sort((a, b) => {
+                            // ST-OUT (source) first, then ST-IN (destination)
+                            if (a.type === 'stock_transfer_out' && b.type !== 'stock_transfer_out') return -1;
+                            if (a.type !== 'stock_transfer_out' && b.type === 'stock_transfer_out') return 1;
+                            return 0;
+                          })
+                          .map(s => {
+                          // Each slip shows its own warehouse_id
+                          const warehouseName = warehouses.find(w => w.id === s.warehouse_id)?.name;
+                          // ST-OUT is source (Kho nguồn), ST-IN is destination (Kho đích)
+                          const label = s.type === 'stock_transfer_in' 
+                            ? <span className="text-green-600">(Kho đích)</span> 
+                            : <span className="text-blue-600">(Kho nguồn)</span>;
+                          
+                          return (
+                            <span key={s.id} className="text-sm">
+                              {warehouseName || '-'} {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        {group.slips.map(s => (
+                          <span key={s.id}>{getStatusBadge(s.status)}</span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        {group.slips.map(s => (
+                          <span key={s.id} className="text-sm">
+                            {s.created_by_name || s.created_by || '-'}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {group.primarySlip.created_at ? format(new Date(group.primarySlip.created_at), 'dd/MM/yyyy') : '-'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        {group.slips.map(slip => (
+                          <div key={slip.id} className="text-xs">
+                            {slip.completed_at ? format(new Date(slip.completed_at), 'dd/MM/yyyy') : '-'}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        {group.slips.map(slip => (
+                          <div key={slip.id} className="flex items-center space-x-1">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleApproveSlip(slip)}
-                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+                              onClick={() => handleViewSlip(slip)}
+                              className="h-8 px-2 text-xs whitespace-nowrap"
                             >
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Duyệt
+                              <Package className="w-3 h-3 mr-1" />
+                              Chi tiết
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRejectSlip(slip)}
-                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
-                            >
-                              <XCircle className="w-3 h-3 mr-1" />
-                              Từ chối
-                            </Button>
-                          </>
-                        )}
+                            {hasPermission('WAREHOUSE_RECEIPTS_APPROVE') && slip.status === 'pending' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleApproveSlip(slip)}
+                                  className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+                                >
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Duyệt
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRejectSlip(slip)}
+                                  className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                                >
+                                  <XCircle className="w-3 h-3 mr-1" />
+                                  Từ chối
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </TableCell>
                   </TableRow>
