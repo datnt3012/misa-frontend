@@ -68,6 +68,7 @@ const Layout = ({ children }: LayoutProps) => {
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Báo Giá", href: "/quotations", icon: FileText },
     { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
+    { name: "Đơn Hàng (New)", href: "/orders-new", icon: ShoppingCart },
     { name: "Quản Lý Kho", href: "/inventory", icon: Package },
     { name: "Xuất Nhập Kho", href: "/export-import", icon: Package },
     { name: "Quản Lý Liên Hệ", href: "/relations", icon: Users },
