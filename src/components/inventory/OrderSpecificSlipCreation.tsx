@@ -617,13 +617,13 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                         <div className="text-sm text-muted-foreground">
                           {returnedQuantity}/{allocatedQuantity}/{orderQuantity}
                         </div>
-                        {returnedQuantity > 0 ? (
-                          <Badge variant="default" className="bg-blue-100 text-blue-800 w-fit">
-                            Đã hoàn: {returnedQuantity}
+                        {(allocatedQuantity - returnedQuantity) > 0 ? (
+                          <Badge variant="default" className="bg-yellow-100 text-yellow-800 w-fit">
+                            Còn: {allocatedQuantity - returnedQuantity}
                           </Badge>
                         ) : (
                           <Badge variant="default" className="bg-green-100 text-green-800 w-fit">
-                            Chưa hoàn
+                            Đã hoàn đủ
                           </Badge>
                         )}
                       </div>
