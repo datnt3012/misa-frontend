@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ import { SlipDetailDialog } from '@/components/inventory/SlipDetailDialog';
 
 function ExportSlipsContent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [exportSlips, setExportSlips] = useState<WarehouseReceipt[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [addressCache, setAddressCache] = useState<Record<string, string>>({});
@@ -88,6 +89,19 @@ function ExportSlipsContent() {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Initialize and update searchTerm from URL params when URL changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchFromUrl = params.get('search');
+    
+    if (searchFromUrl) {
+      // Only set searchTerm - let debounce useEffect handle setting debouncedSearchTerm
+      // This prevents duplicate API calls
+      setSearchTerm(searchFromUrl);
+      setCurrentPage(1);
+    }
+  }, [location.search]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [completedStartDate, setCompletedStartDate] = useState<string>('');
@@ -209,8 +223,45 @@ function ExportSlipsContent() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Initialize and update searchTerm from URL params when URL changes
   useEffect(() => {
-    fetchExportSlips();
+    const params = new URLSearchParams(location.search);
+    const searchFromUrl = params.get('search');
+    const hasInitialSearch = !!searchFromUrl;
+    
+    if (searchFromUrl) {
+      setSearchTerm(searchFromUrl);
+      setCurrentPage(1);
+    }
+    
+    // Fetch on mount - skip if we have URL search (will be fetched after debounce)
+    if (!hasInitialSearch) {
+      fetchExportSlips();
+    }
+    fetchCategories();
+    fetchManufacturers();
+    loadOrders();
+    // Load active jobs on mount
+    refreshImportJobs({ onlyActive: true });
+    // Load job history on mount
+    refreshImportJobs({
+      onlyActive: false,
+      sortBy: 'createdAt',
+      sortOrder: 'DESC',
+      page: 1,
+      limit: jobHistoryItemsPerPage
+    });
+  }, []); // Only run on mount
+
+  // Fetch export slips when filters change (excluding initial mount - handled by mount useEffect)
+  const isInitialMountRef = useRef(true);
+  useEffect(() => {
+    // Skip fetchExportSlips on first render - the mount useEffect handles it
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+    } else {
+      fetchExportSlips();
+    }
     fetchCategories();
     fetchManufacturers();
     loadOrders();

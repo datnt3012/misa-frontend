@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -91,6 +92,7 @@ interface ImportSlipsProps {
 export default function ImportSlips({ canManageImports, canApproveImports }: ImportSlipsProps) {
   const { user } = useAuth();
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('import-slips');
+  const location = useLocation();
   const isClosingDialogRef = useRef(false);
   const [importSlips, setImportSlips] = useState<ImportSlip[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -190,8 +192,47 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Initialize and update searchTerm from URL params when URL changes
   useEffect(() => {
-    loadImportSlips();
+    const params = new URLSearchParams(location.search);
+    const searchFromUrl = params.get('search');
+    const hasInitialSearch = !!searchFromUrl;
+    
+    if (searchFromUrl) {
+      setSearchTerm(searchFromUrl);
+      setCurrentPage(1);
+    }
+    
+    // Fetch on mount - skip if we have URL search (will be fetched after debounce)
+    if (!hasInitialSearch) {
+      loadImportSlips();
+    }
+    loadProducts();
+    loadSuppliers();
+    loadWarehouses();
+    fetchCategories();
+    fetchManufacturers();
+    // Load active jobs on mount
+    refreshImportJobs({ onlyActive: true });
+    // Load job history on mount
+    refreshImportJobs({
+      onlyActive: false,
+      sortBy: 'createdAt',
+      sortOrder: 'DESC',
+      page: 1,
+      limit: jobHistoryItemsPerPage
+    });
+  }, []); // Only run on mount
+
+  // Fetch import slips when filters change (excluding initial mount - handled by mount useEffect)
+  const isInitialMountRef = useRef(true);
+  useEffect(() => {
+    // Skip fetchImportSlips on first render - the mount useEffect handles it
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+    } else {
+      loadImportSlips();
+    }
     loadProducts();
     loadSuppliers();
     loadWarehouses();
