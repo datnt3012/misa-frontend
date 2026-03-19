@@ -23,6 +23,8 @@ export interface GenericFormFieldConfig<T> {
     options?: Array<{ value: string; label: string }>;
     disabled?: boolean;
     colSpan?: 1 | 2 | 3 | 4 | 6 | 8 | 12;
+    colSpanMd?: 1 | 2 | 3 | 4 | 6 | 8 | 12;
+    colSpanLg?: 1 | 2 | 3 | 4 | 6 | 8 | 12;
     required?: boolean;
     onChange?: (value: any, setValue: any) => void;
     onClick?: (value: any, setValue: any) => void;

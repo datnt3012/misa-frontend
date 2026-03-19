@@ -11,90 +11,47 @@ import { PermissionGuard } from '@/components/PermissionGuard';
 import { orderApi } from '@/api/order.api';
 import { getErrorMessage } from '@/lib/error-utils';
 import { useOrderList } from '@/features/orders/hooks';
-import { useOrderFilters } from '@/features/orders/hooks';
 import { useOrderCatalogs } from '@/features/orders/hooks';
-import {
-    OrderFilterBar,
-    OrderSummary,
-    OrderBulkActions,
-    OrderDataTable,
-    OrderDialogs,
-    type OrderDialogActions,
-} from '@/features/orders/components';
+import { OrderFilter } from '@/features/orders/components/OrderFilter';
+import { OrderPageHeader } from '@/features/orders/components/OrderPageHeader';
+import { OrderSummary } from '@/features/orders/components/OrderSummary';
+import { OrderDialogManager, type OrderDialogManagerHandle } from '@/features/orders/components/OrderDialogManager';
+import { OrderBulkActions } from '@/features/orders/components/OrderBulkActions';
+import { OrderDataTable } from '@/features/orders/components/OrderDataTable';
+import { ORDER_TYPES, OrderFilterSchemaType } from '@/features/orders/schemas';
 
 const OrdersNewContent: React.FC = () => {
-    const queryClient = useQueryClient();
-    const { toast } = useToast();
+    const dialogManagerRef = useRef<OrderDialogManagerHandle>(null);
     const { hasPermission } = usePermissions();
     const { openDialog, closeDialog, getDialogState } = useDialogUrl('orders');
     const location = useLocation();
-    const isClosingDialogRef = useRef(false);
 
     // ── Hooks ──────────────────────────────────────────────────────────────────
-    const filters = useOrderFilters();
+    const [filters, setFilters] = useState<OrderFilterSchemaType>({
+        keyword: '',
+        page: 1,
+        limit: 50,
+        type: ORDER_TYPES[0],
+    });
     const catalogs = useOrderCatalogs();
-    const { data, isLoading, isFetching } = useOrderList(filters.queryParams);
+    const { data, isLoading, isFetching } = useOrderList(filters as any);
 
     const orders = data?.orders ?? [];
-    const totalOrders = data?.total ?? 0;
     const summary = data?.summary ?? null;
 
     // ── Selection ──────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-    // ── Dialog state ───────────────────────────────────────────────────────────
-    const [selectedOrder, setSelectedOrder] = useState<any>(null);
-    const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
-    const [showOrderDetailDialog, setShowOrderDetailDialog] = useState(false);
-    const [showCreateDialog, setShowCreateDialog] = useState(false);
-    const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-    const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
-    const [showTagsManager, setShowTagsManager] = useState(false);
-    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [orderToDelete, setOrderToDelete] = useState<any>(null);
-    const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
-    const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
-    const [showExportDeliveryDialog, setShowExportDeliveryDialog] = useState(false);
-    const [selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport] = useState<any>(null);
-    const [exportingDeliveryPDF, setExportingDeliveryPDF] = useState(false);
-    const [exportingDeliveryXLSX, setExportingDeliveryXLSX] = useState(false);
 
     // ── Scroll to top on route change ──────────────────────────────────────────
     useEffect(() => {
         window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }, [location.pathname]);
 
-    // ── URL dialog auto-open ───────────────────────────────────────────────────
-    useEffect(() => {
-        if (isClosingDialogRef.current) return;
-        const dialogState = getDialogState();
-        if (!dialogState.isOpen || !dialogState.entityId) return;
-        const isOpen =
-            (showOrderViewDialog && selectedOrder?.id === dialogState.entityId && dialogState.dialogType === 'view') ||
-            (showOrderDetailDialog && selectedOrder?.id === dialogState.entityId);
-        if (isOpen) return;
-        const open = (o: any) => {
-            setSelectedOrder(o);
-            dialogState.dialogType === 'view' ? setShowOrderViewDialog(true) : setShowOrderDetailDialog(true);
-        };
-        const order = orders.find((o) => o.id === dialogState.entityId);
-        if (order) open(order);
-        else if (orders.length > 0) orderApi.getOrder(dialogState.entityId).then(open).catch(closeDialog);
-    }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
-
-    // ── Totals ────────────────────────────────────────────────────────────────
-    const totals = summary
-        ? { totalAmount: summary.totalAmount, paidAmount: summary.totalPaidAmount || summary.totalInitialPayment, debtAmount: summary.totalDebt, totalExpenses: summary.totalExpenses || 0 }
-        : orders.reduce(
-            (acc, o: any) => {
-                const total = o.totalAmount ?? o.total_amount ?? 0;
-                const paid = o.totalPaidAmount ?? o.paid_amount ?? o.initial_payment ?? 0;
-                return { totalAmount: acc.totalAmount + total, paidAmount: acc.paidAmount + paid, debtAmount: acc.debtAmount + (o.remainingDebt ?? Math.max(0, total - paid)), totalExpenses: acc.totalExpenses + (o.totalExpenses ?? 0) };
-            },
-            { totalAmount: 0, paidAmount: 0, debtAmount: 0, totalExpenses: 0 }
-        );
-
     // ── Quick note + status update ─────────────────────────────────────────────
+    // Note: These could also be moved to a hook if needed
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+
     const handleQuickNote = async (orderId: string, note: string, currentNote: string) => {
         if (note === (currentNote || '')) return;
         try {
@@ -119,94 +76,100 @@ const OrdersNewContent: React.FC = () => {
         }
     };
 
-    // ── Dialog action callbacks ────────────────────────────────────────────────
-    const dialogActions: OrderDialogActions = {
-        openView: (order) => { setSelectedOrder(order); openDialog('view', order.id); setShowOrderViewDialog(true); },
-        openEdit: (order) => { setSelectedOrder(order); openDialog('edit', order.id); setShowOrderDetailDialog(true); },
-        openPayment: (order) => { setSelectedOrder(order); openDialog('payment', order.id); setShowPaymentDialog(true); },
-        openTagsManager: (order) => { setSelectedOrder(order); setShowTagsManager(true); },
-        openExportDelivery: (order) => { setSelectedOrderForDeliveryExport(order); setShowExportDeliveryDialog(true); },
-        openExportSlip: (order) => { setSelectedOrderForExport(order); setShowExportSlipDialog(true); },
-        openDelete: (order) => { setOrderToDelete(order); setShowDeleteDialog(true); },
+    const handleFilterChange = (newFilters: Partial<OrderFilterSchemaType>) => {
+        setFilters(prev => ({
+            ...prev,
+            ...newFilters,
+        }));
     };
 
     return (
-        <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
-            <div className="w-full mx-auto space-y-3 sm:space-y-4">
-
-                <OrderFilterBar
-                    filters={filters}
-                    catalogs={catalogs}
-                    isLoading={isLoading || isFetching}
-                    onCreateClick={() => { openDialog('create'); setShowCreateDialog(true); }}
+        <div className="min-h-screen bg-background pb-10">
+            <div className="w-full mx-auto space-y-6 p-4 md:p-8">
+                {/* Header with Title and Add New Action */}
+                <OrderPageHeader
+                    onCreateClick={() => dialogManagerRef.current?.openCreate()}
+                    description="Theo dõi và quản lý tất cả đơn hàng bán và mua của bạn."
                 />
 
-                <Tabs value={filters.orderType} onValueChange={(v) => filters.setOrderType(v as 'sale' | 'purchase')} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="sale" className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" />Bán hàng</TabsTrigger>
-                        <TabsTrigger value="purchase" className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" />Mua hàng</TabsTrigger>
+                <OrderFilter
+                    filters={filters}
+                    onFilterChange={handleFilterChange}
+                    defaultExpanded={false}
+                />
+
+                <Tabs value={filters.type} onValueChange={(value) => handleFilterChange({ type: value as any })} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+                        <TabsTrigger value={ORDER_TYPES[0]} className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" />Bán hàng</TabsTrigger>
+                        <TabsTrigger value={ORDER_TYPES[1]} className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" />Mua hàng</TabsTrigger>
                     </TabsList>
                 </Tabs>
 
                 <OrderBulkActions
                     selectedCount={selectedIds.length}
-                    onMultiplePayments={() => setShowMultiplePaymentDialog(true)}
-                    onDelete={() => setShowDeleteDialog(true)}
+                    onMultiplePayments={() => dialogManagerRef.current?.openMultiplePayment()}
+                    onDelete={() => dialogManagerRef.current?.openMultipleDelete()}
                     onClearSelection={() => setSelectedIds([])}
                 />
 
-                <Card className="shadow-sm border">
+                {/* {summary && (
+                    <OrderSummary
+                        totalOrders={data?.total ?? 0}
+                        totalAmount={summary.totalAmount}
+                        paidAmount={summary.totalPaidAmount || summary.totalInitialPayment}
+                        debtAmount={summary.totalDebt}
+                        totalExpenses={summary.totalExpenses || 0}
+                        orderType={filters.type as any}
+                    />
+                )} */}
+
+                <Card className="shadow-premium border-none overflow-hidden">
                     <CardContent className="p-0">
                         <OrderDataTable
                             orders={orders}
-                            isLoading={isLoading}
-                            total={totalOrders}
-                            pagination={filters.pagination}
-                            onPaginationChange={filters.setPagination}
+                            isLoading={isLoading || isFetching}
+                            total={data?.total ?? 0}
+                            pagination={{ page: filters.page || 1, limit: filters.limit || 50 }}
+                            onPaginationChange={(p) => handleFilterChange(p)}
                             selectedIds={selectedIds}
                             onSelectedIdsChange={setSelectedIds}
-                            orderType={filters.orderType}
+                            orderType={filters.type as any}
                             availableTags={catalogs.availableTags}
-                            onSort={filters.handleSort}
-                            getSortIcon={filters.getSortIcon}
+                            onSort={(field) => console.log('Sort', field)}
+                            getSortIcon={() => null}
                             onQuickNote={handleQuickNote}
                             onUpdateStatus={handleUpdateOrderStatus}
                             hasPermission={hasPermission}
-                            dialogActions={dialogActions}
+                            dialogActions={{
+                                openView: (order) => dialogManagerRef.current?.openView(order),
+                                openEdit: (order) => dialogManagerRef.current?.openEdit(order),
+                                openPayment: (order) => dialogManagerRef.current?.openPayment(order),
+                                openTagsManager: (order) => dialogManagerRef.current?.openTagsManager(order),
+                                openExportDelivery: (order) => dialogManagerRef.current?.openExportDelivery(order),
+                                openExportSlip: (order) => dialogManagerRef.current?.openExportSlip(order),
+                                openDelete: (order) => dialogManagerRef.current?.openDelete(order),
+                            }}
                         />
                     </CardContent>
                 </Card>
 
-                <OrderDialogs
-                    selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}
-                    showOrderViewDialog={showOrderViewDialog} setShowOrderViewDialog={setShowOrderViewDialog}
-                    showOrderDetailDialog={showOrderDetailDialog} setShowOrderDetailDialog={setShowOrderDetailDialog}
-                    showCreateDialog={showCreateDialog} setShowCreateDialog={setShowCreateDialog}
-                    showPaymentDialog={showPaymentDialog} setShowPaymentDialog={setShowPaymentDialog}
-                    showMultiplePaymentDialog={showMultiplePaymentDialog} setShowMultiplePaymentDialog={setShowMultiplePaymentDialog}
-                    showTagsManager={showTagsManager} setShowTagsManager={setShowTagsManager}
-                    showDeleteDialog={showDeleteDialog} setShowDeleteDialog={setShowDeleteDialog}
-                    orderToDelete={orderToDelete} setOrderToDelete={setOrderToDelete}
-                    showExportSlipDialog={showExportSlipDialog} setShowExportSlipDialog={setShowExportSlipDialog}
-                    selectedOrderForExport={selectedOrderForExport} setSelectedOrderForExport={setSelectedOrderForExport}
-                    showExportDeliveryDialog={showExportDeliveryDialog} setShowExportDeliveryDialog={setShowExportDeliveryDialog}
-                    selectedOrderForDeliveryExport={selectedOrderForDeliveryExport} setSelectedOrderForDeliveryExport={setSelectedOrderForDeliveryExport}
-                    exportingDeliveryPDF={exportingDeliveryPDF} setExportingDeliveryPDF={setExportingDeliveryPDF}
-                    exportingDeliveryXLSX={exportingDeliveryXLSX} setExportingDeliveryXLSX={setExportingDeliveryXLSX}
-                    selectedIds={selectedIds} setSelectedIds={setSelectedIds}
+                {/* Encapsulated Dialog States and Logic */}
+                <OrderDialogManager
+                    ref={dialogManagerRef}
                     orders={orders}
                     availableTags={catalogs.availableTags}
-                    isLoading={isLoading}
-                    isClosingDialogRef={isClosingDialogRef}
+                    selectedIds={selectedIds}
+                    setSelectedIds={setSelectedIds}
                     openDialog={openDialog}
                     closeDialog={closeDialog}
+                    getDialogState={getDialogState}
                     refreshTags={catalogs.refreshTags}
                 />
-
             </div>
         </div>
     );
 };
+
 
 export const OrdersNew = () => (
     <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>

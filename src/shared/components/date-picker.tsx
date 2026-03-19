@@ -1,18 +1,12 @@
 import * as React from "react"
 import { format } from "date-fns"
 import { vi } from "date-fns/locale"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { CalendarIcon } from "lucide-react"
 
-import { cn } from "@/shared/lib/utils"
-import { Button } from "@/shared/components/ui/button"
-import { Label } from "@/shared/components/ui/label"
-import { Calendar } from "@/shared/components/ui/calendar"
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/shared/components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@radix-ui/react-select"
 interface DatePickerProps {
     className?: string
     date?: Date

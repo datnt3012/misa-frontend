@@ -18,6 +18,16 @@ import { OrderSpecificExportSlipCreation } from '@/components/inventory/OrderSpe
 import { getFilenameFromContentDisposition } from '../utils/formatters';
 import { mapTagNames } from '../utils/tagHelpers';
 
+export interface OrderDialogActions {
+  openView: (order: any) => void;
+  openEdit: (order: any) => void;
+  openPayment: (order: any) => void;
+  openTagsManager: (order: any) => void;
+  openExportDelivery: (order: any) => void;
+  openExportSlip: (order: any) => void;
+  openDelete: (order: any) => void;
+}
+
 export interface OrderDialogsState {
   selectedOrder: any;
   setSelectedOrder: (o: any) => void;
@@ -231,7 +241,10 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
         orderIds={selectedIds}
         orders={orders}
         onUpdate={() => { invalidateList(); setSelectedIds([]); }}
-        onRemoveOrder={(id) => setSelectedIds((prev) => prev.filter((x) => x !== id))}
+        onRemoveOrder={(id) => {
+          const newIds = selectedIds.filter((x) => x !== id);
+          setSelectedIds(newIds);
+        }}
       />
 
       {/* Export Slip */}

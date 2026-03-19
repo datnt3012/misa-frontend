@@ -2,13 +2,13 @@ import * as yup from 'yup';
 
 // Pagination — dùng chung cho tất cả API có phân trang
 
-export const paginationParamsSchema = yup.object({
+export const paginationSchema = yup.object({
   keyword: yup.string().optional(),
   page: yup.number().integer().min(1).default(1),
   limit: yup.number().integer().min(1).default(10),
 });
 
-export type PaginationParams = yup.InferType<typeof paginationParamsSchema>;
+export type PaginationSchemaType = yup.InferType<typeof paginationSchema>;
 
 export const sortParamsSchema = yup.object({
   sortBy: yup.string().optional(),

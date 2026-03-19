@@ -1,15 +1,19 @@
 import * as yup from 'yup';
-import { paginationParamsSchema } from '@/shared/schemas';
+import { paginationSchema } from '@/shared/schemas';
 
 export const ORDER_STATUSES = [
   'new', 'pending', 'picking', 'picked',
   'delivered', 'delivery_failed', 'completed', 'cancelled',
 ] as const;
 
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
-export type OrderType = 'sale' | 'return' | 'purchase';
+export const ORDER_TYPES = [
+  'sale', 'purchase',
+] as const;
 
-export const orderFilterSchema = paginationParamsSchema.concat(
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export type OrderType = (typeof ORDER_TYPES)[number];
+
+export const orderFilterSchema = paginationSchema.concat(
   yup.object({
     status: yup.string().optional(),
     startDate: yup.string().optional(),
@@ -26,4 +30,4 @@ export const orderFilterSchema = paginationParamsSchema.concat(
   })
 );
 
-export type OrderFilterParams = yup.InferType<typeof orderFilterSchema>;
+export type OrderFilterSchemaType = yup.InferType<typeof orderFilterSchema>;

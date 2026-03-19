@@ -4,14 +4,14 @@ import { vi } from "date-fns/locale"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { DateRange } from "react-day-picker"
 
-import { cn } from "@/shared/lib/utils"
-import { Button } from "@/shared/components/ui/button"
-import { Calendar } from "@/shared/components/ui/calendar"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/shared/components/ui/popover"
+} from "@/components/ui/popover"
 
 interface DatePickerWithRangeProps {
   className?: string

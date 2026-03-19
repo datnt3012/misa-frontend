@@ -48,15 +48,7 @@ const RowHeightSync: React.FC<{ orderId: string; itemCount: number }> = ({ order
 };
 
 // ─── Dialog action callbacks ──────────────────────────────────────────────────
-export interface OrderDialogActions {
-  openView: (order: any) => void;
-  openEdit: (order: any) => void;
-  openPayment: (order: any) => void;
-  openTagsManager: (order: any) => void;
-  openExportDelivery: (order: any) => void;
-  openExportSlip: (order: any) => void;
-  openDelete: (order: any) => void;
-}
+import { OrderDialogActions } from './OrderDialogs';
 
 interface OrderDataTableProps {
   orders: any[];
