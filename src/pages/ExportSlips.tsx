@@ -201,12 +201,6 @@ function ExportSlipsContent() {
           description: 'Xuất kho trực tiếp' 
         });
       }
-      // Add option to cancel the export slip
-      options.push({ 
-        value: 'cancelled', 
-        label: 'Hủy phiếu', 
-        description: 'Hủy phiếu xuất kho' 
-      });
     } else if (currentStatus === 'picked') {
       // Only show "Đã xuất kho" when user has required permission
       if (canExport) {
@@ -216,12 +210,6 @@ function ExportSlipsContent() {
           description: 'Xác nhận hàng đã rời khỏi kho' 
         });
       }
-      // Add option to cancel the export slip
-      options.push({ 
-        value: 'cancelled', 
-        label: 'Hủy phiếu', 
-        description: 'Hủy phiếu xuất kho' 
-      });
     }
     // No options for 'pending', 'exported', 'rejected', or 'cancelled' status
     return options;
@@ -2251,6 +2239,19 @@ function ExportSlipsContent() {
                         >
                           <FileText className="w-4 h-4" />
                         </Button>
+
+                        {/* Cancel button - show for all statuses except cancelled/rejected */}
+                        {slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStatusUpdateWithSelection(slip.id, 'cancelled', '')}
+                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Hủy
+                          </Button>
+                        )}
 
                         {/* Approval buttons - Only show when status is pending and user has permission */}
                         {canApproveExports && slip.status === 'pending' && (
