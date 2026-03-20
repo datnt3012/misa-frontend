@@ -201,9 +201,6 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     if (searchFromUrl) {
       setSearchTerm(searchFromUrl);
       setCurrentPage(1);
-    } else if (searchTerm) {
-      // Clear local search term if URL doesn't have search param
-      setSearchTerm('');
     }
     
     // Fetch on mount - skip if we have URL search (will be fetched after debounce)
@@ -225,7 +222,20 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, [location.search]); // Run when URL search changes
+  }, []); // Only run on mount
+
+  // Clear search when tab changes (detected by URL tab parameter change)
+  const [prevTab, setPrevTab] = useState<string>('');
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const currentTab = params.get('tab') || 'imports';
+    
+    // If tab changed and URL doesn't have search, clear local search
+    if (prevTab && prevTab !== currentTab && !params.get('search')) {
+      setSearchTerm('');
+    }
+    setPrevTab(currentTab);
+  }, [location.search]);
 
   // Fetch import slips when filters change (excluding initial mount - handled by mount useEffect)
   const isInitialMountRef = useRef(true);

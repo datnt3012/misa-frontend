@@ -232,9 +232,6 @@ function ExportSlipsContent() {
     if (searchFromUrl) {
       setSearchTerm(searchFromUrl);
       setCurrentPage(1);
-    } else if (searchTerm) {
-      // Clear local search term if URL doesn't have search param
-      setSearchTerm('');
     }
     
     // Fetch on mount - skip if we have URL search (will be fetched after debounce)
@@ -254,7 +251,20 @@ function ExportSlipsContent() {
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, [location.search]); // Run when URL search changes
+  }, []); // Only run on mount
+
+  // Clear search when tab changes (detected by URL tab parameter change)
+  const [prevTab, setPrevTab] = useState<string>('');
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const currentTab = params.get('tab') || 'exports';
+    
+    // If tab changed and URL doesn't have search, clear local search
+    if (prevTab && prevTab !== currentTab && !params.get('search')) {
+      setSearchTerm('');
+    }
+    setPrevTab(currentTab);
+  }, [location.search]);
 
   // Fetch export slips when filters change (excluding initial mount - handled by mount useEffect)
   const isInitialMountRef = useRef(true);
@@ -470,9 +480,13 @@ function ExportSlipsContent() {
           // Merge dữ liệu: ưu tiên dữ liệu mới từ API, fallback về dữ liệu cũ nếu có
           detail.order = {
             order_number: orderResponse.order_number || detail.order?.order_number || '',
+            orderNumber: orderResponse.order_number || detail.order?.orderNumber || detail.order?.order_number || '',
             contract_code: orderResponse.contract_code || detail.order?.contract_code || undefined,
+            contractCode: orderResponse.contract_code || detail.order?.contractCode || detail.order?.contract_code || undefined,
             customer_name: orderResponse.customer_name || detail.order?.customer_name || 'Không xác định',
+            customerName: orderResponse.customer_name || detail.order?.customerName || detail.order?.customer_name || 'Không xác định',
             customer_address: orderResponse.customer_address || detail.order?.customer_address || undefined,
+            customerPhone: orderResponse.customer_phone || detail.order?.customerPhone || detail.order?.customer_phone || undefined,
             customer_phone: orderResponse.customer_phone || detail.order?.customer_phone || undefined,
             customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo || detail.order?.customer_addressInfo || undefined,
             receiver_address: orderResponse.receiverAddress || detail.order?.receiver_address || undefined,
@@ -480,6 +494,15 @@ function ExportSlipsContent() {
             total_amount: orderResponse.total_amount || detail.order?.total_amount || 0,
             vat_total_amount: orderResponse.totalVatAmount || detail.order?.vat_total_amount || 0,
             order_items: orderResponse.order_items || detail.order?.order_items || undefined,
+            // Include customer object if available
+            customer: orderResponse.customer ? {
+              id: orderResponse.customer.id,
+              code: orderResponse.customer.code || '',
+              name: orderResponse.customer.name || orderResponse.customer_name || 'Không xác định',
+              phoneNumber: orderResponse.customer.phoneNumber || orderResponse.customer.phone,
+              email: orderResponse.customer.email,
+              address: orderResponse.customer.address || orderResponse.customer_address
+            } : undefined,
           };
         } catch (orderError) {
           // Nếu không fetch được order, vẫn giữ nguyên detail hiện tại
@@ -2416,10 +2439,12 @@ function ExportSlipsContent() {
           setShowDetailDialog(open);
           if (!open) {
             setSelectedSlip(null);
+            setSlipDetail(null);
           }
         }}
         slipId={selectedSlip?.id || ''}
         slipType="export"
+        slip={slipDetail}
       />
     </div>
   );
