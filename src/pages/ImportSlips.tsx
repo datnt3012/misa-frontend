@@ -201,6 +201,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
     if (searchFromUrl) {
       setSearchTerm(searchFromUrl);
       setCurrentPage(1);
+    } else if (searchTerm) {
+      // Clear local search term if URL doesn't have search param
+      setSearchTerm('');
     }
     
     // Fetch on mount - skip if we have URL search (will be fetched after debounce)
@@ -222,7 +225,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, []); // Only run on mount
+  }, [location.search]); // Run when URL search changes
 
   // Fetch import slips when filters change (excluding initial mount - handled by mount useEffect)
   const isInitialMountRef = useRef(true);
@@ -682,16 +685,28 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     }
   };
+  const cancelImportSlip = async (slipId: string) => {
+    try {
+      const response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled' });
+      toast({ title: 'Thành công', description: response.message || 'Đã hủy phiếu nhập kho' });
+      loadImportSlips();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể hủy phiếu nhập kho';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
+    }
+  };
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
       case 'approved':
-        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
       case 'rejected':
-        return <Badge variant="outline" className="text-red-600"><XCircle className="w-3 h-3 mr-1" />Đã từ chối</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-red-600"><XCircle className="w-3 h-3 mr-1" />Đã từ chối</Badge>;
+      case 'cancelled':
+        return <Badge variant="outline" className="whitespace-nowrap text-red-600"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap">{status}</Badge>;
     }
   };
   const formatCurrency = (amount: number) => {
@@ -1963,6 +1978,18 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                               <Package className="w-3 h-3 mr-1" />
                               Chi tiết
                             </Button>
+                            {/* Cancel button - show for all statuses except cancelled/rejected/pending */}
+                            {slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => cancelImportSlip(slip.id)}
+                                className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                              >
+                                <XCircle className="w-3 h-3 mr-1" />
+                                Hủy
+                              </Button>
+                            )}
                             {canApproveImports && slip.status === 'pending' && (
                               <>
                                 <Button

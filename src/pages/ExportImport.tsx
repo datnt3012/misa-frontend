@@ -27,6 +27,8 @@ const ExportImportContent = () => {
     setActiveTab(value);
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.set('tab', value);
+    // Clear search parameter when switching tabs to avoid old search terms affecting data
+    newSearchParams.delete('search');
     setSearchParams(newSearchParams, { replace: true });
   };
 
@@ -71,13 +73,14 @@ const ExportImportContent = () => {
           {/* Export Management Tab */}
           <TabsContent value="exports" className="space-y-6">
             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
-              <ExportSlips />
+              <ExportSlips key="exports" />
             </PermissionGuard>
           </TabsContent>
 
           {/* Import Management Tab */}
           <TabsContent value="imports" className="space-y-6">
             <ImportSlips
+              key="imports"
               canManageImports={canManageImports}
               canApproveImports={canApproveImports}
             />
@@ -86,7 +89,7 @@ const ExportImportContent = () => {
           {/* Moving Management Tab */}
           <TabsContent value="moving" className="space-y-6">
             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
-              <MovingSlips />
+              <MovingSlips key="moving" />
             </PermissionGuard>
           </TabsContent>
 
@@ -96,7 +99,7 @@ const ExportImportContent = () => {
               requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}
               requireAll={false}
             >
-              <InventoryHistory />
+              <InventoryHistory key="history" />
             </PermissionGuard>
           </TabsContent>
         </Tabs>

@@ -232,6 +232,9 @@ function ExportSlipsContent() {
     if (searchFromUrl) {
       setSearchTerm(searchFromUrl);
       setCurrentPage(1);
+    } else if (searchTerm) {
+      // Clear local search term if URL doesn't have search param
+      setSearchTerm('');
     }
     
     // Fetch on mount - skip if we have URL search (will be fetched after debounce)
@@ -251,7 +254,7 @@ function ExportSlipsContent() {
       page: 1,
       limit: jobHistoryItemsPerPage
     });
-  }, []); // Only run on mount
+  }, [location.search]); // Run when URL search changes
 
   // Fetch export slips when filters change (excluding initial mount - handled by mount useEffect)
   const isInitialMountRef = useRef(true);
