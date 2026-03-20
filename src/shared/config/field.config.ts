@@ -21,6 +21,11 @@ export interface GenericFormFieldConfig<T> {
     placeholder?: string;
     type: FormFieldType;
     options?: Array<{ value: string; label: string }>;
+    fetchOptions?: () => {
+        data: Array<{ value: string; label: string }>;
+        isLoading: boolean;
+        isFetching: boolean;
+    };
     disabled?: boolean;
     colSpan?: 1 | 2 | 3 | 4 | 6 | 8 | 12;
     colSpanMd?: 1 | 2 | 3 | 4 | 6 | 8 | 12;
@@ -40,4 +45,5 @@ export interface GenericFormFieldConfig<T> {
     // For select with lazy loading
     onOpenChange?: (open: boolean) => void;
     folder?: string;
+    multiple?: boolean;
 }

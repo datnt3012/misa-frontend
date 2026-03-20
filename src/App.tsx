@@ -23,7 +23,9 @@ import { AuthProvider } from "./hooks/useAuth";
 import { NotificationProvider } from "./hooks/useNotifications";
 import { ApiErrorMonitor } from "./components/ApiErrorMonitor";
 import "./utils/test-fallback"; // Auto-test fallback system
-import { OrdersNew } from "./pages/OrdersNew";
+import { OrdersNew } from "./pages/app/OrdersNew";
+import { OrderFormPage } from "./features/orders/pages";
+import { ProductsPage } from "./pages/app/ProductsPage";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,38 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Navigate to="/inventory?tab=categories" replace />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/products"
+                element={
+                  <ProtectedRoute>
+                    <Layout><ProductsPage /></Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/orders-new/create"
+                element={
+                  <ProtectedRoute>
+                    <Layout><OrderFormPage /></Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/orders-new/:id/edit"
+                element={
+                  <ProtectedRoute>
+                    <Layout><OrderFormPage /></Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/orders-new/:id"
+                element={
+                  <ProtectedRoute>
+                    <Layout><OrderFormPage /></Layout>
                   </ProtectedRoute>
                 }
               />

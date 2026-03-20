@@ -9,9 +9,7 @@ import { orderTagsApi, OrderTag as ApiOrderTag } from '@/api/orderTags.api';
 import { getErrorMessage } from '@/lib/error-utils';
 import axiosClient from '@/shared/api/axiosClient';
 import CreateOrderForm from '@/components/orders/CreateOrderForm';
-import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { PaymentDialog } from '@/components/PaymentDialog';
-import { OrderViewDialog } from '@/components/orders/OrderViewDialog';
 import { OrderTagsManager } from '@/components/orders/OrderTagsManager';
 import { MultiplePaymentDialog } from '@/components/MultiplePaymentDialog';
 import { OrderSpecificExportSlipCreation } from '@/components/inventory/OrderSpecificExportSlipCreation';
@@ -31,12 +29,6 @@ export interface OrderDialogActions {
 export interface OrderDialogsState {
   selectedOrder: any;
   setSelectedOrder: (o: any) => void;
-  showOrderViewDialog: boolean;
-  setShowOrderViewDialog: (v: boolean) => void;
-  showOrderDetailDialog: boolean;
-  setShowOrderDetailDialog: (v: boolean) => void;
-  showCreateDialog: boolean;
-  setShowCreateDialog: (v: boolean) => void;
   showPaymentDialog: boolean;
   setShowPaymentDialog: (v: boolean) => void;
   showMultiplePaymentDialog: boolean;
@@ -73,9 +65,6 @@ export interface OrderDialogsState {
 export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
   const {
     selectedOrder, setSelectedOrder,
-    showOrderViewDialog, setShowOrderViewDialog,
-    showOrderDetailDialog, setShowOrderDetailDialog,
-    showCreateDialog, setShowCreateDialog,
     showPaymentDialog, setShowPaymentDialog,
     showMultiplePaymentDialog, setShowMultiplePaymentDialog,
     showTagsManager, setShowTagsManager,
@@ -162,47 +151,6 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
 
   return (
     <>
-      {/* Create */}
-      <CreateOrderForm
-        open={showCreateDialog}
-        onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) closeWithDelay(() => setShowCreateDialog(false));
-        }}
-        onOrderCreated={() => {
-          invalidateList();
-          closeWithDelay(() => setShowCreateDialog(false));
-        }}
-      />
-
-      {/* View */}
-      <OrderViewDialog
-        order={selectedOrder}
-        open={showOrderViewDialog}
-        onOpenChange={(open) => {
-          setShowOrderViewDialog(open);
-          if (!open) closeWithDelay(() => { setShowOrderViewDialog(false); setSelectedOrder(null); });
-        }}
-      />
-
-      {/* Edit */}
-      <OrderDetailDialog
-        order={selectedOrder}
-        open={showOrderDetailDialog}
-        onOpenChange={(open) => {
-          setShowOrderDetailDialog(open);
-          if (!open) closeWithDelay(() => { setShowOrderDetailDialog(false); setSelectedOrder(null); });
-        }}
-        onOrderUpdated={() => {
-          invalidateList();
-          if (selectedOrder) orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
-        }}
-        onOpenPaymentDialog={() => {
-          if (selectedOrder?.id) openDialog('payment', selectedOrder.id);
-          setShowPaymentDialog(true);
-        }}
-      />
-
       {/* Tags */}
       {showTagsManager && selectedOrder && (
         <OrderTagsManager

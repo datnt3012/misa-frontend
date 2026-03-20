@@ -1,5 +1,8 @@
 import { GenericFormFieldConfig } from "@/shared/config";
 import { ORDER_STATUSES, OrderFilterSchemaType } from "./schemas";
+import { useCategoriesQuery } from "../categories/hooks";
+import { useUserList } from "../users";
+import { useManufacturers } from "../products";
 
 export type FilterOrderFieldConfig = GenericFormFieldConfig<OrderFilterSchemaType>;
 
@@ -17,14 +20,27 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
         name: "createdBy",
         type: "autocomplete",
         placeholder: "Tất cả",
+        fetchOptions: () => {
+            const { data, isLoading, isFetching } = useUserList({});
+            return {
+                data: data?.data?.rows?.map(user => ({
+                    value: user.id,
+                    label: user.username
+                })) ?? [],
+                isLoading,
+                isFetching,
+            };
+        },
+        multiple: true,
         colSpan: 3,
         colSpanMd: 3,
     },
     {
         label: "Trạng thái",
         name: "status",
-        type: "select",
+        type: "autocomplete",
         placeholder: "Tất cả",
+        multiple: true,
         options: ORDER_STATUSES.map((status) => ({ value: status, label: status })),
         colSpan: 3,
         colSpanMd: 3,
@@ -71,8 +87,9 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
     {
         label: "Phương thức thanh toán",
         name: "paymentMethods",
-        type: "select",
+        type: "autocomplete",
         placeholder: "Tất cả",
+        multiple: true,
         options: [
             { value: "cash", label: "Tiền mặt" },
             { value: "credit_card", label: "Thẻ tín dụng" },
@@ -86,6 +103,18 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
         name: "manufacturers",
         type: "autocomplete",
         placeholder: "Chọn nhà sản xuất...",
+        multiple: true,
+        fetchOptions: () => {
+            const { data, isLoading, isFetching } = useManufacturers();
+            return {
+                data: data?.data?.map(manufacturer => ({
+                    value: manufacturer,
+                    label: manufacturer
+                })) ?? [],
+                isLoading,
+                isFetching,
+            };
+        },
         colSpan: 6,
         colSpanMd: 6,
     },
@@ -94,6 +123,18 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
         name: "categories",
         type: "autocomplete",
         placeholder: "Tất cả",
+        multiple: true,
+        fetchOptions: () => {
+            const { data, isLoading, isFetching } = useCategoriesQuery();
+            return {
+                data: data?.data?.rows?.map(category => ({
+                    value: category.id,
+                    label: category.name
+                })) ?? [],
+                isLoading,
+                isFetching,
+            };
+        },
         colSpan: 6,
         colSpanMd: 6,
     },

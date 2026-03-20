@@ -15,6 +15,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
+import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
 
 export interface AutocompleteOption {
@@ -24,8 +25,9 @@ export interface AutocompleteOption {
 
 interface AutocompleteProps {
     options: AutocompleteOption[]
-    value?: string
-    onChange: (value: string) => void
+    value?: string | string[]
+    onChange: (value: any) => void
+    multiple?: boolean
     placeholder?: string
     emptyMessage?: string
     className?: string
@@ -37,6 +39,7 @@ export const Autocomplete = React.forwardRef<HTMLButtonElement, AutocompleteProp
         options,
         value,
         onChange,
+        multiple = false,
         placeholder = "Select option...",
         emptyMessage = "No option found.",
         className,
@@ -45,7 +48,21 @@ export const Autocomplete = React.forwardRef<HTMLButtonElement, AutocompleteProp
         const [open, setOpen] = useState(false)
         const [searchQuery, setSearchQuery] = useState("")
 
-        const selectedOption = options.find((option) => option.value.toString() === value?.toString())
+        const values = Array.isArray(value) ? value : value ? [value] : []
+        const selectedOptions = options.filter((option) => values.includes(option.value.toString()))
+
+        const handleSelect = (currentValue: string) => {
+            if (multiple) {
+                const newValue = values.includes(currentValue)
+                    ? values.filter((v) => v !== currentValue)
+                    : [...values, currentValue]
+                onChange(newValue)
+            } else {
+                onChange(currentValue === value?.toString() ? "" : currentValue)
+                setOpen(false)
+                setSearchQuery("")
+            }
+        }
 
         return (
             <Popover open={open} onOpenChange={setOpen}>
@@ -55,13 +72,29 @@ export const Autocomplete = React.forwardRef<HTMLButtonElement, AutocompleteProp
                         variant="outline"
                         role="combobox"
                         aria-expanded={open}
-                        className={cn("w-full justify-between relative", className)}
+                        className={cn("w-full justify-between relative min-h-10 h-auto py-2", className)}
                         disabled={disabled}
                     >
-                        {value
-                            ? selectedOption?.label
-                            : placeholder}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 absolute right-2" />
+                        <div className="flex flex-wrap gap-1 mr-6">
+                            {selectedOptions.length > 0 ? (
+                                multiple ? (
+                                    selectedOptions.map((option) => (
+                                        <Badge
+                                            key={option.value}
+                                            variant="secondary"
+                                            className="font-normal border-none bg-muted/50"
+                                        >
+                                            {option.label}
+                                        </Badge>
+                                    ))
+                                ) : (
+                                    selectedOptions[0].label
+                                )
+                            ) : (
+                                <span className="text-muted-foreground">{placeholder}</span>
+                            )}
+                        </div>
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 absolute right-2 top-3" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
@@ -82,16 +115,12 @@ export const Autocomplete = React.forwardRef<HTMLButtonElement, AutocompleteProp
                                         <CommandItem
                                             key={option.value}
                                             value={option.value.toString()}
-                                            onSelect={(currentValue) => {
-                                                onChange(currentValue === value?.toString() ? "" : currentValue)
-                                                setOpen(false)
-                                                setSearchQuery("")
-                                            }}
+                                            onSelect={handleSelect}
                                         >
                                             <Check
                                                 className={cn(
                                                     "mr-2 h-4 w-4",
-                                                    value?.toString() === option.value.toString() ? "opacity-100" : "opacity-0"
+                                                    values.includes(option.value.toString()) ? "opacity-100" : "opacity-0"
                                                 )}
                                             />
                                             {option.label}

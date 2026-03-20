@@ -7,6 +7,7 @@ export const request = async <T>(
         data?: any;
         params?: any;
         signal?: AbortSignal;
+        responseType?: 'arraybuffer' | 'blob' | 'document' | 'json' | 'text' | 'stream';
     }
 ) => {
     return await axiosClient.request<T>({
@@ -15,5 +16,6 @@ export const request = async <T>(
         data: options?.data,
         params: options?.params,
         signal: options?.signal,
+        responseType: options?.responseType,
     });
 };

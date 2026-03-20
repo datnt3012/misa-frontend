@@ -1,14 +1,9 @@
 import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { OrderDialogs, type OrderDialogActions } from './OrderDialogs';
-import { orderApi } from '@/api/order.api';
-import { getErrorMessage } from '@/lib/error-utils';
+import { OrderDialogs } from './OrderDialogs';
 
 export interface OrderDialogManagerHandle {
-    openCreate: () => void;
-    openView: (order: any) => void;
-    openEdit: (order: any) => void;
     openPayment: (order: any) => void;
     openTagsManager: (order: any) => void;
     openExportDelivery: (order: any) => void;
@@ -30,26 +25,23 @@ interface OrderDialogManagerProps {
 }
 
 export const OrderDialogManager = forwardRef<OrderDialogManagerHandle, OrderDialogManagerProps>((props, ref) => {
-    const { 
-        orders, 
-        availableTags, 
-        selectedIds, 
-        setSelectedIds, 
-        openDialog, 
-        closeDialog, 
-        getDialogState, 
-        refreshTags 
+    const {
+        orders,
+        availableTags,
+        selectedIds,
+        setSelectedIds,
+        openDialog,
+        closeDialog,
+        getDialogState,
+        refreshTags
     } = props;
-    
+
     const queryClient = useQueryClient();
     const { toast } = useToast();
     const isClosingDialogRef = useRef(false);
 
     // Dialog Visibility States
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
-    const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
-    const [showOrderDetailDialog, setShowOrderDetailDialog] = useState(false);
-    const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [showPaymentDialog, setShowPaymentDialog] = useState(false);
     const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
     const [showTagsManager, setShowTagsManager] = useState(false);
@@ -63,9 +55,6 @@ export const OrderDialogManager = forwardRef<OrderDialogManagerHandle, OrderDial
     const [exportingDeliveryXLSX, setExportingDeliveryXLSX] = useState(false);
 
     useImperativeHandle(ref, () => ({
-        openCreate: () => { openDialog('create'); setShowCreateDialog(true); },
-        openView: (order) => { setSelectedOrder(order); openDialog('view', order.id); setShowOrderViewDialog(true); },
-        openEdit: (order) => { setSelectedOrder(order); openDialog('edit', order.id); setShowOrderDetailDialog(true); },
         openPayment: (order) => { setSelectedOrder(order); openDialog('payment', order.id); setShowPaymentDialog(true); },
         openTagsManager: (order) => { setSelectedOrder(order); setShowTagsManager(true); },
         openExportDelivery: (order) => { setSelectedOrderForDeliveryExport(order); setShowExportDeliveryDialog(true); },
@@ -79,12 +68,6 @@ export const OrderDialogManager = forwardRef<OrderDialogManagerHandle, OrderDial
         <OrderDialogs
             selectedOrder={selectedOrder}
             setSelectedOrder={setSelectedOrder}
-            showOrderViewDialog={showOrderViewDialog}
-            setShowOrderViewDialog={setShowOrderViewDialog}
-            showOrderDetailDialog={showOrderDetailDialog}
-            setShowOrderDetailDialog={setShowOrderDetailDialog}
-            showCreateDialog={showCreateDialog}
-            setShowCreateDialog={setShowCreateDialog}
             showPaymentDialog={showPaymentDialog}
             setShowPaymentDialog={setShowPaymentDialog}
             showMultiplePaymentDialog={showMultiplePaymentDialog}

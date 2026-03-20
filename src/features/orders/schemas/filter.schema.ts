@@ -13,7 +13,7 @@ export const ORDER_TYPES = [
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export type OrderType = (typeof ORDER_TYPES)[number];
 
-export const orderFilterSchema = paginationSchema.concat(
+export const OrderFilterSchema = paginationSchema.concat(
   yup.object({
     status: yup.string().optional(),
     startDate: yup.string().optional(),
@@ -30,4 +30,4 @@ export const orderFilterSchema = paginationSchema.concat(
   })
 );
 
-export type OrderFilterSchemaType = yup.InferType<typeof orderFilterSchema>;
+export type OrderFilterSchemaType = yup.InferType<typeof OrderFilterSchema>;

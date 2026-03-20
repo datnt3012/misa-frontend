@@ -7,6 +7,18 @@ const axiosClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  paramsSerializer: (params) => {
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (Array.isArray(value)) {
+        if (value.length > 0) parts.push(`${key}=${value.join(',')}`);
+      } else {
+        parts.push(`${key}=${value}`);
+      }
+    }
+    return parts.join('&');
+  },
 });
 
 // Request interceptor — gắn access token

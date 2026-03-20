@@ -180,12 +180,15 @@ export interface CreateOrderRequest {
 export interface UpdateOrderRequest {
   customer_name?: string;
   customer_phone?: string;
+  customer_email?: string;
   customer_address?: string;
   customer_addressInfo?: {
     provinceCode?: string;
     districtCode?: string;
     wardCode?: string;
   };
+  receiver_name?: string;
+  receiver_phone?: string;
   receiver_address?: string;
   receiver_addressInfo?: {
     provinceCode?: string;
@@ -215,6 +218,12 @@ export interface UpdateOrderRequest {
     note?: string;
   }[];
   paymentDeadline?: string; // YYYY-MM-DD
+  details?: {
+    productId?: string;
+    quantity?: number;
+    unitPrice?: number;
+    vatPercentage?: number;
+  }[];
 }
 export interface CreateOrderItemRequest {
   productId: string;

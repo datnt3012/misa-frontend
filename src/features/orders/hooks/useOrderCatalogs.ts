@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { categoriesApi } from '@/api/categories.api';
-import { usersApi } from '@/api/users.api';
+import { CATEGORIES_API } from '@/features/categories/categories.api';
+import { USER_API } from '@/features/users';
 import { productApi } from '@/api/product.api';
-import { orderApi } from '@/api/order.api';
+import { ORDER_API } from '../api/order.api';
 import { orderTagsApi, OrderTag as ApiOrderTag } from '@/api/orderTags.api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,14 +18,12 @@ export const useOrderCatalogs = () => {
     orderTagsApi.getAllTags({ type: 'order' }).then(setAvailableTags).catch(() => {});
 
   useEffect(() => {
-    categoriesApi
-      .getCategories({ page: 1, limit: 1000 })
-      .then((r) => setCategories(r.categories.filter((c: any) => c.isActive)))
+    CATEGORIES_API.GET_CATEGORIES({ page: 1, limit: 1000 })
+      .then((r) => setCategories((r.rows || []).filter((c: any) => c.isActive)))
       .catch(() => {});
 
-    usersApi
-      .getUsers({ page: 1, limit: 1000 })
-      .then((r) => setCreators(r.users || []))
+    USER_API.GET_USERS({ page: 1, limit: 1000 })
+      .then((r) => setCreators(r.rows || []))
       .catch(() => setCreators([]));
 
     productApi
@@ -33,8 +31,7 @@ export const useOrderCatalogs = () => {
       .then((d) => setManufacturers(d || []))
       .catch(() => setManufacturers([]));
 
-    orderApi
-      .getBanks()
+    ORDER_API.GET_BANKS()
       .then((d) => setBanks(d || []))
       .catch(() => setBanks([]));
 

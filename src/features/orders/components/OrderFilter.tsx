@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ORDER_TYPES, OrderFilterSchemaType, orderFilterSchema } from "../schemas";
+import { ORDER_TYPES, OrderFilterSchemaType, OrderFilterSchema } from "../schemas";
 import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ export const OrderFilter = ({
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
     const methods = useForm<OrderFilterSchemaType>({
         defaultValues: { ...defaultValues, ...filters },
-        resolver: yupResolver(orderFilterSchema),
+        resolver: yupResolver(OrderFilterSchema),
     });
 
     const { handleSubmit, reset, watch } = methods;
@@ -48,7 +48,6 @@ export const OrderFilter = ({
     }, [JSON.stringify(watchedValues)]);
 
     const onFormSubmit = handleSubmit((data) => {
-        console.log('--- Order Filter Triggered ---', data);
         onFilterChange(data);
     });
 

@@ -1,3 +1,4 @@
+import React from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { AlertCircle, Loader2, X } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -19,6 +20,26 @@ interface DynamicFormFieldProps<T extends object> {
     isReadOnly?: boolean;
     isFilterVariant?: boolean;
 }
+
+// Sub-component: calls fetchOptions() unconditionally so React hook rules are satisfied
+interface AutocompleteWithFetchProps {
+    fetchOptions: () => { data: Array<{ value: string; label: string }>; isLoading?: boolean; isFetching?: boolean };
+    value: string | string[];
+    onChange: (value: string | string[]) => void;
+    multiple?: boolean;
+    placeholder?: string;
+    disabled?: boolean;
+    className?: string;
+}
+const AutocompleteWithFetch: React.FC<AutocompleteWithFetchProps> = ({ fetchOptions, ...props }) => {
+    const { data: options = [], isLoading } = fetchOptions();
+    return (
+        <div className="relative">
+            <Autocomplete options={options} {...props} />
+            {isLoading && <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />}
+        </div>
+    );
+};
 
 const colSpanClasses = {
     1: "col-span-1",
@@ -146,20 +167,20 @@ export const DynamicFormField = <T extends object>({
                     control={control}
                     rules={{ required: config.required }}
                     render={({ field }) => {
-                        return (
-                            <Autocomplete
-                                {...field}
-                                options={config.options || []}
-                                value={field.value !== undefined && field.value !== null ? String(field.value) : ""}
-                                onChange={(value) => {
-                                    field.onChange(value);
-                                    config.onChange?.(value, setValue);
-                                }}
-                                placeholder={config.placeholder}
-                                disabled={isReadOnly || config.disabled}
-                                className={error ? "border-destructive" : ""}
-                            />
-                        )
+                        const commonProps = {
+                            multiple: config.multiple,
+                            value: field.value ?? (config.multiple ? [] : ""),
+                            onChange: (value: string | string[]) => {
+                                field.onChange(value);
+                                config.onChange?.(value, setValue);
+                            },
+                            placeholder: config.placeholder,
+                            disabled: isReadOnly || config.disabled,
+                            className: error ? "border-destructive" : "",
+                        };
+                        return config.fetchOptions
+                            ? <AutocompleteWithFetch fetchOptions={config.fetchOptions} {...commonProps} />
+                            : <Autocomplete options={config.options || []} {...commonProps} />;
                     }}
                 />
                 {error?.message && (
@@ -287,16 +308,19 @@ export const DynamicFormField = <T extends object>({
                         <Label htmlFor={config.minField as string}>{config.minLabel}</Label>
                         <Input
                             id={config.minField as string}
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             placeholder="0"
-                            // min={0}
-                            value={(watch(config.minField as any) ?? "").toLocaleString()}
-                            onChange={(e) =>
+                            value={watch(config.minField as any) != null
+                                ? Number(watch(config.minField as any)).toLocaleString('en-US')
+                                : ""}
+                            onChange={(e) => {
+                                const raw = e.target.value.replace(/,/g, '');
                                 setValue(
                                     config.minField as any,
-                                    e.target.value === "" ? undefined : Number(e.target.value) as any
-                                )
-                            }
+                                    raw === "" ? undefined : Number(raw) as any
+                                );
+                            }}
                             disabled={isReadOnly || config.disabled}
                         />
                     </div>
@@ -304,16 +328,19 @@ export const DynamicFormField = <T extends object>({
                         <Label htmlFor={config.maxField as string}>{config.maxLabel}</Label>
                         <Input
                             id={config.maxField as string}
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             placeholder="0"
-                            // min={watch(config.minField as any) || 0}
-                            value={(watch(config.maxField as any) ?? "").toLocaleString()}
-                            onChange={(e) =>
+                            value={watch(config.maxField as any) != null
+                                ? Number(watch(config.maxField as any)).toLocaleString('en-US')
+                                : ""}
+                            onChange={(e) => {
+                                const raw = e.target.value.replace(/,/g, '');
                                 setValue(
                                     config.maxField as any,
-                                    e.target.value === "" ? undefined : Number(e.target.value) as any
-                                )
-                            }
+                                    raw === "" ? undefined : Number(raw) as any
+                                );
+                            }}
                             disabled={isReadOnly || config.disabled}
                         />
                     </div>
