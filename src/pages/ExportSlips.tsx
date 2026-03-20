@@ -201,6 +201,12 @@ function ExportSlipsContent() {
           description: 'Xuất kho trực tiếp' 
         });
       }
+      // Add option to cancel the export slip
+      options.push({ 
+        value: 'cancelled', 
+        label: 'Hủy phiếu', 
+        description: 'Hủy phiếu xuất kho' 
+      });
     } else if (currentStatus === 'picked') {
       // Only show "Đã xuất kho" when user has required permission
       if (canExport) {
@@ -210,6 +216,12 @@ function ExportSlipsContent() {
           description: 'Xác nhận hàng đã rời khỏi kho' 
         });
       }
+      // Add option to cancel the export slip
+      options.push({ 
+        value: 'cancelled', 
+        label: 'Hủy phiếu', 
+        description: 'Hủy phiếu xuất kho' 
+      });
     }
     // No options for 'pending', 'exported', 'rejected', or 'cancelled' status
     return options;
@@ -613,13 +625,14 @@ function ExportSlipsContent() {
       let response;
       switch (newStatus) {
         case 'picked':
-          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked', description: notes });
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked' });
           break;
         case 'exported':
-          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported', description: notes });
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported' });
           break;
         case 'cancelled':
-          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled', description: notes });
+          // Don't send description when cancelling to avoid overriding it
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled' });
           break;
         default:
           throw new Error('Trạng thái không hợp lệ');
@@ -666,19 +679,19 @@ function ExportSlipsContent() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
       case 'approved':
-        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
       case 'rejected':
-        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
       case 'picked':
-        return <Badge variant="outline" className="text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
       case 'exported':
-        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
       case 'cancelled':
-        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Hủy lấy hàng</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Hủy lấy hàng</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap">{status}</Badge>;
     }
   };
   const formatCurrency = (amount: number) => {
