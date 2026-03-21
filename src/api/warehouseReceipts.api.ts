@@ -207,7 +207,9 @@ export interface WarehouseReceipt {
     id?: string;
     code?: string;
     orderNumber?: string;
+    order_number?: string;
     contractCode?: string;
+    contract_code?: string;
     customerId?: string;
     customerName?: string;
     customerPhone?: string;
@@ -229,8 +231,6 @@ export interface WarehouseReceipt {
     receiver_address?: string;
     customer_addressInfo?: any;
     receiver_addressInfo?: any;
-    order_number?: string;
-    contract_code?: string;
     vat_total_amount?: number | string;
     total_amount?: number | string;
     // CamelCase version
@@ -349,12 +349,12 @@ const normalize = (row: any): WarehouseReceipt => ({
   completed_at: row.completedAt ?? row.completed_at ?? undefined, // Backward compat
   updatedAt: row.updatedAt ?? row.updated_at ?? '',
   updated_at: row.updatedAt ?? row.updated_at ?? '', // Backward compat
-  createdBy: row.createdBy ?? row.created_by ?? '',
-  created_by: row.createdBy ?? row.created_by ?? '', // Backward compat
-  createdByName: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
-  created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? undefined, // Backward compat
-  approvedBy: row.approvedBy ?? row.approved_by ?? '',
-  approved_by: row.approvedBy ?? row.approved_by ?? '', // Backward compat
+  createdBy: typeof row.createdBy === 'string' ? row.createdBy : (typeof row.created_by === 'string' ? row.created_by : ''),
+  created_by: typeof row.createdBy === 'string' ? row.createdBy : (typeof row.created_by === 'string' ? row.created_by : ''), // Backward compat
+  createdByName: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.created_by === 'object' ? row.created_by?.username : undefined),
+  created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.created_by === 'object' ? row.created_by?.username : undefined), // Backward compat
+  approvedBy: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''),
+  approved_by: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''), // Backward compat
   supplierId: row.supplierId ?? row.supplier_id ?? undefined,
   supplier_id: row.supplierId ?? row.supplier_id ?? undefined, // Backward compat
   // Full customer object from backend
@@ -386,11 +386,18 @@ const normalize = (row: any): WarehouseReceipt => ({
   exportSlipItems: row.exportSlipItems ?? row.export_slip_items,
   export_slip_items: row.exportSlipItems ?? row.export_slip_items, // Backward compat
   order: row.order ? {
+    id: row.order.id,
+    code: row.order.code,
     order_number: row.order.order_number ?? row.order.orderNumber ?? row.order.code ?? '',
+    orderNumber: row.order.orderNumber ?? row.order.order_number ?? row.order.code ?? '',
     contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
-    customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
-    customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
-    customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
+    contractCode: row.order.contractCode ?? row.order.contract_code ?? '',
+    customerId: row.order.customerId ?? row.order.customer_id,
+    customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? row.order.companyName ?? row.order.company_name ?? '',
+    customerName: row.order.customerName ?? row.order.customer_name ?? row.order.customer?.name ?? row.order.companyName ?? row.order.company_name ?? '',
+    customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? row.order.companyAddress ?? row.order.company_address ?? undefined,
+    customerPhone: row.order.customerPhone ?? row.order.customer_phone ?? row.order.customer?.phoneNumber ?? row.order.receiverPhone ?? row.order.receiver_phone ?? undefined,
+    customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? row.order.receiverPhone ?? row.order.receiver_phone ?? undefined,
     customer_addressInfo: (() => {
       const ai = row.order.customer_addressInfo || row.order.customerAddressInfo || row.order.customer?.addressInfo || row.order.customer?.address_info;
       if (!ai) return undefined;
@@ -422,6 +429,15 @@ const normalize = (row: any): WarehouseReceipt => ({
         wardName: ai.ward?.name ?? ai.wardName,
       };
     })(),
+    // Include customer object from order
+    customer: row.order.customer ? {
+      id: row.order.customer.id,
+      code: row.order.customer.code ?? '',
+      name: row.order.customer.name ?? '',
+      phoneNumber: row.order.customer.phoneNumber ?? row.order.customer.phone,
+      email: row.order.customer.email,
+      address: row.order.customer.address
+    } : undefined,
     total_amount: Number(row.order.total_amount ?? row.order.totalAmount ?? row.totalAmount ?? row.total_amount ?? 0),
     order_items: Array.isArray(row.order.order_items)
       ? row.order.order_items.map((oi: any) => ({

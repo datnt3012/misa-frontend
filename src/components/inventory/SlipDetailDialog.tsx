@@ -102,16 +102,30 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
       // Use passed slip data if available, otherwise load from API
       if (initialSlip) {
         setSlip(initialSlip);
-      } else {
-        loadSlipDetails();
+        return; // Don't fetch if we have initial data
       }
+      loadSlipDetails();
+    } else if (!open) {
+      // Reset slip when dialog closes
+      setSlip(null);
     }
   }, [open, slipId, initialSlip]);
+
+  // Update slip when initialSlip prop changes (for external data updates)
+  useEffect(() => {
+    if (initialSlip) {
+      setSlip(initialSlip);
+      console.log(initialSlip);
+    }
+  }, [initialSlip]);
 
   const loadSlipDetails = async () => {
     try {
       setLoading(true);
       const receipt = await warehouseReceiptsApi.getReceipt(slipId);
+      console.log('Receipt from API:', receipt);
+      console.log('Customer in receipt:', receipt?.customer);
+      console.log('Order in receipt:', receipt?.order);
       setSlip(receipt);
     } catch (error) {
       console.error('Error loading slip details:', error);
@@ -156,6 +170,33 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
   const isImportSlip = slipType === 'import';
   const isExportSlip = slipType === 'export';
 
+  const exportCustomerName =
+    slip?.order?.customerName ||
+    slip?.order?.customer?.name ||
+    slip?.customer?.name ||
+    slip?.order?.companyName ||
+    slip?.order?.company_name ||
+    slip?.order?.customer_name ||
+    '-';
+
+  const exportCustomerPhone =
+    slip?.order?.customerPhone ||
+    slip?.order?.customer?.phoneNumber ||
+    slip?.order?.receiverPhone ||
+    slip?.order?.customer_phone ||
+    slip?.order?.receiver_phone ||
+    slip?.customer?.phoneNumber ||
+    '-';
+
+  const exportCustomerAddress =
+    slip?.order?.customer_address ||
+    slip?.order?.receiver_address ||
+    slip?.order?.customer?.address ||
+    slip?.order?.companyAddress ||
+    slip?.order?.company_address ||
+    slip?.customer?.address ||
+    '-';
+
   // Get items from normalized response (uses 'items' field, not 'details')
   const slipItems = slip?.items || slip?.details || [];
 
@@ -189,7 +230,7 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
                 </>
               ) : (
                 <>
-                  Khách hàng: {slip?.order?.customer?.name || slip?.customer?.name || slip?.order?.customer_name || '-'} | 
+                  Khách hàng: {exportCustomerName} | 
                   Ngày xuất: {slip?.completed_at ? formatDate(slip.completed_at) : '-'} | 
                   Kho xuất: {slip?.warehouse?.name || '-'} ({slip?.warehouse?.code || '-'})
                 </>
@@ -287,12 +328,12 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
                   <>
                     <div>
                       <Label className="font-medium text-sm">Khách hàng:</Label>
-                      <p className="text-sm text-muted-foreground">{slip.order.customer_name}</p>
+                      <p className="text-sm text-muted-foreground">{exportCustomerName}</p>
                     </div>
-                    {slip.order.customer_phone && (
+                    {exportCustomerPhone !== '-' && (
                       <div>
                         <Label className="font-medium text-sm">Số điện thoại:</Label>
-                        <p className="text-sm text-muted-foreground">{slip.order.customer_phone}</p>
+                        <p className="text-sm text-muted-foreground">{exportCustomerPhone}</p>
                       </div>
                     )}
                   </>
@@ -300,14 +341,14 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
               </div>
 
               {/* Customer address for export slips */}
-              {isExportSlip && slip.order && (slip.order.customer_address || slip.order.receiver_address || slip.order.customer_addressInfo || slip.order.receiver_addressInfo) && (
+              {isExportSlip && slip.order && (slip.order.customer_address || slip.order.receiver_address || slip.order.companyAddress || slip.order.customer_addressInfo || slip.order.receiver_addressInfo) && (
                 <div className="col-span-2">
                   <Label className="font-medium text-sm">
-                    {slip.order.customer_address ? 'Địa chỉ khách hàng:' : 'Địa chỉ giao hàng:'}
+                    {slip.order.customer_address || slip.order.companyAddress ? 'Địa chỉ khách hàng:' : 'Địa chỉ giao hàng:'}
                   </Label>
                   <p className="text-sm text-muted-foreground">
                     {formatFullAddress(
-                      slip.order.receiver_address || slip.order.customer_address,
+                      exportCustomerAddress,
                       slip.order.receiver_addressInfo || slip.order.customer_addressInfo
                     ) || '-'}
                   </p>

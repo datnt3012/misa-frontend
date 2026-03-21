@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { useDialogUrl } from "@/hooks/useDialogUrl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToastAction } from "@/components/ui/toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader, ShoppingCart, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
@@ -156,6 +158,9 @@ const OrdersContent: React.FC = () => {
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
+  // Payment warning dialog state
+  const [showPaymentWarningDialog, setShowPaymentWarningDialog] = useState(false);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{orderId: string, status: string} | null>(null);
   const [selectedSlipType, setSelectedSlipType] = useState<string | undefined>(undefined);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
@@ -197,6 +202,7 @@ const OrdersContent: React.FC = () => {
   const { hasPermission } = usePermissions();
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('orders');
   const location = useLocation();
+  const navigate = useNavigate();
   // Ref to track if we're currently closing a dialog to prevent reopening
   const isClosingDialogRef = useRef(false);
   const loadOrderTagsCatalog = useCallback(async () => {
@@ -729,7 +735,25 @@ const OrdersContent: React.FC = () => {
         });
         return;
       }
-      // Use the new endpoint specifically for status updates
+      
+      // Check if trying to cancel an order with payments
+      if (newStatus === 'cancelled') {
+        const order = orders.find(o => o.id === orderId);
+        const paidAmount = orderPaymentsCache[orderId] || 
+          order?.paid_amount || 
+          order?.initial_payment || 
+          order?.total_paid_amount ||
+          0;
+        
+        if (paidAmount > 0) {
+          // Show warning dialog
+          setPendingStatusUpdate({ orderId, status: newStatus });
+          setShowPaymentWarningDialog(true);
+          return;
+        }
+      }
+      
+      // Proceed with status update
       const response = await orderApi.updateOrderStatus(orderId, newStatus);
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -739,12 +763,67 @@ const OrdersContent: React.FC = () => {
         title: "Thành công",
         description: "Đã cập nhật trạng thái đơn hàng",
       });
-    } catch (error) {
-      toast({
+    } catch (error: any) {
+      // Extract error details if available
+      const errorDetails = error.response?.data?.details;
+      const warehouseReceipts = errorDetails?.warehouseReceipts || {};
+      const exportCodes = warehouseReceipts?.export || [];
+      const returnCodes = warehouseReceipts?.sale_return_note || [];
+      const orderType = errorDetails?.orderType || 'sale';
+      
+      // Create navigation actions for export and return slips - open in new tab
+      let toastAction: React.ReactNode = undefined;
+      
+      // For export slips (DO) - navigate to exports tab in new window
+      const exportSearchQuery = exportCodes.join(',');
+      const exportAction = exportCodes.length > 0 ? (
+        <ToastAction 
+          altText="Xem phiếu xuất" 
+          onClick={() => window.open(`/export-import?tab=exports&search=${encodeURIComponent(exportSearchQuery)}`, '_blank')}
+        >
+          Phiếu xuất ({exportCodes.length})
+        </ToastAction>
+      ) : null;
+      
+      // For return slips (SRN) - navigate to imports tab in new window
+      const returnSearchQuery = returnCodes.join(',');
+      const returnAction = returnCodes.length > 0 ? (
+        <ToastAction 
+          altText="Xem phiếu hoàn" 
+          onClick={() => window.open(`/export-import?tab=imports&search=${encodeURIComponent(returnSearchQuery)}`, '_blank')}
+        >
+          Phiếu hoàn ({returnCodes.length})
+        </ToastAction>
+      ) : null;
+      
+      // Combine actions if both exist - wrap in flex container for side by side
+      if (exportAction && returnAction) {
+        toastAction = (
+          <div className="flex flex-row gap-2 w-full">
+            {exportAction}
+            {returnAction}
+          </div>
+        );
+      } else if (exportAction) {
+        toastAction = exportAction;
+      } else if (returnAction) {
+        toastAction = returnAction;
+      }
+      
+      // Use stacked layout when there are actions
+      const toastOptions: any = {
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
-      });
+        action: toastAction,
+      };
+      
+      // Add layout="stacked" if there are actions
+      if (toastAction) {
+        (toastOptions as any).layout = "stacked";
+      }
+      
+      toast(toastOptions);
     }
   };
 
@@ -967,8 +1046,98 @@ const OrdersContent: React.FC = () => {
   // Show loading if loading
   // Don't return early - show inline loading to preserve input focus
   const isInitialLoading = loading && orders.length === 0;
+  
+  // Handle confirmed payment warning - proceed with status update
+  const handleConfirmedStatusUpdate = async () => {
+    if (pendingStatusUpdate) {
+      setShowPaymentWarningDialog(false);
+      try {
+        const { orderId, status } = pendingStatusUpdate;
+        const response = await orderApi.updateOrderStatus(orderId, status);
+        setOrders(prev => prev.map(order => 
+          order.id === orderId ? { ...order, status: status } : order
+        ));
+        toast({
+          title: "Thành công",
+          description: "Đã cập nhật trạng thái đơn hàng",
+        });
+      } catch (error: any) {
+        // Handle error - same as in handleUpdateOrderStatus
+        const errorDetails = error.response?.data?.details;
+        const warehouseReceipts = errorDetails?.warehouseReceipts || {};
+        const exportCodes = warehouseReceipts?.export || [];
+        const returnCodes = warehouseReceipts?.sale_return_note || [];
+        
+        let toastAction: React.ReactNode = undefined;
+        const exportSearchQuery = exportCodes.join(',');
+        const exportAction = exportCodes.length > 0 ? (
+          <ToastAction 
+            altText="Xem phiếu xuất" 
+            onClick={() => window.open(`/export-import?tab=exports&search=${encodeURIComponent(exportSearchQuery)}`, '_blank')}
+          >
+            Phiếu xuất ({exportCodes.length})
+          </ToastAction>
+        ) : null;
+        
+        const returnSearchQuery = returnCodes.join(',');
+        const returnAction = returnCodes.length > 0 ? (
+          <ToastAction 
+            altText="Xem phiếu hoàn" 
+            onClick={() => window.open(`/export-import?tab=imports&search=${encodeURIComponent(returnSearchQuery)}`, '_blank')}
+          >
+            Phiếu hoàn ({returnCodes.length})
+          </ToastAction>
+        ) : null;
+        
+        if (exportAction && returnAction) {
+          toastAction = (
+            <div className="flex flex-row gap-2 w-full">
+              {exportAction}
+              {returnAction}
+            </div>
+          );
+        } else if (exportAction) {
+          toastAction = exportAction;
+        } else if (returnAction) {
+          toastAction = returnAction;
+        }
+        
+        const toastOptions: any = {
+          title: "Lỗi",
+          description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
+          variant: "destructive",
+          action: toastAction,
+        };
+        
+        if (toastAction) {
+          (toastOptions as any).layout = "stacked";
+        }
+        
+        toast(toastOptions);
+      } finally {
+        setPendingStatusUpdate(null);
+      }
+    }
+  };
+  
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
+      {/* Payment Warning Dialog */}
+      <AlertDialog open={showPaymentWarningDialog} onOpenChange={setShowPaymentWarningDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cảnh báo thanh toán</AlertDialogTitle>
+            <AlertDialogDescription>
+              Đơn hàng này đã có thanh toán liên kết. Nếu hủy đơn, bạn cần hoàn tiền cho khách hàng. Bạn có chắc chắn muốn hủy đơn hàng không?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingStatusUpdate(null)}>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedStatusUpdate}>Tiếp tục hủy</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="w-full mx-auto space-y-3 sm:space-y-4">
       {/* Filters */}
       <Card>

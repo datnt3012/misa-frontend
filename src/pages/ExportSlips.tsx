@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ import { SlipDetailDialog } from '@/components/inventory/SlipDetailDialog';
 
 function ExportSlipsContent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [exportSlips, setExportSlips] = useState<WarehouseReceipt[]>([]);
   const [displayLimit, setDisplayLimit] = useState<number>(25);
   const [addressCache, setAddressCache] = useState<Record<string, string>>({});
@@ -88,6 +89,19 @@ function ExportSlipsContent() {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Initialize and update searchTerm from URL params when URL changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchFromUrl = params.get('search');
+    
+    if (searchFromUrl) {
+      // Only set searchTerm - let debounce useEffect handle setting debouncedSearchTerm
+      // This prevents duplicate API calls
+      setSearchTerm(searchFromUrl);
+      setCurrentPage(1);
+    }
+  }, [location.search]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [completedStartDate, setCompletedStartDate] = useState<string>('');
@@ -209,8 +223,58 @@ function ExportSlipsContent() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Initialize and update searchTerm from URL params when URL changes
   useEffect(() => {
-    fetchExportSlips();
+    const params = new URLSearchParams(location.search);
+    const searchFromUrl = params.get('search');
+    const hasInitialSearch = !!searchFromUrl;
+    
+    if (searchFromUrl) {
+      setSearchTerm(searchFromUrl);
+      setCurrentPage(1);
+    }
+    
+    // Fetch on mount - skip if we have URL search (will be fetched after debounce)
+    if (!hasInitialSearch) {
+      fetchExportSlips();
+    }
+    fetchCategories();
+    fetchManufacturers();
+    loadOrders();
+    // Load active jobs on mount
+    refreshImportJobs({ onlyActive: true });
+    // Load job history on mount
+    refreshImportJobs({
+      onlyActive: false,
+      sortBy: 'createdAt',
+      sortOrder: 'DESC',
+      page: 1,
+      limit: jobHistoryItemsPerPage
+    });
+  }, []); // Only run on mount
+
+  // Clear search when tab changes (detected by URL tab parameter change)
+  const [prevTab, setPrevTab] = useState<string>('');
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const currentTab = params.get('tab') || 'exports';
+    
+    // If tab changed and URL doesn't have search, clear local search
+    if (prevTab && prevTab !== currentTab && !params.get('search')) {
+      setSearchTerm('');
+    }
+    setPrevTab(currentTab);
+  }, [location.search]);
+
+  // Fetch export slips when filters change (excluding initial mount - handled by mount useEffect)
+  const isInitialMountRef = useRef(true);
+  useEffect(() => {
+    // Skip fetchExportSlips on first render - the mount useEffect handles it
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+    } else {
+      fetchExportSlips();
+    }
     fetchCategories();
     fetchManufacturers();
     loadOrders();
@@ -416,9 +480,13 @@ function ExportSlipsContent() {
           // Merge dữ liệu: ưu tiên dữ liệu mới từ API, fallback về dữ liệu cũ nếu có
           detail.order = {
             order_number: orderResponse.order_number || detail.order?.order_number || '',
+            orderNumber: orderResponse.order_number || detail.order?.orderNumber || detail.order?.order_number || '',
             contract_code: orderResponse.contract_code || detail.order?.contract_code || undefined,
+            contractCode: orderResponse.contract_code || detail.order?.contractCode || detail.order?.contract_code || undefined,
             customer_name: orderResponse.customer_name || detail.order?.customer_name || 'Không xác định',
+            customerName: orderResponse.customer_name || detail.order?.customerName || detail.order?.customer_name || 'Không xác định',
             customer_address: orderResponse.customer_address || detail.order?.customer_address || undefined,
+            customerPhone: orderResponse.customer_phone || detail.order?.customerPhone || detail.order?.customer_phone || undefined,
             customer_phone: orderResponse.customer_phone || detail.order?.customer_phone || undefined,
             customer_addressInfo: orderResponse.customer_addressInfo || orderResponse.addressInfo || detail.order?.customer_addressInfo || undefined,
             receiver_address: orderResponse.receiverAddress || detail.order?.receiver_address || undefined,
@@ -426,6 +494,15 @@ function ExportSlipsContent() {
             total_amount: orderResponse.total_amount || detail.order?.total_amount || 0,
             vat_total_amount: orderResponse.totalVatAmount || detail.order?.vat_total_amount || 0,
             order_items: orderResponse.order_items || detail.order?.order_items || undefined,
+            // Include customer object if available
+            customer: orderResponse.customer ? {
+              id: orderResponse.customer.id,
+              code: orderResponse.customer.code || '',
+              name: orderResponse.customer.name || orderResponse.customer_name || 'Không xác định',
+              phoneNumber: orderResponse.customer.phoneNumber || orderResponse.customer.phone,
+              email: orderResponse.customer.email,
+              address: orderResponse.customer.address || orderResponse.customer_address
+            } : undefined,
           };
         } catch (orderError) {
           // Nếu không fetch được order, vẫn giữ nguyên detail hiện tại
@@ -562,13 +639,14 @@ function ExportSlipsContent() {
       let response;
       switch (newStatus) {
         case 'picked':
-          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked', description: notes });
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked' });
           break;
         case 'exported':
-          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported', description: notes });
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported' });
           break;
         case 'cancelled':
-          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled', description: notes });
+          // Don't send description when cancelling to avoid overriding it
+          response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled' });
           break;
         default:
           throw new Error('Trạng thái không hợp lệ');
@@ -615,19 +693,19 @@ function ExportSlipsContent() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-orange-600"><Clock className="w-3 h-3 mr-1" />Chờ duyệt</Badge>;
       case 'approved':
-        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
       case 'rejected':
-        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
       case 'picked':
-        return <Badge variant="outline" className="text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
       case 'exported':
-        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
       case 'cancelled':
-        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Hủy lấy hàng</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Hủy lấy hàng</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap">{status}</Badge>;
     }
   };
   const formatCurrency = (amount: number) => {
@@ -2188,6 +2266,19 @@ function ExportSlipsContent() {
                           <FileText className="w-4 h-4" />
                         </Button>
 
+                        {/* Cancel button - show for all statuses except cancelled/rejected */}
+                        {slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStatusUpdateWithSelection(slip.id, 'cancelled', '')}
+                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Hủy
+                          </Button>
+                        )}
+
                         {/* Approval buttons - Only show when status is pending and user has permission */}
                         {canApproveExports && slip.status === 'pending' && (
                           <>
@@ -2348,10 +2439,12 @@ function ExportSlipsContent() {
           setShowDetailDialog(open);
           if (!open) {
             setSelectedSlip(null);
+            setSlipDetail(null);
           }
         }}
         slipId={selectedSlip?.id || ''}
         slipType="export"
+        slip={slipDetail}
       />
     </div>
   );
