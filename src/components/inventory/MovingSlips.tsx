@@ -575,7 +575,7 @@ const MovingSlips: React.FC = () => {
                                 />
                               </div>
                               <div className="space-y-1 flex justify-center">
-                                {item.current_stock !== undefined && newSlip.source_warehouse_id && (
+                                {item.product_id && item.current_stock !== undefined && newSlip.source_warehouse_id && (
                                   <div className="text-xs mt-1">
                                     {item.current_stock === 0 ? (
                                       <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">

@@ -859,7 +859,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                             />
                           </div>
                           <div className="space-y-1 flex justify-center">
-                            {item.current_stock !== undefined && selectedWarehouse && (
+                            {item.product_id && item.current_stock !== undefined && selectedWarehouse && (
                               <div className="text-xs mt-1">
                                 {item.current_stock === 0 ? (
                                   <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
