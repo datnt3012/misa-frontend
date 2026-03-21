@@ -841,7 +841,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                   
                   {/* Notes */}
                   <div>
-                    <Label htmlFor={`notes-${slip.id}`}>Ghi chú</Label>
+                    <Label htmlFor={`notes-${slip.id}`}>Ghi chú {!isReturnSlip && (<span className="text-red-500">*</span>)}</Label>
                     <Textarea
                       id={`notes-${slip.id}`}
                       value={slip.notes}
