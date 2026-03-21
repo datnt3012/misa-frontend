@@ -310,7 +310,7 @@ const MovingSlips: React.FC = () => {
     try {
       setSubmitting(true);
         const createData = {
-          type: 'stock_transfer_out,stock_transfer_in',
+          type: 'moving',
           status: 'pending',
           warehouseId: newSlip.source_warehouse_id,
           newWarehouseId: newSlip.destination_warehouse_id,

@@ -349,12 +349,12 @@ const normalize = (row: any): WarehouseReceipt => ({
   completed_at: row.completedAt ?? row.completed_at ?? undefined, // Backward compat
   updatedAt: row.updatedAt ?? row.updated_at ?? '',
   updated_at: row.updatedAt ?? row.updated_at ?? '', // Backward compat
-  createdBy: row.createdBy ?? row.created_by ?? '',
-  created_by: row.createdBy ?? row.created_by ?? '', // Backward compat
-  createdByName: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
-  created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? undefined, // Backward compat
-  approvedBy: row.approvedBy ?? row.approved_by ?? '',
-  approved_by: row.approvedBy ?? row.approved_by ?? '', // Backward compat
+  createdBy: typeof row.createdBy === 'string' ? row.createdBy : (typeof row.created_by === 'string' ? row.created_by : ''),
+  created_by: typeof row.createdBy === 'string' ? row.createdBy : (typeof row.created_by === 'string' ? row.created_by : ''), // Backward compat
+  createdByName: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.created_by === 'object' ? row.created_by?.username : undefined),
+  created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.created_by === 'object' ? row.created_by?.username : undefined), // Backward compat
+  approvedBy: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''),
+  approved_by: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''), // Backward compat
   supplierId: row.supplierId ?? row.supplier_id ?? undefined,
   supplier_id: row.supplierId ?? row.supplier_id ?? undefined, // Backward compat
   // Full customer object from backend
