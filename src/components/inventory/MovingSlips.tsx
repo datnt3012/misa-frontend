@@ -384,6 +384,46 @@ const MovingSlips: React.FC = () => {
     }
   };
 
+  // Update slip status (picked, exported, cancelled)
+  const handleUpdateSlipStatus = async (slip: MovingSlip, newStatus: string) => {
+    try {
+      setSubmitting(true);
+      await warehouseReceiptsApi.updateReceipt(slip.id, { status: newStatus });
+      const statusLabels: Record<string, string> = {
+        'picked': 'Đã lấy hàng',
+        'exported': 'Đã xuất kho',
+        'cancelled': 'Hủy phiếu'
+      };
+      toast({
+        title: 'Thành công',
+        description: `Đã cập nhật trạng thái thành ${statusLabels[newStatus] || newStatus}`
+      });
+      loadMovingSlips();
+    } catch (error: any) {
+      toast({
+        title: 'Lỗi',
+        description: error.response?.data?.message || error.message || 'Không thể cập nhật trạng thái',
+        variant: 'destructive'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Get available status options for stock_transfer_out slip
+  const getAvailableStatusOptions = (currentStatus: string) => {
+    const options: { value: string; label: string }[] = [];
+    
+    if (currentStatus === 'approved') {
+      options.push({ value: 'picked', label: 'Đã lấy hàng' });
+      options.push({ value: 'exported', label: 'Đã xuất kho' });
+    } else if (currentStatus === 'picked') {
+      options.push({ value: 'exported', label: 'Đã xuất kho' });
+    }
+    
+    return options;
+  };
+
   // Export slip
   const handleExportSlip = async (slip: MovingSlip, type: 'pdf' | 'xlsx') => {
     try {
@@ -451,6 +491,12 @@ const MovingSlips: React.FC = () => {
         return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
       case 'rejected':
         return <Badge variant="outline" className="text-red-600"><XCircle className="w-3 h-3 mr-1" />Đã từ chối</Badge>;
+      case 'picked':
+        return <Badge variant="outline" className="text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
+      case 'exported':
+        return <Badge variant="outline" className="text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
+      case 'cancelled':
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -795,6 +841,35 @@ const MovingSlips: React.FC = () => {
                               <Package className="w-3 h-3 mr-1" />
                               Chi tiết
                             </Button>
+                            {/* Status Update Dropdown for stock_transfer_out slip */}
+                            {slip.type === 'stock_transfer_out' && getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
+                              <Select
+                                onValueChange={(newStatus) => handleUpdateSlipStatus(slip, newStatus)}
+                              >
+                                <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
+                                  <SelectValue placeholder="Cập nhật trạng thái" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getAvailableStatusOptions(slip.status).map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            {/* Cancel button for stock_transfer_out slip - show for all statuses except cancelled/rejected/pending */}
+                            {slip.type === 'stock_transfer_out' && slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleUpdateSlipStatus(slip, 'cancelled')}
+                                className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                              >
+                                <XCircle className="w-3 h-3 mr-1" />
+                                Hủy
+                              </Button>
+                            )}
                             {hasPermission('WAREHOUSE_RECEIPTS_APPROVE') && slip.status === 'pending' && (
                               <>
                                 <Button
