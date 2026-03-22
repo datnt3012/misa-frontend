@@ -90,7 +90,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'code',
         label: (
-          <button onClick={() => onSort('code')} className="flex items-center gap-1 font-medium">
+          <button onClick={() => onSort('code')} className="flex items-start gap-1 font-medium">
             ID {getSortIcon('code')}
           </button>
         ),
@@ -99,12 +99,12 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
           const specialTags = tags.filter((t) => isReconciledDisplayTag(t) || isPendingDisplayTag(t));
           const hasReconciliation = specialTags.some(isReconciledDisplayTag);
           return (
-            <div className="space-y-1 whitespace-nowrap text-center">
+            <div className="space-y-1 whitespace-nowrap text-left">
               <div className="font-mono text-sm font-medium text-blue-600">{order.code}</div>
               <div className="text-xs text-muted-foreground">
                 {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm') : 'N/A'}
               </div>
-              <div className="flex gap-1 flex-wrap justify-center">
+              <div className="flex gap-1 flex-wrap justify-start">
                 {specialTags.length > 0 ? specialTags.map((tag, i) => (
                   <Badge key={i} variant={isReconciledDisplayTag(tag) ? 'default' : 'secondary'}
                     className={cn('text-xs', isReconciledDisplayTag(tag) ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800')}>
@@ -124,7 +124,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'customer',
         label: (
-          <button onClick={() => onSort('customer')} className="flex items-center gap-1 font-medium">
+          <button onClick={() => onSort('customer')} className="flex items-start gap-1 font-medium">
             {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'} {getSortIcon('customer')}
           </button>
         ),
@@ -137,7 +137,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
           const addr = order.customer?.address || '';
           const shortAddr = formatAddress(addr);
           return (
-            <div className="space-y-1 whitespace-nowrap text-center">
+            <div className="space-y-1 whitespace-nowrap text-left">
               <div className="text-sm font-medium text-blue-600">{maskedPhone}</div>
               <div className="font-medium truncate" title={order.customer?.name}>{order.customer?.name}</div>
               <div className="text-sm text-muted-foreground truncate" title={shortAddr}>{shortAddr}</div>
@@ -156,11 +156,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'product',
         label: <span className="font-medium">Sản phẩm</span>,
         render: (order: OrderSchemaType) => (
-          <div className="divide-y divide-slate-100" data-order-id={order.id}>
+          <div className="divide-y divide-slate-100 text-left" data-order-id={order.id}>
             <RowHeightSync orderId={order.id} itemCount={order.details?.length || 0} />
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 px-3 min-h-[60px] flex items-center justify-center">
-                <div className="font-medium text-slate-900 truncate w-full text-center" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start justify-center">
+                <div className="font-medium text-slate-900 truncate w-full" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
               </div>
             ))}
             {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>}
@@ -173,11 +173,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         render: (order: OrderSchemaType) => (
           <div className="divide-y divide-slate-100">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 px-3 min-h-[60px] flex items-center justify-center">
-                <div className="font-medium text-slate-900 truncate">{item.product?.manufacturer || '-'}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
+                <div className="font-medium text-slate-900 truncate text-left">{item.product?.manufacturer || '-'}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
@@ -187,11 +187,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         render: (order: OrderSchemaType) => (
           <div className="divide-y divide-slate-100">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 px-3 min-h-[60px] flex items-center justify-center">
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
                 <div className="font-medium text-slate-900">{formatCurrency(item.unitPrice)}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
@@ -201,11 +201,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         render: (order: OrderSchemaType) => (
           <div className="divide-y divide-slate-100">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 px-3 min-h-[60px] flex items-center justify-center">
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
                 <div className="font-medium">{item.quantity || 0}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
@@ -215,7 +215,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         render: (order: OrderSchemaType) => (
           <div className="divide-y divide-slate-100">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 px-3 min-h-[60px] flex items-center justify-center">
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
                 <div className="text-center">
                   <div>{formatCurrency(item.vatTotalPrice)}</div>
                   <div className="text-xs text-slate-500">({item.vatPercentage}%)</div>
@@ -230,7 +230,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalExpenses',
         label: <span className="font-medium">Chi phí</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-medium text-orange-600 text-center">
+          <div className="text-sm font-medium text-orange-600 text-left">
             {formatCurrency(order.totalExpenses ?? order.expenses?.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0) ?? 0)}
           </div>
         ),
@@ -239,7 +239,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalAmount',
         label: <span className="font-medium text-xs">Tổng chưa VAT</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-center">
+          <div className="text-sm font-semibold text-slate-900 text-left">
             {formatCurrency(order.totalAmount ?? 0)}
           </div>
         ),
@@ -248,7 +248,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalVat',
         label: <span className="font-medium text-xs">Tổng tiền VAT</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-center">
+          <div className="text-sm font-semibold text-slate-900 text-left">
             {formatCurrency(order.totalVat ?? 0)}
           </div>
         ),
@@ -257,7 +257,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalVatAmount',
         label: <span className="font-medium text-xs">Tổng có VAT</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-center">
+          <div className="text-sm font-semibold text-slate-900 text-left">
             {formatCurrency(order.totalVatAmount ?? 0)}
           </div>
         ),
@@ -270,7 +270,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
           const paid = order.totalPaidAmount ?? 0;
           const debt = order.remainingDebt ?? Math.max(0, total - paid);
           return (
-            <div className="space-y-1 text-center">
+            <div className="space-y-1 text-left">
               <div className="text-sm font-medium flex items-center gap-1 justify-center">
                 <Banknote className="w-3 h-3" />{formatCurrency(paid)}
               </div>
@@ -282,15 +282,15 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'contract_code',
         label: <span className="font-medium">Số hợp đồng</span>,
-        render: (order: OrderSchemaType) => <div className="text-sm text-center">{order.contractCode || '-'}</div>,
+        render: (order: OrderSchemaType) => <div className="text-sm text-left">{order.contractCode || '-'}</div>,
       },
       {
         key: 'note',
         label: <span className="font-medium">Ghi chú</span>,
         render: (order: OrderSchemaType) => (
           <div
-            className="relative p-2 min-w-[120px] min-h-[60px] flex items-center justify-center
-            text-sm text-center overflow-auto hover:bg-muted/50 focus:bg-background
+            className="relative p-2 min-w-[120px] min-h-[60px]
+            text-sm text-left overflow-auto hover:bg-muted/50 focus:bg-background
             focus:outline-none focus:ring-1 focus:ring-ring break-words"
             contentEditable
             suppressContentEditableWarning
@@ -312,7 +312,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         render: (order: OrderSchemaType) => {
           const completedAt = order.completedAt || order.updatedAt;
           const show = ['delivered', 'completed'].includes(order.status?.code);
-          return <div className="text-center text-sm">{show && completedAt ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm') : '-'}</div>;
+          return <div className="text-left text-sm">{show && completedAt ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm') : '-'}</div>;
         },
       },
       {
@@ -324,7 +324,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
             onValueChange={(s) => onUpdateStatus(order.id, s)}
             disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
           >
-            <SelectTrigger className="h-auto p-0 border-none bg-transparent hover:bg-transparent justify-center min-w-[120px]">
+            <SelectTrigger className="h-auto p-0 border-none bg-transparent hover:bg-transparent min-w-[120px]">
               <div className="cursor-pointer inline-flex whitespace-nowrap text-xs">
                 {getStatusBadge(
                   typeof order.status === 'object' ? order.status?.code : order.status,

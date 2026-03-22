@@ -5,17 +5,15 @@ import { FileDown } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { orderApi } from '@/api/order.api';
-import { orderTagsApi, OrderTag as ApiOrderTag } from '@/api/orderTags.api';
+import { OrderTag as ApiOrderTag } from '@/api/orderTags.api';
 import { getErrorMessage } from '@/lib/error-utils';
 import axiosClient from '@/shared/api/axiosClient';
-import CreateOrderForm from '@/components/orders/CreateOrderForm';
 import { PaymentDialog } from '@/components/PaymentDialog';
 import { OrderTagsManager } from '@/components/orders/OrderTagsManager';
 import { MultiplePaymentDialog } from '@/components/MultiplePaymentDialog';
-import { OrderSpecificExportSlipCreation } from '@/components/inventory/OrderSpecificExportSlipCreation';
 import { getFilenameFromContentDisposition } from '../utils/formatters';
 import { mapTagNames } from '../utils/tagHelpers';
-
+import { OrderSpecificSlipCreation } from '@/components/inventory/OrderSpecificSlipCreation';
 export interface OrderDialogActions {
   openView: (order: any) => void;
   openEdit: (order: any) => void;
@@ -160,7 +158,7 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
           onTagsUpdated={() => {
             invalidateList();
             refreshTags();
-            if (selectedOrder) orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
+            if (selectedOrder) orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => { });
           }}
           currentTags={mapTagNames(selectedOrder.tags || [], availableTags)}
           availableTags={availableTags}
@@ -208,7 +206,7 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
           </DialogHeader>
           <div className="py-4">
             {selectedOrderForExport && (
-              <OrderSpecificExportSlipCreation
+              <OrderSpecificSlipCreation
                 orderId={selectedOrderForExport.id}
                 orderType={selectedOrderForExport.type}
                 onExportSlipCreated={() => {
