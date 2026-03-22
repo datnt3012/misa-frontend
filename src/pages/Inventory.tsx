@@ -33,6 +33,15 @@ import { CategoriesContent } from "@/pages/Categories";
 import { useSearchParams } from "react-router-dom";
 import React from "react";
 
+// Helper function to get administrative version (1 or 2)
+const getAdministrativeVersion = (): number => {
+  const version = import.meta.env.VITE_ADMINISTRATIVE_VERSION;
+  if (version === '2') {
+    return 2;
+  }
+  return 1; // Default to version 1
+};
+
 // Helper function to normalize summary data from API response
 const normalizeSummary = (summary: any): {
   totalOutOfStocks: number;
@@ -827,8 +836,22 @@ const InventoryContent = () => {
       toast({ title: "Lỗi", description: "Địa chỉ chi tiết là bắt buộc", variant: "destructive" });
       return;
     }
-    if (!newWarehouse.addressInfo?.provinceCode || !newWarehouse.addressInfo?.districtCode || !newWarehouse.addressInfo?.wardCode) {
-      toast({ title: "Lỗi", description: "Vui lòng chọn đầy đủ Tỉnh/TP, Quận/Huyện và Phường/Xã", variant: "destructive" });
+    
+    // Check administrative version
+    const adminVersion = getAdministrativeVersion();
+    const isV2 = adminVersion === 2;
+    
+    // Validate based on version - V2 doesn't require district
+    if (!newWarehouse.addressInfo?.provinceCode) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn Tỉnh/TP", variant: "destructive" });
+      return;
+    }
+    if (!isV2 && !newWarehouse.addressInfo?.districtCode) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn Quận/Huyện", variant: "destructive" });
+      return;
+    }
+    if (!newWarehouse.addressInfo?.wardCode) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn Phường/Xã", variant: "destructive" });
       return;
     }
     try {

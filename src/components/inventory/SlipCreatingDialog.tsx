@@ -14,7 +14,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { Plus, Trash2, ExternalLink, Loader } from 'lucide-react';
 import { orderApi, type Order } from '@/api/order.api';
 import { customerApi, type Customer } from '@/api/customer.api';
-import { exportSlipsApi } from '@/api/exportSlips.api';
 import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
 import { warehouseApi, type Warehouse } from '@/api/warehouse.api';
 import { productApi } from '@/api/product.api';
@@ -101,7 +100,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
   };
 
   const [form, setForm] = useState<SlipForm>({
-    code: generateSlipCode(),
+    code: '',
     order_id: orderId || '',
     warehouse_id: '',
     customer_id: '',
@@ -160,7 +159,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
 
   const loadOrder = async (id: string) => {
     try {
-      const orderData = await orderApi.getOrderIncludeDeleted(id);
+      const orderData = await orderApi.getOrder(id, { includeDeleted: true });
       setOrder(orderData);
       
       // For import orders (purchase), populate supplier fields
@@ -213,10 +212,10 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
         });
         setAllocatedQuantityByProduct(quantities);
       } else {
-        const response = await exportSlipsApi.getSlips({ limit: 1000, orderId: id });
+        const response = await warehouseReceiptsApi.getReceipts({ limit: 1000, orderId: id, type: 'export,purchase_return_note' });
 
         const quantities: Record<string, number> = {};
-        response.slips.forEach(slip => {
+        response.receipts.forEach(slip => {
           if (slip.status === 'cancelled') return;
           if (slip.export_slip_items) {
             slip.export_slip_items.forEach(item => {
@@ -324,7 +323,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
       }
 
       // Calculate total price with VAT
-      if (field === 'quantity' || field === 'unit_price' || field === 'vat_percentage') {
+      if (field === 'quantity' || field === 'unit_price' || field === 'vat_percentage' || field === 'product_id') {
         const vatSubtotal = items[index].quantity * (items[index].unit_price * (items[index].vat_percentage / 100));
         items[index].total_price = (items[index].quantity * items[index].unit_price) + vatSubtotal;
       }
@@ -452,23 +451,30 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
 
     setLoading(true);
     try {
-      const code = form.code?.trim() || generateSlipCode();
+      // Only include code if user entered it, otherwise let backend generate
+      const request: any = {
+        warehouseId: selectedWarehouse,
+        description: form.notes,
+        details: form.items.map(item => ({
+          productId: item.product_id,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          vatPercentage: item.vat_percentage
+        })),
+      };
+
+      // Add optional fields only if provided
+      const code = form.code?.trim();
+      if (code) {
+        request.code = code;
+      }
+      if (form.order_id) {
+        request.orderId = form.order_id;
+      }
 
       if (isImport) {
-        const request = {
-          warehouseId: selectedWarehouse,
-          supplierId: form.supplier_id || undefined,
-          code: code,
-          description: form.notes,
-          orderId: form.order_id || undefined,
-          type: 'import',
-          details: form.items.map(item => ({
-            productId: item.product_id,
-            quantity: item.quantity,
-            unitPrice: item.unit_price,
-            vatPercentage: item.vat_percentage
-          })),
-        };
+        request.supplierId = form.supplier_id || undefined;
+        request.type = 'import';
 
         await warehouseReceiptsApi.createReceipt(request);
         toast({
@@ -476,20 +482,11 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
           description: 'Tạo phiếu nhập kho thành công'
         });
       } else {
-        const request = {
-          code: code,
-          order_id: form.order_id || undefined,
-          warehouse_id: selectedWarehouse,
-          notes: form.notes,
-          items: form.items.map(item => ({
-            product_id: item.product_id,
-            requested_quantity: item.quantity,
-            unit_price: item.unit_price,
-            vat_percentage: item.vat_percentage
-          }))
-        };
+        // Export slip request
+        request.type = 'export';
+        request.status = 'pending';
 
-        await exportSlipsApi.createSlip(request);
+        await warehouseReceiptsApi.createReceipt(request);
         toast({
           title: 'Thành công',
           description: 'Tạo phiếu xuất kho thành công'
@@ -511,7 +508,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
 
   const handleClose = () => {
     setForm({
-      code: generateSlipCode(),
+      code: '',
       order_id: orderId || '',
       warehouse_id: '',
       customer_id: '',
@@ -862,7 +859,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                             />
                           </div>
                           <div className="space-y-1 flex justify-center">
-                            {item.current_stock !== undefined && selectedWarehouse && (
+                            {item.product_id && item.current_stock !== undefined && selectedWarehouse && (
                               <div className="text-xs mt-1">
                                 {item.current_stock === 0 ? (
                                   <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">

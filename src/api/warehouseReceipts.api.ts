@@ -38,6 +38,46 @@ export interface WarehouseReceiptImportRequest {
   type?: 'import' | 'export'; // Phân biệt phiếu nhập/xuất kho
 }
 
+export interface WarehouseReceiptItemDetail {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  vatTotalPrice: number;
+  purchasePrice: number;
+  salePrice: number;
+  vatPercentage: string;
+  product: {
+    id: string;
+    code: string;
+    name: string;
+    description?: string;
+    category?: string;
+    sku?: string;
+    unit?: string;
+    price?: string;
+    costPrice?: number;
+    barcode?: string;
+    manufacturer?: string;
+    lowStockThreshold?: number;
+    isForeignCurrency?: boolean;
+    exchangeRate?: number | null;
+    isActive?: boolean;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
+  };
+  originalCostPrice: number;
+  // Backward compatibility - snake_case versions
+  product_id?: string;
+  unit_price?: number;
+  total_price?: number;
+  vat_total_price?: number;
+  po_number?: string;
+  notes?: string;
+}
+
 export interface WarehouseReceiptItem {
   id: string;
   product_id: string;
@@ -59,64 +99,169 @@ export interface WarehouseReceiptItem {
 
 export interface WarehouseReceipt {
   id: string;
-  order_id?: string;
   code: string; // slip number
-  warehouse_id: string;
-  new_warehouse_id?: string; // Kho đích cho loại moving
-  status: string; // draft | completed | approved | pending | rejected
+  warehouseId: string;
+  warehouse?: {
+    id: string;
+    code: string;
+    name: string;
+    address?: string;
+    description?: string;
+    organizationCode?: string;
+    addressDetail?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+    deletedAt?: string | null;
+  };
+  warehouseName?: string;
+  newWarehouseId?: string; // Kho đích cho loại moving
+  // Backward compatibility
+  new_warehouse_id?: string;
+  movingReceiptId?: string; // ID của phiếu gốc (dùng để nhóm phiếu chuyển đi và chuyển đến)
+  moving_receipt_id?: string;
+  status: string; // draft | completed | approved | pending | rejected | picked | exported | cancelled
   notes: string;
-  created_at: string;
-  completed_at?: string;
-  created_by: string;
+  description?: string;
+  approvalNotes?: string;
+  exportNotes?: string;
+  createdAt: string;
+  completedAt?: string;
+  approvedAt?: string;
+  pickedAt?: string;
+  exportedAt?: string;
+  createdBy: string | {
+    id: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  createdByName?: string;
+  // Backward compatibility
   created_by_name?: string;
-  updated_at?: string;
-  approved_by?: string;
+  updatedAt?: string;
+  approvedBy?: string | {
+    id: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  pickedBy?: string;
+  exportedBy?: string;
+  supplierId?: string;
+  // Backward compatibility
   supplier_id?: string;
+  supplier?: {
+    id: string;
+    code?: string;
+    name: string;
+    phoneNumber?: string;
+    email?: string;
+    address?: string;
+  };
+  supplierName?: string;
+  supplierContact?: string;
+  orderId?: string;
+  type: string;   // import | export | moving
+  // Both details and items - items is from normalized response
+  details?: WarehouseReceiptItemDetail[];
+  items?: WarehouseReceiptItemDetail[];
+  // Export slip items
+  exportSlipItems?: any[];
+  export_slip_items?: any[];
+  totalAmount?: number | string;
+  // Backward compatibility - snake_case versions from normalize function
+  total_amount?: number | string;
+  created_at?: string;
+  completed_at?: string;
+  updated_at?: string;
+  approved_by?: string | {
+    id: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  created_by?: string | {
+    id: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
   supplier_name?: string;
   supplier_contact?: string;
-  description?: string;
-  type: string;   // import | export | moving
-  items?: WarehouseReceiptItem[];
-  total_amount?: number;
+  warehouse_id?: string;
+  order_id?: string;
+  approval_notes?: string;
+  isForeignCurrency?: boolean;
+  // Backward compatibility
   is_foreign_currency?: boolean;
+  exchangeRate?: number | null;
+  // Backward compatibility
   exchange_rate?: number | null;
   order?: {
-    order_number: string;
-    contract_code: string;
-    customer_name: string;
+    id?: string;
+    code?: string;
+    orderNumber?: string;
+    order_number?: string;
+    contractCode?: string;
+    contract_code?: string;
+    customerId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    customerAddress?: string;
+    vatTotalAmount?: number | string;
+    // Customer object from backend
+    customer?: {
+      id?: string;
+      code?: string;
+      name?: string;
+      phoneNumber?: string;
+      email?: string;
+      address?: string;
+    };
+    // Backward compatibility
+    customer_name?: string;
     customer_phone?: string;
     customer_address?: string;
-    customer_addressInfo?: {
-      provinceCode?: string;
-      districtCode?: string;
-      wardCode?: string;
-      province?: { code?: string; name?: string; };
-      district?: { code?: string; name?: string; };
-      ward?: { code?: string; name?: string; };
-      provinceName?: string;
-      districtName?: string;
-      wardName?: string;
-    };
-    receiver_address?: string
-    receiver_addressInfo?: {
-      provinceCode?: string;
-      districtCode?: string;
-      wardCode?: string;
-      province?: { code?: string; name?: string; };
-      district?: { code?: string; name?: string; };
-      ward?: { code?: string; name?: string; };
-      provinceName?: string;
-      districtName?: string;
-      wardName?: string;
-    };
-    total_amount: number;
+    receiver_address?: string;
+    customer_addressInfo?: any;
+    receiver_addressInfo?: any;
+    vat_total_amount?: number | string;
+    total_amount?: number | string;
+    // CamelCase version
+    totalAmount?: number | string;
     order_items?: Array<{
-      product_name: string;
+      id: string;
       product_code: string;
+      product_name: string;
       quantity: number;
       unit_price: number;
-      total_price?: number;
     }>;
+  };
+  customer?: {
+    id: string;
+    code: string;
+    name: string;
+    phoneNumber?: string;
+    email?: string;
+    address?: string;
+  };
+  creator_profile?: {
+    full_name: string;
+  };
+  approver_profile?: {
+    full_name: string;
+  };
+  picker_profile?: {
+    full_name: string;
+  };
+  exporter_profile?: {
+    full_name: string;
   };
 }
 
@@ -171,72 +316,88 @@ const normalizeImportJobResponse = (job: any): WarehouseReceiptImportJobSnapshot
 };
 
 const normalize = (row: any): WarehouseReceipt => ({
+  // Primary camelCase fields (matching backend response)
   id: row.id,
   code: row.code ?? row.slip_number ?? '',
-  order_id: row.orderId ?? row.order_id ?? '',
-  warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
-  new_warehouse_id: row.newWarehouseId ?? row.new_warehouse_id ?? undefined, // Kho đích cho moving
+  warehouseId: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '',
+  warehouse_id: row.warehouseId ?? row.warehouse_id ?? row.warehouse?.id ?? '', // Backward compat
+  // Full warehouse object from backend
+  warehouse: row.warehouse ? {
+    id: row.warehouse.id,
+    code: row.warehouse.code ?? '',
+    name: row.warehouse.name ?? '',
+    address: row.warehouse.address,
+    description: row.warehouse.description,
+    organizationCode: row.warehouse.organizationCode,
+    addressDetail: row.warehouse.addressDetail,
+    isActive: row.warehouse.isActive,
+    isDeleted: row.warehouse.isDeleted,
+    createdAt: row.warehouse.createdAt,
+    updatedAt: row.warehouse.updatedAt,
+    deletedAt: row.warehouse.deletedAt
+  } : undefined,
+  newWarehouseId: row.newWarehouseId ?? row.new_warehouse_id ?? undefined,
+  new_warehouse_id: row.newWarehouseId ?? row.new_warehouse_id ?? undefined, // Backward compat
+  movingReceiptId: row.movingReceiptId ?? row.moving_receipt_id ?? undefined,
+  moving_receipt_id: row.movingReceiptId ?? row.moving_receipt_id ?? undefined, // Backward compat
   status: row.status ?? 'draft',
   notes: row.description ?? row.notes ?? undefined,
-  created_at: row.createdAt ?? row.created_at ?? '',
-  completed_at: row.completed_at ?? row.completedAt ?? undefined,
-  updated_at: row.updated_at ?? row.updatedAt ?? '',
-  created_by: row.created_by ?? row.createdBy ?? '',
-  created_by_name: row.created_by_name ?? row.createdByName ?? row.creator?.name ?? row.creator?.full_name ?? undefined,
-  approved_by: row.approved_by ?? row.approvedBy ?? '',
-  supplier_id: row.supplierId ?? row.supplier_id ?? undefined,
-  supplier_name: row.supplier?.name ?? row.supplier_name ?? undefined,
-  supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
   description: row.description ?? undefined,
+  createdAt: row.createdAt ?? row.created_at ?? '',
+  created_at: row.createdAt ?? row.created_at ?? '', // Backward compat
+  completedAt: row.completedAt ?? row.completed_at ?? undefined,
+  completed_at: row.completedAt ?? row.completed_at ?? undefined, // Backward compat
+  updatedAt: row.updatedAt ?? row.updated_at ?? '',
+  updated_at: row.updatedAt ?? row.updated_at ?? '', // Backward compat
+  createdBy: typeof row.createdBy === 'string' ? row.createdBy : (typeof row.created_by === 'string' ? row.created_by : (typeof row.createdBy === 'object' ? row.createdBy?.id : '')),
+  created_by: typeof row.createdBy === 'string' ? row.createdBy : (typeof row.created_by === 'string' ? row.created_by : (typeof row.createdBy === 'object' ? row.createdBy?.id : '')), // Backward compat
+  createdByName: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.createdBy === 'object' ? row.createdBy?.firstName ?? row.createdBy?.username : (typeof row.created_by === 'object' ? row.created_by?.username : undefined)),
+  created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.createdBy === 'object' ? row.createdBy?.firstName ?? row.createdBy?.username : (typeof row.created_by === 'object' ? row.created_by?.username : undefined)), // Backward compat
+  approvedBy: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''),
+  approved_by: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''), // Backward compat
+  supplierId: row.supplierId ?? row.supplier_id ?? undefined,
+  supplier_id: row.supplierId ?? row.supplier_id ?? undefined, // Backward compat
+  // Full customer object from backend
+  customer: row.customer ? {
+    id: row.customer.id,
+    code: row.customer.code ?? '',
+    name: row.customer.name ?? '',
+    phoneNumber: row.customer.phoneNumber,
+    email: row.customer.email,
+    address: row.customer.address
+  } : undefined,
+  supplierName: row.supplier?.name ?? row.supplier_name ?? row?.customer?.name ?? undefined,
+  supplier_name: row.supplier?.name ?? row.supplier_name ?? row?.customer?.name ?? undefined, // Backward compat
+  supplierContact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined,
+  supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined, // Backward compat
+  orderId: row.orderId ?? row.order_id ?? undefined,
+  order_id: row.orderId ?? row.order_id ?? undefined, // Backward compat
   type: row.type ?? 'import',
-  is_foreign_currency: row.isForeignCurrency ?? row.is_foreign_currency ?? false,
-  exchange_rate: row.exchangeRate ?? row.exchange_rate ?? null,
-  items: Array.isArray(row.details)
-    ? row.details.map((detail: any) => ({
-        id: detail.id,
-        product_id: detail.product?.id ?? detail.productId ?? detail.product_id,
-        product: detail.product ? {
-          id: detail.product.id,
-          code: detail.product.code,
-          name: detail.product.name,
-          description: detail.product.description,
-          category: detail.product.category,
-          unit: detail.product.unit,
-          price: detail.product.price
-        } : undefined,
-        requested_quantity: Number(row.quantity ?? 0),
-        quantity: Number(detail.quantity ?? 0),
-        unit_price: Number(detail.unitPrice ?? detail.unit_price ?? 0),
-        total_price: Number(detail.totalPrice ?? detail.total_price ?? 0),
-        po_number: detail.poNumber ?? detail.po_number ?? undefined,
-        notes: detail.notes ?? undefined,
-      }))
-    : Array.isArray(row.items)
-    ? row.items.map((it: any) => ({
-        id: it.id,
-        product_id: it.productId ?? it.product_id,
-        product: it.product ? {
-          id: it.product.id,
-          code: it.product.code,
-          name: it.product.name,
-          description: it.product.description,
-          category: it.product.category,
-          unit: it.product.unit,
-          price: it.product.price
-        } : undefined,
-        quantity: Number(it.quantity ?? 0),
-        unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-        total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-        po_number: it.poNumber ?? it.po_number ?? undefined,
-        notes: it.notes ?? undefined,
-      }))
-    : undefined,
+  totalAmount: row.totalAmount ?? row.total_amount ?? 0,
+  total_amount: row.totalAmount ?? row.total_amount ?? 0, // Backward compat
+  isForeignCurrency: row.isForeignCurrency ?? row.is_foreign_currency ?? false,
+  is_foreign_currency: row.isForeignCurrency ?? row.is_foreign_currency ?? false, // Backward compat
+  exchangeRate: row.exchangeRate ?? row.exchange_rate ?? null,
+  exchange_rate: row.exchangeRate ?? row.exchange_rate ?? null, // Backward compat
+  // Items
+  details: row.details, // Keep original camelCase from backend
+  items: row.details ?? row.items, // For backward compat
+  // Export slip items - add both camelCase and snake_case
+  exportSlipItems: row.exportSlipItems ?? row.export_slip_items,
+  export_slip_items: row.exportSlipItems ?? row.export_slip_items, // Backward compat
   order: row.order ? {
+    id: row.order.id,
+    code: row.order.code,
     order_number: row.order.order_number ?? row.order.orderNumber ?? row.order.code ?? '',
+    orderNumber: row.order.orderNumber ?? row.order.order_number ?? row.order.code ?? '',
     contract_code: row.order.contract_code ?? row.order.contractCode ?? '',
-    customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? '',
-    customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? undefined,
-    customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? undefined,
+    contractCode: row.order.contractCode ?? row.order.contract_code ?? '',
+    customerId: row.order.customerId ?? row.order.customer_id,
+    customer_name: row.order.customer_name ?? row.order.customerName ?? row.order.customer?.name ?? row.order.companyName ?? row.order.company_name ?? '',
+    customerName: row.order.customerName ?? row.order.customer_name ?? row.order.customer?.name ?? row.order.companyName ?? row.order.company_name ?? '',
+    customer_address: row.order.customer_address ?? row.order.customerAddress ?? row.order.customer?.address ?? row.order.companyAddress ?? row.order.company_address ?? undefined,
+    customerPhone: row.order.customerPhone ?? row.order.customer_phone ?? row.order.customer?.phoneNumber ?? row.order.receiverPhone ?? row.order.receiver_phone ?? undefined,
+    customer_phone: row.order.customer_phone ?? row.order.customerPhone ?? row.order.customer?.phone ?? row.order.receiverPhone ?? row.order.receiver_phone ?? undefined,
     customer_addressInfo: (() => {
       const ai = row.order.customer_addressInfo || row.order.customerAddressInfo || row.order.customer?.addressInfo || row.order.customer?.address_info;
       if (!ai) return undefined;
@@ -268,6 +429,15 @@ const normalize = (row: any): WarehouseReceipt => ({
         wardName: ai.ward?.name ?? ai.wardName,
       };
     })(),
+    // Include customer object from order
+    customer: row.order.customer ? {
+      id: row.order.customer.id,
+      code: row.order.customer.code ?? '',
+      name: row.order.customer.name ?? '',
+      phoneNumber: row.order.customer.phoneNumber ?? row.order.customer.phone,
+      email: row.order.customer.email,
+      address: row.order.customer.address
+    } : undefined,
     total_amount: Number(row.order.total_amount ?? row.order.totalAmount ?? row.totalAmount ?? row.total_amount ?? 0),
     order_items: Array.isArray(row.order.order_items)
       ? row.order.order_items.map((oi: any) => ({
@@ -279,7 +449,6 @@ const normalize = (row: any): WarehouseReceipt => ({
         }))
       : undefined,
   } : undefined,
-  total_amount: Number(row.totalAmount ?? row.total_amount ?? 0),
 });
 
 export const warehouseReceiptsApi = {
@@ -327,7 +496,11 @@ export const warehouseReceiptsApi = {
 
     const filterByType = (receipts: WarehouseReceipt[]) => {
       if (params?.type) {
-        return receipts.filter((receipt) => (receipt.type || '').toLowerCase() === params.type?.toLowerCase());
+        // Support comma-separated types (e.g., 'stock_transfer_out,stock_transfer_in')
+        const types = params.type.split(',').map(t => t.trim().toLowerCase());
+        return receipts.filter((receipt) => 
+          types.includes((receipt.type || '').toLowerCase())
+        );
       }
       return receipts;
     };
@@ -381,6 +554,14 @@ export const warehouseReceiptsApi = {
     return {
       message: response?.message || (hard ? 'Phiếu nhập kho đã được xóa vĩnh viễn' : 'Phiếu nhập kho đã được xóa')
     };
+  },
+
+  // Update warehouse receipt (for status updates, notes, etc.)
+  updateReceipt: async (id: string, data: { status?: string; description?: string; notes?: string }): Promise<WarehouseReceipt> => {
+    const response = await api.patch<any>(API_ENDPOINTS.WAREHOUSE_RECEIPTS.UPDATE(id), data);
+    const receiptData = response?.data || response;
+    
+    return normalize(receiptData);
   },
 
   // Helper function to extract filename from Content-Disposition header (RFC 5987)

@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config/api';
+
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -17,6 +18,34 @@ export interface OrderItem {
   category_name?: string;
   vat_price?: number;
 }
+
+export interface OrderAllocation {
+  productId: string;
+  productCode: string;
+  productName: string;
+  orderQuantity: number;
+  allocatedQuantity: number;
+  returnedQuantity: number;
+  remainingQuantity: number;
+  returnedValue?: number;
+}
+
+export interface OrderAllocationTotals {
+  orderQuantity: number;
+  allocatedQuantity: number;
+  returnedQuantity: number;
+  remainingQuantity: number;
+  returnedValue?: number;
+  deductionVat?: number;
+  deductionAmount?: number;
+}
+
+export interface OrderAllocationStatus {
+  orderType: 'sale' | 'purchase';
+  allocations: OrderAllocation[];
+  totals: OrderAllocationTotals;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -113,6 +142,8 @@ export interface Order {
   vatEmail?: string;
   companyPhone?: string;
   expenses?: Array<{ name: string; amount: number; note?: string | null }>;
+  // Allocation status (only returned when explicitly requested via includeAllocationStatus query param)
+  allocationStatus?: OrderAllocationStatus;
 }
 export interface CreateOrderRequest {
   customerId: string;
@@ -176,6 +207,7 @@ export interface CreateOrderRequest {
   isDeleted?: boolean;
   contractCode?: string;
   purchaseOrderNumber?: string;
+  allocationStatus?: OrderAllocationStatus;
 }
 export interface UpdateOrderRequest {
   customer_name?: string;
@@ -233,6 +265,175 @@ export interface CreateOrderItemRequest {
   unitPrice: number;
   vatPercentage: number;
 }
+// Shared normalize function for order items
+export const normalizeOrderItem = (it: any): OrderItem => ({
+  id: it.id,
+  order_id: it.order_id ?? it.orderId ?? '',
+  product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
+  product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
+  product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+  category_id: it.product?.categoryId ?? it.categoryId ?? it.product?.category ?? it.category_id ?? undefined,
+  category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
+  quantity: Number(it.quantity ?? 0),
+  unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+  total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+  vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
+  vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
+  vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice ?? 0) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
+  manufacturer: it.product?.manufacturer ?? it.manufacturer ?? '',
+  created_at: it.created_at ?? it.createdAt ?? it.product?.created_at ?? it.product?.createdAt ?? '',
+});
+
+// Shared normalize function for orders
+export const normalizeOrder = (row: any, options?: { includeAllocationStatus?: boolean }): Order => {
+  const includeAllocation = options?.includeAllocationStatus ?? false;
+  
+  return {
+    id: row.id,
+    order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
+    customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
+    customer_name: row.customer?.name ?? row.customer_name ?? '',
+    customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
+    customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
+    customer_email: row.customer?.email ?? row.customer_email ?? undefined,
+    customer_address: row.customer?.address ?? row.customer_address ?? '',
+    // Receiver fields
+    ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
+    ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
+    ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
+    // Address info for receiver
+    ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
+      const ai = row.addressInfo ?? row.receiver_address_info;
+      if (!ai) return undefined;
+      return {
+        provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+        districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
+        wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+        province: ai.province,
+        district: ai.district,
+        ward: ai.ward,
+        provinceName: ai.province?.name,
+        districtName: ai.district?.name,
+        wardName: ai.ward?.name,
+      };
+    })() } : {} as any),
+    // Customer address info
+    customer_addressInfo: (() => {
+      const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
+      if (!ai) return undefined;
+      return {
+        provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
+        districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
+        wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
+        province: ai.province,
+        district: ai.district,
+        ward: ai.ward,
+        provinceName: ai.province?.name ?? ai.provinceName,
+        districtName: ai.district?.name ?? ai.districtName,
+        wardName: ai.ward?.name ?? ai.wardName,
+      };
+    })(),
+    status: row.status ?? 'new',
+    order_type: row.order_type ?? row.type ?? 'sale',
+    type: row.type ?? undefined,
+    totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
+    totalVatAmount: Number(row.totalVatAmount ?? row.total_vat_amount ?? 0),
+    totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
+    totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
+    remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
+    totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
+    initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
+    payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
+    paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
+    debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
+    debt_date: row.debt_date ?? row.debtDate ?? undefined,
+    notes: row.notes ?? row.note ?? row.description ?? '',
+    vat_type: row.vat_type ?? row.vatType ?? undefined,
+    contract_code: row.contract_code ?? row.contractCode ?? undefined,
+    contract_url: row.contract_url ?? row.contractUrl ?? undefined,
+    purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
+    paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
+    created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
+    creator_info: row.creator ? {
+      id: row.creator.id,
+      email: row.creator.email,
+      firstName: row.creator.firstName,
+      lastName: row.creator.lastName,
+      username: row.creator.username,
+    } : undefined,
+    creator: row.creator ? {
+      id: row.creator.id,
+      email: row.creator.email,
+      firstName: row.creator.firstName,
+      lastName: row.creator.lastName,
+      phoneNumber: row.creator.phoneNumber,
+      avatarUrl: row.creator.avatarUrl,
+    } : undefined,
+    tags: Array.isArray(row.tags) ? row.tags : undefined,
+    created_at: row.created_at ?? row.createdAt ?? '',
+    updated_at: row.updated_at ?? row.updatedAt ?? '',
+    deleted_at: row.deleted_at ?? row.deletedAt ?? undefined,
+    completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
+    // VAT company information
+    taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
+    companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
+    companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
+    vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
+    companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
+    // Expenses
+    expenses: Array.isArray(row.expenses)
+      ? row.expenses.map((exp: any) => ({
+          name: String(exp.name ?? "").trim(),
+          amount: Number(exp.amount ?? 0),
+          note: exp.note ?? null,
+        }))
+      : undefined,
+    // Items - try different field names
+    items: Array.isArray(row.details)
+      ? row.details.map(normalizeOrderItem)
+      : Array.isArray(row.items)
+        ? row.items.map(normalizeOrderItem)
+        : Array.isArray(row.order_items)
+          ? row.order_items.map(normalizeOrderItem)
+          : [],
+    // Customer object
+    customer: row.customer ? {
+      id: row.customer.id,
+      code: row.customer.code,
+      name: row.customer.name,
+      email: row.customer.email,
+      phone: row.customer.phoneNumber ?? row.customer.phone,
+      address: row.customer.address,
+      addressInfo: row.customer.addressInfo ?? row.customer.address_info,
+    } : undefined,
+    // Allocation status (only if requested)
+    ...(includeAllocation && row.allocationStatus ? { allocationStatus: {
+      orderType: row.allocationStatus.orderType ?? row.allocationStatus.order_type ?? 'sale',
+      allocations: Array.isArray(row.allocationStatus.allocations) 
+        ? row.allocationStatus.allocations.map((a: any) => ({
+            productId: a.productId ?? a.product_id ?? '',
+            productCode: a.productCode ?? a.product_code ?? '',
+            productName: a.productName ?? a.product_name ?? '',
+            orderQuantity: Number(a.orderQuantity ?? a.order_quantity ?? 0),
+            allocatedQuantity: Number(a.allocatedQuantity ?? a.allocated_quantity ?? 0),
+            returnedQuantity: Number(a.returnedQuantity ?? a.returned_quantity ?? 0),
+            remainingQuantity: Number(a.remainingQuantity ?? a.remaining_quantity ?? 0),
+            returnedValue: Number(a.returnedValue ?? a.returned_value ?? 0),
+          }))
+        : [],
+      totals: row.allocationStatus.totals ? {
+        orderQuantity: Number(row.allocationStatus.totals.orderQuantity ?? row.allocationStatus.totals.order_quantity ?? 0),
+        allocatedQuantity: Number(row.allocationStatus.totals.allocatedQuantity ?? row.allocationStatus.totals.allocated_quantity ?? 0),
+        returnedQuantity: Number(row.allocationStatus.totals.returnedQuantity ?? row.allocationStatus.totals.returned_quantity ?? 0),
+        remainingQuantity: Number(row.allocationStatus.totals.remainingQuantity ?? row.allocationStatus.totals.remaining_quantity ?? 0),
+        returnedValue: Number(row.allocationStatus.totals.returnedValue ?? row.allocationStatus.totals.returned_value ?? 0),
+        deductionVat: Number(row.allocationStatus.totals.deductionVat ?? row.allocationStatus.totals.deduction_vat ?? 0),
+        deductionAmount: Number(row.allocationStatus.totals.deductionAmount ?? row.allocationStatus.totals.deduction_amount ?? 0),
+      } : undefined,
+    } } : {} as any),
+  } as Order;
+};
+
 export const orderApi = {
   // Get all orders
   getOrders: async (params?: {
@@ -259,6 +460,7 @@ export const orderApi = {
     manufacturers?: string | string[];
     bank?: string;
     type?: 'sale' | 'purchase';
+    includeAllocationStatus?: boolean;
   }): Promise<{
     orders: Order[]; 
     total: number; 
@@ -338,6 +540,7 @@ export const orderApi = {
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
     if (params?.bank) queryParams.append('bank', params.bank);
     if (params?.type) queryParams.append('type', params.type);
+    if (params?.includeAllocationStatus) queryParams.append('includeAllocationStatus', 'true');
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.ORDERS.LIST}?${queryParams.toString()}`
@@ -347,125 +550,9 @@ export const orderApi = {
     // Structure 1: { code: 200, data: { rows: [], summary: {} } }
     // Structure 2: { rows: [], summary: {} }
     const data = response?.data || response;
-    const normalizeItem = (it: any): OrderItem => ({
-      id: it.id,
-      order_id: it.order_id ?? it.orderId ?? '',
-      product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
-      product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
-      product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-      manufacturer: it.product?.manufacturer ?? it.manufacturer ?? undefined,
-      category_id: it.product?.category ?? undefined,
-      quantity: Number(it.quantity ?? 0),
-      unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-      total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-      vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
-      vat_total_price: Number(it.vat_total_price || it.vatTotalPrice || 0),
-      vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
-      created_at: it.created_at ?? it.createdAt ?? '',
-    });
-    const normalizeOrder = (row: any): Order => ({
-      id: row.id,
-      order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
-      customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
-      customer_name: row.customer?.name ?? row.customer_name ?? '',
-      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
-      customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
-      customer_address: row.customer?.address ?? row.customer_address ?? '',
-      // receiver fields (kept as extra props on the returned object)
-      ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
-      ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
-      ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
-      ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
-        const ai = row.addressInfo ?? row.receiver_address_info;
-        if (!ai) return undefined;
-        return {
-          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
-          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
-          province: ai.province,
-          district: ai.district,
-          ward: ai.ward,
-          provinceName: ai.province?.name,
-          districtName: ai.district?.name,
-          wardName: ai.ward?.name,
-        };
-      })() } : {} as any),
-      customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
-        if (!ai) return undefined;
-        return {
-          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
-          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
-          province: ai.province,
-          district: ai.district,
-          ward: ai.ward,
-          provinceName: ai.province?.name ?? ai.provinceName,
-          districtName: ai.district?.name ?? ai.districtName,
-          wardName: ai.ward?.name ?? ai.wardName,
-        };
-      })(),
-      status: row.status ?? 'new',
-      order_type: row.order_type ?? row.type ?? 'sale',
-      type: row.type ?? undefined,
-      totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
-      totalVatAmount: Number(row.total_vat_amount ?? row.totalVatAmount ?? 0),
-      totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
-      totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
-      remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
-      totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
-      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
-      payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
-      paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
-      debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
-      notes: row.notes ?? row.note ?? row.description ?? '',
-      vat_type: row.vat_type ?? row.vatType ?? undefined,
-      contract_code: row.contract_code ?? row.contractCode ?? undefined,
-      purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
-      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
-      created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
-      creator_info: row.creator ? {
-        id: row.creator.id,
-        email: row.creator.email,
-        firstName: row.creator.firstName,
-        lastName: row.creator.lastName,
-        username: row.creator.username,
-      } : undefined,
-      tags: Array.isArray(row.tags) ? row.tags : undefined,
-      created_at: row.created_at ?? row.createdAt ?? '',
-      updated_at: row.updated_at ?? row.updatedAt ?? '',
-      completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
-      // VAT company information
-      taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
-      companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
-      companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
-      vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
-      companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
-      expenses: Array.isArray(row.expenses)
-        ? row.expenses.map((exp: any) => ({
-            name: String(exp.name ?? "").trim(),
-            amount: Number(exp.amount ?? 0),
-            note: exp.note ?? null,
-          }))
-        : undefined,
-      items: Array.isArray(row.details)
-        ? row.details.map(normalizeItem)
-        : Array.isArray(row.items)
-          ? row.items.map(normalizeItem)
-          : Array.isArray(row.order_items)
-            ? row.order_items.map(normalizeItem)
-            : [],
-      customer: row.customer ? {
-        id: row.customer.id,
-        code: row.customer.code,
-        name: row.customer.name,
-        email: row.customer.email,
-        phone: row.customer.phoneNumber ?? row.customer.phone,
-      } : undefined,
-    } as Order);
     if (data && Array.isArray(data.rows)) {
       return {
-        orders: data.rows.map(normalizeOrder),
+        orders: data.rows.map((row: any) => normalizeOrder(row, { includeAllocationStatus: params?.includeAllocationStatus })),
         total: Number(data.count ?? data.rows.length ?? 0),
         page: Number(data.page ?? params?.page ?? 1),
         limit: Number(data.limit ?? params?.limit ?? data.rows.length ?? 0),
@@ -478,7 +565,7 @@ export const orderApi = {
         } : undefined,
       };
     }
-    const orders = (response?.orders || []).map(normalizeOrder);
+    const orders = (response?.orders || []).map((row: any) => normalizeOrder(row, { includeAllocationStatus: params?.includeAllocationStatus }));
     return {
       orders,
       total: Number(response?.total ?? orders.length ?? 0),
@@ -494,134 +581,21 @@ export const orderApi = {
     };
   },
   // Get order by ID
-  getOrder: async (id: string): Promise<Order> => {
-    const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}`);
+  getOrder: async (id: string, params?: { includeAllocationStatus?: boolean; includeDeleted?: boolean }): Promise<Order> => {
+    const queryParams = new URLSearchParams();
+    if (params?.includeAllocationStatus) {
+      queryParams.append('includeAllocationStatus', 'true');
+    }
+    if (params?.includeDeleted) {
+      queryParams.append('includeDeleted', 'true');
+    }
+    const queryString = queryParams.toString();
+    const url = queryString 
+      ? `${API_ENDPOINTS.ORDERS.LIST}/${id}?${queryString}` 
+      : `${API_ENDPOINTS.ORDERS.LIST}/${id}`;
+    const response = await api.get<any>(url);
     const data = response?.data || response;
-    const normalizeItem = (it: any): OrderItem => ({
-      id: it.id,
-      order_id: it.order_id ?? it.orderId ?? '',
-      product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
-      product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
-      product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
-      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
-      quantity: Number(it.quantity ?? 0),
-      unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-      total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-      vat_percentage: it.vat_percentage ?? it.vatPercentage ?? undefined,
-      vat_total_price: Number(it.vat_total_price) || Number(it.vatTotalPrice) || undefined,
-      vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
-      manufacturer: it.product?.manufacturer ?? '',
-      created_at: it.product?.created_at ?? it.product.createdAt ?? '',
-    });
-    const normalizeOrder = (row: any): Order => ({
-      id: row.id,
-      order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
-      customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
-      customer_name: row.customer?.name ?? row.customer_name ?? '',
-      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
-      customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
-      customer_address: row.customer?.address ?? row.customer_address ?? '',
-      ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
-      ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
-      ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
-      ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
-        const ai = row.addressInfo ?? row.receiver_address_info;
-        if (!ai) return undefined;
-        return {
-          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
-          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
-          province: ai.province,
-          district: ai.district,
-          ward: ai.ward,
-          provinceName: ai.province?.name,
-          districtName: ai.district?.name,
-          wardName: ai.ward?.name,
-        };
-      })() } : {} as any),
-      customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
-        if (!ai) return undefined;
-        return {
-          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
-          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
-          province: ai.province,
-          district: ai.district,
-          ward: ai.ward,
-          provinceName: ai.province?.name ?? ai.provinceName,
-          districtName: ai.district?.name ?? ai.districtName,
-          wardName: ai.ward?.name ?? ai.wardName,
-        };
-      })(),
-      status: row.status ?? 'new',
-      order_type: row.order_type ?? row.type ?? 'sale',
-      type: row.type ?? undefined,
-      totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
-      totalVatAmount: Number(row.totalVatAmount ?? row.total_vat_amount ?? 0),
-      totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
-      totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
-      remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
-      totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
-      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
-      payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
-      paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
-      debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
-      notes: row.notes ?? row.note ?? row.description ?? '',
-      vat_type: row.vat_type ?? row.vatType ?? undefined,
-      contract_code: row.contract_code ?? row.contractCode ?? undefined,
-      purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
-      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
-      created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
-      creator_info: row.creator ? {
-        id: row.creator.id,
-        email: row.creator.email,
-        firstName: row.creator.firstName,
-        lastName: row.creator.lastName,
-      } : undefined,
-      tags: Array.isArray(row.tags) ? row.tags : undefined,
-      created_at: row.created_at ?? row.createdAt ?? '',
-      updated_at: row.updated_at ?? row.updatedAt ?? '',
-      completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
-      // VAT company information
-      taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
-      companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
-      companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
-      vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
-      companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
-      expenses: Array.isArray(row.expenses)
-        ? row.expenses.map((exp: any) => ({
-            name: String(exp.name ?? "").trim(),
-            amount: Number(exp.amount ?? 0),
-            note: exp.note ?? null,
-          }))
-        : undefined,
-      items: Array.isArray(row.details)
-        ? row.details.map(normalizeItem)
-        : Array.isArray(row.items)
-          ? row.items.map(normalizeItem)
-          : Array.isArray(row.order_items)
-            ? row.order_items.map(normalizeItem)
-            : [],
-      customer: row.customer ? {
-        id: row.customer.id,
-        code: row.customer.code,
-        name: row.customer.name,
-        email: row.customer.email,
-        phone: row.customer.phoneNumber ?? row.customer.phone,
-      } : undefined,
-      creator: row.creator ? {
-        id: row.creator.id,
-        email: row.creator.email,
-        firstName: row.creator.firstName,
-        lastName: row.creator.lastName,
-        phoneNumber: row.creator.phoneNumber,
-        avatarUrl: row.creator.avatarUrl,
-      } : undefined,
-    });
-    const normalizedOrder = normalizeOrder(data);
-    return normalizedOrder;
+    return normalizeOrder(data, { includeAllocationStatus: params?.includeAllocationStatus });
   },
   // Create order
   createOrder: async (data: CreateOrderRequest): Promise<Order> => {
@@ -732,135 +706,6 @@ export const orderApi = {
   // Get order items
   getOrderItems: async (orderId: string): Promise<OrderItem[]> => {
     return api.get<OrderItem[]>(API_ENDPOINTS.ORDERS.ITEMS(orderId));
-  },
-  // Get order by ID including soft deleted orders
-  getOrderIncludeDeleted: async (id: string): Promise<Order> => {
-    const response = await api.get<any>(`${API_ENDPOINTS.ORDERS.LIST}/${id}?includeDeleted=true`);
-    const data = response?.data || response;
-    const normalizeItem = (it: any): OrderItem => ({
-      id: it.id,
-      order_id: it.order_id ?? it.orderId ?? '',
-      product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
-      product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
-      product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-      category_id: it.product?.categoryId ?? it.categoryId ?? it.category_id ?? undefined,
-      category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
-      quantity: Number(it.quantity ?? 0),
-      unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-      total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-      vat_percentage: it.vat_percentage ?? it.vatPercentage ?? undefined,
-      vat_total_price: Number(it.vat_total_price) || Number(it.vatTotalPrice) || undefined,
-      vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
-      manufacturer: it.product?.manufacturer ?? '',
-      created_at: it.product?.created_at ?? it.product.createdAt ?? '',
-    });
-    const normalizeOrder = (row: any): Order => ({
-      id: row.id,
-      order_number: row.order_number ?? row.orderNumber ?? row.code ?? '',
-      customer_id: row.customer?.id ?? row.customer_id ?? row.customerId ?? '',
-      customer_name: row.customer?.name ?? row.customer_name ?? '',
-      customer_code: row.customer?.code ?? row.customer_code ?? row.customerCode ?? undefined,
-      customer_phone: row.customer?.phoneNumber ?? row.customer?.phone ?? row.customer_phone ?? '',
-      customer_address: row.customer?.address ?? row.customer_address ?? '',
-      ...(row.receiverName || row.receiver_name ? { receiverName: row.receiverName ?? row.receiver_name } : {} as any),
-      ...(row.receiverPhone || row.receiver_phone ? { receiverPhone: row.receiverPhone ?? row.receiver_phone } : {} as any),
-      ...(row.receiverAddress || row.receiver_address ? { receiverAddress: row.receiverAddress ?? row.receiver_address } : {} as any),
-      ...(row.addressInfo || row.receiver_address_info ? { addressInfo: ((): any => {
-        const ai = row.addressInfo ?? row.receiver_address_info;
-        if (!ai) return undefined;
-        return {
-          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
-          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
-          province: ai.province,
-          district: ai.district,
-          ward: ai.ward,
-          provinceName: ai.province?.name,
-          districtName: ai.district?.name,
-          wardName: ai.ward?.name,
-        };
-      })() } : {} as any),
-      customer_addressInfo: (() => {
-        const ai = row.customer_address_info || row.customerAddressInfo || row.customer?.addressInfo || row.customer?.address_info || row.addressInfo;
-        if (!ai) return undefined;
-        return {
-          provinceCode: (ai.provinceCode ?? ai.province_code ?? ai.province?.code) ? String(ai.provinceCode ?? ai.province_code ?? ai.province?.code) : undefined,
-          districtCode: (ai.districtCode ?? ai.district_code ?? ai.district?.code) ? String(ai.districtCode ?? ai.district_code ?? ai.district?.code) : null,
-          wardCode: (ai.wardCode ?? ai.ward_code ?? ai.ward?.code) ? String(ai.wardCode ?? ai.ward_code ?? ai.ward?.code) : undefined,
-          province: ai.province,
-          district: ai.district,
-          ward: ai.ward,
-          provinceName: ai.province?.name ?? ai.provinceName,
-          districtName: ai.district?.name ?? ai.districtName,
-          wardName: ai.ward?.name ?? ai.wardName,
-        };
-      })(),
-      status: row.status ?? 'new',
-      order_type: row.order_type ?? row.type ?? 'sale',
-      totalVat: Number(row.totalVat ?? row.total_vat ?? 0),
-      totalVatAmount: Number(row.totalVatAmount ?? row.total_vat_amount ?? 0),
-      totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
-      totalPaidAmount: Number(row.totalPaidAmount ?? row.total_paid_amount ?? row.paid_amount ?? row.paidAmount ?? 0),
-      remainingDebt: Number(row.remainingDebt ?? row.remaining_debt ?? row.debt_amount ?? row.debtAmount ?? 0),
-      totalExpenses: Number(row.totalExpenses ?? row.total_expenses ?? 0),
-      initial_payment: Number(row.initial_payment ?? row.initialPayment ?? 0) || undefined,
-      payment_method: row.payment_method ?? row.paymentMethod ?? undefined,
-      paid_amount: Number(row.paid_amount ?? row.paidAmount ?? 0),
-      debt_amount: Number(row.debt_amount ?? row.debtAmount ?? 0),
-      notes: row.notes ?? row.note ?? row.description ?? '',
-      vat_type: row.vat_type ?? row.vatType ?? undefined,
-      contract_code: row.contract_code ?? row.contractCode ?? undefined,
-      purchase_order_number: row.purchase_order_number ?? row.purchaseOrderNumber ?? undefined,
-      paymentDeadline: row.paymentDeadline ?? row.payment_deadline ?? undefined,
-      created_by: row.creator?.id ?? row.created_by ?? row.createdBy ?? '',
-      creator_info: row.creator ? {
-        id: row.creator.id,
-        email: row.creator.email,
-        firstName: row.creator.firstName,
-        lastName: row.creator.lastName,
-      } : undefined,
-      tags: Array.isArray(row.tags) ? row.tags : undefined,
-      created_at: row.created_at ?? row.createdAt ?? '',
-      updated_at: row.updated_at ?? row.updatedAt ?? '',
-      completed_at: row.completed_at ?? row.completedAt ?? row.delivered_at ?? row.deliveredAt ?? undefined,
-      // VAT company information
-      taxCode: row.taxCode ?? row.tax_code ?? row.vat_tax_code ?? undefined,
-      companyName: row.companyName ?? row.company_name ?? row.vat_company_name ?? undefined,
-      companyAddress: row.companyAddress ?? row.company_address ?? row.vat_company_address ?? undefined,
-      vatEmail: row.vatEmail ?? row.vat_email ?? row.vat_invoice_email ?? undefined,
-      companyPhone: row.companyPhone ?? row.company_phone ?? row.vat_company_phone ?? undefined,
-      expenses: Array.isArray(row.expenses)
-        ? row.expenses.map((exp: any) => ({
-            name: String(exp.name ?? "").trim(),
-            amount: Number(exp.amount ?? 0),
-            note: exp.note ?? null,
-          }))
-        : undefined,
-      items: Array.isArray(row.details)
-        ? row.details.map(normalizeItem)
-        : Array.isArray(row.items)
-          ? row.items.map(normalizeItem)
-          : Array.isArray(row.order_items)
-            ? row.order_items.map(normalizeItem)
-            : [],
-      customer: row.customer ? {
-        id: row.customer.id,
-        code: row.customer.code,
-        name: row.customer.name,
-        email: row.customer.email,
-        phone: row.customer.phoneNumber ?? row.customer.phone,
-      } : undefined,
-      creator: row.creator ? {
-        id: row.creator.id,
-        email: row.creator.email,
-        firstName: row.creator.firstName,
-        lastName: row.creator.lastName,
-        phoneNumber: row.creator.phoneNumber,
-        avatarUrl: row.creator.avatarUrl,
-      } : undefined,
-    });
-    const normalizedOrder = normalizeOrder(data);
-    return normalizedOrder;
   },
   // Add item to order
   addOrderItem: async (orderId: string, data: CreateOrderItemRequest): Promise<OrderItem> => {

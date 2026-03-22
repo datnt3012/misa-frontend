@@ -391,7 +391,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     try {
       let customerId = newOrder.customer_id;
       let selectedCustomer: Customer | undefined;
-
       // Handle customer/supplier creation/selection (for both sale and purchase orders)
       if (newOrder.customer_id === "__new__") {
         if (orderType === 'purchase') {
@@ -896,24 +895,112 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     }}
                   />
                 </div>
-              </CardContent>
-            </Card>
-            {/* Contract Infomation */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Thông tin hợp đồng</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="contract_code">Mã hợp đồng</Label>
-                    <Input
-                      id="contract_code"
-                      value={newOrder.contract_code}
-                      onChange={(e) => setNewOrder(prev => ({ ...prev, contract_code: e.target.value }))}
-                      placeholder="Nhập mã hợp đồng"
-                    />
-                  </div>
+              )}
+              {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
+            </CardContent>
+          </Card>
+          {/* Contract Infomation */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin hợp đồng</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="contract_code">Mã hợp đồng</Label>
+                  <Input
+                    id="contract_code"
+                    value={newOrder.contract_code}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, contract_code: e.target.value }))}
+                    placeholder="Nhập mã hợp đồng"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          {/* VAT Information - Only show for sale orders */}
+          {orderType === 'sale' && (
+          <Card ref={vatCardRef}>
+            <CardHeader>
+              <CardTitle>Thông tin VAT</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="vat_tax_code">Mã số thuế</Label>
+                  <Input
+                    id="vat_tax_code"
+                    value={newOrder.vat_tax_code}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_tax_code: e.target.value }))}
+                    placeholder="Nhập mã số thuế"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="vat_invoice_email">Email nhận hóa đơn VAT</Label>
+                  <Input
+                    id="vat_invoice_email"
+                    type="email"
+                    value={newOrder.vat_invoice_email}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_invoice_email: e.target.value }))}
+                    placeholder="email@domain.com"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="vat_company_name">Tên công ty</Label>
+                <Input
+                  id="vat_company_name"
+                  value={newOrder.vat_company_name}
+                  onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_name: e.target.value }))}
+                  placeholder="Nhập tên công ty"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Điện thoại công ty</Label>
+                  <Input
+                    value={newOrder.vat_company_phone}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại công ty"
+                  />
+                </div>
+                <div>
+                  <Label>Địa chỉ công ty</Label>
+                  <Input
+                    value={newOrder.vat_company_address}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
+                    placeholder="Nhập địa chỉ công ty"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          )}
+          {/* Shipping Information - Only show for sale orders */}
+          {orderType === 'sale' && (
+          <Card ref={shippingCardRef}>
+            <CardHeader>
+              <CardTitle>Thông tin vận chuyển</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="shipping_recipient_name">Người nhận hàng <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="shipping_recipient_name"
+                    value={newOrder.shipping_recipient_name}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_name: e.target.value }))}
+                    placeholder="Nhập tên người nhận"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="shipping_recipient_phone">Số điện thoại <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="shipping_recipient_phone"
+                    value={newOrder.shipping_recipient_phone}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại"
+                  />
                 </div>
               </CardContent>
             </Card>
