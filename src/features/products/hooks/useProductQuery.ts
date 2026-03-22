@@ -15,8 +15,10 @@ export const useProductList = (params: Partial<ProductFilterSchemaType>) => {
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.list(params),
     queryFn: ({ signal }) => PRODUCT_API.GET_PRODUCTS(params, signal),
-    staleTime: 30_000,
     placeholderData: (prev) => prev,
+    refetchInterval: 300_000,
+    staleTime: 60_000,
+    retry: 2,
   });
 };
 
@@ -25,7 +27,9 @@ export const useProductDetail = (id: string | null) => {
     queryKey: PRODUCT_QUERY_KEYS.detail(id ?? ''),
     queryFn: ({ signal }) => PRODUCT_API.GET_PRODUCT_BY_ID(id!, signal),
     enabled: !!id,
-    staleTime: 30_000,
+    refetchInterval: 300_000,
+    staleTime: 60_000,
+    retry: 2,
   });
 };
 
@@ -33,7 +37,9 @@ export const useManufacturers = () => {
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.manufacturers(),
     queryFn: ({ signal }) => PRODUCT_API.GET_MANUFACTURERS(signal),
-    staleTime: 300_000,
+    refetchInterval: 300_000,
+    staleTime: 60_000,
+    retry: 2,
   });
 };
 

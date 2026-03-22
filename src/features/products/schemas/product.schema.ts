@@ -29,28 +29,42 @@ export const UpdateProductSchema = yup.object({
 });
 
 export const ProductSchema = yup.object({
-  id: yup.string().required('ID không được để trống').defined(),
-  name: yup.string().required('Tên sản phẩm không được để trống').defined(),
-  code: yup.string().optional(),
-  barcode: yup.string().optional(),
+  id: yup.string().required("ID không được để trống"),
+  code: yup.string().required("Mã sản phẩm không được để trống"),
+  name: yup.string().required("Tên sản phẩm không được để trống"),
   description: yup.string().optional(),
-  manufacturer: yup.string().optional(),
-  categoryId: yup.string().optional(),
-  categoryName: yup.string().optional(),
+  category: yup.string().optional(),
   unit: yup.string().optional(),
-  sellingPrice: yup.number().optional(),
+  price: yup.number().optional(),
   costPrice: yup.number().optional(),
-  vatRate: yup.number().optional(),
-  stockQuantity: yup.number().optional(),
-  isActive: yup.boolean().optional(),
+  lowStockThreshold: yup.number().optional(),
+  manufacturer: yup.string().optional(),
+  barcode: yup.string().optional(),
   isDeleted: yup.boolean().optional(),
   createdAt: yup.string().optional(),
   updatedAt: yup.string().optional(),
+  deletedAt: yup.string().optional(),
+  isForeignCurrency: yup.boolean().optional(),
+  exchangeRate: yup.number().optional(),
+  originalCostPrice: yup.number().optional(),
+  // stockLevel: yup.array().of(ProductStockLevelSchema).optional(),
+});
+
+export const ProductStockLevelSchema = yup.object({
+  id: yup.string().required("ID không được để trống"),
+  quantity: yup.number().required("Số lượng không được để trống"),
+  stockStatus: yup.string().optional(),
+  warehouse: yup.object().nullable().optional(),
+  isDeleted: yup.boolean().optional(),
+  createdAt: yup.string().optional(),
+  updatedAt: yup.string().optional(),
+  deletedAt: yup.string().optional(),
 });
 
 export type CreateProductSchemaType = yup.InferType<typeof CreateProductSchema>;
 export type UpdateProductSchemaType = yup.InferType<typeof UpdateProductSchema>;
 export type ProductSchemaType = yup.InferType<typeof ProductSchema>;
+export type ProductStockLevelSchemaType = yup.InferType<typeof ProductStockLevelSchema>;
 
 // ── Import job types (mirrors old productApi) ─────────────────────────────
 export type ProductImportJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';

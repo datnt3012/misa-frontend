@@ -7,12 +7,13 @@ import {
   ProductSchemaType,
 } from '../schemas';
 import type { ProductImportJobSnapshot } from '../schemas/product.schema';
+import { BackendPaginatedResponse } from '@/shared/schemas';
 
 export const PRODUCT_API = {
   // ── List / Detail ──────────────────────────────────────────────────────────
 
   GET_PRODUCTS: (params: Partial<ProductFilterSchemaType>, signal?: AbortSignal) =>
-    request<{ rows: ProductSchemaType[]; count: number; summary?: Record<string, unknown> }>(
+    request<BackendPaginatedResponse<ProductSchemaType>>(
       'get',
       API.PRODUCTS.ROOT,
       { params, signal }

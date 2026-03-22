@@ -32,10 +32,20 @@ export interface PaginatedResponse<T> extends PaginationMeta {
 
 // Dạng response backend trả về { rows, count, page, limit }
 export interface BackendPaginatedResponse<T> {
-  rows: T[];
-  count: number;
-  page: number;
-  limit: number;
-  totalPage?: number;
+  code: number;
+  message: string;
+  data: {
+    rows: T[];
+    count: number;
+    page: number;
+    limit: number;
+    totalPage?: number;
+  }
+}
+
+export interface BackendResponse<T> {
+  code: number;
+  message: string;
+  data: T;
 }
 

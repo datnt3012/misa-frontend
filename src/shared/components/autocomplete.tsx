@@ -40,8 +40,8 @@ export const Autocomplete = React.forwardRef<HTMLButtonElement, AutocompleteProp
         value,
         onChange,
         multiple = false,
-        placeholder = "Select option...",
-        emptyMessage = "No option found.",
+        placeholder = "Chọn...",
+        emptyMessage = "Không tìm thấy kết quả.",
         className,
         disabled = false,
     }, ref) => {

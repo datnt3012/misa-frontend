@@ -23,19 +23,24 @@ interface DynamicFormFieldProps<T extends object> {
 
 // Sub-component: calls fetchOptions() unconditionally so React hook rules are satisfied
 interface AutocompleteWithFetchProps {
-    fetchOptions: () => { data: Array<{ value: string; label: string }>; isLoading?: boolean; isFetching?: boolean };
+    fetchOptions: (watch: (name: string) => unknown) => { data: Array<{ value: string; label: string; data?: object }>; isLoading?: boolean; isFetching?: boolean };
     value: string | string[];
-    onChange: (value: string | string[]) => void;
+    onChange: (value: string | string[], data?: object) => void;
     multiple?: boolean;
     placeholder?: string;
     disabled?: boolean;
     className?: string;
 }
-const AutocompleteWithFetch: React.FC<AutocompleteWithFetchProps> = ({ fetchOptions, ...props }) => {
-    const { data: options = [], isLoading } = fetchOptions();
+const AutocompleteWithFetch: React.FC<AutocompleteWithFetchProps> = ({ fetchOptions, onChange, ...props }) => {
+    const { watch } = useFormContext();
+    const { data: options = [], isLoading } = fetchOptions(watch);
+    const handleChange = (value: string | string[]) => {
+        const selectedOption = Array.isArray(value) ? undefined : options.find(opt => opt.value === value);
+        onChange(value, selectedOption?.data);
+    };
     return (
         <div className="relative">
-            <Autocomplete options={options} {...props} />
+            <Autocomplete options={options} onChange={handleChange} {...props} />
             {isLoading && <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />}
         </div>
     );
@@ -59,7 +64,7 @@ export const DynamicFormField = <T extends object>({
     const { control, register, formState: { errors }, setValue, watch } = useFormContext<T>();
     // const { uploadFile } = useUploadFileMutation();
     const currentValues = watch();
-    const error = errors[config.name as string];
+    const error = (config.name as string).split('.').reduce((obj, key) => obj?.[key], errors as any);
     const colSpan = colSpanClasses[config.colSpan || (isFilterVariant ? 1 : 4)];
 
     // Check if field should be shown
@@ -80,7 +85,7 @@ export const DynamicFormField = <T extends object>({
                     placeholder={config.placeholder}
                     className={error ? "border-destructive" : ""}
                     disabled={isReadOnly || config.disabled}
-                    required={config.required}
+                    aria-required={config.required}
                 />
                 {error?.message && (
                     <p className="text-sm text-destructive flex items-center gap-1">
@@ -170,9 +175,9 @@ export const DynamicFormField = <T extends object>({
                         const commonProps = {
                             multiple: config.multiple,
                             value: field.value ?? (config.multiple ? [] : ""),
-                            onChange: (value: string | string[]) => {
+                            onChange: (value: string | string[], data?: object) => {
                                 field.onChange(value);
-                                config.onChange?.(value, setValue);
+                                config.onChange?.(value, setValue, data);
                             },
                             placeholder: config.placeholder,
                             disabled: isReadOnly || config.disabled,

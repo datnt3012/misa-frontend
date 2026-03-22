@@ -392,62 +392,114 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       let customerId = newOrder.customer_id;
       let selectedCustomer: Customer | undefined;
 
-      // Handle customer creation/selection (for both sale and purchase orders)
+      // Handle customer/supplier creation/selection (for both sale and purchase orders)
       if (newOrder.customer_id === "__new__") {
-        // Create new customer from form data
-        const customerData: any = {
-          name: newOrder.customer_name.trim(),
-          phoneNumber: newOrder.customer_phone?.trim() || undefined,
-          email: newOrder.customer_email?.trim() || undefined,
-          address: orderType === 'sale' ? (newOrder.shipping_address?.trim() || undefined) : undefined,
-          addressInfo: orderType === 'sale' && newOrder.shipping_addressInfo?.provinceCode ? {
-            provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
-            districtCode: newOrder.shipping_addressInfo.districtCode ?? null,
-            wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
-          } : undefined,
-        };
-        // Add VAT info if available (only for sale orders)
-        if (orderType === 'sale') {
+        if (orderType === 'purchase') {
+          // Create new supplier from form data
+          const supplierData: any = {
+            name: newOrder.customer_name.trim(),
+            phoneNumber: newOrder.customer_phone?.trim() || undefined,
+            email: newOrder.customer_email?.trim() || undefined,
+            address: newOrder.shipping_address?.trim() || undefined,
+            addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
+              provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
+              districtCode: newOrder.shipping_addressInfo.districtCode
+                ? newOrder.shipping_addressInfo.districtCode
+                : null,
+              wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
+            } : undefined,
+          };
+          try {
+            // Create supplier and wait for response
+            const newSupplier = await supplierApi.createSupplier(supplierData);
+            // Validate that supplier was created successfully
+            if (!newSupplier || !newSupplier.id) {
+              throw new Error("Không thể tạo nhà cung cấp mới. Phản hồi từ server không hợp lệ.");
+            }
+            customerId = newSupplier.id;
+            selectedCustomer = undefined;
+            newlyCreatedCustomer = undefined;
+            // Reload suppliers list
+            const suppliersRes = await supplierApi.getSuppliers({ page: 1, limit: 1000 });
+            setSuppliers(suppliersRes.suppliers || []);
+            toast({
+              title: "Thành công",
+              description: `Đã tạo nhà cung cấp mới: ${newSupplier.name}`,
+            });
+          } catch (supplierError: any) {
+            toast({
+              title: "Lỗi",
+              description: getErrorMessage(supplierError, "Không thể tạo nhà cung cấp mới"),
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
+          }
+        } else {
+          // Create new customer from form data (for sale orders)
+          const customerData: any = {
+            name: newOrder.customer_name.trim(),
+            phoneNumber: newOrder.customer_phone?.trim() || undefined,
+            email: newOrder.customer_email?.trim() || undefined,
+            address: newOrder.shipping_address?.trim() || undefined,
+            addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
+              provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
+              districtCode: newOrder.shipping_addressInfo.districtCode ?? null,
+              wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
+            } : undefined,
+          };
+          // Add VAT info if available (only for sale orders)
           const vatInfo = extractVatInfoFromOrder(newOrder);
           if (vatInfo) {
             customerData.vatInfo = vatInfo;
           }
-        }
-        try {
-          // Create customer and wait for response
-          const newCustomer = await customerApi.createCustomer(customerData);
-          // Validate that customer was created successfully
-          if (!newCustomer || !newCustomer.id) {
-            throw new Error(orderType === 'sale'
-              ? "Không thể tạo khách hàng mới. Phản hồi từ server không hợp lệ."
-              : "Không thể tạo nhà cung cấp mới. Phản hồi từ server không hợp lệ.");
+          try {
+            // Create customer and wait for response
+            const newCustomer = await customerApi.createCustomer(customerData);
+            // Validate that customer was created successfully
+            if (!newCustomer || !newCustomer.id) {
+              throw new Error("Không thể tạo khách hàng mới. Phản hồi từ server không hợp lệ.");
+            }
+            customerId = newCustomer.id;
+            selectedCustomer = newCustomer;
+            newlyCreatedCustomer = newCustomer; // Track that we created a new customer
+            // Reload customers list
+            const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
+            setCustomers(customersRes.customers || []);
+            toast({
+              title: "Thành công",
+              description: `Đã tạo khách hàng mới: ${newCustomer.name}`,
+            });
+          } catch (customerError: any) {
+            toast({
+              title: "Lỗi",
+              description: getErrorMessage(customerError, "Không thể tạo khách hàng mới"),
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
           }
-          customerId = newCustomer.id;
-          selectedCustomer = newCustomer;
-          newlyCreatedCustomer = newCustomer; // Track that we created a new customer
-          // Reload customers list
-          const customersRes = await customerApi.getCustomers({ page: 1, limit: 1000 });
-          setCustomers(customersRes.customers || []);
-          toast({
-            title: "Thành công",
-            description: orderType === 'sale'
-              ? `Đã tạo khách hàng mới: ${newCustomer.name}`
-              : `Đã tạo nhà cung cấp mới: ${newCustomer.name}`,
-          });
-        } catch (customerError: any) {
-          toast({
-            title: "Lỗi",
-            description: getErrorMessage(customerError, orderType === 'sale'
-              ? "Không thể tạo khách hàng mới"
-              : "Không thể tạo nhà cung cấp mới"),
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
         }
       } else {
-        // Get existing customer details
-        selectedCustomer = customers.find(c => c.id === newOrder.customer_id);
+        // Get existing customer/supplier details
+        if (orderType === 'sale') {
+          selectedCustomer = customers.find(c => c.id === newOrder.customer_id);
+        } else {
+          // For purchase orders, get supplier details
+          const selectedSupplier = suppliers.find(s => s.id === newOrder.customer_id);
+          // Map supplier to customer-like object for order creation
+          if (selectedSupplier) {
+            selectedCustomer = {
+              id: selectedSupplier.id,
+              name: selectedSupplier.name,
+              customer_code: selectedSupplier.code,
+              phoneNumber: selectedSupplier.contact_phone,
+              email: selectedSupplier.email,
+              address: selectedSupplier.address,
+              addressInfo: selectedSupplier.addressInfo,
+            } as Customer;
+          }
+        }
         customerId = newOrder.customer_id;
       }
       // Validate customerId before creating order
@@ -757,6 +809,37 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     />
                   </div>
                 </div>
+                {/* Address input for suppliers in purchase orders when not selecting existing supplier */}
+                {orderType === 'purchase' && newOrder.customer_id === "__new__" && (
+                  <div className="space-y-4">
+                    <Label>Địa chỉ nhà cung cấp</Label>
+                    <AddressFormSeparate
+                      value={{
+                        address: newOrder.shipping_address || '',
+                        provinceCode: newOrder.shipping_addressInfo?.provinceCode || '',
+                        districtCode: newOrder.shipping_addressInfo?.districtCode || '',
+                        wardCode: newOrder.shipping_addressInfo?.wardCode || '',
+                        provinceName: newOrder.shipping_addressInfo?.provinceName || '',
+                        districtName: newOrder.shipping_addressInfo?.districtName || '',
+                        wardName: newOrder.shipping_addressInfo?.wardName || '',
+                      }}
+                      onChange={(data) => {
+                        setNewOrder(prev => ({
+                          ...prev,
+                          shipping_address: data.address || '',
+                          shipping_addressInfo: {
+                            provinceCode: data.provinceCode || '',
+                            districtCode: data.districtCode || '',
+                            wardCode: data.wardCode || '',
+                            provinceName: data.provinceName || '',
+                            districtName: data.districtName || '',
+                            wardName: data.wardName || '',
+                          },
+                        }));
+                      }}
+                    />
+                  </div>
+                )}
                 {/* Removed customer address input. Shipping address will auto-fill from selected customer. */}
               </CardContent>
             </Card>
