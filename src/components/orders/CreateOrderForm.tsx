@@ -808,7 +808,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     />
                   </div>
                 </div>
-                {/* Address input for suppliers in purchase orders when not selecting existing supplier */}
                 {orderType === 'purchase' && newOrder.customer_id === "__new__" && (
                   <div className="space-y-4">
                     <Label>Địa chỉ nhà cung cấp</Label>
@@ -835,70 +834,63 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             wardName: data.wardName || '',
                           },
                         }));
-                      }
-                    }}
-                    placeholder={orderType === 'sale' ? "Chọn khách hàng hoặc nhập mới" : "Chọn nhà cung cấp hoặc nhập mới"}
-                    searchPlaceholder={orderType === 'sale' ? "Tìm khách hàng..." : "Tìm nhà cung cấp..."}
-                    emptyMessage={orderType === 'sale' ? "Không có khách hàng nào" : "Không có nhà cung cấp nào"}
-                  />
+                      }}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card ref={shippingCardRef}>
+              <CardHeader>
+                <CardTitle>Thông tin vận chuyển</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="shipping_recipient_name">Người nhận hàng <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="shipping_recipient_name"
+                      value={newOrder.shipping_recipient_name}
+                      onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_name: e.target.value }))}
+                      placeholder="Nhập tên người nhận"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="shipping_recipient_phone">Số điện thoại <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="shipping_recipient_phone"
+                      value={newOrder.shipping_recipient_phone}
+                      onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_phone: e.target.value }))}
+                      placeholder="Nhập số điện thoại"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <Label htmlFor="customer_name">{orderType === 'sale' ? 'Tên khách hàng' : 'Tên nhà cung cấp'} <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="customer_name"
-                    value={newOrder.customer_name}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_name: e.target.value }))}
-                    placeholder={orderType === 'sale' ? 'Nhập tên khách hàng' : 'Nhập tên nhà cung cấp'}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="customer_phone">Số điện thoại <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="customer_phone"
-                    value={newOrder.customer_phone}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_phone: e.target.value }))}
-                    placeholder="Nhập số điện thoại"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="customer_email">Email</Label>
-                  <Input
-                    id="customer_email"
-                    type="email"
-                    value={newOrder.customer_email}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, customer_email: e.target.value }))}
-                    placeholder={orderType === 'sale' ? 'Nhập email khách hàng' : 'Nhập email nhà cung cấp'}
-                  />
-                </div>
-              </div>
-              {/* Address input for suppliers in purchase orders when not selecting existing supplier */}
-              {orderType === 'purchase' && newOrder.customer_id === "__new__" && (
-                <div className="space-y-4">
-                  <Label>Địa chỉ nhà cung cấp</Label>
+                  <Label>Địa chỉ nhận hàng <span className="text-red-500">*</span></Label>
                   <AddressFormSeparate
+                    key={shippingAddressVersion}
+                    required={true}
                     value={{
-                      address: newOrder.shipping_address || '',
-                      provinceCode: newOrder.shipping_addressInfo?.provinceCode || '',
-                      districtCode: newOrder.shipping_addressInfo?.districtCode || '',
-                      wardCode: newOrder.shipping_addressInfo?.wardCode || '',
-                      provinceName: newOrder.shipping_addressInfo?.provinceName || '',
-                      districtName: newOrder.shipping_addressInfo?.districtName || '',
-                      wardName: newOrder.shipping_addressInfo?.wardName || '',
+                      address: newOrder.shipping_address,
+                      provinceCode: newOrder.shipping_addressInfo?.provinceCode,
+                      districtCode: newOrder.shipping_addressInfo?.districtCode,
+                      wardCode: newOrder.shipping_addressInfo?.wardCode,
+                      provinceName: newOrder.shipping_addressInfo?.provinceName,
+                      districtName: newOrder.shipping_addressInfo?.districtName,
+                      wardName: newOrder.shipping_addressInfo?.wardName,
                     }}
                     onChange={(data) => {
                       setNewOrder(prev => ({
                         ...prev,
-                        shipping_address: data.address || '',
+                        shipping_address: data.address,
                         shipping_addressInfo: {
-                          provinceCode: data.provinceCode || '',
-                          districtCode: data.districtCode || '',
-                          wardCode: data.wardCode || '',
-                          provinceName: data.provinceName || '',
-                          districtName: data.districtName || '',
-                          wardName: data.wardName || '',
-                        },
+                          provinceCode: data.provinceCode || "",
+                          districtCode: data.districtCode || "",
+                          wardCode: data.wardCode || "",
+                          provinceName: data.provinceName || "",
+                          districtName: data.districtName || "",
+                          wardName: data.wardName || "",
+                        }
                       }));
                     }}
                   />
