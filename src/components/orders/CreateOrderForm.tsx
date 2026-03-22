@@ -187,13 +187,13 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const shippingCardRef = useRef<HTMLDivElement>(null);
   const productsCardRef = useRef<HTMLDivElement>(null);
   const paymentCardRef = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     if (open) {
       setNewOrder(createInitialOrderState());
       setOrderType('sale');
       setShippingAddressVersion((v) => v + 1);
-      
+
       // Scroll to section based on tab param
       const tab = searchParams.get('tab');
       if (tab) {
@@ -391,7 +391,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     try {
       let customerId = newOrder.customer_id;
       let selectedCustomer: Customer | undefined;
-      
       // Handle customer/supplier creation/selection (for both sale and purchase orders)
       if (newOrder.customer_id === "__new__") {
         if (orderType === 'purchase') {
@@ -403,8 +402,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             address: newOrder.shipping_address?.trim() || undefined,
             addressInfo: newOrder.shipping_addressInfo?.provinceCode ? {
               provinceCode: newOrder.shipping_addressInfo.provinceCode || undefined,
-              districtCode: newOrder.shipping_addressInfo.districtCode 
-                ? newOrder.shipping_addressInfo.districtCode 
+              districtCode: newOrder.shipping_addressInfo.districtCode
+                ? newOrder.shipping_addressInfo.districtCode
                 : null,
               wardCode: newOrder.shipping_addressInfo.wardCode || undefined,
             } : undefined,
@@ -514,7 +513,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         setLoading(false);
         return;
       }
-      
+
       const { subtotal } = calculateTotals();
       // Prepare customer address info if available
       const customerAddressInfo = selectedCustomer?.addressInfo ? {
@@ -555,11 +554,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         addressInfo: orderType === 'sale' ? (() => {
           const addrInfo = newOrder.shipping_addressInfo;
           // Ensure codes are strings for validation
-          const provinceCodeStr = addrInfo?.provinceCode !== undefined && addrInfo?.provinceCode !== null 
-            ? String(addrInfo.provinceCode) 
+          const provinceCodeStr = addrInfo?.provinceCode !== undefined && addrInfo?.provinceCode !== null
+            ? String(addrInfo.provinceCode)
             : undefined;
-          const wardCodeStr = addrInfo?.wardCode !== undefined && addrInfo?.wardCode !== null 
-            ? String(addrInfo.wardCode) 
+          const wardCodeStr = addrInfo?.wardCode !== undefined && addrInfo?.wardCode !== null
+            ? String(addrInfo.wardCode)
             : undefined;
           // districtCode: check for null (V2) or valid string
           const hasProvinceCode = provinceCodeStr !== undefined && provinceCodeStr.trim() !== "";
@@ -579,8 +578,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         paymentMethod: newOrder.initial_payment_method || "cash",
         initialPayment: newOrder.initial_payment || 0,
         totalAmount: subtotal,
-        bank: newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment_bank 
-          ? newOrder.initial_payment_bank 
+        bank: newOrder.initial_payment_method === "bank_transfer" && newOrder.initial_payment_bank
+          ? newOrder.initial_payment_bank
           : undefined,
         paymentDeadline: newOrder.paymentDeadline || undefined,
         // Order details
@@ -602,9 +601,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       // Items are included in order payload; adjust if BE requires separate calls
       // TODO: initial payment can be handled via payments API if available
       // Get order code from response
-      const orderCode = orderData.order_number || 
-                       orderData.id || 
-                       'thành công';
+      const orderCode = orderData.order_number ||
+        orderData.id ||
+        'thành công';
       // Update VAT info for customer if needed (only for sale orders)
       if (
         orderType === 'sale' &&
@@ -673,103 +672,168 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       loadingMessage="Đang tải dữ liệu tạo đơn hàng..."
     >
       <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Tạo đơn hàng mới</DialogTitle>
-          <DialogDescription>
-            Nhập thông tin chi tiết cho đơn hàng mới
-          </DialogDescription>
-        </DialogHeader>
-        {/* Order Type Tabs */}
-        <Tabs value={orderType} onValueChange={(value) => {
-          setOrderType(value as 'sale' | 'purchase');
-          // Reset form when switching type
-          setNewOrder(createInitialOrderState());
-          setShippingAddressVersion(v => v + 1);
-        }} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="sale" className="flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4" />
-              Bán hàng
-            </TabsTrigger>
-            <TabsTrigger value="purchase" className="flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4" />
-              Mua hàng
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="space-y-6">
-          {/* Customer/Supplier Information */}
-          <Card ref={customerCardRef}>
-            <CardHeader>
-              <CardTitle>{orderType === 'sale' ? 'Thông tin khách hàng' : 'Thông tin nhà cung cấp'}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="customer">{orderType === 'sale' ? 'Khách hàng' : 'Nhà cung cấp'}</Label>
-                  <Combobox
-                    options={[
-                      { label: orderType === 'sale' ? "Chọn khách hàng cũ" : "Chọn nhà cung cấp cũ", value: "__new__" },
-                      ...(orderType === 'sale' ? customers.map(customer => ({
-                        label: `${customer.name} (${customer.customer_code})`,
-                        value: customer.id
-                      })) : suppliers.map(supplier => ({
-                        label: `${supplier.name} (${supplier.code})`,
-                        value: supplier.id
-                      })))
-                    ]}
-                    value={newOrder.customer_id}
-                    onValueChange={(value) => {
-                      // Handle "Create new customer" option - just set the value, don't create yet
-                      const stringValue = Array.isArray(value) ? value[0] : value;
-                      if (stringValue === "__new__") {
-                        setNewOrder(prev => ({
-                          ...prev,
-                          customer_id: "__new__",
-                        }));
-                        return;
-                      }
-                      
-                      // Handle existing customer/supplier selection
-                      if (orderType === 'sale') {
-                        const customer = customers.find(c => c.id === stringValue);
-                        const vatInfo = buildVatInfoFromCustomer(customer);
-                        const shippingInfo = buildShippingInfoFromCustomer(customer);
-                        
-                        setNewOrder(prev => {
-                          const newState = {
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tạo đơn hàng mới</DialogTitle>
+            <DialogDescription>
+              Nhập thông tin chi tiết cho đơn hàng mới
+            </DialogDescription>
+          </DialogHeader>
+          {/* Order Type Tabs */}
+          <Tabs value={orderType} onValueChange={(value) => {
+            setOrderType(value as 'sale' | 'purchase');
+            // Reset form when switching type
+            setNewOrder(createInitialOrderState());
+            setShippingAddressVersion(v => v + 1);
+          }} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="sale" className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4" />
+                Bán hàng
+              </TabsTrigger>
+              <TabsTrigger value="purchase" className="flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4" />
+                Mua hàng
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="space-y-6">
+            {/* Customer/Supplier Information */}
+            <Card ref={customerCardRef}>
+              <CardHeader>
+                <CardTitle>{orderType === 'sale' ? 'Thông tin khách hàng' : 'Thông tin nhà cung cấp'}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="customer">{orderType === 'sale' ? 'Khách hàng' : 'Nhà cung cấp'}</Label>
+                    <Combobox
+                      options={[
+                        { label: orderType === 'sale' ? "Chọn khách hàng cũ" : "Chọn nhà cung cấp cũ", value: "__new__" },
+                        ...(orderType === 'sale' ? customers.map(customer => ({
+                          label: `${customer.name} (${customer.customer_code})`,
+                          value: customer.id
+                        })) : suppliers.map(supplier => ({
+                          label: `${supplier.name} (${supplier.code})`,
+                          value: supplier.id
+                        })))
+                      ]}
+                      value={newOrder.customer_id}
+                      onValueChange={(value) => {
+                        // Handle "Create new customer" option - just set the value, don't create yet
+                        const stringValue = Array.isArray(value) ? value[0] : value;
+                        if (stringValue === "__new__") {
+                          setNewOrder(prev => ({
+                            ...prev,
+                            customer_id: "__new__",
+                          }));
+                          return;
+                        }
+
+                        // Handle existing customer/supplier selection
+                        if (orderType === 'sale') {
+                          const customer = customers.find(c => c.id === stringValue);
+                          const vatInfo = buildVatInfoFromCustomer(customer);
+                          const shippingInfo = buildShippingInfoFromCustomer(customer);
+
+                          setNewOrder(prev => {
+                            const newState = {
+                              ...prev,
+                              customer_id: stringValue || "",
+                              customer_name: customer?.name || "",
+                              customer_code: customer?.customer_code || "",
+                              customer_phone: customer?.phoneNumber || "",
+                              customer_email: customer?.email || "",
+                              ...vatInfo,
+                              ...shippingInfo,
+                            };
+
+                            // Only trigger AddressFormSeparate re-mount if province changed (for sale orders)
+                            const currentProvinceCode = prev.shipping_addressInfo?.provinceCode;
+                            const newProvinceCode = shippingInfo.shipping_addressInfo?.provinceCode;
+
+                            if (currentProvinceCode !== newProvinceCode) {
+                              setShippingAddressVersion(v => v + 1);
+                            }
+
+                            return newState;
+                          });
+                        } else {
+                          // Purchase order - auto-fill supplier information
+                          const supplier = suppliers.find(s => s.id === stringValue);
+
+                          setNewOrder(prev => ({
                             ...prev,
                             customer_id: stringValue || "",
-                            customer_name: customer?.name || "",
-                            customer_code: customer?.customer_code || "",
-                            customer_phone: customer?.phoneNumber || "",
-                            customer_email: customer?.email || "",
-                            ...vatInfo,
-                            ...shippingInfo,
-                          };
-                          
-                          // Only trigger AddressFormSeparate re-mount if province changed (for sale orders)
-                          const currentProvinceCode = prev.shipping_addressInfo?.provinceCode;
-                          const newProvinceCode = shippingInfo.shipping_addressInfo?.provinceCode;
-                          
-                          if (currentProvinceCode !== newProvinceCode) {
-                            setShippingAddressVersion(v => v + 1);
-                          }
-                          
-                          return newState;
-                        });
-                      } else {
-                        // Purchase order - auto-fill supplier information
-                        const supplier = suppliers.find(s => s.id === stringValue);
-                        
+                            customer_name: supplier?.name || "",
+                            customer_code: supplier?.code || "",
+                            customer_phone: supplier?.contact_phone || "",
+                            customer_email: supplier?.email || "",
+                          }));
+                        }
+                      }}
+                      placeholder={orderType === 'sale' ? "Chọn khách hàng hoặc nhập mới" : "Chọn nhà cung cấp hoặc nhập mới"}
+                      searchPlaceholder={orderType === 'sale' ? "Tìm khách hàng..." : "Tìm nhà cung cấp..."}
+                      emptyMessage={orderType === 'sale' ? "Không có khách hàng nào" : "Không có nhà cung cấp nào"}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer_name">{orderType === 'sale' ? 'Tên khách hàng' : 'Tên nhà cung cấp'} <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="customer_name"
+                      value={newOrder.customer_name}
+                      onChange={(e) => setNewOrder(prev => ({ ...prev, customer_name: e.target.value }))}
+                      placeholder={orderType === 'sale' ? 'Nhập tên khách hàng' : 'Nhập tên nhà cung cấp'}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="customer_phone">Số điện thoại <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="customer_phone"
+                      value={newOrder.customer_phone}
+                      onChange={(e) => setNewOrder(prev => ({ ...prev, customer_phone: e.target.value }))}
+                      placeholder="Nhập số điện thoại"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer_email">Email</Label>
+                    <Input
+                      id="customer_email"
+                      type="email"
+                      value={newOrder.customer_email}
+                      onChange={(e) => setNewOrder(prev => ({ ...prev, customer_email: e.target.value }))}
+                      placeholder={orderType === 'sale' ? 'Nhập email khách hàng' : 'Nhập email nhà cung cấp'}
+                    />
+                  </div>
+                </div>
+                {/* Address input for suppliers in purchase orders when not selecting existing supplier */}
+                {orderType === 'purchase' && newOrder.customer_id === "__new__" && (
+                  <div className="space-y-4">
+                    <Label>Địa chỉ nhà cung cấp</Label>
+                    <AddressFormSeparate
+                      value={{
+                        address: newOrder.shipping_address || '',
+                        provinceCode: newOrder.shipping_addressInfo?.provinceCode || '',
+                        districtCode: newOrder.shipping_addressInfo?.districtCode || '',
+                        wardCode: newOrder.shipping_addressInfo?.wardCode || '',
+                        provinceName: newOrder.shipping_addressInfo?.provinceName || '',
+                        districtName: newOrder.shipping_addressInfo?.districtName || '',
+                        wardName: newOrder.shipping_addressInfo?.wardName || '',
+                      }}
+                      onChange={(data) => {
                         setNewOrder(prev => ({
                           ...prev,
-                          customer_id: stringValue || "",
-                          customer_name: supplier?.name || "",
-                          customer_code: supplier?.code || "",
-                          customer_phone: supplier?.contact_phone || "",
-                          customer_email: supplier?.email || "",
+                          shipping_address: data.address || '',
+                          shipping_addressInfo: {
+                            provinceCode: data.provinceCode || '',
+                            districtCode: data.districtCode || '',
+                            wardCode: data.wardCode || '',
+                            provinceName: data.provinceName || '',
+                            districtName: data.districtName || '',
+                            wardName: data.wardName || '',
+                          },
                         }));
                       }
                     }}
@@ -946,347 +1010,433 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                     placeholder="Nhập số điện thoại"
                   />
                 </div>
-              </div>
-              <div>
-                <Label>Địa chỉ nhận hàng <span className="text-red-500">*</span></Label>
-                <AddressFormSeparate
-                  key={shippingAddressVersion}
-                  required={true}
-                  value={{
-                    address: newOrder.shipping_address,
-                    provinceCode: newOrder.shipping_addressInfo?.provinceCode,
-                    districtCode: newOrder.shipping_addressInfo?.districtCode,
-                    wardCode: newOrder.shipping_addressInfo?.wardCode,
-                    provinceName: newOrder.shipping_addressInfo?.provinceName,
-                    districtName: newOrder.shipping_addressInfo?.districtName,
-                    wardName: newOrder.shipping_addressInfo?.wardName,
-                  }}
-                  onChange={(data) => {
-                    setNewOrder(prev => ({
-                      ...prev,
-                      shipping_address: data.address,
-                      shipping_addressInfo: {
-                        provinceCode: data.provinceCode || "",
-                        districtCode: data.districtCode || "",
-                        wardCode: data.wardCode || "",
-                        provinceName: data.provinceName || "",
-                        districtName: data.districtName || "",
-                        wardName: data.wardName || "",
-                      }
-                    }));
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          )}
-          {/* Order Items */}
-          <Card ref={productsCardRef}>
-            <CardHeader>
-              <CardTitle className="flex justify-between items-center">
-                <span>Sản phẩm</span>
-                <Button onClick={addItem} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Thêm sản phẩm
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Table className="border border-border/30 rounded-lg overflow-hidden">
-                <TableHeader>
-                  <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Sản phẩm <span className="text-red-500">*</span>
-                    </TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Thuế suất
-                    </TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Số lượng <span className="text-red-500">*</span>
-                    </TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Đơn giá <span className="text-red-500">*</span>
-                    </TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Tiền thuế GTGT
-                    </TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Thành tiền chưa có thuế GTGT
-                    </TableHead>
-                    <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                      Thành tiền có thuế GTGT
-                    </TableHead>
-                    <TableHead className="font-semibold text-slate-700"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {newOrder.items.map((item, index) => (
-                    <TableRow
-                      key={item.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
-                    >
-                      <TableCell className="border-r border-slate-100 align-top pt-4 max-w-[300px]">
-                        <Combobox
-                          key={`product-select-${item.id}`}
-                          options={products
-                            .filter(product => {
-                              // Loại bỏ sản phẩm đã được chọn trong các item khác
-                              const isAlreadySelected = newOrder.items.some((otherItem, otherIndex) =>
-                                otherItem.product_id === product.id && otherIndex !== index
-                              );
-                              return !isAlreadySelected;
-                            })
-                            .map(product => ({
-                              label: `${product.name} (${product.code})`,
-                              value: product.id
-                            }))}
-                          value={item.product_id}
-                          onValueChange={(value) => updateItem(index, "product_id", value)}
-                          placeholder="Chọn sản phẩm"
-                          searchPlaceholder="Tìm sản phẩm..."
-                          emptyMessage="Không có sản phẩm nào"
-                          className="w-full"
-                        />
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
-                        <div className="inline-block">
-                          <NumberInput
-                            value={item.vat_percentage}
-                            onChange={(value) => updateItem(index, "vat_percentage", value)}
-                            min={0}
-                            max={100}
-                            allowDecimal={true}
-                            className="w-20 text-center"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
-                        <div className="inline-block">
-                          <NumberInput
-                            value={item.quantity}
-                            onChange={(value) => updateItem(index, "quantity", value)}
-                            min={1}
-                            className="w-20 text-center"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
-                        <div className="inline-block">
-                          <CurrencyInput
-                            value={item.unit_price}
-                            onChange={(value) => updateItem(index, "unit_price", value)}
-                            className="w-32 text-center"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
-                        {(item.total_price * item.vat_percentage / 100).toLocaleString("vi-VN")}
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
-                        {item.total_price.toLocaleString("vi-VN")}
-                      </TableCell>
-                      <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
-                        {(item.total_price + (item.total_price * item.vat_percentage / 100)).toLocaleString("vi-VN")}
-                      </TableCell>
-                      <TableCell className="align-top pt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeItem(index)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          {/* Additional Expenses */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex justify-between items-center">
-                <span>Chi phí</span>
-                <Button onClick={addExpense} size="sm" variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Thêm chi phí
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {newOrder.expenses.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  Chưa có chi phí nào. Nhấn <span className="font-medium">Thêm chi phí</span> để bắt đầu.
-                </div>
-              ) : (
-                <>
-                  <Table className="border border-border/30 rounded-lg overflow-hidden">
-                    <TableHeader>
-                      <TableRow className="bg-slate-50 border-b-2 border-slate-200">
-                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                          Tên chi phí
-                        </TableHead>
-                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                          Số tiền
-                        </TableHead>
-                        <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                          Ghi chú
-                        </TableHead>
-                        <TableHead className="font-semibold text-slate-700"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {newOrder.expenses.map((expense, index) => (
-                        <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
-                          <TableCell className="border-r border-slate-100 align-top pt-4">
-                            <Input
-                              value={expense.name}
-                              onChange={(e) => updateExpense(index, "name", e.target.value)}
-                              placeholder="Ví dụ: Phí vận chuyển"
-                            />
-                          </TableCell>
-                          <TableCell className="border-r border-slate-100 align-top pt-4">
-                            <CurrencyInput
-                              value={expense.amount}
-                              onChange={(value) => updateExpense(index, "amount", value)}
-                              className="w-32 text-center"
-                            />
-                          </TableCell>
-                          <TableCell className="border-r border-slate-100 align-top pt-4">
-                            <Input
-                              value={expense.note || ""}
-                              onChange={(e) => updateExpense(index, "note", e.target.value)}
-                              placeholder="Ghi chú (không bắt buộc)"
-                            />
-                          </TableCell>
-                          <TableCell className="align-top pt-4">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeExpense(index)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <div className="mt-3 flex justify-end">
-                    <div className="text-sm font-medium">
-                      Tổng chi phí:{" "}
-                      <span className="font-semibold text-blue-600">
-                        {newOrder.expenses
-                          .reduce((sum, exp) => sum + (exp.amount || 0), 0)
-                          .toLocaleString("vi-VN")}{" "}
-                        đ
-                      </span>
+              </CardContent>
+            </Card>
+            {/* VAT Information - Only show for sale orders */}
+            {orderType === 'sale' && (
+              <Card ref={vatCardRef}>
+                <CardHeader>
+                  <CardTitle>Thông tin VAT</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="vat_tax_code">Mã số thuế</Label>
+                      <Input
+                        id="vat_tax_code"
+                        value={newOrder.vat_tax_code}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, vat_tax_code: e.target.value }))}
+                        placeholder="Nhập mã số thuế"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="vat_invoice_email">Email nhận hóa đơn VAT</Label>
+                      <Input
+                        id="vat_invoice_email"
+                        type="email"
+                        value={newOrder.vat_invoice_email}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, vat_invoice_email: e.target.value }))}
+                        placeholder="email@domain.com"
+                      />
                     </div>
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-          {/* Payment & Summary */}
-          <Card ref={paymentCardRef}>
-            <CardHeader>
-              <CardTitle>Thanh toán và Tổng kết</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="initial_payment">Thanh toán ban đầu</Label>
-                  <CurrencyInput
-                    id="initial_payment"
-                    value={newOrder.initial_payment}
-                    onChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment: value }))}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
-                  <Select value={newOrder.initial_payment_method} onValueChange={(value) => setNewOrder(prev => ({
-                    ...prev,
-                    initial_payment_method: value,
-                    // Reset bank when payment method is not bank_transfer
-                    initial_payment_bank: value === "bank_transfer" ? prev.initial_payment_bank : ""
-                  }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn phương thức" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Tiền mặt</SelectItem>
-                      <SelectItem value="bank_transfer">Chuyển khoản</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {newOrder.initial_payment_method === "bank_transfer" && (
                   <div>
-                    <Label htmlFor="initial_payment_bank">Ngân hàng <span className="text-red-500">*</span></Label>
-                    <BankSelector
-                      value={newOrder.initial_payment_bank}
-                      onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_bank: value }))}
-                      placeholder="Chọn ngân hàng"
+                    <Label htmlFor="vat_company_name">Tên công ty</Label>
+                    <Input
+                      id="vat_company_name"
+                      value={newOrder.vat_company_name}
+                      onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_name: e.target.value }))}
+                      placeholder="Nhập tên công ty"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Điện thoại công ty</Label>
+                      <Input
+                        value={newOrder.vat_company_phone}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_phone: e.target.value }))}
+                        placeholder="Nhập số điện thoại công ty"
+                      />
+                    </div>
+                    <div>
+                      <Label>Địa chỉ công ty</Label>
+                      <Input
+                        value={newOrder.vat_company_address}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, vat_company_address: e.target.value }))}
+                        placeholder="Nhập địa chỉ công ty"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {/* Shipping Information - Only show for sale orders */}
+            {orderType === 'sale' && (
+              <Card ref={shippingCardRef}>
+                <CardHeader>
+                  <CardTitle>Thông tin vận chuyển</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="shipping_recipient_name">Người nhận hàng <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="shipping_recipient_name"
+                        value={newOrder.shipping_recipient_name}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_name: e.target.value }))}
+                        placeholder="Nhập tên người nhận"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="shipping_recipient_phone">Số điện thoại <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="shipping_recipient_phone"
+                        value={newOrder.shipping_recipient_phone}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, shipping_recipient_phone: e.target.value }))}
+                        placeholder="Nhập số điện thoại"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Địa chỉ nhận hàng <span className="text-red-500">*</span></Label>
+                    <AddressFormSeparate
+                      key={shippingAddressVersion}
+                      required={true}
+                      value={{
+                        address: newOrder.shipping_address,
+                        provinceCode: newOrder.shipping_addressInfo?.provinceCode,
+                        districtCode: newOrder.shipping_addressInfo?.districtCode,
+                        wardCode: newOrder.shipping_addressInfo?.wardCode,
+                        provinceName: newOrder.shipping_addressInfo?.provinceName,
+                        districtName: newOrder.shipping_addressInfo?.districtName,
+                        wardName: newOrder.shipping_addressInfo?.wardName,
+                      }}
+                      onChange={(data) => {
+                        setNewOrder(prev => ({
+                          ...prev,
+                          shipping_address: data.address,
+                          shipping_addressInfo: {
+                            provinceCode: data.provinceCode || "",
+                            districtCode: data.districtCode || "",
+                            wardCode: data.wardCode || "",
+                            provinceName: data.provinceName || "",
+                            districtName: data.districtName || "",
+                            wardName: data.wardName || "",
+                          }
+                        }));
+                      }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {/* Order Items */}
+            <Card ref={productsCardRef}>
+              <CardHeader>
+                <CardTitle className="flex justify-between items-center">
+                  <span>Sản phẩm</span>
+                  <Button onClick={addItem} size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Thêm sản phẩm
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Table className="border border-border/30 rounded-lg overflow-hidden">
+                  <TableHeader>
+                    <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Sản phẩm <span className="text-red-500">*</span>
+                      </TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Thuế suất
+                      </TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Số lượng <span className="text-red-500">*</span>
+                      </TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Đơn giá <span className="text-red-500">*</span>
+                      </TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Tiền thuế GTGT
+                      </TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Thành tiền chưa có thuế GTGT
+                      </TableHead>
+                      <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                        Thành tiền có thuế GTGT
+                      </TableHead>
+                      <TableHead className="font-semibold text-slate-700"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {newOrder.items.map((item, index) => (
+                      <TableRow
+                        key={item.id}
+                        className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
+                      >
+                        <TableCell className="border-r border-slate-100 align-top pt-4 max-w-[300px]">
+                          <Combobox
+                            key={`product-select-${item.id}`}
+                            options={products
+                              .filter(product => {
+                                // Loại bỏ sản phẩm đã được chọn trong các item khác
+                                const isAlreadySelected = newOrder.items.some((otherItem, otherIndex) =>
+                                  otherItem.product_id === product.id && otherIndex !== index
+                                );
+                                return !isAlreadySelected;
+                              })
+                              .map(product => ({
+                                label: `${product.name} (${product.code})`,
+                                value: product.id
+                              }))}
+                            value={item.product_id}
+                            onValueChange={(value) => updateItem(index, "product_id", value)}
+                            placeholder="Chọn sản phẩm"
+                            searchPlaceholder="Tìm sản phẩm..."
+                            emptyMessage="Không có sản phẩm nào"
+                            className="w-full"
+                          />
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
+                          <div className="inline-block">
+                            <NumberInput
+                              value={item.vat_percentage}
+                              onChange={(value) => updateItem(index, "vat_percentage", value)}
+                              min={0}
+                              max={100}
+                              allowDecimal={true}
+                              className="w-20 text-center"
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
+                          <div className="inline-block">
+                            <NumberInput
+                              value={item.quantity}
+                              onChange={(value) => updateItem(index, "quantity", value)}
+                              min={1}
+                              className="w-20 text-center"
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
+                          <div className="inline-block">
+                            <CurrencyInput
+                              value={item.unit_price}
+                              onChange={(value) => updateItem(index, "unit_price", value)}
+                              className="w-32 text-center"
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                          {(item.total_price * item.vat_percentage / 100).toLocaleString("vi-VN")}
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                          {item.total_price.toLocaleString("vi-VN")}
+                        </TableCell>
+                        <TableCell className="border-r border-slate-100 align-top pt-7 text-center">
+                          {(item.total_price + (item.total_price * item.vat_percentage / 100)).toLocaleString("vi-VN")}
+                        </TableCell>
+                        <TableCell className="align-top pt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeItem(index)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            {/* Additional Expenses */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex justify-between items-center">
+                  <span>Chi phí</span>
+                  <Button onClick={addExpense} size="sm" variant="outline">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Thêm chi phí
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {newOrder.expenses.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    Chưa có chi phí nào. Nhấn <span className="font-medium">Thêm chi phí</span> để bắt đầu.
+                  </div>
+                ) : (
+                  <>
+                    <Table className="border border-border/30 rounded-lg overflow-hidden">
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 border-b-2 border-slate-200">
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Tên chi phí
+                          </TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Số tiền
+                          </TableHead>
+                          <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
+                            Ghi chú
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {newOrder.expenses.map((expense, index) => (
+                          <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50">
+                            <TableCell className="border-r border-slate-100 align-top pt-4">
+                              <Input
+                                value={expense.name}
+                                onChange={(e) => updateExpense(index, "name", e.target.value)}
+                                placeholder="Ví dụ: Phí vận chuyển"
+                              />
+                            </TableCell>
+                            <TableCell className="border-r border-slate-100 align-top pt-4">
+                              <CurrencyInput
+                                value={expense.amount}
+                                onChange={(value) => updateExpense(index, "amount", value)}
+                                className="w-32 text-center"
+                              />
+                            </TableCell>
+                            <TableCell className="border-r border-slate-100 align-top pt-4">
+                              <Input
+                                value={expense.note || ""}
+                                onChange={(e) => updateExpense(index, "note", e.target.value)}
+                                placeholder="Ghi chú (không bắt buộc)"
+                              />
+                            </TableCell>
+                            <TableCell className="align-top pt-4">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeExpense(index)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <div className="mt-3 flex justify-end">
+                      <div className="text-sm font-medium">
+                        Tổng chi phí:{" "}
+                        <span className="font-semibold text-blue-600">
+                          {newOrder.expenses
+                            .reduce((sum, exp) => sum + (exp.amount || 0), 0)
+                            .toLocaleString("vi-VN")}{" "}
+                          đ
+                        </span>
+                      </div>
+                    </div>
+                  </>
                 )}
-              </div>
-              <div className="grid grid-cols-3 gap-4">
+              </CardContent>
+            </Card>
+            {/* Payment & Summary */}
+            <Card ref={paymentCardRef}>
+              <CardHeader>
+                <CardTitle>Thanh toán và Tổng kết</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="initial_payment">Thanh toán ban đầu</Label>
+                    <CurrencyInput
+                      id="initial_payment"
+                      value={newOrder.initial_payment}
+                      onChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment: value }))}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="initial_payment_method">Phương thức thanh toán</Label>
+                    <Select value={newOrder.initial_payment_method} onValueChange={(value) => setNewOrder(prev => ({
+                      ...prev,
+                      initial_payment_method: value,
+                      // Reset bank when payment method is not bank_transfer
+                      initial_payment_bank: value === "bank_transfer" ? prev.initial_payment_bank : ""
+                    }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn phương thức" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Tiền mặt</SelectItem>
+                        <SelectItem value="bank_transfer">Chuyển khoản</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newOrder.initial_payment_method === "bank_transfer" && (
+                    <div>
+                      <Label htmlFor="initial_payment_bank">Ngân hàng <span className="text-red-500">*</span></Label>
+                      <BankSelector
+                        value={newOrder.initial_payment_bank}
+                        onValueChange={(value) => setNewOrder(prev => ({ ...prev, initial_payment_bank: value }))}
+                        placeholder="Chọn ngân hàng"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="payment_deadline">Hạn thanh toán</Label>
+                    <Input
+                      id="payment_deadline"
+                      type="date"
+                      value={newOrder.paymentDeadline}
+                      onChange={(e) =>
+                        setNewOrder((prev) => ({ ...prev, paymentDeadline: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
                 <div>
-                  <Label htmlFor="payment_deadline">Hạn thanh toán</Label>
-                  <Input
-                    id="payment_deadline"
-                    type="date"
-                    value={newOrder.paymentDeadline}
-                    onChange={(e) =>
-                      setNewOrder((prev) => ({ ...prev, paymentDeadline: e.target.value }))
-                    }
+                  <Label htmlFor="notes">Ghi chú</Label>
+                  <Textarea
+                    id="notes"
+                    value={newOrder.notes}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Nhập ghi chú"
                   />
                 </div>
-              </div>
-              <div>
-                <Label htmlFor="notes">Ghi chú</Label>
-                <Textarea
-                  id="notes"
-                  value={newOrder.notes}
-                  onChange={(e) => setNewOrder(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Nhập ghi chú"
-                />
-              </div>
-              {/* Order Summary */}
-              {(() => {
-                const { subtotal, debt } = calculateTotals();
-                return (
-                  <div className="border-t pt-4 space-y-2">
-                    <div className="flex justify-between text-lg font-bold">
-                      <span>Tổng tiền:</span>
-                      <span>{subtotal.toLocaleString('vi-VN')} đ</span>
-                    </div>
-                    {newOrder.initial_payment > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Còn nợ:</span>
-                        <span className="font-medium text-orange-600">{debt.toLocaleString('vi-VN')} đ</span>
+                {/* Order Summary */}
+                {(() => {
+                  const { subtotal, debt } = calculateTotals();
+                  return (
+                    <div className="border-t pt-4 space-y-2">
+                      <div className="flex justify-between text-lg font-bold">
+                        <span>Tổng tiền:</span>
+                        <span>{subtotal.toLocaleString('vi-VN')} đ</span>
                       </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-          {/* Action Buttons */}
-          <div className="flex gap-4 justify-end">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Hủy
-            </Button>
-            <Button onClick={handleSubmit} disabled={loading}>
-              {loading ? "Đang tạo..." : "Tạo đơn hàng"}
-            </Button>
+                      {newOrder.initial_payment > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Còn nợ:</span>
+                          <span className="font-medium text-orange-600">{debt.toLocaleString('vi-VN')} đ</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+            {/* Action Buttons */}
+            <div className="flex gap-4 justify-end">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleSubmit} disabled={loading}>
+                {loading ? "Đang tạo..." : "Tạo đơn hàng"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-      </LoadingWrapper>
+        </DialogContent>
+      </Dialog>
+    </LoadingWrapper>
   );
 };
 export default CreateOrderForm;

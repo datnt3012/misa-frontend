@@ -3,10 +3,10 @@ export const API_CONFIG = {
   // Sử dụng backend thực tế
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3274/api/v0',
   BACKEND_URL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3274',
-  
+
   // Timeout cho requests (ms) - Increased to 60 seconds for long-running operations
   TIMEOUT: Number(import.meta.env.VITE_API_TIMEOUT) || 60000,
-  
+
   // Headers mặc định
   DEFAULT_HEADERS: {
     'Content-Type': 'application/json',
@@ -28,7 +28,7 @@ export const API_ENDPOINTS = {
     CHANGE_PASSWORD: '/auth/change-password',
     VERIFY_TEMPORARY_PASSWORD: '/auth/verify-temporary-password',
   },
-  
+
   // Dashboard
   DASHBOARD: {
     SUMMARY: '/dashboard/summary',
@@ -42,7 +42,7 @@ export const API_ENDPOINTS = {
     RECENT_ORDERS: '/dashboard/recent-orders',
     RECENT_ACTIVITIES: '/dashboard/recent-activities',
   },
-  
+
   // Users
   USERS: {
     LIST: '/users',
@@ -52,12 +52,12 @@ export const API_ENDPOINTS = {
     GET_PREFERENCES: '/users/get-preferences',
     UPDATE_EMAIL_PREFERENCES: '/users/email-preferences',
   },
-  
+
   // Roles
   ROLES: {
     LIST: '/roles',
   },
-  
+
   // Warehouses
   WAREHOUSES: {
     LIST: '/warehouses',
@@ -65,7 +65,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/warehouses/${id}`,
     DELETE: (id: string) => `/warehouses/${id}`,
   },
-  
+
   // Products
   PRODUCTS: {
     LIST: '/products',
@@ -80,7 +80,7 @@ export const API_ENDPOINTS = {
     EXPORT: '/products/export',
     MANUFACTURERS: '/products/manufacturers',
   },
-  
+
   // Categories
   CATEGORIES: {
     LIST: '/categories',
@@ -89,7 +89,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/categories/${id}`,
     DELETE: (id: string) => `/categories/${id}`,
   },
-  
+
   // Inventory
   INVENTORY: {
     LIST: '/inventory',
@@ -97,7 +97,7 @@ export const API_ENDPOINTS = {
     HISTORY: '/inventory/history',
     STOCK_LEVELS: '/inventory/stock-levels',
   },
-  
+
   // Customers
   CUSTOMERS: {
     LIST: '/customers',
@@ -105,7 +105,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/customers/${id}`,
     DELETE: (id: string) => `/customers/${id}`,
   },
-  
+
   // Suppliers
   SUPPLIERS: {
     LIST: '/suppliers',
@@ -113,7 +113,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/suppliers/${id}`,
     DELETE: (id: string) => `/suppliers/${id}`,
   },
-  
+
   // Administrative Units
   ADMINISTRATIVE: {
     LIST: '/administrative',
@@ -121,7 +121,7 @@ export const API_ENDPOINTS = {
     UPDATE: (code: string) => `/administrative/${code}`,
     DELETE: (code: string) => `/administrative/${code}`,
   },
-  
+
   // Stock Levels
   STOCK_LEVELS: {
     LIST: '/stock-levels',
@@ -129,7 +129,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/stock-levels/${id}`,
     DELETE: (id: string) => `/stock-levels/${id}`,
   },
-  
+
   // Orders
   ORDERS: {
     LIST: '/orders',
@@ -144,7 +144,7 @@ export const API_ENDPOINTS = {
     HISTORY: (id: string) => `/orders/${id}/history`,
     BANKS: '/orders/banks',
   },
-  
+
   // History
   HISTORY: {
     LIST: '/history',
@@ -153,7 +153,7 @@ export const API_ENDPOINTS = {
     ORDER: (orderId: string) => `/history/entity/order/${orderId}`,
     ORDERS_BY_ID: (id: string) => `/orders/${id}/history`, // Alternative endpoint
   },
-  
+
   // Order Items
   ORDER_ITEMS: {
     LIST: '/order-items',
@@ -161,7 +161,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/order-items/${id}`,
     DELETE: (id: string) => `/order-items/${id}`,
   },
-  
+
   // Tags
   TAGS: {
     LIST: '/tags',
@@ -177,7 +177,7 @@ export const API_ENDPOINTS = {
   ORDER_TAGS: {
     ASSIGN: (orderId: string) => `/orders/${orderId}/tags`,
   },
-  
+
   // Export Slips
   EXPORT_SLIPS: {
     LIST: '/export-slips',
@@ -215,7 +215,7 @@ export const API_ENDPOINTS = {
     // Export APIs
     EXPORT: (id: string, type: string) => `/warehouse-receipts/${id}/export?type=${type}`,
   },
-  
+
   // Payments
   PAYMENTS: {
     LIST: '/payments',
@@ -224,7 +224,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/payments/${id}`,
     DELETE: (id: string) => `/payments/${id}`,
   },
-  
+
   // Revenue
   REVENUE: {
     LIST: '/revenue',
@@ -236,21 +236,21 @@ export const API_ENDPOINTS = {
   REPORT: {
     REVENUE: '/report/revenue',
   },
-  
+
   // Notifications
   NOTIFICATIONS: {
     LIST: '/notifications',
     DETAIL: (id: string) => `/notifications/${id}`,
     MARK_ALL_READ: '/notifications/mark-all-read',
   },
-  
+
   // Documents
   DOCUMENTS: {
     UPLOAD: '/documents/upload',
     DOWNLOAD: (id: string) => `/documents/${id}/download`,
     DELETE: (id: string) => `/documents/${id}`,
   },
-  
+
   // Quotations
   QUOTATIONS: {
     LIST: '/quotations',

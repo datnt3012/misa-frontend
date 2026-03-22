@@ -23,7 +23,7 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
       const lastName = creatorInfo.lastName?.trim();
       const username = creatorInfo.username?.trim();
       const email = creatorInfo.email?.trim();
-      
+
       // Ưu tiên: firstname + lastname > username > email
       if (firstName || lastName) {
         return `${firstName || ''} ${lastName || ''}`.trim();
@@ -32,16 +32,16 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
       if (username) {
         return username;
       }
-      
+
       if (email) {
         return email;
       }
-      
+
       return null;
     };
 
     const displayName = getDisplayName();
-    
+
     if (!displayName) {
       return null;
     }
@@ -78,7 +78,7 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
     if (firstName || lastName) {
       return `${firstName || ''} ${lastName || ''}`.trim();
     }
-    
+
     if (fullName) {
       return fullName;
     }
@@ -86,16 +86,16 @@ const CreatorDisplay: React.FC<CreatorDisplayProps> = ({ createdBy, creatorInfo 
     if (username) {
       return username;
     }
-    
+
     if (email) {
       return email;
     }
-    
+
     return null; // Không hiển thị gì nếu tất cả đều rỗng
   };
 
   const displayName = getDisplayName();
-  
+
   // Không hiển thị gì nếu không có tên hoặc email
   if (!displayName) {
     return null;
