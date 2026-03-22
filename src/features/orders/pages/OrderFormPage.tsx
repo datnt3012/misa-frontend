@@ -108,7 +108,6 @@ const OrderFormPageContent: React.FC = () => {
           </div>
         </div>
       </div>
-
       {/* Navigation guard dialog */}
       <AlertDialog open={showLeaveDialog}>
         <AlertDialogContent>

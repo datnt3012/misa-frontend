@@ -94,7 +94,7 @@ export function DataTable<T extends { id: string }>({
                                     <TableHead
                                         key={String(col.key)}
                                         className={cn(
-                                            "h-10 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 whitespace-nowrap",
+                                            "h-10 px-3 text-xs text-left font-semibold uppercase tracking-wider text-muted-foreground/70 whitespace-nowrap",
                                             col.className
                                         )}
                                     >
@@ -117,7 +117,7 @@ export function DataTable<T extends { id: string }>({
                                 ))
                             ) : data?.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={columns.length + (onSelectedIdsChange ? 1 : 0)} className="text-center py-10 text-muted-foreground text-sm">
+                                    <TableCell colSpan={columns.length + (onSelectedIdsChange ? 1 : 0)} className="text-left py-10 text-muted-foreground text-sm">
                                         Không có dữ liệu
                                     </TableCell>
                                 </TableRow>
@@ -154,7 +154,7 @@ export function DataTable<T extends { id: string }>({
                                                         }
                                                     }}
                                                     className={cn(
-                                                        "px-3 py-2 text-sm text-foreground/80 whitespace-nowrap",
+                                                        "px-3 py-2 text-left text-sm text-foreground/80 whitespace-nowrap",
                                                         col.lengthLimit && "max-w-[250px] truncate",
                                                         col.className
                                                     )}
