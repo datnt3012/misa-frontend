@@ -13,7 +13,6 @@ import {
   User,
   LogOut,
   Users,
-  Building2,
   Edit,
   FileText
 } from "lucide-react";
@@ -71,8 +70,7 @@ const Layout = ({ children }: LayoutProps) => {
     { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
     { name: "Quản Lý Kho", href: "/inventory", icon: Package },
     { name: "Xuất Nhập Kho", href: "/export-import", icon: Package },
-    { name: "Khách Hàng", href: "/customers", icon: Users },
-    { name: "Nhà Cung Cấp", href: "/suppliers", icon: Building2 },
+    { name: "Quản Lý Liên Hệ", href: "/relations", icon: Users },
     { name: "Báo Cáo Doanh Thu", href: "/revenue", icon: TrendingUp },
     { name: "Cài Đặt", href: "/settings", icon: Settings },
   ];

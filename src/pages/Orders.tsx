@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { useDialogUrl } from "@/hooks/useDialogUrl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToastAction } from "@/components/ui/toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader, ShoppingCart, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
 import { categoriesApi } from "@/api/categories.api";
 import { usersApi } from "@/api/users.api";
+import { warehouseReceiptsApi } from "@/api/warehouseReceipts.api";
 import { MultiplePaymentDialog } from "@/components/MultiplePaymentDialog";
 import { paymentsApi } from "@/api/payments.api";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,13 +30,13 @@ import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { OrderSpecificExportSlipCreation } from "@/components/inventory/OrderSpecificExportSlipCreation";
+import { OrderSpecificSlipCreation } from "@/components/inventory/OrderSpecificSlipCreation";
 import { format, set } from "date-fns";
 import { cn } from "@/lib/utils";
 import CreatorDisplay from "@/components/orders/CreatorDisplay";
 import { Loading } from "@/components/ui/loading";
 import { getErrorMessage } from "@/lib/error-utils";
-import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
+import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_LABELS_VI } from "@/constants/order-status.constants";
 import apiClient from "@/lib/api";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { productApi } from "@/api/product.api";
@@ -148,10 +152,16 @@ const OrdersContent: React.FC = () => {
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [orderType, setOrderType] = useState<'sale' | 'purchase'>('sale');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showExportSlipDialog, setShowExportSlipDialog] = useState(false);
   const [selectedOrderForExport, setSelectedOrderForExport] = useState<any>(null);
+  // Payment warning dialog state
+  const [showPaymentWarningDialog, setShowPaymentWarningDialog] = useState(false);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{orderId: string, status: string} | null>(null);
+  const [selectedSlipType, setSelectedSlipType] = useState<string | undefined>(undefined);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
   const [manufacturers, setManufacturers] = useState<string[]>([]);
@@ -170,6 +180,9 @@ const OrdersContent: React.FC = () => {
   // Cache for total payments per order
   const [orderPaymentsCache, setOrderPaymentsCache] = useState<Record<string, number>>({});
   const [loadingPayments, setLoadingPayments] = useState<Set<string>>(new Set());
+  // Cache for linked slips (export/import slips) per order
+  const [orderHasLinkedSlipsCache, setOrderHasLinkedSlipsCache] = useState<Record<string, boolean>>({});
+  const [checkingLinkedSlips, setCheckingLinkedSlips] = useState<Set<string>>(new Set());
   // Bulk payment preview state - moved to MultiplePaymentDialog
   // Summary state from API
   const [summary, setSummary] = useState<{
@@ -189,6 +202,7 @@ const OrdersContent: React.FC = () => {
   const { hasPermission } = usePermissions();
   const { openDialog, closeDialog, getDialogState } = useDialogUrl('orders');
   const location = useLocation();
+  const navigate = useNavigate();
   // Ref to track if we're currently closing a dialog to prevent reopening
   const isClosingDialogRef = useRef(false);
   const loadOrderTagsCatalog = useCallback(async () => {
@@ -208,7 +222,7 @@ const OrdersContent: React.FC = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const params: any = { page: currentPage, limit: itemsPerPage };
+      const params: any = { page: currentPage, limit: itemsPerPage, includeAllocationStatus: true };
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter !== 'all') params.categories = categoryFilter;
       if (debouncedSearchTerm) params.search = debouncedSearchTerm;
@@ -222,15 +236,11 @@ const OrdersContent: React.FC = () => {
       if (manufacturerFilter !== 'all') params.manufacturers = manufacturerFilter;
       if (paymentMethodFilters !== 'all') params.paymentMethods = paymentMethodFilters;
       if (paymentMethodFilters === 'bank_transfer' && bankFilter !== 'all') params.bank = bankFilter;
+      if (orderType) params.type = orderType;
 
       const resp = await orderApi.getOrders(params);
       setOrders(resp.orders || []);
       setTotalOrders(resp.total || 0);
-      // Load payments for all orders to calculate accurate paid amounts
-      // if (resp.orders && resp.orders.length > 0) {
-      //   loadPaymentsForOrders(resp.orders.map(o => o.id));
-      // }
-      // Set summary from API if available
       if (resp.summary) {
         setSummary({
           totalAmount: resp.summary.totalAmount,
@@ -284,6 +294,7 @@ const OrdersContent: React.FC = () => {
     manufacturerFilter,
     paymentMethodFilters,
     bankFilter,
+    orderType,
     toast]);
     
   // Load payments for orders and cache total paid amounts
@@ -331,6 +342,60 @@ const OrdersContent: React.FC = () => {
       });
     }
   }, [orderPaymentsCache, loadingPayments]);
+
+  // Check if an order has linked export or import slips with valid status
+  // For export slips: status must be 'picked' or 'exported'
+  // For import slips: status must be 'approved'
+  const checkOrderHasLinkedSlips = useCallback(async (orderId: string) => {
+    // Return cached result if already checked
+    if (orderHasLinkedSlipsCache[orderId] !== undefined) {
+      return orderHasLinkedSlipsCache[orderId];
+    }
+    // Skip if already checking
+    if (checkingLinkedSlips.has(orderId)) {
+      return false;
+    }
+    // Mark as checking
+    setCheckingLinkedSlips(prev => {
+      const newSet = new Set(prev);
+      newSet.add(orderId);
+      return newSet;
+    });
+    try {
+      // Check for export slips with status 'picked' or 'exported'
+      const exportSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100, type: 'export,purchase_return_note' });
+      const validExportSlips = exportSlipsResponse?.receipts?.filter(
+        (slip: any) => slip.status === 'picked' || slip.status === 'exported'
+      ) || [];
+      const hasValidExportSlips = validExportSlips.length > 0;
+      
+      if (hasValidExportSlips) {
+        setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: true }));
+        return true;
+      }
+      
+      // Check for import slips (warehouse receipts) with status 'approved'
+      const importSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100 });
+      const validImportSlips = importSlipsResponse?.receipts?.filter(
+        (receipt: any) => receipt.status === 'approved'
+      ) || [];
+      const hasValidImportSlips = validImportSlips.length > 0;
+      
+      const hasLinked = hasValidExportSlips || hasValidImportSlips;
+      setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: hasLinked }));
+      return hasLinked;
+    } catch (error) {
+      // On error, assume no linked slips
+      setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: false }));
+      return false;
+    } finally {
+      setCheckingLinkedSlips(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  }, [orderHasLinkedSlipsCache, checkingLinkedSlips]);
 
   // Debounce search term
   useEffect(() => {
@@ -401,8 +466,9 @@ const OrdersContent: React.FC = () => {
   }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
 
   // Handle creating export slip
-  const handleCreateExportSlip = (order: any) => {
+  const handleCreateExportSlip = (order: any, slipType?: string) => {
     setSelectedOrderForExport(order);
+    setSelectedSlipType(slipType);
     setShowExportSlipDialog(true);
   };
 
@@ -511,6 +577,7 @@ const OrdersContent: React.FC = () => {
     manufacturerFilter,
     paymentMethodFilters,
     bankFilter,
+    orderType,
   ]);
 
   useEffect(() => {
@@ -533,6 +600,18 @@ const OrdersContent: React.FC = () => {
     fetchManufacturers();
     fetchBanks();
   }, []);
+
+  // Check for linked slips when orders are loaded
+  useEffect(() => {
+    if (!orders || orders.length === 0) return;
+    
+    // Check each order that hasn't been checked yet
+    orders.forEach(order => {
+      if (order.id && orderHasLinkedSlipsCache[order.id] === undefined && !checkingLinkedSlips.has(order.id)) {
+        checkOrderHasLinkedSlips(order.id);
+      }
+    });
+  }, [orders, orderHasLinkedSlipsCache, checkingLinkedSlips, checkOrderHasLinkedSlips]);
 
   const fetchManufacturers = async () => {
     try {
@@ -656,7 +735,25 @@ const OrdersContent: React.FC = () => {
         });
         return;
       }
-      // Use the new endpoint specifically for status updates
+      
+      // Check if trying to cancel an order with payments
+      if (newStatus === 'cancelled') {
+        const order = orders.find(o => o.id === orderId);
+        const paidAmount = orderPaymentsCache[orderId] || 
+          order?.paid_amount || 
+          order?.initial_payment || 
+          order?.total_paid_amount ||
+          0;
+        
+        if (paidAmount > 0) {
+          // Show warning dialog
+          setPendingStatusUpdate({ orderId, status: newStatus });
+          setShowPaymentWarningDialog(true);
+          return;
+        }
+      }
+      
+      // Proceed with status update
       const response = await orderApi.updateOrderStatus(orderId, newStatus);
       // Update local state
       setOrders(prev => prev.map(order => 
@@ -666,12 +763,67 @@ const OrdersContent: React.FC = () => {
         title: "Thành công",
         description: "Đã cập nhật trạng thái đơn hàng",
       });
-    } catch (error) {
-      toast({
+    } catch (error: any) {
+      // Extract error details if available
+      const errorDetails = error.response?.data?.details;
+      const warehouseReceipts = errorDetails?.warehouseReceipts || {};
+      const exportCodes = warehouseReceipts?.export || [];
+      const returnCodes = warehouseReceipts?.sale_return_note || [];
+      const orderType = errorDetails?.orderType || 'sale';
+      
+      // Create navigation actions for export and return slips - open in new tab
+      let toastAction: React.ReactNode = undefined;
+      
+      // For export slips (DO) - navigate to exports tab in new window
+      const exportSearchQuery = exportCodes.join(',');
+      const exportAction = exportCodes.length > 0 ? (
+        <ToastAction 
+          altText="Xem phiếu xuất" 
+          onClick={() => window.open(`/export-import?tab=exports&search=${encodeURIComponent(exportSearchQuery)}`, '_blank')}
+        >
+          Phiếu xuất ({exportCodes.length})
+        </ToastAction>
+      ) : null;
+      
+      // For return slips (SRN) - navigate to imports tab in new window
+      const returnSearchQuery = returnCodes.join(',');
+      const returnAction = returnCodes.length > 0 ? (
+        <ToastAction 
+          altText="Xem phiếu hoàn" 
+          onClick={() => window.open(`/export-import?tab=imports&search=${encodeURIComponent(returnSearchQuery)}`, '_blank')}
+        >
+          Phiếu hoàn ({returnCodes.length})
+        </ToastAction>
+      ) : null;
+      
+      // Combine actions if both exist - wrap in flex container for side by side
+      if (exportAction && returnAction) {
+        toastAction = (
+          <div className="flex flex-row gap-2 w-full">
+            {exportAction}
+            {returnAction}
+          </div>
+        );
+      } else if (exportAction) {
+        toastAction = exportAction;
+      } else if (returnAction) {
+        toastAction = returnAction;
+      }
+      
+      // Use stacked layout when there are actions
+      const toastOptions: any = {
         title: "Lỗi",
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
-      });
+        action: toastAction,
+      };
+      
+      // Add layout="stacked" if there are actions
+      if (toastAction) {
+        (toastOptions as any).layout = "stacked";
+      }
+      
+      toast(toastOptions);
     }
   };
 
@@ -705,7 +857,6 @@ const OrdersContent: React.FC = () => {
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-      // Get filename from Content-Disposition header, or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = `delivery_note_${order.order_number}.pdf`;
       const parsedFilename = getFilenameFromContentDisposition(contentDisposition);
@@ -844,10 +995,10 @@ const OrdersContent: React.FC = () => {
       <ChevronUp className="w-4 h-4" /> : 
       <ChevronDown className="w-4 h-4" />;
   };
-  const getStatusBadge = (status: string) => {
-    const config = getOrderStatusConfig(status);
+  const getStatusBadge = (status: string, isPurchaseOrder: boolean = false) => {
+    const config = getOrderStatusConfig(status, isPurchaseOrder);
     // Thu nhỏ chữ cho status "delivery_failed" vì label quá dài
-    const isLongLabel = status === 'delivery_failed' || status === 'Giao hàng thất bại';
+    const isLongLabel = status === 'delivery_failed' || status === 'Giao hàng thất bại' || status === 'partially_imported' || status === 'Đã nhập kho một phần';
     const className = cn(
       config.className,
       isLongLabel ? 'text-[10px] px-1.5 py-0.5' : ''
@@ -895,8 +1046,98 @@ const OrdersContent: React.FC = () => {
   // Show loading if loading
   // Don't return early - show inline loading to preserve input focus
   const isInitialLoading = loading && orders.length === 0;
+  
+  // Handle confirmed payment warning - proceed with status update
+  const handleConfirmedStatusUpdate = async () => {
+    if (pendingStatusUpdate) {
+      setShowPaymentWarningDialog(false);
+      try {
+        const { orderId, status } = pendingStatusUpdate;
+        const response = await orderApi.updateOrderStatus(orderId, status);
+        setOrders(prev => prev.map(order => 
+          order.id === orderId ? { ...order, status: status } : order
+        ));
+        toast({
+          title: "Thành công",
+          description: "Đã cập nhật trạng thái đơn hàng",
+        });
+      } catch (error: any) {
+        // Handle error - same as in handleUpdateOrderStatus
+        const errorDetails = error.response?.data?.details;
+        const warehouseReceipts = errorDetails?.warehouseReceipts || {};
+        const exportCodes = warehouseReceipts?.export || [];
+        const returnCodes = warehouseReceipts?.sale_return_note || [];
+        
+        let toastAction: React.ReactNode = undefined;
+        const exportSearchQuery = exportCodes.join(',');
+        const exportAction = exportCodes.length > 0 ? (
+          <ToastAction 
+            altText="Xem phiếu xuất" 
+            onClick={() => window.open(`/export-import?tab=exports&search=${encodeURIComponent(exportSearchQuery)}`, '_blank')}
+          >
+            Phiếu xuất ({exportCodes.length})
+          </ToastAction>
+        ) : null;
+        
+        const returnSearchQuery = returnCodes.join(',');
+        const returnAction = returnCodes.length > 0 ? (
+          <ToastAction 
+            altText="Xem phiếu hoàn" 
+            onClick={() => window.open(`/export-import?tab=imports&search=${encodeURIComponent(returnSearchQuery)}`, '_blank')}
+          >
+            Phiếu hoàn ({returnCodes.length})
+          </ToastAction>
+        ) : null;
+        
+        if (exportAction && returnAction) {
+          toastAction = (
+            <div className="flex flex-row gap-2 w-full">
+              {exportAction}
+              {returnAction}
+            </div>
+          );
+        } else if (exportAction) {
+          toastAction = exportAction;
+        } else if (returnAction) {
+          toastAction = returnAction;
+        }
+        
+        const toastOptions: any = {
+          title: "Lỗi",
+          description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
+          variant: "destructive",
+          action: toastAction,
+        };
+        
+        if (toastAction) {
+          (toastOptions as any).layout = "stacked";
+        }
+        
+        toast(toastOptions);
+      } finally {
+        setPendingStatusUpdate(null);
+      }
+    }
+  };
+  
   return (
     <div className="min-h-screen bg-background p-6 sm:p-6 md:p-7">
+      {/* Payment Warning Dialog */}
+      <AlertDialog open={showPaymentWarningDialog} onOpenChange={setShowPaymentWarningDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cảnh báo thanh toán</AlertDialogTitle>
+            <AlertDialogDescription>
+              Đơn hàng này đã có thanh toán liên kết. Nếu hủy đơn, bạn cần hoàn tiền cho khách hàng. Bạn có chắc chắn muốn hủy đơn hàng không?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingStatusUpdate(null)}>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedStatusUpdate}>Tiếp tục hủy</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="w-full mx-auto space-y-3 sm:space-y-4">
       {/* Filters */}
       <Card>
@@ -917,9 +1158,10 @@ const OrdersContent: React.FC = () => {
             {/* Status Filter */}
             <MultiSelect
               className="w-60"
-              options={ORDER_STATUSES.map((status) => (
-                { value: status, label: ORDER_STATUS_LABELS_VI[status] }
-              ))}
+              options={(orderType === 'purchase' ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((status) => ({
+                value: status,
+                label: orderType === 'purchase' ? PURCHASE_ORDER_STATUS_LABELS_VI[status as keyof typeof PURCHASE_ORDER_STATUS_LABELS_VI] : ORDER_STATUS_LABELS_VI[status as keyof typeof ORDER_STATUS_LABELS_VI]
+              }))}
               value={statusFilter}
               onValueChange={setStatusFilter}
               placeholder="Tất cả trạng thái"
@@ -1141,11 +1383,11 @@ const OrdersContent: React.FC = () => {
             </div>
             <div>
               <div className="text-2xl font-bold text-green-600">{formatCurrency(totals.paidAmount)}</div>
-              <div className="text-sm text-muted-foreground">Đã trả</div>
+              <div className="text-sm text-muted-foreground">{orderType === 'sale' ? 'Đã trả' : 'Đã chi'}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-red-600">{formatCurrency(totals.debtAmount)}</div>
-              <div className="text-sm text-muted-foreground">Còn nợ</div>
+              <div className="text-sm text-muted-foreground">{orderType === 'sale' ? 'Còn nợ' : 'Còn phải trả'}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-orange-600">{formatCurrency(totals.totalExpenses)}</div>
@@ -1154,6 +1396,19 @@ const OrdersContent: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      {/* Order Type Tabs */}
+      <Tabs value={orderType} onValueChange={(value) => setOrderType(value as 'sale' | 'purchase')} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="sale" className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            Bán hàng
+          </TabsTrigger>
+          <TabsTrigger value="purchase" className="flex items-center gap-2">
+            <ShoppingBag className="w-4 h-4" />
+            Mua hàng
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
       {/* Action Bar */}
       {selectedOrders.length > 0 && (
         <Card className="shadow-sm border bg-blue-50">
@@ -1227,7 +1482,7 @@ const OrdersContent: React.FC = () => {
                     onClick={() => handleSort("customer_name")}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      Khách hàng
+                      {orderType === 'purchase' ? 'Nhà cung cấp': 'Khách hàng'}
                       {getSortIcon("customer_name")}
                     </div>
                   </TableHead>
@@ -1348,7 +1603,7 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="p-0 border-r border-slate-200 text-center">
                             <div className="divide-y divide-slate-100">
                               {order.items?.map((item: any, index: number) => (
-                                <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
+                                <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex flex-col items-center justify-center gap-1">
                                   <div className="font-medium text-slate-900 truncate w-full" title={item.product_name || 'N/A'}>{item.product_name || 'N/A'}</div>
                                 </div>
                               ))}
@@ -1373,11 +1628,13 @@ const OrdersContent: React.FC = () => {
                            {/* Price Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                               <div className="divide-y divide-slate-100">
-                                {order.items?.map((item: any, index: number) => (
-                                  <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
-                                    <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
+                                {order.items?.map((item: any, index: number) => {
+                                 return (
+                                   <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] text-center flex items-center justify-center">
+                                     <div className="font-medium text-slate-900">{formatVndNoSymbol(item.unit_price)}</div>
                                   </div>
-                                ))}
+                                );
+                              })}
                                 {(!order.items || order.items.length === 0) && (
                                   <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                                 )}
@@ -1386,11 +1643,19 @@ const OrdersContent: React.FC = () => {
                            {/* Quantity Column */}
                            <TableCell className="p-0 border-r border-slate-200 text-center">
                              <div className="divide-y divide-slate-100">
-                               {order.items?.map((item: any, index: number) => (
-                                 <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
-                                   <div className="font-medium text-slate-900">{item.quantity || 0}</div>
-                                 </div>
-                               ))}
+                               {order.items?.map((item: any, index: number) => {
+                                 const allocation = order.allocationStatus?.allocations?.find((a: any) => a.productId === item.product_id);
+                                 return (
+                                   <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex flex-col items-center justify-center gap-1">
+                                     <div className="font-medium text-slate-900">{item.quantity || 0}</div>
+                                     {allocation?.returnedQuantity > 0 && (
+                                       <div className="text-xs text-red-500 whitespace-nowrap">
+                                         - {allocation.returnedQuantity}
+                                       </div>
+                                     )}
+                                   </div>
+                                 );
+                               })}
                                {(!order.items || order.items.length === 0) && (
                                  <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>
                                )}
@@ -1434,6 +1699,11 @@ const OrdersContent: React.FC = () => {
                                  (order as any).totalAmount ?? order.total_amount ?? 0
                                )}
                              </div>
+                             {(order.allocationStatus?.totals?.returnedValue > 0) && (
+                               <div className="text-xs text-red-500">
+                                 - {formatVndNoSymbol(order.allocationStatus?.totals?.returnedValue || 0)}
+                               </div>
+                             )}
                            </TableCell>
                            {/* Vat Price Column - use backend aggregated vatPercentage * totalVat */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
@@ -1442,6 +1712,11 @@ const OrdersContent: React.FC = () => {
                                  (order as any).totalVat ?? order.total_vat ?? 0
                                )}
                              </div>
+                            {(order.allocationStatus?.totals?.deductionVat > 0) && (
+                              <div className="text-xs text-red-500">
+                                - {formatVndNoSymbol(order.allocationStatus?.totals?.deductionVat || 0)}
+                              </div>
+                            )}
                            </TableCell>
                            {/* Total VAT Price Column - use backend aggregated vatTotalAmount*/}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
@@ -1451,6 +1726,11 @@ const OrdersContent: React.FC = () => {
                                  (order as any).totalVatAmount ?? order.total_vat_amount ?? 0
                                )}
                              </div>
+                            {(order.allocationStatus?.totals?.deductionAmount > 0) && (
+                              <div className="text-xs text-red-500">
+                                - {formatVndNoSymbol(order.allocationStatus?.totals?.deductionAmount || 0)}
+                              </div>
+                            )}
                            </TableCell>
                            {/* Payment Column - use backend totalPaidAmount / remainingDebt */}
                            <TableCell className="py-3 border-r border-slate-200 text-center">
@@ -1479,10 +1759,11 @@ const OrdersContent: React.FC = () => {
                                       order.paid_amount ??
                                       order.initial_payment ??
                                       0;
+                                    const returnedAmount = order.allocationStatus?.totals?.deductionAmount ?? 0;
                                     const debtAmount =
                                       (order as any).remainingDebt ??
                                       order.remainingDebt ??
-                                      Math.max(0, totalAmount - paidAmount);
+                                      Math.max(0, totalAmount - paidAmount - returnedAmount);
                                     return formatVndNoSymbol(debtAmount);
                                   })()}
                                 </div>
@@ -1519,28 +1800,28 @@ const OrdersContent: React.FC = () => {
                           <TableCell className="py-3 border-r border-slate-200 text-center">
                             {(() => {
                               const completedAt = order.completed_at || order.updated_at;
-                              const showCompleted = ['delivered','completed'].includes(order.status);
+                              const showCompleted = ['delivered','completed'].includes(order.status?.code);
                               return showCompleted && completedAt
                                 ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm')
                                 : '-';
                             })()}
                           </TableCell>
                           {/* Status Column */}
-                          <TableCell className="py-4 border-r border-slate-200 min-w-[88px] sm:min-w-[104px]">
+                          <TableCell className="py-4 border-r border-slate-200 min-w-[120px] sm:min-w-[140px]">
                             <Select
-                              value={order.status || 'pending'}
+                              value={typeof order.status === 'object' ? order.status?.code : order.status || 'pending'}
                               onValueChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
                               disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
                             >
-                              <SelectTrigger className="min-w-[88px] sm:min-w-[104px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
-                                <div className="cursor-pointer inline-flex whitespace-nowrap truncate max-w-[88px] sm:max-w-[104px] text-xs sm:text-sm">
-                                  {getStatusBadge(order.status)}
+                              <SelectTrigger className="min-w-[120px] sm:min-w-[140px] h-auto p-0 border-none bg-transparent hover:bg-transparent focus:bg-transparent justify-center">
+                                <div className="cursor-pointer inline-flex whitespace-nowrap text-xs sm:text-sm">
+                                  {getStatusBadge(typeof order.status === 'object' ? order.status?.code : order.status, order.type === 'purchase')}
                                 </div>
                               </SelectTrigger>
                               <SelectContent className="min-w-[128px] sm:min-w-[144px]">
-                                {ORDER_STATUSES.map((status) => (
+                                {(order.type === 'purchase' ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((status) => (
                                   <SelectItem key={status} value={status}>
-                                    {ORDER_STATUS_LABELS_VI[status]}
+                                    {order.type === 'purchase' ? PURCHASE_ORDER_STATUS_LABELS_VI[status as keyof typeof PURCHASE_ORDER_STATUS_LABELS_VI] : ORDER_STATUS_LABELS_VI[status as keyof typeof ORDER_STATUS_LABELS_VI]}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1606,15 +1887,24 @@ const OrdersContent: React.FC = () => {
                                  className="cursor-pointer hover:bg-muted"
                                >
                                  <Download className="w-4 h-4 mr-2" />
-                                 Xuất biên bản giao hàng
+                                 {order.type === 'purchase' ? 'Xuất biên bản mua hàng' : 'Xuất biên bản giao hàng'}
                                </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  onClick={() => handleCreateExportSlip(order)}
+                                  onClick={() => handleCreateExportSlip(order, order.type === 'purchase' ? 'import' : 'export')}
                                   className="cursor-pointer hover:bg-muted"
                                 >
                                   <Package className="w-4 h-4 mr-2" />
-                                  Tạo phiếu xuất kho
+                                  {order.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
                                 </DropdownMenuItem>
+                                {(orderHasLinkedSlipsCache[order.id] !== false) && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleCreateExportSlip(order, order.type === 'purchase' ? 'purchase_return' : 'sale_return')}
+                                  className="cursor-pointer hover:bg-muted"
+                                >
+                                  <RotateCw className="w-4 h-4 mr-2" />
+                                  {order.type === 'purchase' ? 'Tạo phiếu trả hàng NCC' : 'Tạo phiếu hoàn hàng'}
+                                </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setOrderToDelete(order);
@@ -1845,25 +2135,53 @@ const OrdersContent: React.FC = () => {
       <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tạo phiếu xuất kho</DialogTitle>
+            <DialogTitle>{
+              selectedOrderForExport ? (
+                selectedSlipType === 'import' ? 'Tạo phiếu nhập kho' :
+                selectedSlipType === 'export' ? 'Tạo phiếu xuất kho' :
+                selectedSlipType === 'sale_return' ? 'Tạo phiếu hoàn hàng' :
+                selectedSlipType === 'purchase_return' ? 'Tạo phiếu trả hàng NCC' :
+                (selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho')
+              ) : 'Tạo phiếu'
+            }</DialogTitle>
             <DialogDescription>
               {selectedOrderForExport ? (
-                <>Tạo phiếu xuất kho cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong></>
+                <>
+                  {selectedSlipType === 'import' ? 'Tạo phiếu nhập kho' :
+                   selectedSlipType === 'export' ? 'Tạo phiếu xuất kho' :
+                   selectedSlipType === 'sale_return' ? 'Tạo phiếu hoàn hàng' :
+                   selectedSlipType === 'purchase_return' ? 'Tạo phiếu trả hàng NCC' :
+                   (selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho')
+                  } cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong>
+                </>
               ) : (
-                'Chọn đơn hàng để tạo phiếu xuất kho'
+                'Chọn đơn hàng để tạo phiếu'
               )}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             {selectedOrderForExport && (
-              <OrderSpecificExportSlipCreation 
+              <OrderSpecificSlipCreation 
                 orderId={selectedOrderForExport.id}
+                orderType={selectedOrderForExport.type}
+                slipType={selectedSlipType}
                 onExportSlipCreated={() => {
                   setShowExportSlipDialog(false);
+                  const orderNumber = selectedOrderForExport.order_number;
+                  // Determine slip type label
+                  const getSlipTypeLabel = (type?: string) => {
+                    if (type === 'import') return 'phiếu nhập kho';
+                    if (type === 'export') return 'phiếu xuất kho';
+                    if (type === 'sale_return') return 'phiếu hoàn hàng';
+                    if (type === 'purchase_return') return 'phiếu trả hàng NCC';
+                    return selectedOrderForExport.type === 'purchase' ? 'phiếu nhập kho' : 'phiếu xuất kho';
+                  };
+                  const slipTypeLabel = getSlipTypeLabel(selectedSlipType);
                   setSelectedOrderForExport(null);
+                  setSelectedSlipType(undefined);
                   toast({
                     title: "Thành công",
-                    description: `Đã tạo phiếu xuất kho cho đơn hàng ${selectedOrderForExport.order_number}`,
+                    description: `Đã tạo ${slipTypeLabel} cho đơn hàng ${orderNumber}`,
                   });
                   // Backend cập nhật trạng thái đơn hàng sau khi tạo phiếu xuất kho,
                   // cần refetch danh sách để hiển thị đúng trạng thái mới

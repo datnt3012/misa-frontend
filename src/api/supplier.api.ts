@@ -88,12 +88,12 @@ export const supplierApi = {
   getSuppliers: async (params?: {
     page?: number;
     limit?: number;
-    search?: string;
+    keyword?: string;
   }): Promise<{ suppliers: Supplier[]; total: number; page: number; limit: number }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.search) queryParams.append('search', params.search);
+    if (params?.keyword) queryParams.append('keyword', params.keyword);
 
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.SUPPLIERS.LIST}?${queryParams.toString()}`

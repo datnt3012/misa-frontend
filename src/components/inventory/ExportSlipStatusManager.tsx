@@ -10,9 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Package, CheckCircle, Clock, Truck, AlertTriangle, Info, XCircle } from "lucide-react";
-import { exportSlipsApi, type ExportSlip } from "@/api/exportSlips.api";
+import { warehouseReceiptsApi, type WarehouseReceipt } from "@/api/warehouseReceipts.api";
 interface ExportSlipStatusManagerProps {
-  exportSlip: ExportSlip;
+  exportSlip: WarehouseReceipt;
   onStatusUpdated?: () => void;
 }
 interface StatusTransition {
@@ -125,24 +125,20 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
       let result;
       switch (selectedTransition.to) {
         case 'picked':
-          result = await exportSlipsApi.markAsPicked(exportSlip.id, transitionNotes);
+          result = await warehouseReceiptsApi.updateReceipt(exportSlip.id, { status: 'picked', description: transitionNotes });
           break;
         case 'exported':
-          if (selectedTransition.from === 'pending') {
-            result = await exportSlipsApi.directExport(exportSlip.id, transitionNotes);
-          } else {
-            result = await exportSlipsApi.markAsExported(exportSlip.id, transitionNotes);
-          }
+          result = await warehouseReceiptsApi.updateReceipt(exportSlip.id, { status: 'exported', description: transitionNotes });
           break;
         case 'cancelled':
-          result = await exportSlipsApi.markAsCancelled(exportSlip.id, transitionNotes);
+          result = await warehouseReceiptsApi.updateReceipt(exportSlip.id, { status: 'cancelled', description: transitionNotes });
           break;
         default:
           throw new Error('Invalid transition');
       }
       toast({
         title: "Thành công",
-        description: result.message || `Đã chuyển trạng thái sang "${selectedTransition.action}"`,
+        description: `Đã chuyển trạng thái sang "${selectedTransition.action}"`,
       });
       setTransitionDialog(false);
       setSelectedTransition(null);
@@ -355,4 +351,4 @@ export const ExportSlipStatusManager: React.FC<ExportSlipStatusManagerProps> = (
       </Dialog>
     </>
   );
-};
+};

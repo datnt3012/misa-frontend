@@ -1140,7 +1140,7 @@ function RevenueContent() {
                           {format(new Date(order.created_at), 'dd/MM/yyyy HH:mm', { locale: vi })}
                         </TableCell>
                         <TableCell className="text-center">
-                          {getStatusBadge(order.status)}
+                          {getStatusBadge(typeof order.status === 'object' ? order.status?.code : order.status)}
                         </TableCell>
                         <TableCell className="text-center">
                           {getPaymentMethodLabel(order.payment_method)}
@@ -1148,7 +1148,8 @@ function RevenueContent() {
                         <TableCell className="text-center">
                           {(() => {
                             const completedAt = order.completed_at || order.updated_at;
-                            const showCompleted = ['delivered','completed'].includes(order.status);
+                            const statusCode = typeof order.status === 'object' ? order.status?.code : order.status;
+                            const showCompleted = ['delivered','completed'].includes(statusCode);
                             return showCompleted && completedAt
                               ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm', { locale: vi })
                               : '-';

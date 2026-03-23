@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingDown, TrendingUp, History } from "lucide-react";
+import { TrendingDown, TrendingUp, History, ArrowRight } from "lucide-react";
 import ExportSlips from "@/pages/ExportSlips";
-import ImportSlips from "@/components/inventory/ImportSlips";
+import ImportSlips from "@/pages/ImportSlips";
+import MovingSlips from "@/components/inventory/MovingSlips";
 import InventoryHistory from "@/components/inventory/InventoryHistory";
 import { useToast } from "@/hooks/use-toast";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -15,7 +16,7 @@ const ExportImportContent = () => {
   // Initialize tab from URL or default to 'exports'
   const getTabFromUrl = () => {
     const tab = searchParams.get('tab');
-    return tab && ['exports', 'imports', 'history'].includes(tab) ? tab : 'exports';
+    return tab && ['exports', 'imports', 'moving', 'history'].includes(tab) ? tab : 'exports';
   };
   
   const [activeTab, setActiveTab] = useState(() => getTabFromUrl());
@@ -26,6 +27,8 @@ const ExportImportContent = () => {
     setActiveTab(value);
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.set('tab', value);
+    // Clear search parameter when switching tabs to avoid old search terms affecting data
+    newSearchParams.delete('search');
     setSearchParams(newSearchParams, { replace: true });
   };
 
@@ -48,7 +51,7 @@ const ExportImportContent = () => {
       <div className="max-w-full mx-auto space-y-4">
         {/* Tabs for different sections */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="exports" className="flex items-center gap-2">
               <TrendingDown className="w-4 h-4" />
               Xuất kho
@@ -57,25 +60,37 @@ const ExportImportContent = () => {
               <TrendingUp className="w-4 h-4" />
               Nhập kho
             </TabsTrigger>
+            <TabsTrigger value="moving" className="flex items-center gap-2">
+              <ArrowRight className="w-4 h-4" />
+              Chuyển kho
+            </TabsTrigger>
             <TabsTrigger value="history" className="flex items-center gap-2">
               <History className="w-4 h-4" />
-              Lịch sử xuất nhập kho
+              Lịch sử
             </TabsTrigger>
           </TabsList>
 
           {/* Export Management Tab */}
           <TabsContent value="exports" className="space-y-6">
             <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
-              <ExportSlips />
+              <ExportSlips key="exports" />
             </PermissionGuard>
           </TabsContent>
 
           {/* Import Management Tab */}
           <TabsContent value="imports" className="space-y-6">
             <ImportSlips
+              key="imports"
               canManageImports={canManageImports}
               canApproveImports={canApproveImports}
             />
+          </TabsContent>
+
+          {/* Moving Management Tab */}
+          <TabsContent value="moving" className="space-y-6">
+            <PermissionGuard requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}>
+              <MovingSlips key="moving" />
+            </PermissionGuard>
           </TabsContent>
 
           {/* History Tab */}
@@ -84,7 +99,7 @@ const ExportImportContent = () => {
               requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}
               requireAll={false}
             >
-              <InventoryHistory />
+              <InventoryHistory key="history" />
             </PermissionGuard>
           </TabsContent>
         </Tabs>
