@@ -395,6 +395,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       onFiltersChange={onPaginationChange}
       selectedIds={selectedIds}
       onSelectedIdsChange={onSelectedIdsChange}
+      onRowClick={(order) => dialogActions.openView(order)}
     />
   );
 };

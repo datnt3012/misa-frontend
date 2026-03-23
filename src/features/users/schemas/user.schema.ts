@@ -1,8 +1,8 @@
 import * as yup from 'yup';
 
 export const UserRoleSchema = yup.object({
-    id: yup.string().required('ID không được để trống').defined(),
-    name: yup.string().required('Tên vai trò không được để trống').defined(),
+    id: yup.string().required('ID không được để trống'),
+    name: yup.string().required('Tên vai trò không được để trống'),
     description: yup.string().optional(),
     nameTranslated: yup.string().optional(),
     descriptionTranslated: yup.string().optional(),
@@ -10,20 +10,20 @@ export const UserRoleSchema = yup.object({
 });
 
 export const UserSchema = yup.object({
-    id: yup.string().required('ID không được để trống').defined(),
+    id: yup.string().required('ID không được để trống'),
     email: yup.string().email('Email không hợp lệ').optional(),
-    username: yup.string().required('Tên đăng nhập không được để trống').defined(),
+    username: yup.string().required('Tên đăng nhập không được để trống'),
     firstName: yup.string().optional(),
     lastName: yup.string().optional(),
     phoneNumber: yup.string().optional(),
     address: yup.string().optional(),
     avatarUrl: yup.string().optional(),
-    isActive: yup.boolean().required('Trạng thái không được để trống').defined(),
-    isDeleted: yup.boolean().required().defined(),
-    roleId: yup.string().required('Vai trò không được để trống').defined(),
+    isActive: yup.boolean().required('Trạng thái không được để trống'),
+    isDeleted: yup.boolean().required(),
+    roleId: yup.string().required('Vai trò không được để trống'),
     role: UserRoleSchema.optional(),
-    createdAt: yup.string().required().defined(),
-    updatedAt: yup.string().required().defined(),
+    createdAt: yup.string().required(),
+    updatedAt: yup.string().required(),
     deletedAt: yup.string().optional(),
 });
 
@@ -56,8 +56,8 @@ export const EmailPreferencesSchema = yup.object({
     receive_payment_updates: yup.boolean().required(),
 });
 
-export type UserRole = yup.InferType<typeof UserRoleSchema>;
-export type User = yup.InferType<typeof UserSchema>;
+export type UserRoleSchemaType = yup.InferType<typeof UserRoleSchema>;
+export type UserSchemaType = yup.InferType<typeof UserSchema>;
 export type CreateUserRequest = yup.InferType<typeof CreateUserSchema>;
 export type UpdateUserRequest = yup.InferType<typeof UpdateUserSchema>;
 export type EmailPreferences = yup.InferType<typeof EmailPreferencesSchema>;

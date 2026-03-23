@@ -6,6 +6,8 @@ import {
     UpdateOrderSchemaType,
     OrderSchemaType
 } from "../schemas";
+import { BackendResponse } from "@/shared/schemas";
+import { PaymentSchemaType } from "@/features/payments/schemas";
 
 export const ORDER_API = {
     // Get all orders
@@ -18,7 +20,7 @@ export const ORDER_API = {
 
     // Get order by ID
     GET_ORDER_BY_ID: (id: string, signal?: AbortSignal) => {
-        return request<OrderSchemaType>('get', API.ORDERS.BY_ID(id), {
+        return request<BackendResponse<OrderSchemaType>>('get', API.ORDERS.BY_ID(id), {
             signal
         }).then((res) => res.data);
     },
@@ -63,14 +65,14 @@ export const ORDER_API = {
 
     // Get status options for orders
     GET_STATUS_OPTIONS: (signal?: AbortSignal) => {
-        return request('get', API.ORDERS.STATUS_OPTIONS, {
+        return request<BackendResponse<any[]>>('get', API.ORDERS.STATUS_OPTIONS, {
             signal
         }).then((res) => res.data);
     },
 
     // Get payments for a specific order
     GET_PAYMENTS: (id: string, signal?: AbortSignal) => {
-        return request('get', API.ORDERS.PAYMENTS(id), {
+        return request<BackendResponse<{ payments: PaymentSchemaType[], totalPaid: number }>>('get', API.ORDERS.PAYMENTS(id), {
             signal
         }).then((res) => res.data);
     },
