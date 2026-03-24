@@ -65,6 +65,17 @@ interface MovingSlip {
   total_amount?: number;
 }
 
+// Helper to check if export slip is in exported status
+const isExportSlipExported = (groupSlips: MovingSlip[]): boolean => {
+  const exportSlip = groupSlips.find(s => s.type === 'stock_transfer_out');
+  return exportSlip?.status === 'exported';
+};
+
+// Get export slip from group
+const getExportSlip = (groupSlips: MovingSlip[]): MovingSlip | undefined => {
+  return groupSlips.find(s => s.type === 'stock_transfer_out');
+};
+
 const MovingSlips: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -121,6 +132,10 @@ const MovingSlips: React.FC = () => {
     destination_warehouse_id: undefined as string | undefined,
     notes: ''
   });
+
+  // State for export slip warning dialog
+  const [showExportWarning, setShowExportWarning] = useState(false);
+  const [pendingSlip, setPendingSlip] = useState<{ slip: MovingSlip; action: 'view' | 'approve' } | null>(null);
 
   // Load warehouses and products
   useEffect(() => {
@@ -451,6 +466,69 @@ const MovingSlips: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Check if export slip is exported before viewing/approving import slip
+  const checkExportSlipStatus = (slip: MovingSlip): boolean => {
+    // Only check for import slip (stock_transfer_in)
+    if (slip.type !== 'stock_transfer_in') return true;
+    
+    // Find the group this slip belongs to
+    const group = groupedSlips.find(g => g.slips.some(s => s.id === slip.id));
+    if (!group) return true;
+    
+    // Check if export slip is in exported status
+    return isExportSlipExported(group.slips);
+  };
+
+  // Handle viewing slip with export status check
+  const handleViewSlipWithCheck = async (slip: MovingSlip) => {
+    // For import slip, check if export slip is exported
+    if (slip.type === 'stock_transfer_in') {
+      const group = groupedSlips.find(g => g.slips.some(s => s.id === slip.id));
+      if (group) {
+        const exportSlip = getExportSlip(group.slips);
+        if (exportSlip && exportSlip.status !== 'exported') {
+          setPendingSlip({ slip, action: 'view' });
+          setShowExportWarning(true);
+          return;
+        }
+      }
+    }
+    // Proceed with normal view
+    await handleViewSlip(slip);
+  };
+
+  // Handle approving slip with export status check
+  const handleApproveSlipWithCheck = async (slip: MovingSlip) => {
+    // For import slip, check if export slip is exported
+    if (slip.type === 'stock_transfer_in') {
+      const group = groupedSlips.find(g => g.slips.some(s => s.id === slip.id));
+      if (group) {
+        const exportSlip = getExportSlip(group.slips);
+        if (exportSlip && exportSlip.status !== 'exported') {
+          setPendingSlip({ slip, action: 'approve' });
+          setShowExportWarning(true);
+          return;
+        }
+      }
+    }
+    // Proceed with normal approval
+    await handleApproveSlip(slip);
+  };
+
+  // Proceed after warning confirmed
+  const handleProceedAfterWarning = async () => {
+    if (!pendingSlip) return;
+    
+    if (pendingSlip.action === 'view') {
+      await handleViewSlip(pendingSlip.slip);
+    } else if (pendingSlip.action === 'approve') {
+      await handleApproveSlip(pendingSlip.slip);
+    }
+    
+    setShowExportWarning(false);
+    setPendingSlip(null);
   };
 
   // View slip details
@@ -835,7 +913,7 @@ const MovingSlips: React.FC = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleViewSlip(slip)}
+                              onClick={() => handleViewSlipWithCheck(slip)}
                               className="h-8 px-2 text-xs whitespace-nowrap"
                             >
                               <Package className="w-3 h-3 mr-1" />
@@ -875,7 +953,7 @@ const MovingSlips: React.FC = () => {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleApproveSlip(slip)}
+                                  onClick={() => handleApproveSlipWithCheck(slip)}
                                   className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
                                 >
                                   <CheckCircle className="w-3 h-3 mr-1" />
@@ -1065,7 +1143,7 @@ const MovingSlips: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleApproveSlip(selectedSlip)}
+                      onClick={() => handleApproveSlipWithCheck(selectedSlip)}
                       disabled={submitting}
                       className="text-green-600"
                     >
@@ -1077,6 +1155,51 @@ const MovingSlips: React.FC = () => {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Slip Warning Dialog */}
+      <Dialog open={showExportWarning} onOpenChange={(open) => {
+        if (!open) {
+          setShowExportWarning(false);
+          setPendingSlip(null);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-yellow-600">
+              <AlertCircle className="w-5 h-5" />
+              Cảnh báo
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Phiếu chuyển xuất tương ứng chưa được xuất kho.
+              {pendingSlip && (
+                <div className="mt-2 flex items-center gap-2">
+                  Trạng thái phiếu xuất: {getStatusBadge(getExportSlip(groupedSlips.find(g => g.slips.some(s => s.id === pendingSlip.slip.id))?.slips || [])?.status || '')}
+                </div>
+              )}
+              <div className="mt-2">
+                Bạn có muốn tiếp tục không?
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowExportWarning(false);
+                setPendingSlip(null);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button 
+              onClick={handleProceedAfterWarning}
+              className="bg-yellow-600 hover:bg-yellow-700"
+            >
+              Tiếp tục
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

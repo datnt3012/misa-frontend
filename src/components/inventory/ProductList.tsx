@@ -152,6 +152,8 @@ const ProductList: React.FC<ProductListProps> = ({
         params.sortBy = mapSortKeyToAPI(sortConfig.key);
         params.sortOrder = sortConfig.direction;
       }
+      // Set viewMode to product to get each product as a single row
+      params.viewMode = 'product';
       const response = await productApi.getProducts(params);
       setProducts(response.products || []);
       setTotalProducts(response.total || 0);

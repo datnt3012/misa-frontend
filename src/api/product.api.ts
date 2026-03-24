@@ -213,6 +213,7 @@ export const productApi = {
     stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC' | 'asc' | 'desc';
+    viewMode?: 'product' | 'stock';
   }): Promise<{ products: Product[]; summary:object; total: number; page: number; limit: number; totalPages: number; }> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
@@ -224,6 +225,7 @@ export const productApi = {
     if (params?.stockStatus) queryParams.append('stockStatus', params.stockStatus);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder.toUpperCase());
+    if (params?.viewMode) queryParams.append('viewMode', params.viewMode);
     const url = queryParams.toString() 
       ? `${API_ENDPOINTS.PRODUCTS.LIST}?${queryParams.toString()}`
       : API_ENDPOINTS.PRODUCTS.LIST;
