@@ -144,74 +144,76 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'product',
         label: <span className="font-medium">Sản phẩm</span>,
+        className: 'p-0 align-top',
         render: (order: OrderSchemaType) => (
-          <div className="divide-y divide-slate-100 text-left" data-order-id={order.id}>
+          <div className="flex flex-col h-full text-left" data-order-id={order.id}>
             <RowHeightSync orderId={order.id} itemCount={order.details?.length || 0} />
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start justify-center">
-                <div className="font-medium text-slate-900 truncate w-full" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="font-medium text-slate-900 break-words line-clamp-2 w-[180px] whitespace-normal leading-tight" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>}
+            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>}
           </div>
         ),
       },
       {
         key: 'manufacturer',
         label: <span className="font-medium">Hãng sản xuất</span>,
+        className: 'p-0 align-top',
         render: (order: OrderSchemaType) => (
-          <div className="divide-y divide-slate-100">
+          <div className="flex flex-col h-full text-left">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
-                <div className="font-medium text-slate-900 truncate text-left">{item.product?.manufacturer || '-'}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="font-medium text-slate-900 truncate w-[100px]">{item.product?.manufacturer || '-'}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
+            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
       {
         key: 'price',
         label: <span className="font-medium">Giá</span>,
+        className: 'p-0 align-top',
         render: (order: OrderSchemaType) => (
-          <div className="divide-y divide-slate-100">
+          <div className="flex flex-col h-full text-left">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
+              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
                 <div className="font-medium text-slate-900">{formatCurrency(item.unitPrice)}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
+            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
       {
         key: 'qty',
         label: <span className="font-medium">Số lượng</span>,
+        className: 'p-0 align-top text-center',
         render: (order: OrderSchemaType) => (
-          <div className="divide-y divide-slate-100">
+          <div className="flex flex-col h-full">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
+              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center justify-center border-b border-slate-200 dark:border-slate-700 last:border-0">
                 <div className="font-medium">{item.quantity || 0}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
+            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
           </div>
         ),
       },
       {
         key: 'vat',
         label: <span className="font-medium">Thuế suất</span>,
+        className: 'p-0 align-top text-center',
         render: (order: OrderSchemaType) => (
-          <div className="divide-y divide-slate-100">
+          <div className="flex flex-col h-full">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm py-5 min-h-[60px] flex items-start">
-                <div className="text-center">
-                  <div>{formatCurrency(item.vatTotalPrice)}</div>
-                  <div className="text-xs text-slate-500">({item.vatPercentage}%)</div>
-                </div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="text-blue-600">{item.vatPercentage || 0}%</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
+            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
           </div>
         ),
       },
