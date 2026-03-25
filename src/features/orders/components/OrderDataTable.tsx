@@ -6,12 +6,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Eye, Edit, Tag, CreditCard, Package, Banknote, Trash2, Download, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DataTable } from '@/shared/components/DataTable';
 import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_LABELS_VI } from '@/constants/order-status.constants';
 import { OrderTag as ApiOrderTag } from '@/api/orderTags.api';
 import { formatCurrency, maskPhoneNumber, formatAddress } from '../utils/formatters';
 import { isReconciledDisplayTag, isPendingDisplayTag, getTagDisplayName, mapTagNames } from '../utils/tagHelpers';
 
+import { OrderDialogActions } from './OrderDialogs';
+import { OrderSchemaType } from '../schemas';
+import CreatorDisplay from './CreatorDisplay';
+import { TableCell, TableRow } from '@/components/ui/table';
+import { StripedDataTable } from '@/shared/components/data-tables/StripedDataTable';
 // ─── Row height sync (ResizeObserver per row) ─────────────────────────────────
 const useSyncRowHeights = (orderId: string, itemCount: number) => {
   useEffect(() => {
@@ -45,11 +49,6 @@ const RowHeightSync: React.FC<{ orderId: string; itemCount: number }> = ({ order
   useSyncRowHeights(orderId, itemCount);
   return null;
 };
-
-// ─── Dialog action callbacks ──────────────────────────────────────────────────
-import { OrderDialogActions } from './OrderDialogs';
-import { OrderSchemaType } from '../schemas';
-import CreatorDisplay from './CreatorDisplay';
 
 interface OrderDataTableProps {
   orders: OrderSchemaType[];
@@ -90,8 +89,8 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'code',
         label: (
-          <button onClick={() => onSort('code')} className="flex items-start gap-1 font-medium">
-            ID {getSortIcon('code')}
+          <button onClick={() => onSort('code')} className="flex items-start gap-1 font-medium uppercase">
+            Mã đơn hàng {getSortIcon('code')}
           </button>
         ),
         render: (order: OrderSchemaType) => {
@@ -124,14 +123,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'customer',
         label: (
-          <button onClick={() => onSort('customer')} className="flex items-start gap-1 font-medium">
+          <button onClick={() => onSort('customer')} className="flex items-start gap-1 font-medium uppercase">
             {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'} {getSortIcon('customer')}
           </button>
         ),
         render: (order: OrderSchemaType) => {
-          const tags = mapTagNames(order.tags, availableTags);
-          const specialTags = tags.filter((t) => isReconciledDisplayTag(t) || isPendingDisplayTag(t));
-          const otherTags = tags.filter((t) => !specialTags.includes(t));
           const phone = order.customer?.phoneNumber || '';
           const maskedPhone = maskPhoneNumber(phone);
           const addr = order.customer?.address || '';
@@ -141,13 +137,6 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
               <div className="text-sm font-medium text-blue-600">{maskedPhone}</div>
               <div className="font-medium truncate" title={order.customer?.name}>{order.customer?.name}</div>
               <div className="text-sm text-muted-foreground truncate" title={shortAddr}>{shortAddr}</div>
-              <div className="flex flex-wrap gap-1 justify-center">
-                {otherTags.map((tag, i) => tag && (
-                  <Badge key={i} variant="outline" className="text-xs" style={{ borderColor: tag.color, color: tag.color }}>
-                    {tag.name}
-                  </Badge>
-                ))}
-              </div>
             </div>
           );
         },
@@ -385,10 +374,28 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     ];
   }, [dialogActions, hasPermission, orders, onQuickNote, onUpdateStatus, total, pagination, onPaginationChange, selectedIds, onSelectedIdsChange]);
 
+  const quantityProducts = orders.reduce((acc, order) => acc + order.details.reduce((acc, item) => acc + item.quantity, 0), 0);
+  const totalCosts = orders.reduce((acc, order) => acc + order.expenses.reduce((acc, item) => acc + item.amount, 0), 0);
+  const totalAmountInclVat = orders.reduce((acc, order) => acc + order.details.reduce((acc, item) => acc + item.unitPrice * (1 + Number(item.vatPercentage)) * item.quantity, 0), 0);
+
+  const footer = useMemo(() => {
+    return (
+      <TableRow className="bg-primary/5 hover:bg-primary/10 border-t border-t-primary/20">
+        <TableCell className="font-bold text-primary uppercase text-sm border-r border-border/50">Tổng cộng</TableCell>
+        <TableCell colSpan={5} className="text-left font-semibold text-blue-600 border-r border-border/50 text-sm">{total} đơn</TableCell>
+        <TableCell colSpan={2} className="text-left font-semibold text-indigo-600 border-r border-border/50 text-sm">{quantityProducts} SP</TableCell>
+        <TableCell colSpan={3} className="text-left font-bold text-orange-600 border-r border-border/50 text-sm">{formatCurrency(totalCosts)}</TableCell>
+        <TableCell colSpan={1} className="text-left font-bold text-slate-800 border-r border-border/50 text-sm">{formatCurrency(totalAmountInclVat)}</TableCell>
+        <TableCell colSpan={columns.length - 11} className="text-left font-bold text-primary text-base">{formatCurrency(totalCosts + totalAmountInclVat)}</TableCell>
+      </TableRow>
+    );
+  }, [total, orders, quantityProducts, totalCosts, totalAmountInclVat, columns.length]);
+
   return (
-    <DataTable
+    <StripedDataTable
       columns={columns}
       data={orders as (OrderSchemaType & { id: string })[]}
+      footer={footer}
       isLoading={isLoading}
       total={total}
       filters={pagination}

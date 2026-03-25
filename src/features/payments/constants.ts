@@ -9,6 +9,15 @@ export const PAYMENTS_METHOD = {
     OTHER: 'other',
 } as const;
 
+export const PAYMENT_METHOD_LABELS_VI = {
+    [PAYMENTS_METHOD.CASH]: 'Tiền mặt',
+    [PAYMENTS_METHOD.BANK_TRANSFER]: 'Chuyển khoản',
+    [PAYMENTS_METHOD.CARD]: 'Thẻ',
+    [PAYMENTS_METHOD.OTHER]: 'Khác',
+} as const;
+
+export const getPaymentMethodLabel = (method: string) => PAYMENT_METHOD_LABELS_VI[method] || method;
+
 type FormFieldConfig = GenericFormFieldConfig<PaymentSchemaType>;
 
 export const PAYMENT_FORM_CONFIG: FormFieldConfig[] = [

@@ -19,7 +19,7 @@ import { OrderBulkActions } from '@/features/orders/components/OrderBulkActions'
 import { OrderDataTable } from '@/features/orders/components/OrderDataTable';
 import { ORDER_TYPES, OrderFilterSchemaType } from '@/features/orders/schemas';
 
-const OrdersNewContent: React.FC = () => {
+const Ordersv1Content: React.FC = () => {
     const dialogManagerRef = useRef<OrderDialogManagerHandle>(null);
     const navigate = useNavigate();
     const { hasPermission } = usePermissions();
@@ -36,7 +36,7 @@ const OrdersNewContent: React.FC = () => {
     const catalogs = useOrderCatalogs();
     const { data, isLoading, isFetching } = useOrderList(filters);
     const orders = data?.data?.rows ?? [];
-    const summary = data?.data?.summary ?? null;
+    // const summary = data?.data?.summary ?? null;
 
     // ── Selection ──────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -87,7 +87,7 @@ const OrdersNewContent: React.FC = () => {
             <div className="w-full mx-auto space-y-6 p-4 md:p-8">
                 {/* Header with Title and Add New Action */}
                 <OrderPageHeader
-                    onCreateClick={() => navigate('/orders-new/create')}
+                    onCreateClick={() => navigate('/orders/create')}
                     description="Theo dõi và quản lý tất cả đơn hàng bán và mua của bạn."
                 />
 
@@ -111,17 +111,6 @@ const OrdersNewContent: React.FC = () => {
                     onClearSelection={() => setSelectedIds([])}
                 />
 
-                {/* {summary && (
-                    <OrderSummary
-                        totalOrders={data?.total ?? 0}
-                        totalAmount={summary.totalAmount}
-                        paidAmount={summary.totalPaidAmount || summary.totalInitialPayment}
-                        debtAmount={summary.totalDebt}
-                        totalExpenses={summary.totalExpenses || 0}
-                        orderType={filters.type as any}
-                    />
-                )} */}
-
                 <Card className="shadow-premium border-none overflow-hidden">
                     <CardContent className="p-0">
                         <OrderDataTable
@@ -140,8 +129,8 @@ const OrdersNewContent: React.FC = () => {
                             onUpdateStatus={handleUpdateOrderStatus}
                             hasPermission={hasPermission}
                             dialogActions={{
-                                openView: (order) => navigate(`/orders-new/${order.id}`),
-                                openEdit: (order) => navigate(`/orders-new/${order.id}/edit`),
+                                openView: (order) => navigate(`/orders/${order.id}`),
+                                openEdit: (order) => navigate(`/orders/${order.id}/edit`),
                                 openPayment: (order) => dialogManagerRef.current?.openPayment(order),
                                 openTagsManager: (order) => dialogManagerRef.current?.openTagsManager(order),
                                 openExportDelivery: (order) => dialogManagerRef.current?.openExportDelivery(order),
@@ -170,8 +159,8 @@ const OrdersNewContent: React.FC = () => {
 };
 
 
-export const OrdersNew = () => (
+export const Ordersv1 = () => (
     <PermissionGuard requiredPermissions={['ORDERS_VIEW']}>
-        <OrdersNewContent />
+        <Ordersv1Content />
     </PermissionGuard>
 );

@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  TrendingUp, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  TrendingUp,
+  Settings,
   Menu,
   Bell,
   User,
@@ -68,7 +68,6 @@ const Layout = ({ children }: LayoutProps) => {
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Báo Giá", href: "/quotations", icon: FileText },
     { name: "Đơn Hàng", href: "/orders", icon: ShoppingCart },
-    { name: "Đơn Hàng (New)", href: "/orders-new", icon: ShoppingCart },
     { name: "Quản Lý Kho", href: "/inventory", icon: Package },
     { name: "Xuất Nhập Kho", href: "/export-import", icon: Package },
     { name: "Quản Lý Liên Hệ", href: "/relations", icon: Users },
@@ -96,20 +95,18 @@ const Layout = ({ children }: LayoutProps) => {
           <Link
             key={item.name}
             to={item.href}
-            className={`flex items-center whitespace-nowrap ${
-              isSidebarCollapsed ? "justify-center" : "gap-3"} rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              isActive(item.href)
+            className={`flex items-center whitespace-nowrap ${isSidebarCollapsed ? "justify-center" : "gap-3"} rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive(item.href)
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            }`}
+              }`}
             onClick={() => setSidebarOpen(false)}
           >
             <Icon className="h-5 w-5" />
             {!isSidebarCollapsed && (
-            <span className="transition-opacity duration-300">
-              {item.name}
-            </span>
-          )}
+              <span className="transition-opacity duration-300">
+                {item.name}
+              </span>
+            )}
           </Link>
         );
       })}
@@ -118,8 +115,7 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col border-r bg-card transition-all duration-300 ${
-        isSidebarCollapsed ? 'lg:w-20' : 'lg:w-56'}`}
+      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col border-r bg-card transition-all duration-300 ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-56'}`}
         onMouseEnter={() => setIsSidebarCollapsed(false)}
         onMouseLeave={() => setIsSidebarCollapsed(true)}
       >
@@ -130,9 +126,8 @@ const Layout = ({ children }: LayoutProps) => {
                 <Package className="h-4 w-4" />
               </div>
               <span
-                className={`text-xl font-bold transition-all duration-300 ${
-                  isSidebarCollapsed ? "opacity-0 invisible" : "opacity-100 visible"
-                }`}
+                className={`text-xl font-bold transition-all duration-300 ${isSidebarCollapsed ? "opacity-0 invisible" : "opacity-100 visible"
+                  }`}
               >
                 WareHub
               </span>
@@ -163,9 +158,8 @@ const Layout = ({ children }: LayoutProps) => {
         </SheetContent>
       </Sheet>
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${
-        isSidebarCollapsed ? "lg:pl-20" : "lg:pl-56"
-      }`}>
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? "lg:pl-20" : "lg:pl-56"
+        }`}>
         {/* Top Header */}
         <div className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-x-4 border-b bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
