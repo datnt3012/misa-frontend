@@ -23,7 +23,7 @@ import { AuthProvider } from "./hooks/useAuth";
 import { NotificationProvider } from "./hooks/useNotifications";
 import { ApiErrorMonitor } from "./components/ApiErrorMonitor";
 import "./utils/test-fallback"; // Auto-test fallback system
-import { OrdersNew } from "./pages/app/OrdersNew";
+import { Ordersv1 } from "./pages/app/Ordersv1";
 import { OrderFormPage } from "./features/orders/pages";
 import { ProductsPage } from "./pages/app/ProductsPage";
 
@@ -73,7 +73,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/orders-new/create"
+                path="/orders/create"
                 element={
                   <ProtectedRoute>
                     <Layout><OrderFormPage /></Layout>
@@ -81,7 +81,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/orders-new/:id/edit"
+                path="/orders/:id/edit"
                 element={
                   <ProtectedRoute>
                     <Layout><OrderFormPage /></Layout>
@@ -89,18 +89,10 @@ const App = () => (
                 }
               />
               <Route
-                path="/orders-new/:id"
+                path="/orders/:id"
                 element={
                   <ProtectedRoute>
                     <Layout><OrderFormPage /></Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/orders-new"
-                element={
-                  <ProtectedRoute>
-                    <Layout><OrdersNew /></Layout>
                   </ProtectedRoute>
                 }
               />
@@ -108,10 +100,18 @@ const App = () => (
                 path="/orders"
                 element={
                   <ProtectedRoute>
-                    <Layout><Orders /></Layout>
+                    <Layout><Ordersv1 /></Layout>
                   </ProtectedRoute>
                 }
               />
+              {/* <Route
+                path="/orders"
+                element={
+                  <ProtectedRoute>
+                    <Layout><Orders /></Layout>
+                  </ProtectedRoute>
+                }
+              /> */}
               <Route
                 path="/quotations"
                 element={

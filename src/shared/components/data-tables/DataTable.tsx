@@ -3,6 +3,7 @@ import {
     Table,
     TableBody,
     TableCell,
+    TableFooter,
     TableHead,
     TableHeader,
     TableRow,
@@ -22,6 +23,7 @@ interface DataTableProps<T extends { id: string }> {
         lengthLimit?: number;
         className?: string;
     }[];
+    footer?: React.ReactNode;
     data: T[];
     isLoading?: boolean;
     total?: number;
@@ -39,6 +41,7 @@ interface DataTableProps<T extends { id: string }> {
 export function DataTable<T extends { id: string }>({
     columns,
     data,
+    footer,
     isLoading = false,
     total = 0,
     filters,
@@ -94,7 +97,7 @@ export function DataTable<T extends { id: string }>({
                                     <TableHead
                                         key={String(col.key)}
                                         className={cn(
-                                            "h-10 px-3 text-xs text-left font-semibold uppercase tracking-wider text-muted-foreground/70 whitespace-nowrap",
+                                            "h-10 px-3 text-sm text-left font-semibold uppercase tracking-wider text-muted-foreground/70 whitespace-nowrap",
                                             col.className
                                         )}
                                     >
@@ -167,13 +170,16 @@ export function DataTable<T extends { id: string }>({
                                 })
                             )}
                         </TableBody>
+                        <TableFooter>
+                            {footer}
+                        </TableFooter>
                     </Table>
                 </div>
             </div>
 
             {
                 filters && onFiltersChange && (
-                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-1">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-1 py-2">
                         <div className="flex items-center gap-2 order-2 sm:order-1">
                             <span className="text-sm text-muted-foreground whitespace-nowrap">Hiển thị</span>
                             <Select
