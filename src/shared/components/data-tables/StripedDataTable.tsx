@@ -97,7 +97,7 @@ export function StripedDataTable<T extends { id: string }>({
                                     <TableHead
                                         key={String(col.key)}
                                         className={cn(
-                                            "h-10 px-3 text-sm text-left font-bold uppercase tracking-wider text-foreground whitespace-nowrap border-r border-border/50 last:border-r-0",
+                                            "h-10 px-3 text-sm text-left font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 last:border-r-0",
                                             col.className
                                         )}
                                     >

@@ -99,19 +99,19 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
           const hasReconciliation = specialTags.some(isReconciledDisplayTag);
           return (
             <div className="space-y-1 whitespace-nowrap text-left">
-              <div className="font-mono text-sm font-medium text-blue-600">{order.code}</div>
+              <div className="font-mono text-sm font-semibold text-primary">{order.code}</div>
               <div className="text-xs text-muted-foreground">
                 {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm') : 'N/A'}
               </div>
               <div className="flex gap-1 flex-wrap justify-start">
                 {specialTags.length > 0 ? specialTags.map((tag, i) => (
                   <Badge key={i} variant={isReconciledDisplayTag(tag) ? 'default' : 'secondary'}
-                    className={cn('text-xs', isReconciledDisplayTag(tag) ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800')}>
+                    className={cn('text-xs', isReconciledDisplayTag(tag) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
                     {getTagDisplayName(tag)}
                   </Badge>
                 )) : (
                   <Badge variant={hasReconciliation ? 'default' : 'secondary'}
-                    className={cn('text-xs', hasReconciliation ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800')}>
+                    className={cn('text-xs', hasReconciliation ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
                     {hasReconciliation ? 'Đã đối soát' : 'Chưa đối soát'}
                   </Badge>
                 )}
@@ -134,9 +134,9 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
           const shortAddr = formatAddress(addr);
           return (
             <div className="space-y-1 whitespace-nowrap text-left">
-              <div className="text-sm font-medium text-blue-600">{maskedPhone}</div>
-              <div className="font-medium truncate" title={order.customer?.name}>{order.customer?.name}</div>
-              <div className="text-sm text-muted-foreground truncate" title={shortAddr}>{shortAddr}</div>
+              <div className="text-xs text-muted-foreground font-mono tracking-wide">{maskedPhone}</div>
+              <div className="text-sm font-semibold text-foreground truncate" title={order.customer?.name}>{order.customer?.name}</div>
+              <div className="text-xs text-muted-foreground truncate" title={shortAddr}>{shortAddr}</div>
             </div>
           );
         },
@@ -144,76 +144,71 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'product',
         label: <span className="font-medium">Sản phẩm</span>,
-        className: 'p-0 align-top',
         render: (order: OrderSchemaType) => (
           <div className="flex flex-col h-full text-left" data-order-id={order.id}>
             <RowHeightSync orderId={order.id} itemCount={order.details?.length || 0} />
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium text-slate-900 break-words line-clamp-2 w-[180px] whitespace-normal leading-tight" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="font-medium text-slate-700 break-words line-clamp-2 w-[180px] whitespace-normal leading-tight" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>}
           </div>
         ),
       },
       {
         key: 'manufacturer',
         label: <span className="font-medium">Hãng sản xuất</span>,
-        className: 'p-0 align-top',
         render: (order: OrderSchemaType) => (
           <div className="flex flex-col h-full text-left">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium text-slate-900 truncate w-[100px]">{item.product?.manufacturer || '-'}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="text-sm text-slate-600 truncate w-[100px]">{item.product?.manufacturer || '-'}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
       {
         key: 'price',
         label: <span className="font-medium">Giá</span>,
-        className: 'p-0 align-top',
         render: (order: OrderSchemaType) => (
           <div className="flex flex-col h-full text-left">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium text-slate-900">{formatCurrency(item.unitPrice)}</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="text-sm font-medium text-slate-700">{formatCurrency(item.unitPrice)}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
       {
         key: 'qty',
         label: <span className="font-medium">Số lượng</span>,
-        className: 'p-0 align-top text-center',
         render: (order: OrderSchemaType) => (
           <div className="flex flex-col h-full">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center justify-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
                 <div className="font-medium">{item.quantity || 0}</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
       {
         key: 'vat',
         label: <span className="font-medium">Thuế suất</span>,
-        className: 'p-0 align-top text-center',
         render: (order: OrderSchemaType) => (
           <div className="flex flex-col h-full">
             {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="text-blue-600">{item.vatPercentage || 0}%</div>
+              <div key={i} data-item-row data-item-index={i} className="text-sm py-4 min-h-[60px] flex flex-col items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
+                <div className="text-sm text-slate-600">{item.vatPercentage || 0}%</div>
               </div>
             ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
+            {!order.details?.length && <div className="text-sm text-muted-foreground min-h-[60px] flex items-center">-</div>}
           </div>
         ),
       },
@@ -221,7 +216,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalExpenses',
         label: <span className="font-medium">Chi phí</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-medium text-orange-600 text-left">
+          <div className="text-sm font-medium text-amber-600 text-left">
             {formatCurrency(order.totalExpenses ?? order.expenses?.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0) ?? 0)}
           </div>
         ),
@@ -230,7 +225,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalAmount',
         label: <span className="font-medium text-xs">Tổng chưa VAT</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-left">
+          <div className="text-sm font-medium text-slate-700 text-left">
             {formatCurrency(order.totalAmount ?? 0)}
           </div>
         ),
@@ -239,7 +234,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalVat',
         label: <span className="font-medium text-xs">Tổng tiền VAT</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-left">
+          <div className="text-sm font-medium text-slate-700 text-left">
             {formatCurrency(order.totalVat ?? 0)}
           </div>
         ),
@@ -248,7 +243,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         key: 'totalVatAmount',
         label: <span className="font-medium text-xs">Tổng có VAT</span>,
         render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-left">
+          <div className="text-sm font-semibold text-emerald-700 text-left">
             {formatCurrency(order.totalVatAmount ?? 0)}
           </div>
         ),
@@ -262,10 +257,10 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
           const debt = order.remainingDebt ?? Math.max(0, total - paid);
           return (
             <div className="space-y-1 text-left">
-              <div className="text-sm font-medium flex items-center gap-1 justify-center">
-                <Banknote className="w-3 h-3" />{formatCurrency(paid)}
+              <div className="text-sm font-medium text-emerald-700 flex items-center gap-1">
+                <Banknote className="w-3 h-3 shrink-0" />{formatCurrency(paid)}
               </div>
-              <div className="text-sm font-medium text-red-600">{formatCurrency(debt)}</div>
+              {debt > 0 && <div className="text-xs font-medium text-red-500">{formatCurrency(debt)}</div>}
             </div>
           );
         },
@@ -273,7 +268,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
       {
         key: 'contract_code',
         label: <span className="font-medium">Số hợp đồng</span>,
-        render: (order: OrderSchemaType) => <div className="text-sm text-left">{order.contractCode || '-'}</div>,
+        render: (order: OrderSchemaType) => <div className="text-sm text-slate-600 text-left">{order.contractCode || '-'}</div>,
       },
       {
         key: 'note',
@@ -384,11 +379,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     return (
       <TableRow className="bg-primary/5 hover:bg-primary/10 border-t border-t-primary/20">
         <TableCell className="font-bold text-primary uppercase text-sm border-r border-border/50">Tổng cộng</TableCell>
-        <TableCell colSpan={5} className="text-left font-semibold text-blue-600 border-r border-border/50 text-sm">{total} đơn</TableCell>
-        <TableCell colSpan={2} className="text-left font-semibold text-indigo-600 border-r border-border/50 text-sm">{quantityProducts} SP</TableCell>
-        <TableCell colSpan={3} className="text-left font-bold text-orange-600 border-r border-border/50 text-sm">{formatCurrency(totalCosts)}</TableCell>
-        <TableCell colSpan={1} className="text-left font-bold text-slate-800 border-r border-border/50 text-sm">{formatCurrency(totalAmountInclVat)}</TableCell>
-        <TableCell colSpan={columns.length - 11} className="text-left font-bold text-primary text-base">{formatCurrency(totalCosts + totalAmountInclVat)}</TableCell>
+        <TableCell colSpan={5} className="text-left font-semibold text-slate-700 border-r border-border/50 text-sm">{total} đơn</TableCell>
+        <TableCell colSpan={2} className="text-left font-semibold text-slate-700 border-r border-border/50 text-sm">{quantityProducts} SP</TableCell>
+        <TableCell colSpan={3} className="text-left font-semibold text-amber-600 border-r border-border/50 text-sm">{formatCurrency(totalCosts)}</TableCell>
+        <TableCell colSpan={1} className="text-left font-semibold text-emerald-700 border-r border-border/50 text-sm">{formatCurrency(totalAmountInclVat)}</TableCell>
+        <TableCell colSpan={columns.length - 11} className="text-left font-bold text-primary text-sm">{formatCurrency(totalCosts + totalAmountInclVat)}</TableCell>
       </TableRow>
     );
   }, [total, orders, quantityProducts, totalCosts, totalAmountInclVat, columns.length]);
