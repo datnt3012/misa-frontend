@@ -101,6 +101,8 @@ const InventoryStock: React.FC<InventoryStockProps> = ({
         params.sortOrder = 'desc';
       }
       
+      // Set viewMode to stock to get each stock level as a separate row
+      params.viewMode = 'stock';
       const response = await productApi.getProducts(params);
       setProducts(response.products || []);
       setTotalProducts(response.total || 0);
