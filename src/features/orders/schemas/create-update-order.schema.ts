@@ -8,9 +8,8 @@ import { CreateCustomerSchema } from '@/features/customers/schemas';
  */
 export const OrderPaymentSchema = yup.object({
     paymentMethod: yup.string()
-        .oneOf(['cash', 'bank_transfer', 'credit', 'momo', 'vnpay'], 'Phương thức thanh toán không hợp lệ')
-        .nullable()
-        .optional(),
+        .oneOf(['cash', 'bank_transfer'], 'Phương thức thanh toán không hợp lệ')
+        .required('Phương thức thanh toán không được để trống'),
     initialPayment: yup.number()
         .typeError('Số tiền trả trước phải là số')
         .min(0, 'Không được nhập số âm')
@@ -20,16 +19,16 @@ export const OrderPaymentSchema = yup.object({
         .typeError('Tổng tiền phải là số')
         .min(0, 'Tổng tiền không được âm')
         .required('Tổng tiền không được để trống'),
-    paidAmount: yup.number()
-        .typeError('Số tiền đã trả phải là số')
-        .min(0, 'Số tiền đã trả không được âm')
-        .nullable()
-        .optional(),
-    debtAmount: yup.number()
-        .typeError('Số nợ phải là số')
-        .min(0, 'Số nợ không được âm')
-        .nullable()
-        .optional(),
+    // paidAmount: yup.number()
+    //     .typeError('Số tiền đã trả phải là số')
+    //     .min(0, 'Số tiền đã trả không được âm')
+    //     .nullable()
+    //     .optional(),
+    // debtAmount: yup.number()
+    //     .typeError('Số nợ phải là số')
+    //     .min(0, 'Số nợ không được âm')
+    //     .nullable()
+    //     .optional(),
     bank: yup.string().trim().nullable().optional(),
     paymentDeadline: yup.string().trim().nullable().optional(),
 });
@@ -109,23 +108,23 @@ export const CreateOrderSchema = yup.object()
         // Expenses
         expenses: yup.array().of(OrderExpenseSchema).nullable().optional(),
     }))
-    // Business Logic: paidAmount <= totalAmount
-    .test('paid-check', 'Số tiền đã trả không thể lớn hơn giá trị đơn hàng', function (value) {
-        const { paidAmount, totalAmount } = value || {};
-        if (paidAmount != null && totalAmount != null) {
-            return paidAmount <= totalAmount;
-        }
-        return true;
-    })
-    // Business Logic: debtAmount = totalAmount - paidAmount
-    .test('debt-check', 'Số nợ không khớp với tổng tiền và tiền đã trả', function (value) {
-        const { paidAmount = 0, totalAmount = 0, debtAmount } = value || {};
-        if (debtAmount != null) {
-            const expectedDebt = totalAmount - (paidAmount ?? 0);
-            return Math.abs(debtAmount - expectedDebt) < 0.01;
-        }
-        return true;
-    });
+// // Business Logic: paidAmount <= totalAmount
+// .test('paid-check', 'Số tiền đã trả không thể lớn hơn giá trị đơn hàng', function (value) {
+//     const { paidAmount, totalAmount } = value || {};
+//     if (paidAmount != null && totalAmount != null) {
+//         return paidAmount <= totalAmount;
+//     }
+//     return true;
+// })
+// // Business Logic: debtAmount = totalAmount - paidAmount
+// .test('debt-check', 'Số nợ không khớp với tổng tiền và tiền đã trả', function (value) {
+//     const { paidAmount = 0, totalAmount = 0, debtAmount } = value || {};
+//     if (debtAmount != null) {
+//         const expectedDebt = totalAmount - (paidAmount ?? 0);
+//         return Math.abs(debtAmount - expectedDebt) < 0.01;
+//     }
+//     return true;
+// });
 
 /**
  * Update Order Schema

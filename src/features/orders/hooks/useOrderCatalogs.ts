@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { CATEGORIES_API } from '@/features/categories/categories.api';
 import { USER_API } from '@/features/users';
 import { productApi } from '@/api/product.api';
-import { ORDER_API } from '../api/order.api';
 import { orderTagsApi, OrderTag as ApiOrderTag } from '@/api/orderTags.api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -11,7 +10,6 @@ export const useOrderCatalogs = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [creators, setCreators] = useState<any[]>([]);
   const [manufacturers, setManufacturers] = useState<string[]>([]);
-  const [banks, setBanks] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [availableTags, setAvailableTags] = useState<ApiOrderTag[]>([]);
 
   const refreshTags = () =>
@@ -31,10 +29,6 @@ export const useOrderCatalogs = () => {
       .then((d) => setManufacturers(d || []))
       .catch(() => setManufacturers([]));
 
-    ORDER_API.GET_BANKS()
-      .then((d) => setBanks(d || []))
-      .catch(() => setBanks([]));
-
     orderTagsApi
       .getAllTags({ type: 'order' })
       .then(setAvailableTags)
@@ -43,7 +37,7 @@ export const useOrderCatalogs = () => {
       );
   }, []);
 
-  return { categories, creators, manufacturers, banks, availableTags, refreshTags };
+  return { categories, creators, manufacturers, availableTags, refreshTags };
 };
 
 export type OrderCatalogsReturn = ReturnType<typeof useOrderCatalogs>;

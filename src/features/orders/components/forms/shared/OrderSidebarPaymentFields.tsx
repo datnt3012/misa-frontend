@@ -1,7 +1,7 @@
 import React from "react";
-import { Control, Controller, FieldErrors, useWatch } from "react-hook-form";
+import { Control, Controller, FieldErrors, useFormContext, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -9,7 +9,7 @@ import {
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DatePicker } from "@/shared/components/date-picker";
 import BankSelector from "@/components/orders/BankSelector";
-import { CreditCard } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, CreditCard, Loader2, Pencil } from "lucide-react";
 import {
   ORDER_STATUSES, ORDER_STATUS_LABELS_VI,
   PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_LABELS_VI,
@@ -17,6 +17,8 @@ import {
 import { PAYMENT_METHOD_OPTIONS } from "../../../constants";
 import { formatCurrency } from "../../../utils/formatters";
 import type { OrderTotals } from "../../../hooks/useOrderTotals";
+import { useUpdateOrderStatus } from "../../../hooks/useOrderMutation";
+import { Autocomplete } from "@/shared/components/autocomplete";
 
 interface OrderSidebarPaymentFieldsProps {
   control: Control<any>;
@@ -29,7 +31,254 @@ interface OrderSidebarPaymentFieldsProps {
   isSubmitting: boolean;
   onCancel: () => void;
   accentColor?: "blue" | "amber";
+  orderId?: string;
+  mode?: "edit" | "create";
 }
+
+// ─── (A) Summary Block ────────────────────────────────────────────────────────
+
+interface SummaryBlockProps {
+  totals: OrderTotals;
+  showBreakdown: boolean;
+}
+
+const SummaryBlock: React.FC<SummaryBlockProps> = ({ totals, showBreakdown }) => (
+  <div className="space-y-3">
+    <div className="space-y-0.5">
+      <p className="text-xs font-medium text-slate-400  tracking-wider">
+        Tổng giá trị đơn hàng
+      </p>
+      <p className="text-3xl font-black text-slate-900 tabular-nums leading-tight">
+        {formatCurrency(totals.grandTotal)}
+        <span className="text-base font-semibold text-slate-400 ml-1">đ</span>
+      </p>
+    </div>
+
+    {showBreakdown && (
+      <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 space-y-2">
+        <BreakdownRow
+          label="Tiền hàng"
+          value={totals.subtotal}
+          valueClass="text-slate-700"
+        />
+        <BreakdownRow
+          label="Thuế (VAT)"
+          value={totals.totalVat}
+          valueClass="text-indigo-600"
+        />
+        <BreakdownRow
+          label="Chi phí khác"
+          value={totals.expensesTotal}
+          valueClass="text-orange-500"
+        />
+      </div>
+    )}
+  </div>
+);
+
+interface BreakdownRowProps {
+  label: string;
+  value: number;
+  valueClass?: string;
+}
+
+const BreakdownRow: React.FC<BreakdownRowProps> = ({ label, value, valueClass = "text-slate-700" }) => (
+  <div className="flex items-center justify-between text-sm">
+    <span className="text-slate-500">{label}</span>
+    <span className={`font-semibold tabular-nums ${valueClass}`}>
+      {formatCurrency(value)} đ
+    </span>
+  </div>
+);
+
+// ─── (B) Payment Form ─────────────────────────────────────────────────────────
+
+interface PaymentFormProps {
+  control: Control<any>;
+  errors: FieldErrors<any>;
+  showStatus: boolean;
+  disabled: boolean;
+}
+
+const FieldError: React.FC<{ message?: string }> = ({ message }) =>
+  message ? (
+    <p className="flex items-center gap-1 text-xs text-red-500 mt-1">
+      <AlertCircle className="w-3 h-3 shrink-0" />
+      {message}
+    </p>
+  ) : null;
+
+const PaymentForm: React.FC<PaymentFormProps> = ({ control, errors, showStatus, disabled }) => {
+  const paymentMethod = useWatch({ control, name: "paymentMethod" });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold text-slate-400  tracking-wider">Thanh toán</p>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold text-slate-500">Thanh toán trước</Label>
+        <Controller
+          name="initialPayment"
+          control={control}
+          render={({ field }) => (
+            <CurrencyInput
+              value={field.value}
+              onChange={field.onChange}
+              className={`h-10 text-base font-bold tabular-nums${errors.initialPayment ? " border-red-500 focus-visible:ring-red-500" : ""}`}
+              disabled={disabled}
+            />
+          )}
+        />
+        <FieldError message={errors.initialPayment?.message as string} />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold text-slate-500">
+          Phương thức thanh toán <span className="text-destructive">*</span>
+        </Label>
+        <Controller
+          name="paymentMethod"
+          control={control}
+          render={({ field }) => (
+            <Autocomplete
+              options={PAYMENT_METHOD_OPTIONS}
+              value={field.value}
+              onChange={field.onChange}
+              placeholder="Chọn phương thức"
+              disabled={disabled}
+              className={errors.paymentMethod ? "border-red-500" : ""}
+            />
+          )}
+        />
+        <FieldError message={errors.paymentMethod?.message as string} />
+      </div>
+
+      {paymentMethod === "bank_transfer" && (
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-slate-500">
+            Ngân hàng {!showStatus && <span className="text-destructive">*</span>}
+          </Label>
+          <Controller
+            name="bank"
+            control={control}
+            render={({ field }) => (
+              <BankSelector
+                value={field.value || ""}
+                onValueChange={field.onChange}
+                placeholder="Chọn ngân hàng"
+                disabled={disabled}
+              />
+            )}
+          />
+          <FieldError message={errors.bank?.message as string} />
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold text-slate-500">Hạn thanh toán</Label>
+        <Controller
+          name="paymentDeadline"
+          control={control}
+          render={({ field }) => (
+            <DatePicker
+              date={field.value ? new Date(field.value) : undefined}
+              setDate={(d) => field.onChange(d ? d.toISOString() : null)}
+              disabled={disabled}
+            />
+          )}
+        />
+        <FieldError message={errors.paymentDeadline?.message as string} />
+      </div>
+    </div>
+  );
+};
+
+// ─── (C) Status Section ───────────────────────────────────────────────────────
+
+interface StatusSectionProps {
+  control: Control<any>;
+  isPurchase: boolean;
+  disabled: boolean;
+}
+
+const StatusSection: React.FC<StatusSectionProps> = ({ control, isPurchase, disabled }) => (
+  <div className="space-y-1">
+    <Label className="text-xs font-semibold text-slate-500  tracking-wider">
+      Trạng thái đơn hàng
+    </Label>
+    <Controller
+      name="status"
+      control={control}
+      disabled={disabled}
+      render={({ field }) => (
+        <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={disabled}>
+          <SelectTrigger className="h-9 font-semibold border-slate-200">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(isPurchase ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((s: string) => (
+              <SelectItem key={s} value={s}>
+                {(isPurchase ? PURCHASE_ORDER_STATUS_LABELS_VI : ORDER_STATUS_LABELS_VI)[s as keyof typeof ORDER_STATUS_LABELS_VI]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    />
+  </div>
+);
+
+// ─── Debt Summary ─────────────────────────────────────────────────────────────
+
+interface DebtSummaryProps {
+  totals: OrderTotals;
+  mode?: "edit" | "create";
+}
+
+const DebtSummary: React.FC<DebtSummaryProps> = ({ totals, mode }) => {
+  const isPaid = totals.debt <= 0;
+  const isOverpaid = totals.grandTotal > 0 && totals.debt < -100;
+
+  if (isOverpaid) {
+    return (
+      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
+        <div className="flex items-center gap-1.5 text-amber-600">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span className="text-xs font-semibold">Thanh toán vượt quá tổng tiền</span>
+        </div>
+        <p className="text-xs text-amber-500">
+          Đã thu vượt{" "}
+          <span className="font-bold tabular-nums">
+            {formatCurrency(Math.abs(totals.debt))} đ
+          </span>
+        </p>
+      </div>
+    );
+  }
+
+  if (isPaid && mode !== "create") {
+    return (
+      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          <span className="text-sm font-semibold text-emerald-700">Đã thanh toán đủ</span>
+        </div>
+        <span className="text-sm font-bold tabular-nums text-emerald-600">0 đ</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 flex items-center justify-between">
+      <span className="text-sm font-semibold text-orange-700">Còn nợ</span>
+      <span className="text-xl font-black tabular-nums text-orange-600">
+        {formatCurrency(totals.debt)} đ
+      </span>
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export const OrderSidebarPaymentFields: React.FC<OrderSidebarPaymentFieldsProps> = ({
   control,
@@ -42,171 +291,125 @@ export const OrderSidebarPaymentFields: React.FC<OrderSidebarPaymentFieldsProps>
   isSubmitting,
   onCancel,
   accentColor = "blue",
+  orderId,
+  mode,
 }) => {
-  const paymentMethod = useWatch({ control, name: "paymentMethod" });
-  const accentClass = accentColor === "amber" ? "bg-amber-500" : "bg-blue-600";
-  const accentIconClass = accentColor === "amber" ? "text-amber-500" : "text-blue-600";
+  const currentStatus = useWatch({ control, name: "status" });
+  const { setValue } = useFormContext();
+  const updateStatusMutation = useUpdateOrderStatus();
+
+  // Only "new" status allows editing; for new orders (no status), always editable
+  const isReadOnly = showStatus && currentStatus !== "new";
+  const accentBar = accentColor === "amber" ? "bg-amber-500" : "bg-blue-600";
+
+  const handleResetToNew = async () => {
+    if (!orderId) return;
+    await updateStatusMutation.mutateAsync({ orderId, status: "new" });
+    setValue("status", "new");
+  };
 
   return (
-    <Card className="sticky top-20 shadow-xl border-none overflow-hidden">
-      <div className={`h-1 ${accentClass}`} />
-      <CardHeader className="p-4 pb-2 flex flex-row items-center gap-2">
-        <CreditCard className={`w-4 h-4 ${accentIconClass}`} />
-        <CardTitle className="text-xs font-bold uppercase text-slate-400">
-          Tổng kết đơn hàng
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-4">
-        <div className="space-y-1">
-          <div className="text-sm text-slate-500 font-medium">Tổng giá trị đơn hàng</div>
-          <div className="text-3xl font-black text-slate-900">
-            {formatCurrency(totals.grandTotal)}
-          </div>
+    <Card className="sticky top-20 shadow-xl border border-slate-100 overflow-hidden">
+      <div className={`h-1 w-full ${accentBar}`} />
+
+      <CardContent className="p-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center gap-2">
+          <CreditCard className="w-4 h-4 text-slate-400" />
+          <span className="text-xs font-bold text-slate-400 tracking-wider">
+            Tổng kết đơn hàng
+          </span>
         </div>
 
-        {showBreakdown && (
-          <div className="space-y-2 pt-3 border-t text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Tiền hàng:</span>
-              <span className="font-bold">{formatCurrency(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Thuế (VAT):</span>
-              <span className="font-bold">{formatCurrency(totals.totalVat)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Chi phí khác:</span>
-              <span className="font-bold">{formatCurrency(totals.expensesTotal)}</span>
-            </div>
+        {/* Read-only banner */}
+        {isReadOnly && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
+            <p className="text-xs font-semibold text-amber-700">
+              Chỉ đơn hàng ở trạng thái <span className="font-black">Mới</span> được phép chỉnh sửa.
+            </p>
+            {orderId && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={updateStatusMutation.isPending}
+                onClick={handleResetToNew}
+                className="w-full h-8 text-xs border-amber-300 text-amber-700 hover:bg-amber-100"
+              >
+                {updateStatusMutation.isPending ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Đang xử lý...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Pencil className="w-3 h-3" /> Chuyển về Mới để chỉnh sửa
+                  </span>
+                )}
+              </Button>
+            )}
           </div>
         )}
 
-        <div className="space-y-3 pt-3 border-t">
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase text-blue-600 font-bold">Thanh toán trước</Label>
-            <Controller
-              name="initialPayment"
+        {/* (A) Summary */}
+        <SummaryBlock totals={totals} showBreakdown={showBreakdown} />
+
+        <div className="border-t border-slate-100" />
+
+        {/* (B) Payment inputs */}
+        <PaymentForm
+          control={control}
+          errors={errors}
+          showStatus={showStatus}
+          disabled={isReadOnly}
+        />
+
+        {showStatus && (
+          <>
+            <div className="border-t border-slate-100" />
+            {/* (C) Status */}
+            <StatusSection
               control={control}
-              render={({ field }) => (
-                <CurrencyInput
-                  value={field.value}
-                  onChange={field.onChange}
-                  className="h-10 text-lg font-bold"
-                />
-              )}
+              isPurchase={isPurchase}
+              disabled={currentStatus === "new" ? false : true}
             />
-            {errors.initialPayment && (
-              <p className="text-red-500 text-xs">{errors.initialPayment.message as string}</p>
-            )}
-          </div>
+          </>
+        )}
 
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase text-slate-500 font-bold">
-              Phương thức thanh toán
-            </Label>
-            <Controller
-              name="paymentMethod"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Chọn phương thức" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHOD_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
+        <div className="border-t border-slate-100" />
 
-          {paymentMethod === "bank_transfer" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase text-slate-500 font-bold">
-                Ngân hàng {!showStatus && <span className="text-destructive">*</span>}
-              </Label>
-              <Controller
-                name="bank"
-                control={control}
-                render={({ field }) => (
-                  <BankSelector
-                    value={field.value || ""}
-                    onValueChange={field.onChange}
-                    placeholder="Chọn ngân hàng"
-                  />
-                )}
-              />
-            </div>
-          )}
+        {/* Debt summary */}
+        <DebtSummary totals={totals} mode={mode} />
 
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase text-slate-500 font-bold">Hạn thanh toán</Label>
-            <Controller
-              name="paymentDeadline"
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  date={field.value ? new Date(field.value) : undefined}
-                  setDate={(d) => field.onChange(d ? d.toISOString() : null)}
-                />
-              )}
-            />
-          </div>
-
-          {showStatus && (
-            <div className="space-y-2 pt-2 border-t">
-              <Label className="text-xs font-bold uppercase text-slate-400">
-                Trạng thái đơn hàng
-              </Label>
-              <Controller
-                name="status"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                    <SelectTrigger className="h-10 font-bold border-slate-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(isPurchase ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {(isPurchase
-                            ? PURCHASE_ORDER_STATUS_LABELS_VI
-                            : ORDER_STATUS_LABELS_VI)[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          )}
-
-          <div className="space-y-1 pt-2 border-t">
-            <Label className="text-xs uppercase text-red-500 font-bold">Còn nợ</Label>
-            <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(Math.max(0, totals.debt))}
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full h-11 bg-slate-900 text-white font-bold"
-          >
-            {isSubmitting ? "Đang xử lý..." : submitLabel}
-          </Button>
-          <Button variant="outline" onClick={onCancel} type="button" className="w-full h-11">
-            Hủy bỏ
-          </Button>
-        </div>
-
+        {/* Root error */}
         {errors.root && (
           <p className="text-red-500 text-xs">{errors.root.message as string}</p>
         )}
+
+        {/* CTAs */}
+        <div className="space-y-2 pt-1">
+          <Button
+            type="submit"
+            disabled={isSubmitting || isReadOnly}
+            className="w-full h-11 bg-slate-900 hover:bg-slate-700 text-white font-bold text-sm"
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Đang xử lý...
+              </span>
+            ) : (
+              submitLabel
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            type="button"
+            className="w-full h-10 font-medium text-sm text-slate-600"
+          >
+            Hủy bỏ
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -9,8 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useDialogUrl } from '@/hooks/useDialogUrl';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { getErrorMessage } from '@/lib/error-utils';
-import { useOrderList } from '@/features/orders/hooks';
-import { useOrderCatalogs } from '@/features/orders/hooks';
+import { useOrderList, useOrderCatalogs } from '@/features/orders/hooks';
 import { ORDER_API } from '@/features/orders/api/order.api';
 import { OrderFilter } from '@/features/orders/components/OrderFilter';
 import { OrderPageHeader } from '@/features/orders/components/OrderPageHeader';
@@ -50,16 +49,6 @@ const Ordersv1Content: React.FC = () => {
     // Note: These could also be moved to a hook if needed
     const queryClient = useQueryClient();
     const { toast } = useToast();
-
-    const handleQuickNote = async (orderId: string, note: string, currentNote: string) => {
-        if (note === (currentNote || '')) return;
-        try {
-            await ORDER_API.UPDATE_ORDER(orderId, { note });
-            queryClient.invalidateQueries({ queryKey: ['orders', 'list'] });
-        } catch (error) {
-            toast({ title: 'Lỗi', description: getErrorMessage(error, 'Không thể cập nhật ghi chú'), variant: 'destructive' });
-        }
-    };
 
     const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
         if (!hasPermission('ORDERS_UPDATE_STATUS')) {
@@ -123,9 +112,6 @@ const Ordersv1Content: React.FC = () => {
                             onSelectedIdsChange={setSelectedIds}
                             orderType={(filters.type === 'purchase' ? 'purchase' : 'sale')}
                             availableTags={catalogs.availableTags}
-                            onSort={(field) => console.log('Sort', field)}
-                            getSortIcon={() => null}
-                            onQuickNote={handleQuickNote}
                             onUpdateStatus={handleUpdateOrderStatus}
                             hasPermission={hasPermission}
                             dialogActions={{
