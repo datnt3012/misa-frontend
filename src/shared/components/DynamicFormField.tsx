@@ -76,7 +76,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "text" || config.type === "number") {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Input
                     id={config.name as string}
@@ -101,7 +101,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "select") {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Controller
                     control={control}
@@ -142,7 +142,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "textarea") {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Textarea
                     id={config.name as string}
@@ -165,7 +165,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "autocomplete") {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Controller
                     name={config.name as any}
@@ -202,7 +202,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "date") {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Controller
                     name={config.name as any}
@@ -234,7 +234,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "dateRange") {
         return (
             <div className={`${colSpan} space-y-2 mt-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Controller
                     control={control}
@@ -272,7 +272,7 @@ export const DynamicFormField = <T extends object>({
                             />
                         )}
                     />
-                    <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                    <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                         htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 </div>
                 {error?.message && (
@@ -306,7 +306,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "numberRange" && config.minField && config.maxField) {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -361,7 +361,7 @@ export const DynamicFormField = <T extends object>({
 
         return (
             <div className={`${colSpan} space-y-2 mt-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                     htmlFor={config.name as string}>{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <div className="space-y-3">
                     {/* <span className="text-sm text-muted-foreground">{config.label}: {minVal}% - {maxVal}%</span> */}
@@ -390,7 +390,7 @@ export const DynamicFormField = <T extends object>({
     if (config.type === "radio") {
         return (
             <div className={`${colSpan} space-y-2`}>
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase ml-1 opacity-70"
+                <Label className="text-xs font-bold text-muted-foreground  ml-1 opacity-70"
                 >{config.label} {config.required && <span className="text-destructive">*</span>}</Label>
                 <Controller
                     control={control}

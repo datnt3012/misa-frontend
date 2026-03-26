@@ -1,56 +1,35 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Eye, Edit, Tag, CreditCard, Package, Banknote, Trash2, Download, MoreHorizontal } from 'lucide-react';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import {
+  Eye, Edit, Tag, CreditCard, Package, Banknote,
+  Trash2, Download, MoreHorizontal, ChevronRight,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getOrderStatusConfig, ORDER_STATUSES, ORDER_STATUS_LABELS_VI, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_LABELS_VI } from '@/constants/order-status.constants';
+import {
+  getOrderStatusConfig,
+  ORDER_STATUSES, ORDER_STATUS_LABELS_VI,
+  PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_LABELS_VI,
+} from '@/constants/order-status.constants';
 import { OrderTag as ApiOrderTag } from '@/api/orderTags.api';
 import { formatCurrency, maskPhoneNumber, formatAddress } from '../utils/formatters';
-import { isReconciledDisplayTag, isPendingDisplayTag, getTagDisplayName, mapTagNames } from '../utils/tagHelpers';
-
+import {
+  isReconciledDisplayTag, isPendingDisplayTag,
+  getTagDisplayName, mapTagNames,
+} from '../utils/tagHelpers';
 import { OrderDialogActions } from './OrderDialogs';
 import { OrderSchemaType } from '../schemas';
-import CreatorDisplay from './CreatorDisplay';
-import { TableCell, TableRow } from '@/components/ui/table';
-import { StripedDataTable } from '@/shared/components/data-tables/StripedDataTable';
-// ─── Row height sync (ResizeObserver per row) ─────────────────────────────────
-const useSyncRowHeights = (orderId: string, itemCount: number) => {
-  useEffect(() => {
-    if (itemCount === 0) return;
-    const syncHeights = () => {
-      const rows = document.querySelectorAll<HTMLElement>(
-        `[data-order-id="${orderId}"] [data-item-row]`
-      );
-      if (rows.length === 0) return;
-      const byIndex: Record<number, HTMLElement[]> = {};
-      rows.forEach((row) => {
-        const idx = parseInt(row.getAttribute('data-item-index') || '0');
-        (byIndex[idx] ??= []).push(row);
-      });
-      Object.values(byIndex).forEach((items) => {
-        items.forEach((el) => { el.style.height = 'auto'; });
-        const max = Math.max(...items.map((el) => el.offsetHeight));
-        items.forEach((el) => { el.style.height = `${max}px`; });
-      });
-    };
-    const timer = setTimeout(syncHeights, 0);
-    const raf = requestAnimationFrame(syncHeights);
-    const container = document.querySelector<HTMLElement>(`[data-order-id="${orderId}"]`);
-    const observer = new ResizeObserver(syncHeights);
-    if (container) observer.observe(container);
-    return () => { clearTimeout(timer); cancelAnimationFrame(raf); observer.disconnect(); };
-  }, [orderId, itemCount]);
-};
 
-const RowHeightSync: React.FC<{ orderId: string; itemCount: number }> = ({ orderId, itemCount }) => {
-  useSyncRowHeights(orderId, itemCount);
-  return null;
-};
+// ─── Prop types ───────────────────────────────────────────────────────────────
 
-interface OrderDataTableProps {
+export interface OrderDataTableProps {
   orders: OrderSchemaType[];
   isLoading: boolean;
   total: number;
@@ -60,351 +39,675 @@ interface OrderDataTableProps {
   onSelectedIdsChange: (ids: string[]) => void;
   orderType: 'sale' | 'purchase';
   availableTags: ApiOrderTag[];
-  onSort: (field: string) => void;
-  getSortIcon: (field: string) => React.ReactNode;
-  onQuickNote: (orderId: string, note: string, currentNote: string) => void;
   onUpdateStatus: (orderId: string, status: string) => void;
   hasPermission: (p: string) => boolean;
   dialogActions: OrderDialogActions;
 }
 
+// ─── ReconciliationBadge ──────────────────────────────────────────────────────
+
+const ReconciliationBadge: React.FC<{
+  tags: string[];
+  availableTags: ApiOrderTag[];
+}> = ({ tags, availableTags }) => {
+  const mapped = mapTagNames(tags, availableTags);
+  const special = mapped.filter(t => isReconciledDisplayTag(t) || isPendingDisplayTag(t));
+  const hasReconciled = special.some(isReconciledDisplayTag);
+
+  const items = special.length > 0 ? special : [null];
+
+  return (
+    <span className="inline-flex gap-1">
+      {items.map((tag, i) => {
+        const reconciled = tag ? isReconciledDisplayTag(tag) : hasReconciled;
+        return (
+          <Badge
+            key={i}
+            variant="outline"
+            className={cn(
+              'text-[10px] px-1.5 py-0 h-4 font-medium border',
+              reconciled
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200',
+            )}
+          >
+            {tag ? getTagDisplayName(tag) : (reconciled ? 'Đã đối soát' : 'Chưa đối soát')}
+          </Badge>
+        );
+      })}
+    </span>
+  );
+};
+
+// ─── StatusSelect ─────────────────────────────────────────────────────────────
+
+const StatusSelect: React.FC<{
+  order: OrderSchemaType;
+  onUpdateStatus: (id: string, status: string) => void;
+  hasPermission: (p: string) => boolean;
+}> = ({ order, onUpdateStatus, hasPermission }) => {
+  const statusCode =
+    typeof order.status === 'object' ? order.status?.code : (order.status as string);
+  const config = getOrderStatusConfig(statusCode, order.type === 'purchase');
+  const isLong =
+    statusCode === 'delivery_failed' || statusCode === 'partially_imported';
+
+  return (
+    <Select
+      value={statusCode || 'pending'}
+      onValueChange={s => onUpdateStatus(order.id, s)}
+      disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
+    >
+      <SelectTrigger className="h-auto p-0 border-none bg-transparent hover:bg-transparent w-fit min-w-0">
+        <Badge
+          variant={config.variant}
+          className={cn(config.className, isLong && 'text-[10px] px-1.5 py-0.5 whitespace-nowrap')}
+        >
+          {config.label}
+        </Badge>
+      </SelectTrigger>
+      <SelectContent>
+        {(order.type === 'purchase' ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map(s => (
+          <SelectItem key={s} value={s}>
+            {order.type === 'purchase'
+              ? PURCHASE_ORDER_STATUS_LABELS_VI[s as keyof typeof PURCHASE_ORDER_STATUS_LABELS_VI]
+              : ORDER_STATUS_LABELS_VI[s as keyof typeof ORDER_STATUS_LABELS_VI]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+// ─── ActionsMenu ──────────────────────────────────────────────────────────────
+
+const ActionsMenu: React.FC<{
+  order: OrderSchemaType;
+  dialogActions: OrderDialogActions;
+}> = ({ order, dialogActions }) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-50 hover:opacity-100 transition-opacity">
+        <MoreHorizontal className="w-4 h-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
+      <DropdownMenuItem onClick={() => dialogActions.openView(order)} className="cursor-pointer hover:bg-muted">
+        <Eye className="w-4 h-4 mr-2" />Xem chi tiết
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => dialogActions.openEdit(order)} className="cursor-pointer hover:bg-muted">
+        <Edit className="w-4 h-4 mr-2" />Sửa đơn
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => dialogActions.openPayment(order)} className="cursor-pointer hover:bg-muted">
+        <CreditCard className="w-4 h-4 mr-2" />Thanh toán
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => dialogActions.openTagsManager(order)} className="cursor-pointer hover:bg-muted">
+        <Tag className="w-4 h-4 mr-2" />Quản lý nhãn
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => dialogActions.openExportDelivery(order)} className="cursor-pointer hover:bg-muted">
+        <Download className="w-4 h-4 mr-2" />
+        {order.type === 'purchase' ? 'Xuất biên bản mua hàng' : 'Xuất biên bản giao hàng'}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => dialogActions.openExportSlip(order)} className="cursor-pointer hover:bg-muted">
+        <Package className="w-4 h-4 mr-2" />
+        {order.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() => dialogActions.openDelete(order)}
+        className="cursor-pointer hover:bg-muted text-red-600 focus:text-red-600"
+      >
+        <Trash2 className="w-4 h-4 mr-2" />Xóa đơn hàng
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
+
+// ─── OrderItemsSection (expandable) ──────────────────────────────────────────
+
+const OrderItemsSection: React.FC<{
+  items: OrderSchemaType['details'];
+  isExpanded: boolean;
+  colSpan: number;
+}> = ({ items, isExpanded, colSpan }) => {
+  if (!isExpanded) return null;
+
+  return (
+    <TableRow className="hover:bg-transparent border-0">
+      <TableCell colSpan={colSpan} className="p-0 border-b border-border/50">
+        <div className="bg-muted/25 border-y border-dashed border-border/40">
+          {/* Sub-header */}
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] px-12 py-2 border-b border-border/30">
+            {['Sản phẩm', 'Hãng sản xuất', 'Đơn giá', 'SL', 'VAT', 'Thành tiền'].map((h, i) => (
+              <div
+                key={h}
+                className={cn(
+                  'text-[11px] font-semibold  tracking-wide text-muted-foreground',
+                  i >= 2 && 'text-right',
+                )}
+              >
+                {h}
+              </div>
+            ))}
+          </div>
+
+          {/* Item rows */}
+          {items?.length ? (
+            items.map((item, i) => {
+              const lineTotal =
+                (item.unitPrice || 0) *
+                (item.quantity || 0) *
+                (1 + (Number(item.vatPercentage) || 0) / 100);
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    'grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] px-12 py-2.5',
+                    i % 2 === 1 && 'bg-muted/20',
+                    i < items.length - 1 && 'border-b border-border/20',
+                  )}
+                >
+                  <div
+                    className="text-sm font-medium text-foreground truncate pr-4"
+                    title={item.product?.name}
+                  >
+                    {item.product?.name || 'N/A'}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {item.product?.manufacturer || '—'}
+                  </div>
+                  <div className="text-sm text-right tabular-nums text-slate-700">
+                    {formatCurrency(item.unitPrice)}
+                  </div>
+                  <div className="text-sm text-right tabular-nums font-medium text-foreground">
+                    {item.quantity || 0}
+                  </div>
+                  <div className="text-sm text-right text-slate-600">
+                    {item.vatPercentage || 0}%
+                  </div>
+                  <div className="text-sm text-right tabular-nums font-semibold text-emerald-700">
+                    {formatCurrency(lineTotal)}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="px-12 py-4 text-sm text-muted-foreground">
+              Không có sản phẩm
+            </div>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
+// ─── OrderRow ─────────────────────────────────────────────────────────────────
+
+interface OrderRowProps {
+  order: OrderSchemaType;
+  isExpanded: boolean;
+  isSelected: boolean;
+  isEven: boolean;
+  onToggleExpand: () => void;
+  onSelect: (checked: boolean) => void;
+  onUpdateStatus: (id: string, status: string) => void;
+  hasPermission: (p: string) => boolean;
+  dialogActions: OrderDialogActions;
+  availableTags: ApiOrderTag[];
+  onRowClick: () => void;
+}
+
+const OrderRow: React.FC<OrderRowProps> = ({
+  order, isExpanded, isSelected, isEven,
+  onToggleExpand, onSelect, onUpdateStatus,
+  hasPermission, dialogActions, availableTags, onRowClick,
+}) => {
+  const phone = maskPhoneNumber(order.customer?.phoneNumber || '');
+  const addr = formatAddress(order.customer?.address || '');
+  const paid = order.totalPaidAmount ?? 0;
+  const debt = order.remainingDebt ?? Math.max(0, (order.totalAmount ?? 0) - paid);
+  const itemCount = order.details?.length ?? 0;
+  const totalQty = order.details?.reduce((s, d) => s + (d.quantity || 0), 0) ?? 0;
+  const expenses =
+    order.totalExpenses ??
+    order.expenses?.reduce((s, e) => s + (Number(e.amount) || 0), 0) ??
+    0;
+
+  return (
+    <TableRow
+      className={cn(
+        'border-b border-border/40 transition-colors group',
+        isEven ? 'bg-background' : 'bg-muted/35',
+        isSelected && '!bg-primary/5',
+        isExpanded && '!bg-primary/[0.04] border-b-0',
+        'hover:bg-muted/60',
+      )}
+    >
+      {/* ── Checkbox ── */}
+      <TableCell className="px-3 py-3 w-8 border-r border-border/30">
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={c => onSelect(!!c)}
+          aria-label={`Chọn ${order.code}`}
+          className="h-3.5 w-3.5"
+          onClick={e => e.stopPropagation()}
+        />
+      </TableCell>
+
+      {/* ── Mã đơn hàng ── */}
+      <TableCell
+        className="px-3 py-3 border-r border-border/30 min-w-[165px] cursor-pointer"
+        onClick={onRowClick}
+      >
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-sm font-semibold text-primary leading-none">
+              {order.code}
+            </span>
+          </div>
+          <div className="text-xs text-muted-foreground pl-5">
+            {order.createdAt
+              ? format(new Date(order.createdAt), 'dd/MM/yy HH:mm')
+              : '—'}
+          </div>
+          <div className="pl-5 flex flex-wrap gap-1">
+            <ReconciliationBadge tags={order.tags} availableTags={availableTags} />
+          </div>
+        </div>
+      </TableCell>
+
+      {/* ── Khách hàng / NCC ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30 min-w-[150px] cursor-pointer">
+        <div className="space-y-0.5">
+          <div
+            className="text-sm font-semibold text-foreground truncate max-w-[170px]"
+            title={order.customer?.name}
+          >
+            {order.customer?.name || '—'}
+          </div>
+          <div className="text-xs text-muted-foreground font-mono">{phone}</div>
+          <div
+            className="text-xs text-muted-foreground truncate max-w-[170px]"
+            title={addr}
+          >
+            {addr}
+          </div>
+        </div>
+      </TableCell>
+
+      {/* ── Sản phẩm (click to expand) ── */}
+      <TableCell
+        className="px-3 py-3 border-r border-border/30 cursor-pointer"
+        onClick={e => { e.stopPropagation(); onToggleExpand(); }}
+      >
+        <div className="flex items-center gap-2">
+          <div>
+            <div className="text-sm font-medium text-foreground whitespace-nowrap">
+              {itemCount} sản phẩm
+            </div>
+            <div className="text-xs text-muted-foreground">{totalQty} đơn vị</div>
+          </div>
+          <ChevronRight
+            className={cn(
+              'w-3 h-3 text-muted-foreground/60 shrink-0 transition-transform duration-150',
+              isExpanded && 'rotate-90 text-primary',
+            )}
+          />
+        </div>
+      </TableCell>
+
+      {/* ── Chi phí ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30 text-right">
+        <span className="text-sm font-medium text-amber-600 tabular-nums">
+          {formatCurrency(expenses)}
+        </span>
+      </TableCell>
+
+      {/* ── Tổng có VAT ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30 text-right">
+        <span className="text-sm font-semibold text-emerald-700 tabular-nums">
+          {formatCurrency(order.totalVatAmount ?? 0)}
+        </span>
+      </TableCell>
+
+      {/* ── Thanh toán ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30">
+        <div className="space-y-0.5 text-right">
+          <div className="text-sm font-medium text-emerald-700 tabular-nums flex items-center justify-end gap-1">
+            <Banknote className="w-3 h-3 shrink-0" />
+            {formatCurrency(paid)}
+          </div>
+          {debt > 0 && (
+            <div className="text-xs font-medium text-red-500 tabular-nums">
+              {formatCurrency(debt)}
+            </div>
+          )}
+        </div>
+      </TableCell>
+
+      {/* ── Trạng thái ── */}
+      <TableCell
+        className="px-3 py-3 border-r border-border/30"
+        onClick={e => e.stopPropagation()}
+      >
+        <StatusSelect
+          order={order}
+          onUpdateStatus={onUpdateStatus}
+          hasPermission={hasPermission}
+        />
+      </TableCell>
+
+      {/* ── Thao tác ── */}
+      <TableCell className="px-3 py-3" onClick={e => e.stopPropagation()}>
+        <ActionsMenu order={order} dialogActions={dialogActions} />
+      </TableCell>
+    </TableRow>
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+// Total columns: checkbox + 8 data cols = 9
+const COL_COUNT = 9;
+
 export const OrderDataTable: React.FC<OrderDataTableProps> = ({
   orders, isLoading, total, pagination, onPaginationChange,
   selectedIds, onSelectedIdsChange,
   orderType, availableTags,
-  onSort, getSortIcon, onQuickNote, onUpdateStatus, hasPermission, dialogActions,
+  onUpdateStatus, hasPermission, dialogActions,
 }) => {
-  const getStatusBadge = (status: string, isPurchase = false) => {
-    const config = getOrderStatusConfig(status, isPurchase);
-    const isLong = status === 'delivery_failed' || status === 'partially_imported';
-    return (
-      <Badge variant={config.variant} className={cn(config.className, isLong && 'text-[10px] px-1.5 py-0.5')}>
-        {config.label}
-      </Badge>
-    );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const isAllSelected =
+    orders.length > 0 && orders.every(o => selectedIds.includes(o.id));
+  const isSomeSelected =
+    orders.some(o => selectedIds.includes(o.id)) && !isAllSelected;
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      onSelectedIdsChange([...new Set([...selectedIds, ...orders.map(o => o.id)])]);
+    } else {
+      onSelectedIdsChange(selectedIds.filter(id => !orders.some(o => o.id === id)));
+    }
   };
 
-  const columns = useMemo(() => {
-    return [
-      {
-        key: 'code',
-        label: (
-          <button onClick={() => onSort('code')} className="flex items-start gap-1 font-medium uppercase">
-            Mã đơn hàng {getSortIcon('code')}
-          </button>
-        ),
-        render: (order: OrderSchemaType) => {
-          const tags = mapTagNames(order.tags, availableTags);
-          const specialTags = tags.filter((t) => isReconciledDisplayTag(t) || isPendingDisplayTag(t));
-          const hasReconciliation = specialTags.some(isReconciledDisplayTag);
-          return (
-            <div className="space-y-1 whitespace-nowrap text-left">
-              <div className="font-mono text-sm font-medium text-blue-600">{order.code}</div>
-              <div className="text-xs text-muted-foreground">
-                {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm') : 'N/A'}
-              </div>
-              <div className="flex gap-1 flex-wrap justify-start">
-                {specialTags.length > 0 ? specialTags.map((tag, i) => (
-                  <Badge key={i} variant={isReconciledDisplayTag(tag) ? 'default' : 'secondary'}
-                    className={cn('text-xs', isReconciledDisplayTag(tag) ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800')}>
-                    {getTagDisplayName(tag)}
-                  </Badge>
-                )) : (
-                  <Badge variant={hasReconciliation ? 'default' : 'secondary'}
-                    className={cn('text-xs', hasReconciliation ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800')}>
-                    {hasReconciliation ? 'Đã đối soát' : 'Chưa đối soát'}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        key: 'customer',
-        label: (
-          <button onClick={() => onSort('customer')} className="flex items-start gap-1 font-medium uppercase">
-            {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'} {getSortIcon('customer')}
-          </button>
-        ),
-        render: (order: OrderSchemaType) => {
-          const phone = order.customer?.phoneNumber || '';
-          const maskedPhone = maskPhoneNumber(phone);
-          const addr = order.customer?.address || '';
-          const shortAddr = formatAddress(addr);
-          return (
-            <div className="space-y-1 whitespace-nowrap text-left">
-              <div className="text-sm font-medium text-blue-600">{maskedPhone}</div>
-              <div className="font-medium truncate" title={order.customer?.name}>{order.customer?.name}</div>
-              <div className="text-sm text-muted-foreground truncate" title={shortAddr}>{shortAddr}</div>
-            </div>
-          );
-        },
-      },
-      {
-        key: 'product',
-        label: <span className="font-medium">Sản phẩm</span>,
-        className: 'p-0 align-top',
-        render: (order: OrderSchemaType) => (
-          <div className="flex flex-col h-full text-left" data-order-id={order.id}>
-            <RowHeightSync orderId={order.id} itemCount={order.details?.length || 0} />
-            {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium text-slate-900 break-words line-clamp-2 w-[180px] whitespace-normal leading-tight" title={item.product?.name}>{item.product?.name || 'N/A'}</div>
-              </div>
-            ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">Không có sản phẩm</div>}
-          </div>
-        ),
-      },
-      {
-        key: 'manufacturer',
-        label: <span className="font-medium">Hãng sản xuất</span>,
-        className: 'p-0 align-top',
-        render: (order: OrderSchemaType) => (
-          <div className="flex flex-col h-full text-left">
-            {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium text-slate-900 truncate w-[100px]">{item.product?.manufacturer || '-'}</div>
-              </div>
-            ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center">-</div>}
-          </div>
-        ),
-      },
-      {
-        key: 'price',
-        label: <span className="font-medium">Giá</span>,
-        className: 'p-0 align-top',
-        render: (order: OrderSchemaType) => (
-          <div className="flex flex-col h-full text-left">
-            {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium text-slate-900">{formatCurrency(item.unitPrice)}</div>
-              </div>
-            ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center">-</div>}
-          </div>
-        ),
-      },
-      {
-        key: 'qty',
-        label: <span className="font-medium">Số lượng</span>,
-        className: 'p-0 align-top text-center',
-        render: (order: OrderSchemaType) => (
-          <div className="flex flex-col h-full">
-            {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex items-center justify-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="font-medium">{item.quantity || 0}</div>
-              </div>
-            ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
-          </div>
-        ),
-      },
-      {
-        key: 'vat',
-        label: <span className="font-medium">Thuế suất</span>,
-        className: 'p-0 align-top text-center',
-        render: (order: OrderSchemaType) => (
-          <div className="flex flex-col h-full">
-            {order.details?.map((item, i: number) => (
-              <div key={i} data-item-row data-item-index={i} className="text-sm px-3 py-4 min-h-[60px] flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-700 last:border-0">
-                <div className="text-blue-600">{item.vatPercentage || 0}%</div>
-              </div>
-            ))}
-            {!order.details?.length && <div className="text-sm px-3 text-muted-foreground min-h-[60px] flex items-center justify-center">-</div>}
-          </div>
-        ),
-      },
-      {
-        key: 'totalExpenses',
-        label: <span className="font-medium">Chi phí</span>,
-        render: (order: OrderSchemaType) => (
-          <div className="text-sm font-medium text-orange-600 text-left">
-            {formatCurrency(order.totalExpenses ?? order.expenses?.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0) ?? 0)}
-          </div>
-        ),
-      },
-      {
-        key: 'totalAmount',
-        label: <span className="font-medium text-xs">Tổng chưa VAT</span>,
-        render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-left">
-            {formatCurrency(order.totalAmount ?? 0)}
-          </div>
-        ),
-      },
-      {
-        key: 'totalVat',
-        label: <span className="font-medium text-xs">Tổng tiền VAT</span>,
-        render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-left">
-            {formatCurrency(order.totalVat ?? 0)}
-          </div>
-        ),
-      },
-      {
-        key: 'totalVatAmount',
-        label: <span className="font-medium text-xs">Tổng có VAT</span>,
-        render: (order: OrderSchemaType) => (
-          <div className="text-sm font-semibold text-slate-900 text-left">
-            {formatCurrency(order.totalVatAmount ?? 0)}
-          </div>
-        ),
-      },
-      {
-        key: 'payment',
-        label: <span className="font-medium">Thanh toán</span>,
-        render: (order: OrderSchemaType) => {
-          const total = order.totalAmount ?? 0;
-          const paid = order.totalPaidAmount ?? 0;
-          const debt = order.remainingDebt ?? Math.max(0, total - paid);
-          return (
-            <div className="space-y-1 text-left">
-              <div className="text-sm font-medium flex items-center gap-1 justify-center">
-                <Banknote className="w-3 h-3" />{formatCurrency(paid)}
-              </div>
-              <div className="text-sm font-medium text-red-600">{formatCurrency(debt)}</div>
-            </div>
-          );
-        },
-      },
-      {
-        key: 'contract_code',
-        label: <span className="font-medium">Số hợp đồng</span>,
-        render: (order: OrderSchemaType) => <div className="text-sm text-left">{order.contractCode || '-'}</div>,
-      },
-      {
-        key: 'note',
-        label: <span className="font-medium">Ghi chú</span>,
-        render: (order: OrderSchemaType) => (
-          <div
-            className="relative p-2 min-w-[120px] min-h-[60px]
-            text-sm text-left overflow-auto hover:bg-muted/50 focus:bg-background
-            focus:outline-none focus:ring-1 focus:ring-ring break-words"
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) => onQuickNote(order.id, e.currentTarget.textContent ?? '', order.note)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
-          >
-            {order.note || ''}
-          </div>
-        ),
-      },
-      {
-        key: 'creator',
-        label: <span className="font-medium">Người tạo</span>,
-        render: (order: OrderSchemaType) => <CreatorDisplay createdBy={order.creator?.id} creatorInfo={order.creator} />,
-      },
-      {
-        key: 'completed_at',
-        label: <span className="font-medium">Ngày hoàn thành</span>,
-        render: (order: OrderSchemaType) => {
-          const completedAt = order.completedAt || order.updatedAt;
-          const show = ['delivered', 'completed'].includes(order.status?.code);
-          return <div className="text-left text-sm">{show && completedAt ? format(new Date(completedAt), 'dd/MM/yyyy HH:mm') : '-'}</div>;
-        },
-      },
-      {
-        key: 'status',
-        label: <span className="font-medium">Trạng thái</span>,
-        render: (order: OrderSchemaType) => (
+  const handleSelectRow = (id: string, checked: boolean) => {
+    if (checked) onSelectedIdsChange([...selectedIds, id]);
+    else onSelectedIdsChange(selectedIds.filter(s => s !== id));
+  };
+
+  // Footer aggregates
+  const totalQty = useMemo(
+    () => orders.reduce((acc, o) => acc + o.details.reduce((s, d) => s + d.quantity, 0), 0),
+    [orders],
+  );
+  const totalCosts = useMemo(
+    () => orders.reduce((acc, o) => acc + o.expenses.reduce((s, e) => s + e.amount, 0), 0),
+    [orders],
+  );
+  const totalVatAmount = useMemo(
+    () => orders.reduce((acc, o) => acc + (o.totalVatAmount ?? 0), 0),
+    [orders],
+  );
+
+  const limit = pagination.limit;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  return (
+    <div className="w-full space-y-4">
+      {/* ── Table wrapper ── */}
+      <div className="overflow-hidden rounded-md border border-border/60 shadow-sm">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+          <Table>
+            {/* Sticky header */}
+            <TableHeader className="sticky top-0 z-10">
+              <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+                {/* Checkbox col */}
+                <TableHead className="w-8 px-3 border-r border-border/50">
+                  <Checkbox
+                    checked={isAllSelected || (isSomeSelected ? 'indeterminate' : false)}
+                    onCheckedChange={c => handleSelectAll(!!c)}
+                    className="h-3.5 w-3.5"
+                    aria-label="Chọn tất cả"
+                  />
+                </TableHead>
+
+                {/* Mã đơn hàng */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Mã đơn hàng
+                </TableHead>
+
+                {/* Khách hàng */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'}
+                </TableHead>
+
+                {/* Sản phẩm */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Sản phẩm
+                </TableHead>
+
+                {/* Chi phí */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 text-right">
+                  Chi phí
+                </TableHead>
+
+                {/* Tổng có VAT */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 text-right">
+                  Tổng có VAT
+                </TableHead>
+
+                {/* Thanh toán */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 text-right">
+                  Thanh toán
+                </TableHead>
+
+                {/* Trạng thái */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Trạng thái
+                </TableHead>
+
+                {/* Thao tác */}
+                <TableHead className="h-10 px-3 w-10" />
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow
+                    key={i}
+                    className={cn('border-b border-border/30', i % 2 !== 0 && 'bg-muted/35')}
+                  >
+                    {Array.from({ length: COL_COUNT }).map((_, j) => (
+                      <TableCell
+                        key={j}
+                        className="px-3 py-4 border-r border-border/30 last:border-r-0"
+                      >
+                        <Skeleton className="h-4 w-full rounded" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : orders.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={COL_COUNT}
+                    className="py-14 text-center text-sm text-muted-foreground"
+                  >
+                    Không có dữ liệu
+                  </TableCell>
+                </TableRow>
+              ) : (
+                orders.flatMap((order, idx) => {
+                  const isExpanded = expandedIds.has(order.id);
+                  const isSelected = selectedIds.includes(order.id);
+                  return [
+                    <OrderRow
+                      key={`${order.id}-row`}
+                      order={order}
+                      isExpanded={isExpanded}
+                      isSelected={isSelected}
+                      isEven={idx % 2 === 0}
+                      onToggleExpand={() => toggleExpand(order.id)}
+                      onSelect={c => handleSelectRow(order.id, c)}
+                      onUpdateStatus={onUpdateStatus}
+                      hasPermission={hasPermission}
+                      dialogActions={dialogActions}
+                      availableTags={availableTags}
+                      onRowClick={() => dialogActions.openView(order)}
+                    />,
+                    <OrderItemsSection
+                      key={`${order.id}-section`}
+                      items={order.details}
+                      isExpanded={isExpanded}
+                      colSpan={COL_COUNT}
+                    />,
+                  ];
+                })
+              )}
+            </TableBody>
+
+            {/* Footer summary */}
+            <TableFooter>
+              <TableRow className="bg-primary/5 border-t-2 border-primary/20 hover:bg-primary/10">
+                <TableCell className="px-3 py-2" />
+                <TableCell className="px-3 py-2 font-bold text-primary  text-xs tracking-wide border-r border-border/40">
+                  Tổng cộng
+                </TableCell>
+                <TableCell className="px-3 py-2 text-xs font-semibold text-slate-600 border-r border-border/40">
+                  {total} đơn
+                </TableCell>
+                <TableCell className="px-3 py-2 text-xs font-semibold text-slate-600 border-r border-border/40">
+                  {totalQty} đơn vị
+                </TableCell>
+                <TableCell className="px-3 py-2 text-xs font-semibold text-amber-600 text-right tabular-nums border-r border-border/40">
+                  {formatCurrency(totalCosts)}
+                </TableCell>
+                <TableCell className="px-3 py-2 text-xs font-semibold text-emerald-700 text-right tabular-nums border-r border-border/40">
+                  {formatCurrency(totalVatAmount)}
+                </TableCell>
+                <TableCell className="px-3 py-2 text-xs font-bold text-primary text-right tabular-nums border-r border-border/40">
+                  {formatCurrency(totalCosts + totalVatAmount)}
+                </TableCell>
+                <TableCell className="px-3 py-2 border-r border-border/40" />
+                <TableCell className="px-3 py-2" />
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
+      </div>
+
+      {/* ── Pagination ── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-1 py-1">
+        <div className="flex items-center gap-2 order-2 sm:order-1">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Hiển thị</span>
           <Select
-            value={(typeof order.status === 'object' && order.status?.code) || (order.status as string) || 'pending'}
-            onValueChange={(s) => onUpdateStatus(order.id, s)}
-            disabled={!hasPermission('ORDERS_UPDATE_STATUS')}
+            value={String(limit)}
+            onValueChange={v =>
+              onPaginationChange({ ...pagination, limit: parseInt(v, 10), page: 1 })
+            }
           >
-            <SelectTrigger className="h-auto p-0 border-none bg-transparent hover:bg-transparent min-w-[120px]">
-              <div className="cursor-pointer inline-flex whitespace-nowrap text-xs">
-                {getStatusBadge(
-                  typeof order.status === 'object' ? order.status?.code : order.status,
-                  order.type === 'purchase'
-                )}
-              </div>
+            <SelectTrigger className="w-[70px] h-8 text-xs">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(order.type === 'purchase' ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((statusKey: string) => (
-                <SelectItem key={statusKey} value={statusKey}>
-                  {order.type === 'purchase'
-                    ? PURCHASE_ORDER_STATUS_LABELS_VI[statusKey as keyof typeof PURCHASE_ORDER_STATUS_LABELS_VI]
-                    : ORDER_STATUS_LABELS_VI[statusKey as keyof typeof ORDER_STATUS_LABELS_VI]}
+              {[10, 25, 50, 100].map(opt => (
+                <SelectItem key={opt} value={String(opt)} className="text-xs">
+                  {opt}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        ),
-      },
-      {
-        key: 'actions',
-        label: <span className="font-medium">Thao tác</span>,
-        render: (order: OrderSchemaType) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
-              <DropdownMenuItem onClick={() => dialogActions.openView(order)} className="cursor-pointer hover:bg-muted">
-                <Eye className="w-4 h-4 mr-2" />Xem chi tiết
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => dialogActions.openEdit(order)} className="cursor-pointer hover:bg-muted">
-                <Edit className="w-4 h-4 mr-2" />Sửa đơn
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => dialogActions.openPayment(order)} className="cursor-pointer hover:bg-muted">
-                <CreditCard className="w-4 h-4 mr-2" />Thanh toán
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => dialogActions.openTagsManager(order)} className="cursor-pointer hover:bg-muted">
-                <Tag className="w-4 h-4 mr-2" />Quản lý nhãn
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => dialogActions.openExportDelivery(order)} className="cursor-pointer hover:bg-muted">
-                <Download className="w-4 h-4 mr-2" />
-                {order.type === 'purchase' ? 'Xuất biên bản mua hàng' : 'Xuất biên bản giao hàng'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => dialogActions.openExportSlip(order)} className="cursor-pointer hover:bg-muted">
-                <Package className="w-4 h-4 mr-2" />
-                {order.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => dialogActions.openDelete(order)} className="cursor-pointer hover:bg-muted text-red-600 focus:text-red-600">
-                <Trash2 className="w-4 h-4 mr-2" />Xóa đơn hàng
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
-      },
-    ];
-  }, [dialogActions, hasPermission, orders, onQuickNote, onUpdateStatus, total, pagination, onPaginationChange, selectedIds, onSelectedIdsChange]);
+          <span className="text-sm text-muted-foreground whitespace-nowrap">
+            trong tổng số {total} bản ghi
+          </span>
+        </div>
 
-  const quantityProducts = orders.reduce((acc, order) => acc + order.details.reduce((acc, item) => acc + item.quantity, 0), 0);
-  const totalCosts = orders.reduce((acc, order) => acc + order.expenses.reduce((acc, item) => acc + item.amount, 0), 0);
-  const totalAmountInclVat = orders.reduce((acc, order) => acc + order.details.reduce((acc, item) => acc + item.unitPrice * (1 + Number(item.vatPercentage)) * item.quantity, 0), 0);
+        <div className="order-1 sm:order-2">
+          <Pagination>
+            <PaginationContent className="gap-1">
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={e => {
+                    e.preventDefault();
+                    if (pagination.page > 1)
+                      onPaginationChange({ ...pagination, page: pagination.page - 1 });
+                  }}
+                  className={cn(
+                    'h-8 px-2 text-xs',
+                    pagination.page <= 1 && 'pointer-events-none opacity-50',
+                  )}
+                />
+              </PaginationItem>
 
-  const footer = useMemo(() => {
-    return (
-      <TableRow className="bg-primary/5 hover:bg-primary/10 border-t border-t-primary/20">
-        <TableCell className="font-bold text-primary uppercase text-sm border-r border-border/50">Tổng cộng</TableCell>
-        <TableCell colSpan={5} className="text-left font-semibold text-blue-600 border-r border-border/50 text-sm">{total} đơn</TableCell>
-        <TableCell colSpan={2} className="text-left font-semibold text-indigo-600 border-r border-border/50 text-sm">{quantityProducts} SP</TableCell>
-        <TableCell colSpan={3} className="text-left font-bold text-orange-600 border-r border-border/50 text-sm">{formatCurrency(totalCosts)}</TableCell>
-        <TableCell colSpan={1} className="text-left font-bold text-slate-800 border-r border-border/50 text-sm">{formatCurrency(totalAmountInclVat)}</TableCell>
-        <TableCell colSpan={columns.length - 11} className="text-left font-bold text-primary text-base">{formatCurrency(totalCosts + totalAmountInclVat)}</TableCell>
-      </TableRow>
-    );
-  }, [total, orders, quantityProducts, totalCosts, totalAmountInclVat, columns.length]);
+              <div className="hidden sm:flex items-center gap-1">
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const p = i + 1;
+                  if (
+                    totalPages > 5 &&
+                    p > 1 &&
+                    p < totalPages &&
+                    (p < pagination.page - 1 || p > pagination.page + 1)
+                  ) {
+                    if (p === pagination.page - 2 || p === pagination.page + 2) {
+                      return (
+                        <span key={p} className="px-1 text-muted-foreground text-xs">
+                          …
+                        </span>
+                      );
+                    }
+                    return null;
+                  }
+                  return (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        href="#"
+                        isActive={pagination.page === p}
+                        onClick={e => {
+                          e.preventDefault();
+                          onPaginationChange({ ...pagination, page: p });
+                        }}
+                        className="h-8 w-8 text-xs"
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+              </div>
 
-  return (
-    <StripedDataTable
-      columns={columns}
-      data={orders as (OrderSchemaType & { id: string })[]}
-      footer={footer}
-      isLoading={isLoading}
-      total={total}
-      filters={pagination}
-      onFiltersChange={onPaginationChange}
-      selectedIds={selectedIds}
-      onSelectedIdsChange={onSelectedIdsChange}
-      onRowClick={(order) => dialogActions.openView(order)}
-    />
+              <div className="flex sm:hidden items-center px-4 text-xs text-muted-foreground">
+                Trang {pagination.page} / {totalPages}
+              </div>
+
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={e => {
+                    e.preventDefault();
+                    if (pagination.page < totalPages)
+                      onPaginationChange({ ...pagination, page: pagination.page + 1 });
+                  }}
+                  className={cn(
+                    'h-8 px-2 text-xs',
+                    pagination.page >= totalPages && 'pointer-events-none opacity-50',
+                  )}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      </div>
+    </div>
   );
 };

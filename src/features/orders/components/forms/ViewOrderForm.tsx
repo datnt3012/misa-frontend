@@ -24,6 +24,8 @@ import { getPaymentMethodLabel, PAYMENTS_QUERY_KEY } from "@/features/payments/c
 import { ORDER_TYPES } from "../../schemas";
 import { useNavigate } from "react-router-dom";
 import { OrderFormHeader } from "./shared/OrderFormHeader";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface ViewFormProps {
     orderId: string;
@@ -40,6 +42,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
         entityType: HISTORY_ENTITY_TYPE.ORDER,
     });
     const { mutateAsync: updateOrderStatus } = useUpdateOrderStatus();
+    const { toast } = useToast();
     const [showSlipDialog, setShowSlipDialog] = useState(false);
     const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
@@ -74,8 +77,12 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
     const outstandingAmount = Math.max(0, finalAmount - settledAmount);
 
     const handleUpdateStatus = async (status: string) => {
-        await updateOrderStatus({ orderId, status });
-        invalidateData();
+        try {
+            await updateOrderStatus({ orderId, status });
+            invalidateData();
+        } catch (err) {
+            toast({ title: "Lỗi", description: getErrorMessage(err, "Không thể cập nhật trạng thái"), variant: "destructive" });
+        }
     };
 
     const invalidateData = () => {
@@ -113,33 +120,33 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                 badgeLabel="Chi tiết đơn hàng"
                 codeLabel={orderDetails.code ? `#${orderDetails.code}` : undefined}
             />
-            <div className="animate-in fade-in duration-500 pb-20 space-y-6">
+            <div className="animate-in fade-in duration-500 space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="lg:col-span-3 space-y-6">
                         {/* Customer Info */}
                         <Card className="shadow-premium border-none">
                             <CardHeader className="pb-3 flex flex-row items-center gap-2 border-b border-slate-50">
                                 <Building2 className="w-4 h-4 text-blue-600" />
-                                <CardTitle className="text-sm font-bold uppercase tracking-tight text-slate-500">
+                                <CardTitle className="text-sm font-bold  tracking-tight text-slate-500">
                                     Khách hàng
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Tên công ty:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Tên công ty:</Label>
                                         <div className="col-span-2 text-sm font-bold text-slate-900">
                                             {orderDetails.companyName || orderDetails?.customer?.name}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Email công ty:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Email công ty:</Label>
                                         <div className="col-span-2 text-sm text-blue-600 underline">
                                             {orderDetails.vatEmail || orderDetails.customer?.email || "-"}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Tên người đặt hàng:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Tên người đặt hàng:</Label>
                                         <div className="col-span-2 text-sm font-medium">
                                             {orderDetails.customer?.name}
                                         </div>
@@ -147,19 +154,19 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                 </div>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Mã số thuế:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Mã số thuế:</Label>
                                         <div className="col-span-2 text-sm font-mono font-medium">
                                             {orderDetails.taxCode || "-"}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Địa chỉ công ty:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Địa chỉ công ty:</Label>
                                         <div className="col-span-2 text-sm leading-relaxed">
                                             {orderDetails.companyAddress || orderDetails.customer?.address || "-"}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Số điện thoại:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Số điện thoại:</Label>
                                         <div className="col-span-2 text-sm font-medium">
                                             {orderDetails.customer?.phoneNumber || "-"}
                                         </div>
@@ -172,27 +179,27 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         <Card className="shadow-premium border-none">
                             <CardHeader className="pb-3 flex flex-row items-center gap-2 border-b border-slate-50">
                                 <Package className="w-4 h-4 text-amber-600" />
-                                <CardTitle className="text-sm font-bold uppercase tracking-tight text-slate-500">
+                                <CardTitle className="text-sm font-bold  tracking-tight text-slate-500">
                                     Vận chuyển
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-6 space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">Người nhận:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">Người nhận:</Label>
                                         <div className="col-span-2 text-sm font-bold text-slate-900">
                                             {orderDetails.receiverName || "-"}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 items-start gap-2">
-                                        <Label className="text-xs text-muted-foreground pt-1">SĐT người nhận:</Label>
+                                        <Label className="text-sm text-muted-foreground pt-1">SĐT người nhận:</Label>
                                         <div className="col-span-2 text-sm font-medium">
                                             {orderDetails.receiverPhone || "-"}
                                         </div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-3 md:grid-cols-6 items-start gap-2">
-                                    <Label className="text-xs text-muted-foreground pt-1">Địa chỉ:</Label>
+                                    <Label className="text-sm text-muted-foreground pt-1">Địa chỉ:</Label>
                                     <div className="col-span-2 md:col-span-5 text-sm leading-relaxed">
                                         {orderDetails.receiverAddress || "-"}
                                     </div>
@@ -203,7 +210,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         {/* Products Table */}
                         <Card className="shadow-premium border-none overflow-hidden">
                             <CardHeader className="pb-3 border-b border-slate-50">
-                                <CardTitle className="text-sm font-bold uppercase tracking-tight text-slate-500 flex items-center gap-2">
+                                <CardTitle className="text-sm font-bold  tracking-tight text-slate-500 flex items-center gap-2">
                                     <Package className="w-4 h-4 text-emerald-600" /> Sản phẩm
                                 </CardTitle>
                             </CardHeader>
@@ -250,7 +257,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                                         </div>
                                                         <Badge
                                                             variant="outline"
-                                                            className="text-xs text-slate-400 mt-0.5 bg-slate-50"
+                                                            className="text-sm text-slate-400 mt-0.5 bg-slate-50"
                                                         >
                                                             {item.vatPercentage ?? 0}% VAT
                                                         </Badge>
@@ -265,7 +272,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                     <tfoot>
                                         <TableRow className="bg-slate-50/30">
                                             <TableCell colSpan={3} className="pl-6 font-bold text-slate-900 text-left">
-                                                Tổng
+                                                Tổng cộng
                                             </TableCell>
                                             <TableCell className="text-left font-bold text-slate-900">
                                                 {totalQuantity}
@@ -289,7 +296,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         {/* Status */}
                         <Card className="shadow-premium border-none">
                             <CardHeader className="p-4 pb-2">
-                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <CardTitle className="text-sm font-bold  tracking-wider text-slate-400">
                                     Trạng thái đơn hàng
                                 </CardTitle>
                             </CardHeader>
@@ -345,14 +352,14 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         {/* Payment Info */}
                         <Card className="shadow-premium border-none">
                             <CardHeader className="p-4 pb-2">
-                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <CardTitle className="text-sm font-bold  tracking-wider text-slate-400">
                                     Thông tin thanh toán
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-4 pt-0 space-y-3">
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-slate-500">Phương thức</span>
-                                    <div className="flex items-center gap-1.5 font-bold text-sm uppercase">
+                                    <div className="flex items-center gap-1.5 font-bold text-sm ">
                                         <CreditCard className="w-3 h-3" />
                                         {getPaymentMethodLabel(orderDetails.paymentMethod || "cash")}
                                     </div>
@@ -375,7 +382,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         {/* Cost Breakdown */}
                         <Card className="shadow-premium border-none bg-slate-50/50">
                             <CardHeader className="p-4 pb-2">
-                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <CardTitle className="text-sm font-bold  tracking-wider text-slate-400">
                                     Chi phí đơn hàng
                                 </CardTitle>
                             </CardHeader>
@@ -390,13 +397,13 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                 </div>
                                 {orderDetails.expenses && orderDetails.expenses.length > 0 && (
                                     <div className="space-y-1 pt-1">
-                                        <div className="text-xs text-slate-400 font-bold uppercase border-b border-slate-100 pb-1 mb-1">
+                                        <div className="text-sm text-slate-400 font-bold  border-b border-slate-100 pb-1 mb-1">
                                             Chi phí khác
                                         </div>
                                         {orderDetails.expenses.map((exp, i) => (
                                             <div key={i} className="flex justify-between items-center">
-                                                <span className="text-xs text-slate-400 italic">• {exp.name}</span>
-                                                <span className="text-xs text-slate-400 font-medium">
+                                                <span className="text-sm text-slate-400 italic">• {exp.name}</span>
+                                                <span className="text-sm text-slate-400 font-medium">
                                                     {formatCurrency(Number(exp.amount))}
                                                 </span>
                                             </div>
@@ -409,7 +416,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                 )}
                                 <Separator className="bg-slate-200" />
                                 <div className="flex justify-between items-end pt-1">
-                                    <span className="text-sm font-bold text-slate-900 uppercase">Tổng cộng</span>
+                                    <span className="text-sm font-bold text-slate-900 ">Tổng cộng</span>
                                     <span className="text-lg font-black text-slate-900 leading-none">
                                         {formatCurrency(finalAmount)}
                                     </span>
@@ -420,7 +427,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         {/* Tags */}
                         <Card className="shadow-premium border-none">
                             <CardHeader className="p-4 pb-2">
-                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <CardTitle className="text-sm font-bold  tracking-wider text-slate-400">
                                     Nhãn đơn hàng
                                 </CardTitle>
                             </CardHeader>
@@ -431,7 +438,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                             <Badge
                                                 key={i}
                                                 variant="secondary"
-                                                className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 border-none"
+                                                className="px-2 py-0.5 text-sm font-medium bg-slate-100 text-slate-600 border-none"
                                             >
                                                 {tag}
                                             </Badge>
@@ -446,10 +453,10 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                         {/* Activity Log */}
                         <Card className="shadow-premium border-none">
                             <CardHeader className="p-4 pb-2">
-                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <CardTitle className="text-sm font-bold  tracking-wider text-slate-400">
                                     Lịch sử hoạt động
                                 </CardTitle>
-                                <CardDescription className="text-xs">
+                                <CardDescription className="text-sm">
                                     Xem lịch sử hoạt động của đơn hàng
                                 </CardDescription>
                             </CardHeader>
@@ -465,12 +472,12 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                                 <p className="text-sm font-bold text-slate-800 leading-tight">
                                                     {log.title}
                                                 </p>
-                                                <p className="text-xs text-slate-400 leading-tight">
+                                                <p className="text-sm text-slate-400 leading-tight">
                                                     {log.user?.username || "Hệ thống"} •{" "}
                                                     {formatDateTime(log.createdAt.toString())}
                                                 </p>
                                                 {log.message && (
-                                                    <p className="text-xs text-slate-500 italic mt-1 bg-slate-50 p-1 rounded leading-tight">
+                                                    <p className="text-sm text-slate-500 italic mt-1 bg-slate-50 p-1 rounded leading-tight">
                                                         {log.message}
                                                     </p>
                                                 )}
@@ -478,7 +485,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                         </div>
                                     ))}
                                     {(historyEntity?.data?.length ?? 0) > 5 && (
-                                        <Button variant="link" className="text-xs h-auto p-0 text-blue-500">
+                                        <Button variant="link" className="text-sm h-auto p-0 text-blue-500">
                                             Xem tất cả ({historyEntity?.data?.length})
                                         </Button>
                                     )}

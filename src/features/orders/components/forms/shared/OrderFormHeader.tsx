@@ -9,6 +9,7 @@ interface OrderFormHeaderProps {
   subtitle: string;
   badgeLabel: string;
   badgeVariant?: "default" | "secondary";
+  badgeClassName?: string;
   codeLabel?: string;
 }
 
@@ -18,6 +19,7 @@ export const OrderFormHeader: React.FC<OrderFormHeaderProps> = ({
   subtitle,
   badgeLabel,
   badgeVariant = "default",
+  badgeClassName,
   codeLabel,
 }) => (
   <div className="flex items-center justify-between mb-6 border-b border-slate-200 pb-6">
@@ -36,13 +38,13 @@ export const OrderFormHeader: React.FC<OrderFormHeaderProps> = ({
             <span className="text-slate-400 font-normal text-sm ml-2">{codeLabel}</span>
           )}
         </h1>
-        <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
+        <p className="text-muted-foreground text-sm font-medium  tracking-wider">
           {subtitle}
         </p>
       </div>
     </div>
     <div className="flex items-center gap-3">
-      <Badge variant={badgeVariant} className="px-3 py-1 font-bold tracking-wider text-xs">
+      <Badge variant={badgeVariant} className={`px-3 py-1 font-bold tracking-wider text-sm ${badgeClassName ?? ""}`}>
         {badgeLabel}
       </Badge>
     </div>

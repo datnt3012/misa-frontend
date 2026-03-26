@@ -1,6 +1,16 @@
 import React, { useEffect } from "react";
 import { useForm, useFieldArray, FormProvider } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-utils";
+
+function sanitizeData<T>(data: T): T {
+  if (typeof data === "string") return (data.trim() === "" ? null : data) as T;
+  if (Array.isArray(data)) return data.map(sanitizeData) as T;
+  if (data !== null && typeof data === "object")
+    return Object.fromEntries(Object.entries(data).map(([k, v]) => [k, sanitizeData(v)])) as T;
+  return data;
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, ShoppingBag, User, MapPin, Receipt, FileText } from "lucide-react";
@@ -34,10 +44,12 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
   const createCustomerMutation = useCustomerMutation().createCustomer;
   const createSupplierMutation = useSupplierMutation().createSupplier;
   const productQuery = useProductList({ page: 1, limit: 1000 });
+  const { toast } = useToast();
 
   const methods = useForm<CreateOrderSchemaType>({
     resolver: yupResolver(CreateOrderSchema),
     defaultValues: { type: "sale", paymentMethod: "cash" },
+    mode: "onTouched",
   });
 
   const {
@@ -58,7 +70,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
 
   useEffect(() => {
     setValue("totalAmount", totals.grandTotal, { shouldDirty: false });
-    setValue("debtAmount", Math.max(0, totals.debt), { shouldDirty: false });
+    // setValue("debtAmount", Math.max(0, totals.debt), { shouldDirty: false });
   }, [totals.grandTotal, totals.debt, setValue]);
 
   useEffect(() => {
@@ -80,31 +92,32 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
   };
 
   const onSubmit = async (data: CreateOrderSchemaType) => {
+    const clean = sanitizeData(data);
     try {
-      let resolvedCustomerId = data.customerId;
-      if (data.customerId === "__new__") {
-        if (data.type === "sale") {
+      let resolvedCustomerId = clean.customerId;
+      if (clean.customerId === "__new__") {
+        if (clean.type === "sale") {
           const payload = {
-            name: data.customer.name,
-            phoneNumber: data.customer.phoneNumber,
-            email: data.customer.email || null,
-            address: data.customer.address || null,
-            addressInfo: data.addressInfo || null,
+            name: clean.customer.name,
+            phoneNumber: clean.customer.phoneNumber,
+            email: clean.customer.email || null,
+            address: clean.customer.address || null,
+            addressInfo: clean.addressInfo || null,
           };
           const customer = await createCustomerMutation.mutateAsync(payload) as BackendResponse<CustomerSchemaType>;
           resolvedCustomerId = customer.data.id;
         } else {
           const supplier = await createSupplierMutation.mutateAsync({
-            ...data.customer,
-            addressInfo: data.addressInfo,
+            ...clean.customer,
+            addressInfo: clean.addressInfo,
           }) as BackendResponse<SupplierSchemaType>;
           resolvedCustomerId = supplier.data.id;
         }
       }
-      await createOrderMutation.mutateAsync({ ...data, customerId: resolvedCustomerId });
+      await createOrderMutation.mutateAsync({ ...clean, customerId: resolvedCustomerId });
       onOrderCreated();
-    } catch {
-      // mutation error states are managed by react-query
+    } catch (err) {
+      toast({ title: "Lỗi", description: getErrorMessage(err, "Không thể tạo đơn hàng"), variant: "destructive" });
     }
   };
 
@@ -120,8 +133,10 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
       <FormProvider {...methods}>
         <form
           noValidate
-          onSubmit={handleSubmit(onSubmit)}
-          className="animate-in fade-in duration-500 pb-20 space-y-6"
+          onSubmit={handleSubmit(onSubmit, () => {
+            toast({ title: "Lỗi xác thực", description: "Vui lòng kiểm tra lại các trường bắt buộc.", variant: "destructive" });
+          })}
+          className="animate-in fade-in duration-500 space-y-6"
         >
           <Tabs
             value={currentType}
@@ -144,7 +159,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
               <Card className="shadow-premium border-none">
                 <CardHeader className="pb-3 border-b flex flex-row items-center gap-2">
                   <User className="w-4 h-4 text-blue-600" />
-                  <CardTitle className="text-sm font-bold uppercase text-slate-500">
+                  <CardTitle className="text-sm font-bold  text-slate-500">
                     {currentType === "sale" ? "Thông tin khách hàng" : "Thông tin nhà cung cấp"}
                   </CardTitle>
                 </CardHeader>
@@ -152,11 +167,11 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
                   <div className="grid grid-cols-12 gap-4">
                     {currentType === "sale"
                       ? customerBaseFields.map((f) => (
-                          <DynamicFormField key={f.name as string} config={f} />
-                        ))
+                        <DynamicFormField key={f.name as string} config={f} />
+                      ))
                       : supplierBaseFields.map((f) => (
-                          <DynamicFormField key={f.name as string} config={f} />
-                        ))}
+                        <DynamicFormField key={f.name as string} config={f} />
+                      ))}
                   </div>
                 </CardContent>
               </Card>
@@ -166,7 +181,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
                 <Card className="shadow-premium border-none">
                   <CardHeader className="pb-3 border-b flex flex-row items-center gap-2">
                     <Receipt className="w-4 h-4 text-violet-600" />
-                    <CardTitle className="text-sm font-bold uppercase text-slate-500">
+                    <CardTitle className="text-sm font-bold  text-slate-500">
                       Thông tin VAT
                     </CardTitle>
                   </CardHeader>
@@ -185,7 +200,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
                 <Card className="shadow-premium border-none">
                   <CardHeader className="pb-3 border-b flex flex-row items-center gap-2">
                     <MapPin className="w-4 h-4 text-amber-600" />
-                    <CardTitle className="text-sm font-bold uppercase text-slate-500">
+                    <CardTitle className="text-sm font-bold  text-slate-500">
                       Vận chuyển
                     </CardTitle>
                   </CardHeader>
@@ -203,7 +218,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
               <Card className="shadow-premium border-none">
                 <CardHeader className="pb-3 border-b flex flex-row items-center gap-2">
                   <FileText className="w-4 h-4 text-slate-500" />
-                  <CardTitle className="text-sm font-bold uppercase text-slate-500">
+                  <CardTitle className="text-sm font-bold  text-slate-500">
                     Thông tin hợp đồng
                   </CardTitle>
                 </CardHeader>
@@ -246,6 +261,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
                 isSubmitting={createOrderMutation.isPending}
                 onCancel={onCancel}
                 accentColor="blue"
+                mode="create"
               />
             </div>
           </div>

@@ -33,14 +33,14 @@ const OrderFormPageContent: React.FC = () => {
   useEffect(() => {
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
-      if (isCreateMode && isFormDirtyRef.current) {
+      if (isFormDirtyRef.current) {
         window.history.pushState(null, '', window.location.href);
         setShowLeaveDialog(true);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isCreateMode]);
+  }, []);
 
   // Block browser tab close / refresh when form is dirty
   useEffect(() => {
@@ -52,7 +52,7 @@ const OrderFormPageContent: React.FC = () => {
   }, [isFormDirty]);
 
   const handleGoBack = () => {
-    if (isCreateMode && isFormDirty) {
+    if (isFormDirty) {
       setShowLeaveDialog(true);
     } else {
       navigate('/orders');
@@ -71,12 +71,12 @@ const OrderFormPageContent: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-slate-50/50 pb-20">
+      <div className="min-h-screen bg-slate-50/50 pb-4">
         <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-6">
           {/* Form */}
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">{
-            mode === "create" ? <NewOrderForm onOrderCreated={invalidateAndGoBack} onCancel={handleGoBack} onDirtyChange={isCreateMode ? setIsFormDirty : undefined} /> :
-              mode === "edit" ? <EditOrderForm orderId={id!} onOrderUpdated={invalidateAndGoBack} onCancel={handleGoBack} /> :
+            mode === "create" ? <NewOrderForm onOrderCreated={invalidateAndGoBack} onCancel={handleGoBack} onDirtyChange={setIsFormDirty} /> :
+              mode === "edit" ? <EditOrderForm orderId={id!} onOrderUpdated={invalidateAndGoBack} onCancel={handleGoBack} onDirtyChange={setIsFormDirty} /> :
                 <ViewOrderForm orderId={id!} onBack={handleGoBack} />
           }</div>
         </div>

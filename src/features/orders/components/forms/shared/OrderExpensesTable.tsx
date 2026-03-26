@@ -15,6 +15,7 @@ interface OrderExpensesTableProps {
   expensesTotal: number;
   onAppend: () => void;
   onRemove: (idx: number) => void;
+  disabled?: boolean;
 }
 
 export const OrderExpensesTable: React.FC<OrderExpensesTableProps> = ({
@@ -23,15 +24,18 @@ export const OrderExpensesTable: React.FC<OrderExpensesTableProps> = ({
   expensesTotal,
   onAppend,
   onRemove,
+  disabled = false,
 }) => (
   <Card className="shadow-premium border-none overflow-hidden">
     <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
-      <CardTitle className="text-sm font-bold uppercase text-slate-500 flex items-center gap-2">
+      <CardTitle className="text-sm font-bold  text-slate-500 flex items-center gap-2">
         <ReceiptText className="w-4 h-4 text-orange-500" /> Chi phí
       </CardTitle>
-      <Button onClick={onAppend} size="sm" variant="outline" type="button" className="h-8 border-dashed">
-        <Plus className="w-3 h-3 mr-1" /> Thêm chi phí
-      </Button>
+      {!disabled && (
+        <Button onClick={onAppend} size="sm" variant="outline" type="button" className="h-8 border-dashed">
+          <Plus className="w-3 h-3 mr-1" /> Thêm chi phí
+        </Button>
+      )}
     </CardHeader>
     <CardContent className="p-0">
       {fields.length === 0 ? (
@@ -43,54 +47,58 @@ export const OrderExpensesTable: React.FC<OrderExpensesTableProps> = ({
           <Table>
             <TableHeader className="bg-slate-50/50">
               <TableRow>
-                <TableHead>Tên chi phí</TableHead>
-                <TableHead className="w-40">Số tiền</TableHead>
-                <TableHead>Ghi chú</TableHead>
+                <TableHead className="text-left">Tên chi phí</TableHead>
+                <TableHead className="w-40 text-left">Số tiền</TableHead>
+                <TableHead className="text-left">Ghi chú</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {fields.map((field, idx) => (
                 <TableRow key={field.id}>
-                  <TableCell>
+                  <TableCell className="text-left">
                     <Controller
                       name={`expenses.${idx}.name`}
                       control={control}
                       render={({ field }) => (
                         <input
                           {...field}
-                          className="w-full bg-transparent outline-none text-sm"
+                          className="w-full bg-transparent outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           placeholder="Ví dụ: Phí vận chuyển"
+                          disabled={disabled}
                         />
                       )}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-left">
                     <Controller
                       name={`expenses.${idx}.amount`}
                       control={control}
                       render={({ field }) => (
-                        <CurrencyInput value={field.value} onChange={field.onChange} />
+                        <CurrencyInput value={field.value} onChange={field.onChange} disabled={disabled} />
                       )}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-left">
                     <Controller
                       name={`expenses.${idx}.note`}
                       control={control}
                       render={({ field }) => (
                         <input
                           {...field}
-                          className="w-full bg-transparent outline-none text-sm"
+                          className="w-full bg-transparent outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           placeholder="Ghi chú (không bắt buộc)"
+                          disabled={disabled}
                         />
                       )}
                     />
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => onRemove(idx)} type="button">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {!disabled && (
+                      <Button variant="ghost" size="icon" onClick={() => onRemove(idx)} type="button">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
