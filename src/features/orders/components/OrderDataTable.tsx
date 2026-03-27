@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { format } from 'date-fns';
+import { format, formatDate } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -174,7 +174,7 @@ const OrderItemsSection: React.FC<{
   return (
     <TableRow className="hover:bg-transparent border-0">
       <TableCell colSpan={colSpan} className="p-0 border-b border-border/50">
-        <div className="bg-muted/25 border-y border-dashed border-border/40">
+        <div className="bg-muted/25 border-y border-dashed border-bolênrder/40">
           {/* Sub-header */}
           <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] px-12 py-2 border-b border-border/30">
             {['Sản phẩm', 'Hãng sản xuất', 'Đơn giá', 'SL', 'VAT', 'Thành tiền'].map((h, i) => (
@@ -316,6 +316,17 @@ const OrderRow: React.FC<OrderRowProps> = ({
         </div>
       </TableCell>
 
+      {/* ── Mã số hợp đồng ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30 min-w-[150px] cursor-pointer">
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-sm font-semibold text-primary leading-none">
+              {order.contractCode}
+            </span>
+          </div>
+        </div>
+      </TableCell>
+
       {/* ── Khách hàng / NCC ── */}
       <TableCell className="px-3 py-3 border-r border-border/30 min-w-[150px] cursor-pointer">
         <div className="space-y-0.5">
@@ -397,6 +408,24 @@ const OrderRow: React.FC<OrderRowProps> = ({
         />
       </TableCell>
 
+      {/* ── Ngày tạo ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30">
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium text-foreground tabular-nums">
+            {format(new Date(order.createdAt), 'dd/MM/yyyy')}
+          </div>
+        </div>
+      </TableCell>
+
+      {/* ── Người tạo đơn ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30">
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium text-foreground tabular-nums">
+            {order.creator.username}
+          </div>
+        </div>
+      </TableCell>
+
       {/* ── Thao tác ── */}
       <TableCell className="px-3 py-3" onClick={e => e.stopPropagation()}>
         <ActionsMenu order={order} dialogActions={dialogActions} />
@@ -408,7 +437,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 // Total columns: checkbox + 8 data cols = 9
-const COL_COUNT = 9;
+const COL_COUNT = 12;
 
 export const OrderDataTable: React.FC<OrderDataTableProps> = ({
   orders, isLoading, total, pagination, onPaginationChange,
@@ -485,6 +514,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   Mã đơn hàng
                 </TableHead>
 
+                {/* Mã số hợp đồng */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Mã số hợp đồng
+                </TableHead>
+
                 {/* Khách hàng */}
                 <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
                   {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'}
@@ -513,6 +547,16 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
                 {/* Trạng thái */}
                 <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
                   Trạng thái
+                </TableHead>
+
+                {/* Ngày tạo */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Ngày tạo
+                </TableHead>
+
+                {/* Người tạo đơn */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Người tạo đơn
                 </TableHead>
 
                 {/* Thao tác */}
