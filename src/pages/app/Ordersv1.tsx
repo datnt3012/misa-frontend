@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,6 +16,9 @@ import { OrderPageHeader } from '@/features/orders/components/OrderPageHeader';
 import { OrderDialogManager, type OrderDialogManagerHandle } from '@/features/orders/components/OrderDialogManager';
 import { OrderBulkActions } from '@/features/orders/components/OrderBulkActions';
 import { OrderDataTable } from '@/features/orders/components/OrderDataTable';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ToastAction } from "@/components/ui/toast";
+import { warehouseReceiptsApi } from "@/api/warehouseReceipts.api";
 import { ORDER_TYPES, OrderFilterSchemaType } from '@/features/orders/schemas';
 
 const Ordersv1Content: React.FC = () => {
@@ -50,17 +53,126 @@ const Ordersv1Content: React.FC = () => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
+    const [orderHasLinkedSlipsCache, setOrderHasLinkedSlipsCache] = useState<Record<string, boolean>>({});
+    const [checkingLinkedSlips, setCheckingLinkedSlips] = useState<Set<string>>(new Set());
+    const [showPaymentWarningDialog, setShowPaymentWarningDialog] = useState(false);
+    const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{orderId: string, status: string} | null>(null);
+
+    const checkOrderHasLinkedSlips = useCallback(async (orderId: string) => {
+        if (orderHasLinkedSlipsCache[orderId] !== undefined) return orderHasLinkedSlipsCache[orderId];
+        if (checkingLinkedSlips.has(orderId)) return false;
+        
+        setCheckingLinkedSlips(prev => new Set(prev).add(orderId));
+        try {
+            const exportSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100, type: 'export,purchase_return_note' });
+            const validExportSlips = exportSlipsResponse?.receipts?.filter((s: any) => s.status === 'picked' || s.status === 'exported') || [];
+            if (validExportSlips.length > 0) {
+                setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: true }));
+                return true;
+            }
+            const importSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100 });
+            const validImportSlips = importSlipsResponse?.receipts?.filter((s: any) => s.status === 'approved') || [];
+            const hasLinked = validImportSlips.length > 0 || validExportSlips.length > 0;
+            setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: hasLinked }));
+            return hasLinked;
+        } catch {
+            setOrderHasLinkedSlipsCache(prev => ({ ...prev, [orderId]: false }));
+            return false;
+        } finally {
+            setCheckingLinkedSlips(prev => {
+                const next = new Set(prev);
+                next.delete(orderId);
+                return next;
+            });
+        }
+    }, [orderHasLinkedSlipsCache, checkingLinkedSlips]);
+
+    useEffect(() => {
+        if (orders?.length) {
+            orders.forEach((o: any) => {
+                if (o.id && orderHasLinkedSlipsCache[o.id] === undefined && !checkingLinkedSlips.has(o.id)) {
+                    checkOrderHasLinkedSlips(o.id);
+                }
+            });
+        }
+    }, [orders, orderHasLinkedSlipsCache, checkingLinkedSlips, checkOrderHasLinkedSlips]);
+
+    const executeStatusUpdate = async (orderId: string, newStatus: string) => {
+        try {
+            await ORDER_API.UPDATE_ORDER_STATUS(orderId, { status: newStatus });
+            queryClient.invalidateQueries({ queryKey: ['orders', 'list'] });
+            toast({ title: 'Thành công', description: 'Đã cập nhật trạng thái đơn hàng' });
+        } catch (error: any) {
+            const errorDetails = error.response?.data?.details;
+            const warehouseReceipts = errorDetails?.warehouseReceipts || {};
+            const exportCodes = warehouseReceipts?.export || [];
+            const returnCodes = warehouseReceipts?.sale_return_note || [];
+            
+            let toastAction: React.ReactNode = undefined;
+            const exportSearchQuery = exportCodes.join(',');
+            const exportAction = exportCodes.length > 0 ? (
+                <ToastAction altText="Xem phiếu xuất" onClick={() => window.open(`/export-import?tab=exports&search=${encodeURIComponent(exportSearchQuery)}`, '_blank')}>Phiếu xuất ({exportCodes.length})</ToastAction>
+            ) : null;
+            
+            const returnSearchQuery = returnCodes.join(',');
+            const returnAction = returnCodes.length > 0 ? (
+                <ToastAction altText="Xem phiếu hoàn" onClick={() => window.open(`/export-import?tab=imports&search=${encodeURIComponent(returnSearchQuery)}`, '_blank')}>Phiếu hoàn ({returnCodes.length})</ToastAction>
+            ) : null;
+            
+            if (exportAction && returnAction) {
+                toastAction = <div className="flex flex-row gap-2 w-full">{exportAction}{returnAction}</div>;
+            } else if (exportAction) {
+                toastAction = exportAction;
+            } else if (returnAction) {
+                toastAction = returnAction;
+            }
+            
+            const toastOptions: any = {
+                title: "Lỗi",
+                description: error.response?.data?.message || getErrorMessage(error, "Không thể cập nhật trạng thái"),
+                variant: "destructive",
+                action: toastAction,
+            };
+            if (toastAction) {
+                toastOptions.layout = "stacked";
+            }
+            toast(toastOptions);
+        } finally {
+            setPendingStatusUpdate(null);
+        }
+    };
+
     const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
         if (!hasPermission('ORDERS_UPDATE_STATUS')) {
             toast({ title: 'Không có quyền', description: 'Bạn không có quyền cập nhật trạng thái đơn hàng', variant: 'destructive' });
             return;
         }
+
+        if (newStatus === 'cancelled') {
+            const order = orders.find((o: any) => o.id === orderId) as any;
+            const paidAmount = order?.totalPaidAmount ?? order?.total_paid_amount ?? order?.paid_amount ?? order?.initialPayment ?? order?.initial_payment ?? 0;
+            if (paidAmount > 0) {
+                setPendingStatusUpdate({ orderId, status: newStatus });
+                setShowPaymentWarningDialog(true);
+                return;
+            }
+        }
+        await executeStatusUpdate(orderId, newStatus);
+    };
+
+    const handleConfirmedStatusUpdate = () => {
+        if (pendingStatusUpdate) {
+            setShowPaymentWarningDialog(false);
+            executeStatusUpdate(pendingStatusUpdate.orderId, pendingStatusUpdate.status);
+        }
+    };
+
+    const handleQuickNote = async (orderId: string, note: string) => {
         try {
-            await ORDER_API.UPDATE_ORDER_STATUS(orderId, { status: newStatus });
+            await ORDER_API.UPDATE_ORDER(orderId, { note });
             queryClient.invalidateQueries({ queryKey: ['orders', 'list'] });
-            toast({ title: 'Thành công', description: 'Đã cập nhật trạng thái đơn hàng' });
         } catch (error) {
-            toast({ title: 'Lỗi', description: getErrorMessage(error, 'Không thể cập nhật trạng thái'), variant: 'destructive' });
+            toast({ title: 'Lỗi', description: getErrorMessage(error, 'Không thể cập nhật ghi chú'), variant: 'destructive' });
         }
     };
 
@@ -73,6 +185,22 @@ const Ordersv1Content: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-background pb-10">
+            {/* Payment Warning Dialog */}
+            <AlertDialog open={showPaymentWarningDialog} onOpenChange={setShowPaymentWarningDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cảnh báo thanh toán</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Đơn hàng này đã có thanh toán liên kết. Nếu hủy đơn, bạn cần hoàn tiền cho khách hàng. Bạn có chắc chắn muốn hủy đơn hàng không?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setPendingStatusUpdate(null)}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmedStatusUpdate}>Tiếp tục hủy</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             <div className="w-full mx-auto space-y-6 p-4 md:p-8">
                 {/* Header with Title and Add New Action */}
                 <OrderPageHeader
@@ -114,13 +242,16 @@ const Ordersv1Content: React.FC = () => {
                             availableTags={catalogs.availableTags}
                             onUpdateStatus={handleUpdateOrderStatus}
                             hasPermission={hasPermission}
+                            orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
+                            onUpdateQuickNote={handleQuickNote}
                             dialogActions={{
                                 openView: (order) => navigate(`/orders/${order.id}`),
                                 openEdit: (order) => navigate(`/orders/${order.id}/edit`),
                                 openPayment: (order) => dialogManagerRef.current?.openPayment(order),
                                 openTagsManager: (order) => dialogManagerRef.current?.openTagsManager(order),
                                 openExportDelivery: (order) => dialogManagerRef.current?.openExportDelivery(order),
-                                openExportSlip: (order) => dialogManagerRef.current?.openExportSlip(order),
+                                openExportSlip: (order) => dialogManagerRef.current?.openExportSlip(order, order.type === 'purchase' ? 'import' : 'export'),
+                                openReturnSlip: (order) => dialogManagerRef.current?.openExportSlip(order, order.type === 'purchase' ? 'purchase_return' : 'sale_return'),
                                 openDelete: (order) => dialogManagerRef.current?.openDelete(order),
                             }}
                         />

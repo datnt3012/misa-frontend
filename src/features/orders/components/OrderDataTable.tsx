@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { format } from 'date-fns';
+import { format, formatDate } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import {
   Eye, Edit, Tag, CreditCard, Package, Banknote,
-  Trash2, Download, MoreHorizontal, ChevronRight,
+  Trash2, Download, MoreHorizontal, ChevronRight, RotateCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -41,7 +41,11 @@ export interface OrderDataTableProps {
   availableTags: ApiOrderTag[];
   onUpdateStatus: (orderId: string, status: string) => void;
   hasPermission: (p: string) => boolean;
-  dialogActions: OrderDialogActions;
+  dialogActions: OrderDialogActions & {
+    openReturnSlip?: (order: OrderSchemaType) => void;
+  };
+  orderHasLinkedSlipsCache?: Record<string, boolean>;
+  onUpdateQuickNote?: (id: string, note: string) => void;
 }
 
 // ─── ReconciliationBadge ──────────────────────────────────────────────────────
@@ -123,8 +127,9 @@ const StatusSelect: React.FC<{
 
 const ActionsMenu: React.FC<{
   order: OrderSchemaType;
-  dialogActions: OrderDialogActions;
-}> = ({ order, dialogActions }) => (
+  dialogActions: OrderDataTableProps['dialogActions'];
+  orderHasLinkedSlipsCache?: Record<string, boolean>;
+}> = ({ order, dialogActions, orderHasLinkedSlipsCache }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-50 hover:opacity-100 transition-opacity">
@@ -152,6 +157,12 @@ const ActionsMenu: React.FC<{
         <Package className="w-4 h-4 mr-2" />
         {order.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
       </DropdownMenuItem>
+      {orderHasLinkedSlipsCache?.[order.id] !== false && dialogActions.openReturnSlip && (
+        <DropdownMenuItem onClick={() => dialogActions.openReturnSlip!(order)} className="cursor-pointer hover:bg-muted">
+          <RotateCw className="w-4 h-4 mr-2" />
+          {order.type === 'purchase' ? 'Tạo phiếu trả hàng NCC' : 'Tạo phiếu hoàn hàng'}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem
         onClick={() => dialogActions.openDelete(order)}
         className="cursor-pointer hover:bg-muted text-red-600 focus:text-red-600"
@@ -174,7 +185,7 @@ const OrderItemsSection: React.FC<{
   return (
     <TableRow className="hover:bg-transparent border-0">
       <TableCell colSpan={colSpan} className="p-0 border-b border-border/50">
-        <div className="bg-muted/25 border-y border-dashed border-border/40">
+        <div className="bg-muted/25 border-y border-dashed border-bolênrder/40">
           {/* Sub-header */}
           <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] px-12 py-2 border-b border-border/30">
             {['Sản phẩm', 'Hãng sản xuất', 'Đơn giá', 'SL', 'VAT', 'Thành tiền'].map((h, i) => (
@@ -252,15 +263,18 @@ interface OrderRowProps {
   onSelect: (checked: boolean) => void;
   onUpdateStatus: (id: string, status: string) => void;
   hasPermission: (p: string) => boolean;
-  dialogActions: OrderDialogActions;
+  dialogActions: OrderDataTableProps['dialogActions'];
   availableTags: ApiOrderTag[];
   onRowClick: () => void;
+  onUpdateQuickNote?: (id: string, note: string) => void;
+  orderHasLinkedSlipsCache?: Record<string, boolean>;
 }
 
 const OrderRow: React.FC<OrderRowProps> = ({
   order, isExpanded, isSelected, isEven,
   onToggleExpand, onSelect, onUpdateStatus,
   hasPermission, dialogActions, availableTags, onRowClick,
+  onUpdateQuickNote, orderHasLinkedSlipsCache
 }) => {
   const phone = maskPhoneNumber(order.customer?.phoneNumber || '');
   const addr = formatAddress(order.customer?.address || '');
@@ -312,6 +326,17 @@ const OrderRow: React.FC<OrderRowProps> = ({
           </div>
           <div className="pl-5 flex flex-wrap gap-1">
             <ReconciliationBadge tags={order.tags} availableTags={availableTags} />
+          </div>
+        </div>
+      </TableCell>
+
+      {/* ── Mã số hợp đồng ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30 min-w-[150px] cursor-pointer">
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-sm font-semibold text-primary leading-none">
+              {order.contractCode}
+            </span>
           </div>
         </div>
       </TableCell>
@@ -397,9 +422,48 @@ const OrderRow: React.FC<OrderRowProps> = ({
         />
       </TableCell>
 
+      {/* ── Ngày tạo ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30">
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium text-foreground tabular-nums">
+            {format(new Date(order.createdAt), 'dd/MM/yyyy')}
+          </div>
+        </div>
+      </TableCell>
+
+      {/* ── Người tạo đơn ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30">
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium text-foreground tabular-nums">
+            {order.creator.username}
+          </div>
+        </div>
+      </TableCell>
+
+      {/* ── Ghi chú ── */}
+      <TableCell className="px-3 py-3 border-r border-border/30 w-48 relative p-0 h-16">
+        <div
+          className="absolute inset-0 w-full h-full flex items-center justify-center text-center 
+            text-sm p-2 overflow-auto hover:bg-muted/50 focus:bg-background h-auto max-h-40
+            focus:outline-none focus:ring-1 focus:ring-ring break-words whitespace-pre-wrap select-text"
+          contentEditable
+          suppressContentEditableWarning={true}
+          onBlur={(e) => onUpdateQuickNote?.(order.id, e.currentTarget.textContent || null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {order.note || (order as any).notes || ""}
+        </div>
+      </TableCell>
+
       {/* ── Thao tác ── */}
       <TableCell className="px-3 py-3" onClick={e => e.stopPropagation()}>
-        <ActionsMenu order={order} dialogActions={dialogActions} />
+        <ActionsMenu order={order} dialogActions={dialogActions} orderHasLinkedSlipsCache={orderHasLinkedSlipsCache} />
       </TableCell>
     </TableRow>
   );
@@ -407,14 +471,15 @@ const OrderRow: React.FC<OrderRowProps> = ({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-// Total columns: checkbox + 8 data cols = 9
-const COL_COUNT = 9;
+// Total columns: checkbox + 11 data cols = 12 (now 13 with Notes)
+const COL_COUNT = 13;
 
 export const OrderDataTable: React.FC<OrderDataTableProps> = ({
   orders, isLoading, total, pagination, onPaginationChange,
   selectedIds, onSelectedIdsChange,
   orderType, availableTags,
   onUpdateStatus, hasPermission, dialogActions,
+  orderHasLinkedSlipsCache, onUpdateQuickNote
 }) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -485,6 +550,11 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   Mã đơn hàng
                 </TableHead>
 
+                {/* Mã số hợp đồng */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Mã số hợp đồng
+                </TableHead>
+
                 {/* Khách hàng */}
                 <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
                   {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'}
@@ -513,6 +583,21 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
                 {/* Trạng thái */}
                 <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
                   Trạng thái
+                </TableHead>
+
+                {/* Ngày tạo */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Ngày tạo
+                </TableHead>
+
+                {/* Người tạo đơn */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
+                  Người tạo đơn
+                </TableHead>
+
+                {/* Ghi chú */}
+                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 w-48">
+                  Ghi chú
                 </TableHead>
 
                 {/* Thao tác */}
@@ -564,6 +649,8 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
                       dialogActions={dialogActions}
                       availableTags={availableTags}
                       onRowClick={() => dialogActions.openView(order)}
+                      onUpdateQuickNote={onUpdateQuickNote}
+                      orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
                     />,
                     <OrderItemsSection
                       key={`${order.id}-section`}
@@ -579,13 +666,15 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
             {/* Footer summary */}
             <TableFooter>
               <TableRow className="bg-primary/5 border-t-2 border-primary/20 hover:bg-primary/10">
-                <TableCell className="px-3 py-2" />
+                {/* <TableCell className="px-3 py-2" /> */}
                 <TableCell className="px-3 py-2 font-bold text-primary  text-xs tracking-wide border-r border-border/40">
                   Tổng cộng
                 </TableCell>
                 <TableCell className="px-3 py-2 text-xs font-semibold text-slate-600 border-r border-border/40">
                   {total} đơn
                 </TableCell>
+                <TableCell colSpan={2} className="px-3 py-2" />
+
                 <TableCell className="px-3 py-2 text-xs font-semibold text-slate-600 border-r border-border/40">
                   {totalQty} đơn vị
                 </TableCell>
@@ -599,7 +688,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   {formatCurrency(totalCosts + totalVatAmount)}
                 </TableCell>
                 <TableCell className="px-3 py-2 border-r border-border/40" />
-                <TableCell className="px-3 py-2" />
+                <TableCell colSpan={4} className="px-3 py-2" />
               </TableRow>
             </TableFooter>
           </Table>
