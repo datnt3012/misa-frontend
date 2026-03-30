@@ -10,6 +10,7 @@ export interface OrderItem {
   manufacturer: string;
   quantity: number;
   unit_price: number;
+  unit_vat_price?: number;
   total_price: number;
   vat_percentage?: number;
   vat_total_price?: number;
@@ -276,6 +277,7 @@ export const normalizeOrderItem = (it: any): OrderItem => ({
   category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
   quantity: Number(it.quantity ?? 0),
   unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+  unit_vat_price: Number(it.unitVatPrice ?? it.unit_vat_price ?? 0),
   total_price: Number(it.totalPrice ?? it.total_price ?? 0),
   vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
   vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),

@@ -1667,7 +1667,7 @@ const OrdersContent: React.FC = () => {
                                {order.items?.map((item: any, index: number) => (
                                  <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                     <div className="font-medium text-slate-900 text-center leading-tight space-y-0">
-                                      <div className="leading-none">{formatVndNoSymbol(item.vat_price)}</div>
+                                      <div className="leading-none">{formatVndNoSymbol(item.unit_vat_price)}</div>
                                       <div className="text-xs text-slate-500 leading-none">({item.vat_percentage}%)</div>
                                     </div>
                                  </div>
