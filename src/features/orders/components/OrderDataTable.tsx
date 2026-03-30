@@ -1,13 +1,10 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { format, formatDate } from 'date-fns';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { TableCell, TableRow } from '@/components/ui/table';
 import {
   Eye, Edit, Tag, CreditCard, Package, Banknote,
   Trash2, Download, MoreHorizontal, ChevronRight, RotateCw,
@@ -25,12 +22,14 @@ import {
   getTagDisplayName, mapTagNames,
 } from '../utils/tagHelpers';
 import { OrderDialogActions } from './OrderDialogs';
-import { OrderSchemaType } from '../schemas';
+import { OrderSchemaType, OrderDetailSchemaType, OrderSummarySchemaType } from '../schemas';
+import { StripedDataTable, DataTableColumn } from '@/shared/components/data-tables/StripedDataTable';
 
 // ─── Prop types ───────────────────────────────────────────────────────────────
 
 export interface OrderDataTableProps {
   orders: OrderSchemaType[];
+  summary?: OrderSummarySchemaType;
   isLoading: boolean;
   total: number;
   pagination: { page: number; limit: number };
@@ -57,7 +56,6 @@ const ReconciliationBadge: React.FC<{
   const mapped = mapTagNames(tags, availableTags);
   const special = mapped.filter(t => isReconciledDisplayTag(t) || isPendingDisplayTag(t));
   const hasReconciled = special.some(isReconciledDisplayTag);
-
   const items = special.length > 0 ? special : [null];
 
   return (
@@ -72,7 +70,7 @@ const ReconciliationBadge: React.FC<{
               'text-[10px] px-1.5 py-0 h-4 font-medium border',
               reconciled
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200',
+                : 'bg-amber-100 text-amber-700 border-amber-200',
             )}
           >
             {tag ? getTagDisplayName(tag) : (reconciled ? 'Đã đối soát' : 'Chưa đối soát')}
@@ -93,8 +91,7 @@ const StatusSelect: React.FC<{
   const statusCode =
     typeof order.status === 'object' ? order.status?.code : (order.status as string);
   const config = getOrderStatusConfig(statusCode, order.type === 'purchase');
-  const isLong =
-    statusCode === 'delivery_failed' || statusCode === 'partially_imported';
+  const isLong = statusCode === 'delivery_failed' || statusCode === 'partially_imported';
 
   return (
     <Select
@@ -173,297 +170,111 @@ const ActionsMenu: React.FC<{
   </DropdownMenu>
 );
 
-// ─── OrderItemsSection (expandable) ──────────────────────────────────────────
+// ─── OrderItemsSection (expandable sub-row) ───────────────────────────────────
+
+type DetailColumn = {
+  key: string;
+  title: string;
+  headerClassName?: string;
+  cellClassName?: string;
+  render: (item: OrderDetailSchemaType) => React.ReactNode;
+};
+
+const DETAIL_GRID_COLS = 'grid-cols-[4fr_2fr_1fr_1fr_1fr_1fr_1fr_3fr]';
+
+const DETAIL_COLUMNS: DetailColumn[] = [
+  { key: 'empty_start', title: '', render: () => null },
+  {
+    key: 'product',
+    title: 'Sản phẩm',
+    cellClassName: 'text-sm font-medium text-slate-800 truncate pr-4',
+    render: (item) => <span title={item.product?.name}>{item.product?.name || 'N/A'}</span>,
+  },
+  {
+    key: 'manufacturer',
+    title: 'Hãng sản xuất',
+    cellClassName: 'text-sm text-slate-500 truncate',
+    render: (item) => item.product?.manufacturer || '—',
+  },
+  {
+    key: 'unitPrice',
+    title: 'Đơn giá',
+    headerClassName: 'text-left',
+    cellClassName: 'text-sm text-left tabular-nums text-slate-700',
+    render: (item) => formatCurrency(item.unitPrice),
+  },
+  {
+    key: 'quantity',
+    title: 'SL',
+    headerClassName: 'text-left',
+    cellClassName: 'text-sm text-left tabular-nums font-medium text-slate-800',
+    render: (item) => item.quantity || 0,
+  },
+  {
+    key: 'vatPercentage',
+    title: 'VAT',
+    headerClassName: 'text-left',
+    cellClassName: 'text-sm text-left text-slate-500',
+    render: (item) => `${item.vatPercentage || 0}%`,
+  },
+  {
+    key: 'lineTotal',
+    title: 'Thành tiền',
+    headerClassName: 'text-left',
+    cellClassName: 'text-sm text-left tabular-nums font-bold text-emerald-700',
+    render: (item) => formatCurrency(
+      (item.unitPrice || 0) * (item.quantity || 0) * (1 + (Number(item.vatPercentage) || 0) / 100)
+    ),
+  },
+  { key: 'empty_end', title: '', render: () => null },
+];
 
 const OrderItemsSection: React.FC<{
   items: OrderSchemaType['details'];
   isExpanded: boolean;
   colSpan: number;
-}> = ({ items, isExpanded, colSpan }) => {
+  rowIndex: number;
+}> = ({ items, isExpanded, colSpan, rowIndex }) => {
   if (!isExpanded) return null;
 
   return (
-    <TableRow className="hover:bg-transparent border-0">
+    <TableRow className="hover:bg-transparent border-b-2 border-border/50">
       <TableCell colSpan={colSpan} className="p-0 border-b border-border/50">
-        <div className="bg-muted/25 border-y border-dashed border-bolênrder/40">
+        <div className={cn(rowIndex % 2 !== 0 ? 'bg-muted/60' : 'bg-background')}>
           {/* Sub-header */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] px-12 py-2 border-b border-border/30">
-            {['Sản phẩm', 'Hãng sản xuất', 'Đơn giá', 'SL', 'VAT', 'Thành tiền'].map((h, i) => (
+          <div className={cn('grid px-4 py-2 border-b border-border/50 bg-muted/40', DETAIL_GRID_COLS)}>
+            {DETAIL_COLUMNS.map((col) => (
               <div
-                key={h}
-                className={cn(
-                  'text-[11px] font-semibold  tracking-wide text-muted-foreground',
-                  i >= 2 && 'text-right',
-                )}
+                key={col.key}
+                className={cn('text-[11px] text-left font-semibold tracking-wide text-muted-foreground border-r border-border/50 last:border-r-0 px-3', col.headerClassName)}
               >
-                {h}
+                {col.title}
               </div>
             ))}
           </div>
 
           {/* Item rows */}
           {items?.length ? (
-            items.map((item, i) => {
-              const lineTotal =
-                (item.unitPrice || 0) *
-                (item.quantity || 0) *
-                (1 + (Number(item.vatPercentage) || 0) / 100);
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    'grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] px-12 py-2.5',
-                    i % 2 === 1 && 'bg-muted/20',
-                    i < items.length - 1 && 'border-b border-border/20',
-                  )}
-                >
-                  <div
-                    className="text-sm font-medium text-foreground truncate pr-4"
-                    title={item.product?.name}
-                  >
-                    {item.product?.name || 'N/A'}
+            items.map((item, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'grid px-4 py-2.5',
+                  DETAIL_GRID_COLS,
+                  i < items.length - 1 && 'border-b border-border/30',
+                )}
+              >
+                {DETAIL_COLUMNS.map((col) => (
+                  <div key={col.key} className={cn('border-r border-border/50 last:border-r-0 px-3 min-w-10 text-left', col.cellClassName)}>
+                    {col.render(item)}
                   </div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {item.product?.manufacturer || '—'}
-                  </div>
-                  <div className="text-sm text-right tabular-nums text-slate-700">
-                    {formatCurrency(item.unitPrice)}
-                  </div>
-                  <div className="text-sm text-right tabular-nums font-medium text-foreground">
-                    {item.quantity || 0}
-                  </div>
-                  <div className="text-sm text-right text-slate-600">
-                    {item.vatPercentage || 0}%
-                  </div>
-                  <div className="text-sm text-right tabular-nums font-semibold text-emerald-700">
-                    {formatCurrency(lineTotal)}
-                  </div>
-                </div>
-              );
-            })
+                ))}
+              </div>
+            ))
           ) : (
-            <div className="px-12 py-4 text-sm text-muted-foreground">
-              Không có sản phẩm
-            </div>
+            <div className="px-4 py-4 text-sm text-muted-foreground">Không có sản phẩm</div>
           )}
         </div>
-      </TableCell>
-    </TableRow>
-  );
-};
-
-// ─── OrderRow ─────────────────────────────────────────────────────────────────
-
-interface OrderRowProps {
-  order: OrderSchemaType;
-  isExpanded: boolean;
-  isSelected: boolean;
-  isEven: boolean;
-  onToggleExpand: () => void;
-  onSelect: (checked: boolean) => void;
-  onUpdateStatus: (id: string, status: string) => void;
-  hasPermission: (p: string) => boolean;
-  dialogActions: OrderDataTableProps['dialogActions'];
-  availableTags: ApiOrderTag[];
-  onRowClick: () => void;
-  onUpdateQuickNote?: (id: string, note: string) => void;
-  orderHasLinkedSlipsCache?: Record<string, boolean>;
-}
-
-const OrderRow: React.FC<OrderRowProps> = ({
-  order, isExpanded, isSelected, isEven,
-  onToggleExpand, onSelect, onUpdateStatus,
-  hasPermission, dialogActions, availableTags, onRowClick,
-  onUpdateQuickNote, orderHasLinkedSlipsCache
-}) => {
-  const phone = maskPhoneNumber(order.customer?.phoneNumber || '');
-  const addr = formatAddress(order.customer?.address || '');
-  const paid = order.totalPaidAmount ?? 0;
-  const debt = order.remainingDebt ?? Math.max(0, (order.totalAmount ?? 0) - paid);
-  const itemCount = order.details?.length ?? 0;
-  const totalQty = order.details?.reduce((s, d) => s + (d.quantity || 0), 0) ?? 0;
-  const expenses =
-    order.totalExpenses ??
-    order.expenses?.reduce((s, e) => s + (Number(e.amount) || 0), 0) ??
-    0;
-
-  return (
-    <TableRow
-      className={cn(
-        'border-b border-border/40 transition-colors group',
-        isEven ? 'bg-background' : 'bg-muted/35',
-        isSelected && '!bg-primary/5',
-        isExpanded && '!bg-primary/[0.04] border-b-0',
-        'hover:bg-muted/60',
-      )}
-    >
-      {/* ── Checkbox ── */}
-      <TableCell className="px-3 py-3 w-8 border-r border-border/30">
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={c => onSelect(!!c)}
-          aria-label={`Chọn ${order.code}`}
-          className="h-3.5 w-3.5"
-          onClick={e => e.stopPropagation()}
-        />
-      </TableCell>
-
-      {/* ── Mã đơn hàng ── */}
-      <TableCell
-        className="px-3 py-3 border-r border-border/30 min-w-[165px] cursor-pointer"
-        onClick={onRowClick}
-      >
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-sm font-semibold text-primary leading-none">
-              {order.code}
-            </span>
-          </div>
-          <div className="text-xs text-muted-foreground pl-5">
-            {order.createdAt
-              ? format(new Date(order.createdAt), 'dd/MM/yy HH:mm')
-              : '—'}
-          </div>
-          <div className="pl-5 flex flex-wrap gap-1">
-            <ReconciliationBadge tags={order.tags} availableTags={availableTags} />
-          </div>
-        </div>
-      </TableCell>
-
-      {/* ── Mã số hợp đồng ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30 min-w-[150px] cursor-pointer">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-sm font-semibold text-primary leading-none">
-              {order.contractCode}
-            </span>
-          </div>
-        </div>
-      </TableCell>
-
-      {/* ── Khách hàng / NCC ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30 min-w-[150px] cursor-pointer">
-        <div className="space-y-0.5">
-          <div
-            className="text-sm font-semibold text-foreground truncate max-w-[170px]"
-            title={order.customer?.name}
-          >
-            {order.customer?.name || '—'}
-          </div>
-          <div className="text-xs text-muted-foreground font-mono">{phone}</div>
-          <div
-            className="text-xs text-muted-foreground truncate max-w-[170px]"
-            title={addr}
-          >
-            {addr}
-          </div>
-        </div>
-      </TableCell>
-
-      {/* ── Sản phẩm (click to expand) ── */}
-      <TableCell
-        className="px-3 py-3 border-r border-border/30 cursor-pointer"
-        onClick={e => { e.stopPropagation(); onToggleExpand(); }}
-      >
-        <div className="flex items-center gap-2">
-          <div>
-            <div className="text-sm font-medium text-foreground whitespace-nowrap">
-              {itemCount} sản phẩm
-            </div>
-            <div className="text-xs text-muted-foreground">{totalQty} đơn vị</div>
-          </div>
-          <ChevronRight
-            className={cn(
-              'w-3 h-3 text-muted-foreground/60 shrink-0 transition-transform duration-150',
-              isExpanded && 'rotate-90 text-primary',
-            )}
-          />
-        </div>
-      </TableCell>
-
-      {/* ── Chi phí ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30 text-right">
-        <span className="text-sm font-medium text-amber-600 tabular-nums">
-          {formatCurrency(expenses)}
-        </span>
-      </TableCell>
-
-      {/* ── Tổng có VAT ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30 text-right">
-        <span className="text-sm font-semibold text-emerald-700 tabular-nums">
-          {formatCurrency(order.totalVatAmount ?? 0)}
-        </span>
-      </TableCell>
-
-      {/* ── Thanh toán ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30">
-        <div className="space-y-0.5 text-right">
-          <div className="text-sm font-medium text-emerald-700 tabular-nums flex items-center justify-end gap-1">
-            <Banknote className="w-3 h-3 shrink-0" />
-            {formatCurrency(paid)}
-          </div>
-          {debt > 0 && (
-            <div className="text-xs font-medium text-red-500 tabular-nums">
-              {formatCurrency(debt)}
-            </div>
-          )}
-        </div>
-      </TableCell>
-
-      {/* ── Trạng thái ── */}
-      <TableCell
-        className="px-3 py-3 border-r border-border/30"
-        onClick={e => e.stopPropagation()}
-      >
-        <StatusSelect
-          order={order}
-          onUpdateStatus={onUpdateStatus}
-          hasPermission={hasPermission}
-        />
-      </TableCell>
-
-      {/* ── Ngày tạo ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30">
-        <div className="space-y-0.5">
-          <div className="text-sm font-medium text-foreground tabular-nums">
-            {format(new Date(order.createdAt), 'dd/MM/yyyy')}
-          </div>
-        </div>
-      </TableCell>
-
-      {/* ── Người tạo đơn ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30">
-        <div className="space-y-0.5">
-          <div className="text-sm font-medium text-foreground tabular-nums">
-            {order.creator.username}
-          </div>
-        </div>
-      </TableCell>
-
-      {/* ── Ghi chú ── */}
-      <TableCell className="px-3 py-3 border-r border-border/30 w-48 relative p-0 h-16">
-        <div
-          className="absolute inset-0 w-full h-full flex items-center justify-center text-center 
-            text-sm p-2 overflow-auto hover:bg-muted/50 focus:bg-background h-auto max-h-40
-            focus:outline-none focus:ring-1 focus:ring-ring break-words whitespace-pre-wrap select-text"
-          contentEditable
-          suppressContentEditableWarning={true}
-          onBlur={(e) => onUpdateQuickNote?.(order.id, e.currentTarget.textContent || null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              e.currentTarget.blur();
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {order.note || (order as any).notes || ""}
-        </div>
-      </TableCell>
-
-      {/* ── Thao tác ── */}
-      <TableCell className="px-3 py-3" onClick={e => e.stopPropagation()}>
-        <ActionsMenu order={order} dialogActions={dialogActions} orderHasLinkedSlipsCache={orderHasLinkedSlipsCache} />
       </TableCell>
     </TableRow>
   );
@@ -471,17 +282,19 @@ const OrderRow: React.FC<OrderRowProps> = ({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-// Total columns: checkbox + 11 data cols = 12 (now 13 with Notes)
-const COL_COUNT = 13;
-
 export const OrderDataTable: React.FC<OrderDataTableProps> = ({
-  orders, isLoading, total, pagination, onPaginationChange,
+  orders, summary,
+  isLoading, total, pagination, onPaginationChange,
   selectedIds, onSelectedIdsChange,
   orderType, availableTags,
   onUpdateStatus, hasPermission, dialogActions,
-  orderHasLinkedSlipsCache, onUpdateQuickNote
+  orderHasLinkedSlipsCache, onUpdateQuickNote,
 }) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setExpandedIds(new Set(orders.map(o => o.id)));
+  }, [orders]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds(prev => {
@@ -491,312 +304,249 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     });
   }, []);
 
-  const isAllSelected =
-    orders.length > 0 && orders.every(o => selectedIds.includes(o.id));
-  const isSomeSelected =
-    orders.some(o => selectedIds.includes(o.id)) && !isAllSelected;
+  const columns = useMemo((): DataTableColumn<OrderSchemaType>[] => [
+    {
+      key: 'orderCode',
+      label: 'Mã đơn hàng',
+      render: (order) => (
+        <div className="space-y-1">
+          <span className="font-mono text-sm font-semibold text-slate-900 leading-none">
+            {order.code}
+          </span>
+          <div className="text-xs text-slate-500">
+            {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yy HH:mm') : '—'}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <ReconciliationBadge tags={order.tags ?? []} availableTags={availableTags} />
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'contractCode',
+      label: 'Mã số hợp đồng',
+      render: (order) => (
+        <span className="font-mono text-sm font-medium text-slate-800 leading-none">
+          {order.contractCode || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'partner',
+      label: orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng',
+      render: (order) => {
+        const phone = maskPhoneNumber(order.customer?.phoneNumber || '');
+        const addr = formatAddress(order.customer?.address || '');
+        return (
+          <div className="space-y-0.5">
+            <div className="text-sm font-semibold text-slate-900 truncate max-w-[170px]" title={order.customer?.name}>
+              {order.customer?.name || '—'}
+            </div>
+            <div className="text-xs text-slate-500 font-mono">{phone}</div>
+            <div className="text-xs text-slate-500 truncate max-w-[170px]" title={addr}>{addr}</div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'product',
+      label: 'Sản phẩm',
+      onCellClick: (order, e) => { e.stopPropagation(); toggleExpand(order.id); },
+      render: (order) => {
+        const itemCount = order.details?.length ?? 0;
+        const isExpanded = expandedIds.has(order.id);
+        const totalQty = order.details?.reduce((s, d) => s + (d.quantity || 0), 0) ?? 0;
+        return (
+          <div className="flex items-center gap-2 cursor-pointer">
+            <div>
+              <div className="text-sm font-medium text-slate-800 whitespace-nowrap">{itemCount} sản phẩm</div>
+              <div className="text-xs text-slate-500">{totalQty} đơn vị</div>
+            </div>
+            <ChevronRight
+              className={cn(
+                'w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150',
+                isExpanded && 'rotate-90 text-primary',
+              )}
+            />
+          </div>
+        );
+      },
+    },
+    {
+      key: 'expenses',
+      label: 'Chi phí',
+      className: 'text-left',
+      render: (order) => (
+        <span className="text-sm font-medium text-amber-600 tabular-nums">
+          {formatCurrency(order.totalExpenses)}
+        </span>
+      ),
+    },
+    {
+      key: 'totalOrderValueExcludingVAT',
+      label: 'Tổng trước thuế',
+      className: 'text-left',
+      render: (order) => (
+        <span className="text-sm font-medium text-emerald-600 tabular-nums">
+          {formatCurrency(order.totalAmount)}
+        </span>
+      ),
+    },
+    {
+      key: 'totalVatValue',
+      label: 'VAT',
+      className: 'text-left',
+      render: (order) => (
+        <span className="text-sm font-medium text-amber-500 tabular-nums">
+          {formatCurrency(order.totalVat)}
+        </span>
+      ),
+    },
+    {
+      key: 'totalOrderValue',
+      label: 'Tổng sau thuế',
+      className: 'text-left',
+      render: (order) => (
+        <span className="text-sm font-bold text-emerald-700 tabular-nums">
+          {formatCurrency(order.totalVatAmount)}
+        </span>
+      ),
+    },
+    {
+      key: 'paid',
+      label: 'Thanh toán',
+      className: 'text-left',
+      render: (order) => {
+        const paid = order.totalPaidAmount ?? 0;
+        const debt = order.remainingDebt ?? Math.max(0, (order.totalAmount ?? 0) - paid);
+        return (
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium text-emerald-600 tabular-nums flex items-center gap-1">
+              <Banknote className="w-3 h-3 shrink-0" />
+              {formatCurrency(paid)}
+            </div>
+            {debt > 0 && (
+              <div className="text-xs font-medium text-red-500 tabular-nums">{formatCurrency(debt)}</div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'status',
+      label: 'Trạng thái',
+      className: 'w-40',
+      onCellClick: (_, e) => e.stopPropagation(),
+      render: (order) => (
+        <StatusSelect order={order} onUpdateStatus={onUpdateStatus} hasPermission={hasPermission} />
+      ),
+    },
+    {
+      key: 'completedAt',
+      label: 'Ngày hoàn thành',
+      render: (order) => (
+        <div className="text-sm text-slate-800">
+          {order.completedAt
+            ? format(new Date(order.completedAt), 'dd/MM/yyyy')
+            : <span className="text-slate-400">—</span>}
+        </div>
+      ),
+    },
+    {
+      key: 'creator',
+      label: 'Người tạo đơn',
+      render: (order) => (
+        <div className="text-sm text-slate-800">
+          {order.creator?.username || <span className="text-slate-400">—</span>}
+        </div>
+      ),
+    },
+    {
+      key: 'note',
+      label: 'Ghi chú',
+      cellClassName: 'w-48 relative p-0 h-16',
+      onCellClick: (_, e) => e.stopPropagation(),
+      render: (order) => (
+        <div
+          className="absolute inset-0 w-full h-full flex items-center justify-center text-center
+            text-sm p-2 overflow-auto hover:bg-muted/50 focus:bg-background
+            focus:outline-none focus:ring-1 focus:ring-ring break-words whitespace-pre-wrap select-text"
+          contentEditable
+          suppressContentEditableWarning={true}
+          onBlur={(e) => onUpdateQuickNote?.(order.id, e.currentTarget.textContent || '')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+        >
+          {order.note || ''}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      label: '',
+      render: (order) => (
+        <ActionsMenu
+          order={order}
+          dialogActions={dialogActions}
+          orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
+        />
+      ),
+    },
+  ], [
+    availableTags, expandedIds, orderType, toggleExpand,
+    onUpdateStatus, hasPermission,
+    dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote,
+  ]);
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      onSelectedIdsChange([...new Set([...selectedIds, ...orders.map(o => o.id)])]);
-    } else {
-      onSelectedIdsChange(selectedIds.filter(id => !orders.some(o => o.id === id)));
-    }
-  };
-
-  const handleSelectRow = (id: string, checked: boolean) => {
-    if (checked) onSelectedIdsChange([...selectedIds, id]);
-    else onSelectedIdsChange(selectedIds.filter(s => s !== id));
-  };
-
-  // Footer aggregates
-  const totalQty = useMemo(
-    () => orders.reduce((acc, o) => acc + o.details.reduce((s, d) => s + d.quantity, 0), 0),
-    [orders],
-  );
-  const totalCosts = useMemo(
-    () => orders.reduce((acc, o) => acc + o.expenses.reduce((s, e) => s + e.amount, 0), 0),
-    [orders],
-  );
-  const totalVatAmount = useMemo(
-    () => orders.reduce((acc, o) => acc + (o.totalVatAmount ?? 0), 0),
-    [orders],
-  );
-
-  const limit = pagination.limit;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const footer = useMemo(() => (
+    <TableRow className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/60">
+      {[
+        { label: 'Tổng cộng', className: 'text-slate-600 font-semibold' },
+        { label: `${orders.length} đơn`, className: 'text-slate-600' },
+        { label: '', colSpan: 3 },
+        { label: formatCurrency(Number(summary?.totalExpenses) || 0), className: 'text-[16px] font-semibold text-amber-600 tabular-nums' },
+        // { label: formatCurrency(Number(summary?.totalVat) || 0), className: 'text-amber-600 tabular-nums' },
+        // { label: formatCurrency(Number(summary?.totalVatAmount) || 0), className: 'text-emerald-700 font-bold tabular-nums' },
+        { label: '', colSpan: 2 },
+        { label: formatCurrency(Number(summary?.totalAmount) || 0), className: 'text-[16px] font-semibold text-amber-600 tabular-nums' },
+        { label: formatCurrency(Number(summary?.totalDebt) || 0), className: 'text-[16px] font-semibold text-red-600 tabular-nums' },
+        { label: '', colSpan: 5 },
+      ].map((cell, i) => (
+        <TableCell
+          key={i}
+          colSpan={cell.colSpan}
+          className={cn('px-3 py-2.5 text-sm whitespace-nowrap', cell.className)}
+        >
+          {cell.label}
+        </TableCell>
+      ))}
+    </TableRow>
+  ), [orders.length, summary]);
 
   return (
-    <div className="w-full space-y-4">
-      {/* ── Table wrapper ── */}
-      <div className="overflow-hidden rounded-md border border-border/60 shadow-sm">
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
-          <Table>
-            {/* Sticky header */}
-            <TableHeader className="sticky top-0 z-10">
-              <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
-                {/* Checkbox col */}
-                <TableHead className="w-8 px-3 border-r border-border/50">
-                  <Checkbox
-                    checked={isAllSelected || (isSomeSelected ? 'indeterminate' : false)}
-                    onCheckedChange={c => handleSelectAll(!!c)}
-                    className="h-3.5 w-3.5"
-                    aria-label="Chọn tất cả"
-                  />
-                </TableHead>
-
-                {/* Mã đơn hàng */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  Mã đơn hàng
-                </TableHead>
-
-                {/* Mã số hợp đồng */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  Mã số hợp đồng
-                </TableHead>
-
-                {/* Khách hàng */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  {orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng'}
-                </TableHead>
-
-                {/* Sản phẩm */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  Sản phẩm
-                </TableHead>
-
-                {/* Chi phí */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 text-right">
-                  Chi phí
-                </TableHead>
-
-                {/* Tổng có VAT */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 text-right">
-                  Tổng có VAT
-                </TableHead>
-
-                {/* Thanh toán */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 text-right">
-                  Thanh toán
-                </TableHead>
-
-                {/* Trạng thái */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  Trạng thái
-                </TableHead>
-
-                {/* Ngày tạo */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  Ngày tạo
-                </TableHead>
-
-                {/* Người tạo đơn */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50">
-                  Người tạo đơn
-                </TableHead>
-
-                {/* Ghi chú */}
-                <TableHead className="h-10 px-3 text-xs font-semibold  tracking-wider text-muted-foreground whitespace-nowrap border-r border-border/50 w-48">
-                  Ghi chú
-                </TableHead>
-
-                {/* Thao tác */}
-                <TableHead className="h-10 px-3 w-10" />
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow
-                    key={i}
-                    className={cn('border-b border-border/30', i % 2 !== 0 && 'bg-muted/35')}
-                  >
-                    {Array.from({ length: COL_COUNT }).map((_, j) => (
-                      <TableCell
-                        key={j}
-                        className="px-3 py-4 border-r border-border/30 last:border-r-0"
-                      >
-                        <Skeleton className="h-4 w-full rounded" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : orders.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={COL_COUNT}
-                    className="py-14 text-center text-sm text-muted-foreground"
-                  >
-                    Không có dữ liệu
-                  </TableCell>
-                </TableRow>
-              ) : (
-                orders.flatMap((order, idx) => {
-                  const isExpanded = expandedIds.has(order.id);
-                  const isSelected = selectedIds.includes(order.id);
-                  return [
-                    <OrderRow
-                      key={`${order.id}-row`}
-                      order={order}
-                      isExpanded={isExpanded}
-                      isSelected={isSelected}
-                      isEven={idx % 2 === 0}
-                      onToggleExpand={() => toggleExpand(order.id)}
-                      onSelect={c => handleSelectRow(order.id, c)}
-                      onUpdateStatus={onUpdateStatus}
-                      hasPermission={hasPermission}
-                      dialogActions={dialogActions}
-                      availableTags={availableTags}
-                      onRowClick={() => dialogActions.openView(order)}
-                      onUpdateQuickNote={onUpdateQuickNote}
-                      orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
-                    />,
-                    <OrderItemsSection
-                      key={`${order.id}-section`}
-                      items={order.details}
-                      isExpanded={isExpanded}
-                      colSpan={COL_COUNT}
-                    />,
-                  ];
-                })
-              )}
-            </TableBody>
-
-            {/* Footer summary */}
-            <TableFooter>
-              <TableRow className="bg-primary/5 border-t-2 border-primary/20 hover:bg-primary/10">
-                {/* <TableCell className="px-3 py-2" /> */}
-                <TableCell className="px-3 py-2 font-bold text-primary  text-xs tracking-wide border-r border-border/40">
-                  Tổng cộng
-                </TableCell>
-                <TableCell className="px-3 py-2 text-xs font-semibold text-slate-600 border-r border-border/40">
-                  {total} đơn
-                </TableCell>
-                <TableCell colSpan={2} className="px-3 py-2" />
-
-                <TableCell className="px-3 py-2 text-xs font-semibold text-slate-600 border-r border-border/40">
-                  {totalQty} đơn vị
-                </TableCell>
-                <TableCell className="px-3 py-2 text-xs font-semibold text-amber-600 text-right tabular-nums border-r border-border/40">
-                  {formatCurrency(totalCosts)}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-xs font-semibold text-emerald-700 text-right tabular-nums border-r border-border/40">
-                  {formatCurrency(totalVatAmount)}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-xs font-bold text-primary text-right tabular-nums border-r border-border/40">
-                  {formatCurrency(totalCosts + totalVatAmount)}
-                </TableCell>
-                <TableCell className="px-3 py-2 border-r border-border/40" />
-                <TableCell colSpan={4} className="px-3 py-2" />
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-      </div>
-
-      {/* ── Pagination ── */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-1 py-1">
-        <div className="flex items-center gap-2 order-2 sm:order-1">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Hiển thị</span>
-          <Select
-            value={String(limit)}
-            onValueChange={v =>
-              onPaginationChange({ ...pagination, limit: parseInt(v, 10), page: 1 })
-            }
-          >
-            <SelectTrigger className="w-[70px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 25, 50, 100].map(opt => (
-                <SelectItem key={opt} value={String(opt)} className="text-xs">
-                  {opt}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-sm text-muted-foreground whitespace-nowrap">
-            trong tổng số {total} bản ghi
-          </span>
-        </div>
-
-        <div className="order-1 sm:order-2">
-          <Pagination>
-            <PaginationContent className="gap-1">
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={e => {
-                    e.preventDefault();
-                    if (pagination.page > 1)
-                      onPaginationChange({ ...pagination, page: pagination.page - 1 });
-                  }}
-                  className={cn(
-                    'h-8 px-2 text-xs',
-                    pagination.page <= 1 && 'pointer-events-none opacity-50',
-                  )}
-                />
-              </PaginationItem>
-
-              <div className="hidden sm:flex items-center gap-1">
-                {Array.from({ length: totalPages }).map((_, i) => {
-                  const p = i + 1;
-                  if (
-                    totalPages > 5 &&
-                    p > 1 &&
-                    p < totalPages &&
-                    (p < pagination.page - 1 || p > pagination.page + 1)
-                  ) {
-                    if (p === pagination.page - 2 || p === pagination.page + 2) {
-                      return (
-                        <span key={p} className="px-1 text-muted-foreground text-xs">
-                          …
-                        </span>
-                      );
-                    }
-                    return null;
-                  }
-                  return (
-                    <PaginationItem key={p}>
-                      <PaginationLink
-                        href="#"
-                        isActive={pagination.page === p}
-                        onClick={e => {
-                          e.preventDefault();
-                          onPaginationChange({ ...pagination, page: p });
-                        }}
-                        className="h-8 w-8 text-xs"
-                      >
-                        {p}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
-              </div>
-
-              <div className="flex sm:hidden items-center px-4 text-xs text-muted-foreground">
-                Trang {pagination.page} / {totalPages}
-              </div>
-
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={e => {
-                    e.preventDefault();
-                    if (pagination.page < totalPages)
-                      onPaginationChange({ ...pagination, page: pagination.page + 1 });
-                  }}
-                  className={cn(
-                    'h-8 px-2 text-xs',
-                    pagination.page >= totalPages && 'pointer-events-none opacity-50',
-                  )}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-      </div>
-    </div>
+    <StripedDataTable
+      data={orders}
+      columns={columns}
+      isLoading={isLoading}
+      total={total}
+      filters={{ page: pagination.page, limit: pagination.limit }}
+      onFiltersChange={(f) => onPaginationChange({ page: f.page, limit: f.limit })}
+      selectedIds={selectedIds}
+      onSelectedIdsChange={onSelectedIdsChange}
+      onRowClick={(order) => dialogActions.openView(order)}
+      renderSubRow={(order, colSpan, rowIndex) => (
+        <OrderItemsSection
+          items={order.details}
+          isExpanded={expandedIds.has(order.id)}
+          colSpan={colSpan}
+          rowIndex={rowIndex}
+        />
+      )}
+      footer={footer}
+    />
   );
 };

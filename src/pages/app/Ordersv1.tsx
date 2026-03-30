@@ -38,7 +38,7 @@ const Ordersv1Content: React.FC = () => {
     const catalogs = useOrderCatalogs();
     const { data, isLoading, isFetching } = useOrderList(filters);
     const orders = data?.data?.rows ?? [];
-    // const summary = data?.data?.summary ?? null;
+    const summary = data?.data?.summary ?? null;
 
     // ── Selection ──────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -56,12 +56,12 @@ const Ordersv1Content: React.FC = () => {
     const [orderHasLinkedSlipsCache, setOrderHasLinkedSlipsCache] = useState<Record<string, boolean>>({});
     const [checkingLinkedSlips, setCheckingLinkedSlips] = useState<Set<string>>(new Set());
     const [showPaymentWarningDialog, setShowPaymentWarningDialog] = useState(false);
-    const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{orderId: string, status: string} | null>(null);
+    const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{ orderId: string, status: string } | null>(null);
 
     const checkOrderHasLinkedSlips = useCallback(async (orderId: string) => {
         if (orderHasLinkedSlipsCache[orderId] !== undefined) return orderHasLinkedSlipsCache[orderId];
         if (checkingLinkedSlips.has(orderId)) return false;
-        
+
         setCheckingLinkedSlips(prev => new Set(prev).add(orderId));
         try {
             const exportSlipsResponse = await warehouseReceiptsApi.getReceipts({ orderId, limit: 100, type: 'export,purchase_return_note' });
@@ -107,18 +107,18 @@ const Ordersv1Content: React.FC = () => {
             const warehouseReceipts = errorDetails?.warehouseReceipts || {};
             const exportCodes = warehouseReceipts?.export || [];
             const returnCodes = warehouseReceipts?.sale_return_note || [];
-            
+
             let toastAction: React.ReactNode = undefined;
             const exportSearchQuery = exportCodes.join(',');
             const exportAction = exportCodes.length > 0 ? (
                 <ToastAction altText="Xem phiếu xuất" onClick={() => window.open(`/export-import?tab=exports&search=${encodeURIComponent(exportSearchQuery)}`, '_blank')}>Phiếu xuất ({exportCodes.length})</ToastAction>
             ) : null;
-            
+
             const returnSearchQuery = returnCodes.join(',');
             const returnAction = returnCodes.length > 0 ? (
                 <ToastAction altText="Xem phiếu hoàn" onClick={() => window.open(`/export-import?tab=imports&search=${encodeURIComponent(returnSearchQuery)}`, '_blank')}>Phiếu hoàn ({returnCodes.length})</ToastAction>
             ) : null;
-            
+
             if (exportAction && returnAction) {
                 toastAction = <div className="flex flex-row gap-2 w-full">{exportAction}{returnAction}</div>;
             } else if (exportAction) {
@@ -126,7 +126,7 @@ const Ordersv1Content: React.FC = () => {
             } else if (returnAction) {
                 toastAction = returnAction;
             }
-            
+
             const toastOptions: any = {
                 title: "Lỗi",
                 description: error.response?.data?.message || getErrorMessage(error, "Không thể cập nhật trạng thái"),
@@ -149,7 +149,7 @@ const Ordersv1Content: React.FC = () => {
         }
 
         if (newStatus === 'cancelled') {
-            const order = orders.find((o: any) => o.id === orderId) as any;
+            const order = orders?.find((o: any) => o.id === orderId) as any;
             const paidAmount = order?.totalPaidAmount ?? order?.total_paid_amount ?? order?.paid_amount ?? order?.initialPayment ?? order?.initial_payment ?? 0;
             if (paidAmount > 0) {
                 setPendingStatusUpdate({ orderId, status: newStatus });
@@ -232,6 +232,7 @@ const Ordersv1Content: React.FC = () => {
                     <CardContent className="p-0">
                         <OrderDataTable
                             orders={orders}
+                            summary={summary}
                             isLoading={isLoading || isFetching}
                             total={data?.data?.count ?? 0}
                             pagination={{ page: filters.page || 1, limit: filters.limit || 50 }}
