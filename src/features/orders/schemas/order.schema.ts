@@ -102,9 +102,19 @@ export const OrderSchema = yup.object({
   totalVat: yup.number().optional(),
 }).required();
 
+export const OrderSummarySchema = yup.object({
+  totalAmount: yup.number().optional(),
+  totalDebt: yup.number().optional(),
+  totalExpenses: yup.number().optional(),
+  totalInitialPayment: yup.number().optional(),
+  totalVat: yup.number().optional(),
+  totalVatAmount: yup.number().optional(),
+});
+
 // --- Types ---
 
 export type OrderSchemaType = yup.InferType<typeof OrderSchema>;
 export type OrderDetailSchemaType = yup.InferType<typeof OrderDetailSchema>;
+export type OrderSummarySchemaType = yup.InferType<typeof OrderSummarySchema>;
 export type ProductSchemaType = yup.InferType<typeof ProductSchema>;
 export type CreatorSchemaType = yup.InferType<typeof CreatorSchema>;
