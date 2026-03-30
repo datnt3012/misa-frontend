@@ -17,11 +17,13 @@ interface BankSelectorProps {
   value?: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 const BankSelector: React.FC<BankSelectorProps> = ({
   value,
   onValueChange,
-  placeholder = "Chọn ngân hàng"
+  placeholder = "Chọn ngân hàng",
+  disabled = false,
 }) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -152,6 +154,7 @@ const BankSelector: React.FC<BankSelectorProps> = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className="w-full justify-between"
         >
           {selectedBank ? `${selectedBank.code} - ${selectedBank.name}` : placeholder}

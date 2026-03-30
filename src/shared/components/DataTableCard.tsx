@@ -2,7 +2,7 @@ import React from "react";
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable } from "./DataTable";
+import { DataTable } from "./data-tables/DataTable";
 
 interface DataTableCardProps<T extends { id: string }> {
     /**

@@ -20,7 +20,7 @@ export interface OrderDialogActions {
   openPayment: (order: any) => void;
   openTagsManager: (order: any) => void;
   openExportDelivery: (order: any) => void;
-  openExportSlip: (order: any) => void;
+  openExportSlip: (order: any, type?: string) => void;
   openDelete: (order: any) => void;
 }
 
@@ -41,6 +41,8 @@ export interface OrderDialogsState {
   setShowExportSlipDialog: (v: boolean) => void;
   selectedOrderForExport: any;
   setSelectedOrderForExport: (o: any) => void;
+  selectedSlipType: string | undefined;
+  setSelectedSlipType: (t: string | undefined) => void;
   showExportDeliveryDialog: boolean;
   setShowExportDeliveryDialog: (v: boolean) => void;
   selectedOrderForDeliveryExport: any;
@@ -70,6 +72,7 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
     orderToDelete, setOrderToDelete,
     showExportSlipDialog, setShowExportSlipDialog,
     selectedOrderForExport, setSelectedOrderForExport,
+    selectedSlipType, setSelectedSlipType,
     showExportDeliveryDialog, setShowExportDeliveryDialog,
     selectedOrderForDeliveryExport, setSelectedOrderForDeliveryExport,
     exportingDeliveryPDF, setExportingDeliveryPDF,
@@ -197,10 +200,25 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
       <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedOrderForExport?.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}</DialogTitle>
+            <DialogTitle>
+              {selectedOrderForExport ? (
+                selectedSlipType === 'import' ? 'Tạo phiếu nhập kho' :
+                selectedSlipType === 'export' ? 'Tạo phiếu xuất kho' :
+                selectedSlipType === 'sale_return' ? 'Tạo phiếu hoàn hàng' :
+                selectedSlipType === 'purchase_return' ? 'Tạo phiếu trả hàng NCC' :
+                (selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho')
+              ) : 'Tạo phiếu'}
+            </DialogTitle>
             <DialogDescription>
               {selectedOrderForExport && (
-                <>{selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'} cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong></>
+                <>
+                  {selectedSlipType === 'import' ? 'Tạo phiếu nhập kho' :
+                   selectedSlipType === 'export' ? 'Tạo phiếu xuất kho' :
+                   selectedSlipType === 'sale_return' ? 'Tạo phiếu hoàn hàng' :
+                   selectedSlipType === 'purchase_return' ? 'Tạo phiếu trả hàng NCC' :
+                   (selectedOrderForExport.type === 'purchase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho')
+                  } cho đơn hàng <strong>{selectedOrderForExport.order_number}</strong>
+                </>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -209,11 +227,19 @@ export const OrderDialogs: React.FC<OrderDialogsState> = (props) => {
               <OrderSpecificSlipCreation
                 orderId={selectedOrderForExport.id}
                 orderType={selectedOrderForExport.type}
+                slipType={selectedSlipType}
                 onExportSlipCreated={() => {
                   setShowExportSlipDialog(false);
                   const { order_number, type } = selectedOrderForExport;
+                  const slipTypeLabel = 
+                    selectedSlipType === 'import' ? 'phiếu nhập kho' :
+                    selectedSlipType === 'export' ? 'phiếu xuất kho' :
+                    selectedSlipType === 'sale_return' ? 'phiếu hoàn hàng' :
+                    selectedSlipType === 'purchase_return' ? 'phiếu trả hàng NCC' :
+                    (type === 'purchase' ? 'phiếu nhập kho' : 'phiếu xuất kho');
                   setSelectedOrderForExport(null);
-                  toast({ title: 'Thành công', description: `Đã tạo ${type === 'purchase' ? 'phiếu nhập kho' : 'phiếu xuất kho'} cho đơn hàng ${order_number}` });
+                  setSelectedSlipType(undefined);
+                  toast({ title: 'Thành công', description: `Đã tạo ${slipTypeLabel} cho đơn hàng ${order_number}` });
                   invalidateList();
                 }}
               />

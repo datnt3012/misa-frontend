@@ -6,11 +6,13 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { PermissionGuard } from '@/components/PermissionGuard';
-import { OrderForm, OrderFormMode } from '../components/forms/OrderForm';
+import NewOrderForm from '../components/forms/NewOrderForm';
+import EditOrderForm from '../components/forms/EditOrderForm';
+import ViewOrderForm from '../components/forms/ViewOrderForm';
+import { ORDER_QUERY_KEYS } from '../hooks/useOrderQuery';
+
+export type OrderFormMode = "create" | "edit" | "view";
 
 const OrderFormPageContent: React.FC = () => {
   const navigate = useNavigate();
@@ -31,14 +33,14 @@ const OrderFormPageContent: React.FC = () => {
   useEffect(() => {
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
-      if (isCreateMode && isFormDirtyRef.current) {
+      if (isFormDirtyRef.current) {
         window.history.pushState(null, '', window.location.href);
         setShowLeaveDialog(true);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isCreateMode]);
+  }, []);
 
   // Block browser tab close / refresh when form is dirty
   useEffect(() => {
@@ -50,16 +52,16 @@ const OrderFormPageContent: React.FC = () => {
   }, [isFormDirty]);
 
   const handleGoBack = () => {
-    if (isCreateMode && isFormDirty) {
+    if (isFormDirty) {
       setShowLeaveDialog(true);
     } else {
-      navigate('/orders-new');
+      navigate('/orders');
     }
   };
 
   const invalidateAndGoBack = () => {
-    queryClient.invalidateQueries({ queryKey: ['orders', 'list'] });
-    navigate('/orders-new');
+    queryClient.invalidateQueries({ queryKey: ORDER_QUERY_KEYS.list({}) });
+    navigate('/orders');
   };
 
   // Scroll to top on mount
@@ -67,45 +69,16 @@ const OrderFormPageContent: React.FC = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, []);
 
-  const modeLabel = { create: 'TẠO MỚI', edit: 'CHỈNH SỬA', view: 'CHI TIẾT' }[mode];
-  const badgeVariant = { create: 'default', edit: 'warning', view: 'secondary' }[mode] as any;
-  const pageTitle = { create: 'Tạo đơn hàng mới', edit: 'Chỉnh sửa đơn hàng', view: 'Chi tiết đơn hàng' }[mode];
-  const pageSubtitle = { create: 'Khởi tạo dữ liệu đơn hàng', edit: 'Cập nhật thông tin đơn hàng', view: 'Thông tin chi tiết & lịch sử' }[mode];
-
   return (
     <>
-      <div className="min-h-screen bg-slate-50/50 pb-20">
+      <div className="min-h-screen bg-slate-50/50 pb-4">
         <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 border-slate-200">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={handleGoBack}
-                className="gap-2 text-slate-600 hover:text-slate-900 pr-4 border-r border-slate-200 rounded-none h-auto py-1">
-                <ArrowLeft className="w-4 h-4" /> Quay lại
-              </Button>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                  {pageTitle}
-                  {id && <span className="text-slate-400 font-normal text-sm ml-2">#{id}</span>}
-                </h1>
-                <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">{pageSubtitle}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Badge variant={badgeVariant} className="px-3 py-1 font-bold tracking-wider text-[10px]">{modeLabel}</Badge>
-            </div>
-          </div>
-
           {/* Form */}
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <OrderForm
-              mode={mode}
-              orderId={id}
-              onSuccess={invalidateAndGoBack}
-              onCancel={handleGoBack}
-              onDirtyChange={isCreateMode ? setIsFormDirty : undefined}
-            />
-          </div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">{
+            mode === "create" ? <NewOrderForm onOrderCreated={invalidateAndGoBack} onCancel={handleGoBack} onDirtyChange={setIsFormDirty} /> :
+              mode === "edit" ? <EditOrderForm orderId={id!} onOrderUpdated={invalidateAndGoBack} onCancel={handleGoBack} onDirtyChange={setIsFormDirty} /> :
+                <ViewOrderForm orderId={id!} onBack={handleGoBack} />
+          }</div>
         </div>
       </div>
       {/* Navigation guard dialog */}
@@ -120,7 +93,7 @@ const OrderFormPageContent: React.FC = () => {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setShowLeaveDialog(false)}>Ở lại</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { setShowLeaveDialog(false); navigate('/orders-new'); }}
+              onClick={() => { setShowLeaveDialog(false); navigate('/orders'); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Rời đi

@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Eye, Edit, Trash2, MoreHorizontal } from 'lucide-react';
-import { DataTable } from '@/shared/components/DataTable';
+import { DataTable } from '@/shared/components/data-tables/DataTable';
 import { formatCurrency } from '../utils/formatters';
 import { ProductSchemaType } from '../schemas';
 

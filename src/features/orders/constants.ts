@@ -261,6 +261,24 @@ export const contractFields: GenericFormFieldConfig<CreateOrderSchemaType>[] = [
     { name: "note", label: "Ghi chú", type: "textarea", placeholder: "Ghi chú đơn hàng...", colSpan: 12 },
 ];
 
+export const PAYMENT_METHOD_OPTIONS = [
+    { value: "cash", label: "Tiền mặt" },
+    { value: "bank_transfer", label: "Chuyển khoản" },
+];
+
+export const ORDER_DETAIL_DEFAULT = {
+    productId: "",
+    quantity: 1,
+    unitPrice: 0,
+    vatPercentage: 0,
+};
+
+export const ORDER_EXPENSE_DEFAULT = {
+    name: "",
+    amount: 0,
+    note: "",
+};
+
 export const receiverFields: GenericFormFieldConfig<CreateOrderSchemaType>[] = [
     { name: "receiverName", label: "Người nhận", type: "text", placeholder: "Nhập tên người nhận", required: true, colSpan: 6 },
     { name: "receiverPhone", label: "SĐT người nhận", type: "text", placeholder: "Nhập số điện thoại người nhận", required: true, colSpan: 6 },
