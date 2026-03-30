@@ -96,22 +96,22 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              <Route
+              {/* <Route
                 path="/orders"
                 element={
                   <ProtectedRoute>
                     <Layout><Ordersv1 /></Layout>
                   </ProtectedRoute>
                 }
-              />
-              {/* <Route
+              /> */}
+              <Route
                 path="/orders"
                 element={
                   <ProtectedRoute>
                     <Layout><Orders /></Layout>
                   </ProtectedRoute>
                 }
-              /> */}
+              />
               <Route
                 path="/quotations"
                 element={
