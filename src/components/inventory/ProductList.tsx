@@ -24,6 +24,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+
 interface ProductListProps {
   warehouses: any[];
   canViewCostPrice: boolean;
@@ -116,7 +117,8 @@ const ProductList: React.FC<ProductListProps> = ({
     manufacturer: '',
     description: '',
     isForeignCurrency: false,
-    exchangeRate: 1
+    exchangeRate: 1,
+    serialManage: false
   });
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -271,7 +273,8 @@ const ProductList: React.FC<ProductListProps> = ({
         manufacturer: editingProduct.manufacturer || '',
         description: editingProduct.description || '',
         isForeignCurrency: Boolean(editingProduct.isForeignCurrency),
-        exchangeRate: editingProduct.exchangeRate || 1
+        exchangeRate: editingProduct.exchangeRate || 1,
+        serialManage: Boolean(editingProduct.serialManage)
       });
     }
   }, [editingProduct, findCategoryByValue]);
@@ -323,7 +326,8 @@ const ProductList: React.FC<ProductListProps> = ({
         manufacturer: '',
         description: '',
         isForeignCurrency: false,
-        exchangeRate: 1
+        exchangeRate: 1,
+        serialManage: false
       });
     }
   }, [isAddProductDialogOpen]);
@@ -626,7 +630,8 @@ const ProductList: React.FC<ProductListProps> = ({
         manufacturer: '',
         description: '',
         isForeignCurrency: false,
-        exchangeRate: 1
+        exchangeRate: 1,
+        serialManage: false
       });
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
@@ -697,6 +702,9 @@ const ProductList: React.FC<ProductListProps> = ({
       if (newProduct.barcode && newProduct.barcode.trim()) {
         updateData.barcode = newProduct.barcode.trim();
       }
+      if (newProduct.serialManage !== undefined) {
+        updateData.serialManage = newProduct.serialManage;
+      }
       const response = await productApi.updateProduct(editingProduct.id, updateData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
       loadProducts();
@@ -716,7 +724,8 @@ const ProductList: React.FC<ProductListProps> = ({
         manufacturer: '',
         description: '',
         isForeignCurrency: false,
-        exchangeRate: 1
+        exchangeRate: 1,
+        serialManage: false
       });
       setIsEditProductDialogOpen(false);
     } catch (error: any) {
@@ -1467,6 +1476,22 @@ const ProductList: React.FC<ProductListProps> = ({
                           placeholder="0"
                         />
                       </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <div></div>
+                        <div className="col-span-3 flex items-center gap-4">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              key="add-serial-manage"
+                              type="checkbox"
+                              id="is-serial-manage"
+                              checked={Boolean(newProduct.serialManage)}
+                              onChange={(e) => setNewProduct(prev => ({ ...prev, serialManage: e.target.checked }))}
+                              className="h-4 w-4"
+                            />
+                            <Label htmlFor="is-serial-manage" className="text-sm">Quản lý số serial</Label>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <DialogFooter>
                       <Button 
@@ -1691,6 +1716,22 @@ const ProductList: React.FC<ProductListProps> = ({
                     placeholder="0"
                   />
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <div></div>
+                  <div className="col-span-3 flex items-center gap-4">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        key={`edit-serial-manage-${editingProduct?.id || 'new'}`}
+                        type="checkbox"
+                        id="edit-is-serial-manage"
+                        checked={Boolean(newProduct.serialManage)}
+                        onChange={(e) => setNewProduct(prev => ({ ...prev, serialManage: e.target.checked }))}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="edit-is-serial-manage" className="text-sm">Quản lý số serial</Label>
+                    </div>
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button 
@@ -1710,7 +1751,8 @@ const ProductList: React.FC<ProductListProps> = ({
                       manufacturer: '',
                       description: '',
                       isForeignCurrency: false,
-                      exchangeRate: 1
+                      exchangeRate: 1,
+                      serialManage: false,
                     });
                   }}
                 >

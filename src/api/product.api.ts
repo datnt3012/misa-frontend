@@ -45,7 +45,9 @@ export interface Product {
    exchangeRate?: number;
    originalCostPrice?: number;
    stockLevel?: ProductStockLevel[];
+   serialManage?: boolean;
 }
+
 export interface ProductWithStock extends Product {
   current_stock: number;
   location?: string;
@@ -175,6 +177,7 @@ const normalizeProduct = (row: any): Product => {
      stockLevel: row.stockLevel && Array.isArray(row.stockLevel) 
        ? row.stockLevel.map(normalizeProductStockLevel)
        : [],
+     serialManage: row.serialManage ?? false,
    };
 };
 const normalizeImportJobResponse = (job: any): ProductImportJobSnapshot => {
