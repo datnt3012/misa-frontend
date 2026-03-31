@@ -322,7 +322,7 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
 
                         {/* Header */}
                         <thead>
-                            <tr className="bg-gray-50 border-b-2 border-gray-200">
+                            <tr className="bg-gray-100 border-b-2 border-gray-200">
                                 {hasCheckbox && (
                                     <th className="w-[40px] px-3 py-2.5 border-r border-gray-200">
                                         <Checkbox
@@ -427,15 +427,8 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
 
                         {/* Footer */}
                         {footer && (
-                            <tfoot>
-                                <tr>
-                                    <td
-                                        colSpan={totalColCount}
-                                        className="px-3 py-2 border-t border-gray-200 bg-gray-50"
-                                    >
-                                        {footer}
-                                    </td>
-                                </tr>
+                            <tfoot className="border-t border-gray-200 bg-gray-100 font-medium whitespace-nowrap">
+                                {footer}
                             </tfoot>
                         )}
                     </table>

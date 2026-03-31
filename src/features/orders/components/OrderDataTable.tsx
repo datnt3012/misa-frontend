@@ -23,6 +23,8 @@ import {
 import { OrderDialogActions } from './OrderDialogs';
 import { OrderDetailSchemaType, OrderSchemaType, OrderSummarySchemaType } from '../schemas';
 import { GroupedRowTable, GroupedRowColumn, GroupedRowGroup } from '@/shared/components/GroupedRowTable';
+import { useColumnVisibility } from '@/shared/hooks';
+import { ColumnVisibilityPopover } from '@/shared/components/data-tables/ColumnVisibilityPopover';
 
 // ─── Prop types ───────────────────────────────────────────────────────────────
 
@@ -194,7 +196,7 @@ function buildOrderColumns(params: {
       key: 'orderCode',
       label: 'Mã đơn hàng',
       grouped: true,
-      width: 260,
+      width: 230,
       render: (group: OrderGroup) => (
         <div className="space-y-1">
           <span className="font-mono text-sm font-semibold text-slate-900 leading-none">
@@ -343,7 +345,7 @@ function buildOrderColumns(params: {
       width: 160,
       grouped: true,
       render: (group: OrderGroup) => (
-        <div onClick={(e) => e.stopPropagation()} className="w-full">
+        <div onClick={(e) => e.stopPropagation()} className="w-full flex items-center justify-center">
           <StatusSelect order={group} onUpdateStatus={onUpdateStatus} hasPermission={hasPermission} />
         </div>
       ),
@@ -435,7 +437,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     [orders]
   );
 
-  const columns = useMemo(
+  const allColumns = useMemo(
     () => buildOrderColumns({
       availableTags, orderType,
       onUpdateStatus, hasPermission,
@@ -444,31 +446,113 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     [availableTags, orderType, onUpdateStatus, hasPermission, dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote],
   );
 
+  const { columnVisibility, toggleColumn, resetToDefaults, setAllVisible, isVisible, alwaysVisible } =
+    useColumnVisibility({
+      alwaysVisible: ['orderCode', 'actions'],
+      defaults: allColumns.reduce((acc, col) => ({ ...acc, [String(col.key)]: true }), {}),
+      storageKey: `orders-${orderType}`,
+    });
+
+  const columns = useMemo(
+    () => allColumns.filter(col => isVisible(String(col.key))),
+    [allColumns, isVisible]
+  );
+
+  const hasCheckbox = !!onSelectedIdsChange;
+
   const footer = useMemo(() => (
-    <div className="flex items-center gap-6 text-sm">
-      <span className="font-semibold text-slate-600">Tổng cộng</span>
-      <span className="text-slate-600">{orders.length} đơn</span>
-      <span className="text-slate-400">Chi phí:</span>
-      <span className="font-semibold text-amber-600 tabular-nums">{formatCurrency(Number(summary?.totalExpenses) || 0)}</span>
-      <span className="text-slate-400">Tổng tiền(số đơn/trang):</span>
-      <span className="font-semibold text-amber-600 tabular-nums">{formatCurrency(Number(summary?.totalAmount) || 0)}</span>
-      <span className="text-slate-400">Công nợ(số đơn/trang):</span>
-      <span className="font-semibold text-red-600 tabular-nums">{formatCurrency(Number(summary?.totalDebt) || 0)}</span>
-    </div>
-  ), [orders.length, summary]);
+    <tr className="bg-slate-50 border-t border-slate-200">
+      {/* Spacer for checkbox column if present */}
+      {hasCheckbox && <td className="px-3 py-2 border-r border-slate-200"></td>}
+
+      {columns.map((col) => {
+        const key = String(col.key);
+        let content: React.ReactNode = null;
+        let align = col.align || (col.type === 'number' ? 'right' : 'left');
+
+        if (key === 'orderCode') {
+          content = (
+            <div className="flex flex-col">
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tổng cộng</span>
+              <span className="text-slate-900 font-semibold whitespace-nowrap">{total} đơn</span>
+            </div>
+          );
+        } else if (key === 'expenses') {
+          content = (
+            <div className="flex flex-col items-end w-full">
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Chi phí</span>
+              <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalExpenses || 0)}</span>
+            </div>
+          );
+        } else if (key === 'totalOrderValueExcludingVAT') {
+          content = (
+            <div className="flex flex-col items-end w-full">
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tiền trước thuế</span>
+              <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalAmount || 0)}</span>
+            </div>
+          );
+        } else if (key === 'totalVatValue') {
+          content = (
+            <div className="flex flex-col items-end w-full">
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tổng VAT</span>
+              <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalVat || 0)}</span>
+            </div>
+          );
+        } else if (key === 'totalOrderValue') {
+          content = (
+            <div className="flex flex-col items-end w-full">
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tiền sau thuế</span>
+              <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalVatAmount || 0)}</span>
+            </div>
+          );
+        } else if (key === 'paid') {
+          content = (
+            <div className="flex flex-col items-end w-full">
+              <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Công nợ</span>
+              <span className="text-red-600 font-semibold tabular-nums">{formatCurrency(summary?.totalDebt || 0)}</span>
+            </div>
+          );
+        }
+
+        return (
+          <td
+            key={key}
+            className={cn(
+              "px-3 py-2 border-r border-slate-200 last:border-r-0",
+              align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
+            )}
+          >
+            {content}
+          </td>
+        );
+      })}
+    </tr>
+  ), [columns, total, summary]);
 
   return (
-    <GroupedRowTable<OrderDetailSchemaType, OrderGroup>
-      groups={groups}
-      columns={columns}
-      isLoading={isLoading}
-      total={total}
-      filters={{ page: pagination.page, limit: pagination.limit }}
-      onFiltersChange={(f) => onPaginationChange({ page: f.page, limit: f.limit })}
-      selectedIds={selectedIds}
-      onSelectedIdsChange={(ids) => onSelectedIdsChange(ids as string[])}
-      onRowClick={(_, group) => dialogActions.openView(group)}
-      footer={footer}
-    />
+    <div className="space-y-2">
+      <div className="flex justify-end pr-2 gap-2">
+        <ColumnVisibilityPopover
+          columns={allColumns}
+          visibility={columnVisibility}
+          onToggle={toggleColumn}
+          onReset={resetToDefaults}
+          onSetAll={setAllVisible}
+          alwaysVisible={alwaysVisible}
+        />
+      </div>
+      <GroupedRowTable<OrderDetailSchemaType, OrderGroup>
+        groups={groups}
+        columns={columns}
+        isLoading={isLoading}
+        total={total}
+        filters={{ page: pagination.page, limit: pagination.limit }}
+        onFiltersChange={(f) => onPaginationChange({ page: f.page, limit: f.limit })}
+        selectedIds={selectedIds}
+        onSelectedIdsChange={(ids) => onSelectedIdsChange(ids as string[])}
+        onRowClick={(_, group) => dialogActions.openView(group)}
+        footer={footer}
+      />
+    </div>
   );
 };
