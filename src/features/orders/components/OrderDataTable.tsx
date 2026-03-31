@@ -1,13 +1,12 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { TableCell, TableRow } from '@/components/ui/table';
 import {
   Eye, Edit, Tag, CreditCard, Package, Banknote,
-  Trash2, Download, MoreHorizontal, ChevronRight, RotateCw,
+  Trash2, Download, MoreHorizontal, RotateCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -22,8 +21,8 @@ import {
   getTagDisplayName, mapTagNames,
 } from '../utils/tagHelpers';
 import { OrderDialogActions } from './OrderDialogs';
-import { OrderSchemaType, OrderDetailSchemaType, OrderSummarySchemaType } from '../schemas';
-import { StripedDataTable, DataTableColumn } from '@/shared/components/data-tables/StripedDataTable';
+import { OrderDetailSchemaType, OrderSchemaType, OrderSummarySchemaType } from '../schemas';
+import { GroupedRowTable, GroupedRowColumn, GroupedRowGroup } from '@/shared/components/GroupedRowTable';
 
 // ─── Prop types ───────────────────────────────────────────────────────────────
 
@@ -170,154 +169,42 @@ const ActionsMenu: React.FC<{
   </DropdownMenu>
 );
 
-// ─── OrderItemsSection (expandable sub-row) ───────────────────────────────────
+// ─── buildOrderColumns ────────────────────────────────────────────────────────
 
-type DetailColumn = {
-  key: string;
-  title: string;
-  headerClassName?: string;
-  cellClassName?: string;
-  render: (item: OrderDetailSchemaType) => React.ReactNode;
-};
+type OrderGroup = OrderSchemaType & GroupedRowGroup<OrderDetailSchemaType>;
+type OrderCol = GroupedRowColumn<OrderDetailSchemaType, OrderGroup>;
 
-const DETAIL_GRID_COLS = 'grid-cols-[4fr_2fr_1fr_1fr_1fr_1fr_1fr_3fr]';
+function buildOrderColumns(params: {
+  availableTags: ApiOrderTag[];
+  orderType: 'sale' | 'purchase';
+  onUpdateStatus: (orderId: string, status: string) => void;
+  hasPermission: (p: string) => boolean;
+  dialogActions: OrderDataTableProps['dialogActions'];
+  orderHasLinkedSlipsCache?: Record<string, boolean>;
+  onUpdateQuickNote?: (id: string, note: string) => void;
+}): OrderCol[] {
+  const {
+    availableTags, orderType,
+    onUpdateStatus, hasPermission,
+    dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote,
+  } = params;
 
-const DETAIL_COLUMNS: DetailColumn[] = [
-  { key: 'empty_start', title: '', render: () => null },
-  {
-    key: 'product',
-    title: 'Sản phẩm',
-    cellClassName: 'text-sm font-medium text-slate-800 truncate pr-4',
-    render: (item) => <span title={item.product?.name}>{item.product?.name || 'N/A'}</span>,
-  },
-  {
-    key: 'manufacturer',
-    title: 'Hãng sản xuất',
-    cellClassName: 'text-sm text-slate-500 truncate',
-    render: (item) => item.product?.manufacturer || '—',
-  },
-  {
-    key: 'unitPrice',
-    title: 'Đơn giá',
-    headerClassName: 'text-left',
-    cellClassName: 'text-sm text-left tabular-nums text-slate-700',
-    render: (item) => formatCurrency(item.unitPrice),
-  },
-  {
-    key: 'quantity',
-    title: 'SL',
-    headerClassName: 'text-left',
-    cellClassName: 'text-sm text-left tabular-nums font-medium text-slate-800',
-    render: (item) => item.quantity || 0,
-  },
-  {
-    key: 'vatPercentage',
-    title: 'VAT',
-    headerClassName: 'text-left',
-    cellClassName: 'text-sm text-left text-slate-500',
-    render: (item) => `${item.vatPercentage || 0}%`,
-  },
-  {
-    key: 'lineTotal',
-    title: 'Thành tiền',
-    headerClassName: 'text-left',
-    cellClassName: 'text-sm text-left tabular-nums font-bold text-emerald-700',
-    render: (item) => formatCurrency(
-      (item.unitPrice || 0) * (item.quantity || 0) * (1 + (Number(item.vatPercentage) || 0) / 100)
-    ),
-  },
-  { key: 'empty_end', title: '', render: () => null },
-];
-
-const OrderItemsSection: React.FC<{
-  items: OrderSchemaType['details'];
-  isExpanded: boolean;
-  colSpan: number;
-  rowIndex: number;
-}> = ({ items, isExpanded, colSpan, rowIndex }) => {
-  if (!isExpanded) return null;
-
-  return (
-    <TableRow className="hover:bg-transparent border-b-2 border-border/50">
-      <TableCell colSpan={colSpan} className="p-0 border-b border-border/50">
-        <div className={cn(rowIndex % 2 !== 0 ? 'bg-muted/60' : 'bg-background')}>
-          {/* Sub-header */}
-          <div className={cn('grid px-4 py-2 border-b border-border/50 bg-muted/40', DETAIL_GRID_COLS)}>
-            {DETAIL_COLUMNS.map((col) => (
-              <div
-                key={col.key}
-                className={cn('text-[11px] text-left font-semibold tracking-wide text-muted-foreground border-r border-border/50 last:border-r-0 px-3', col.headerClassName)}
-              >
-                {col.title}
-              </div>
-            ))}
-          </div>
-
-          {/* Item rows */}
-          {items?.length ? (
-            items.map((item, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'grid px-4 py-2.5',
-                  DETAIL_GRID_COLS,
-                  i < items.length - 1 && 'border-b border-border/30',
-                )}
-              >
-                {DETAIL_COLUMNS.map((col) => (
-                  <div key={col.key} className={cn('border-r border-border/50 last:border-r-0 px-3 min-w-10 text-left', col.cellClassName)}>
-                    {col.render(item)}
-                  </div>
-                ))}
-              </div>
-            ))
-          ) : (
-            <div className="px-4 py-4 text-sm text-muted-foreground">Không có sản phẩm</div>
-          )}
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-};
-
-// ─── Main component ───────────────────────────────────────────────────────────
-
-export const OrderDataTable: React.FC<OrderDataTableProps> = ({
-  orders, summary,
-  isLoading, total, pagination, onPaginationChange,
-  selectedIds, onSelectedIdsChange,
-  orderType, availableTags,
-  onUpdateStatus, hasPermission, dialogActions,
-  orderHasLinkedSlipsCache, onUpdateQuickNote,
-}) => {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setExpandedIds(new Set(orders.map(o => o.id)));
-  }, [orders]);
-
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
-
-  const columns = useMemo((): DataTableColumn<OrderSchemaType>[] => [
+  return [
     {
       key: 'orderCode',
       label: 'Mã đơn hàng',
-      render: (order) => (
+      grouped: true,
+      width: 260,
+      render: (group: OrderGroup) => (
         <div className="space-y-1">
           <span className="font-mono text-sm font-semibold text-slate-900 leading-none">
-            {order.code}
+            {group.code}
           </span>
           <div className="text-xs text-slate-500">
-            {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yy HH:mm') : '—'}
+            {group.createdAt ? format(new Date(group.createdAt), 'dd/MM/yy HH:mm') : '—'}
           </div>
           <div className="flex flex-wrap gap-1">
-            <ReconciliationBadge tags={order.tags ?? []} availableTags={availableTags} />
+            <ReconciliationBadge tags={group.tags ?? []} availableTags={availableTags} />
           </div>
         </div>
       ),
@@ -325,25 +212,29 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     {
       key: 'contractCode',
       label: 'Mã số hợp đồng',
-      render: (order) => (
+      grouped: true,
+      width: 140,
+      render: (group: OrderGroup) => (
         <span className="font-mono text-sm font-medium text-slate-800 leading-none">
-          {order.contractCode || '—'}
+          {group.contractCode || '—'}
         </span>
       ),
     },
     {
       key: 'partner',
       label: orderType === 'purchase' ? 'Nhà cung cấp' : 'Khách hàng',
-      render: (order) => {
-        const phone = maskPhoneNumber(order.customer?.phoneNumber || '');
-        const addr = formatAddress(order.customer?.address || '');
+      grouped: true,
+      width: 220,
+      render: (group: OrderGroup) => {
+        const phone = maskPhoneNumber(group.customer?.phoneNumber || '');
+        const addr = formatAddress(group.customer?.address || '');
         return (
           <div className="space-y-0.5">
-            <div className="text-sm font-semibold text-slate-900 truncate max-w-[170px]" title={order.customer?.name}>
-              {order.customer?.name || '—'}
+            <div className="text-sm font-semibold text-slate-900 truncate max-w-[200px]" title={group.customer?.name}>
+              {group.customer?.name || '—'}
             </div>
             <div className="text-xs text-slate-500 font-mono">{phone}</div>
-            <div className="text-xs text-slate-500 truncate max-w-[170px]" title={addr}>{addr}</div>
+            <div className="text-xs text-slate-500 truncate max-w-[200px]" title={addr}>{addr}</div>
           </div>
         );
       },
@@ -351,23 +242,43 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     {
       key: 'product',
       label: 'Sản phẩm',
-      onCellClick: (order, e) => { e.stopPropagation(); toggleExpand(order.id); },
-      render: (order) => {
-        const itemCount = order.details?.length ?? 0;
-        const isExpanded = expandedIds.has(order.id);
-        const totalQty = order.details?.reduce((s, d) => s + (d.quantity || 0), 0) ?? 0;
+      grouped: false,
+      width: 250,
+      render: (detail: OrderDetailSchemaType) => (
+        <span className="text-sm tabular-nums">
+          {detail.product?.name}
+        </span>
+      ),
+    },
+    {
+      key: 'unitPrice',
+      label: 'Đơn giá',
+      grouped: false,
+      width: 130,
+      type: 'number',
+      render: (detail: OrderDetailSchemaType) => formatCurrency(detail.unitPrice),
+    },
+    {
+      key: 'quantity',
+      label: 'Số lượng',
+      grouped: false,
+      width: 100,
+      type: 'number',
+      render: (detail: OrderDetailSchemaType) => detail.quantity,
+    },
+    {
+      key: 'vat',
+      label: 'Thuế suất',
+      grouped: false,
+      width: 100,
+      type: 'number',
+      render: (detail: OrderDetailSchemaType) => {
+        const vatRate = detail.vatPercentage ?? 0;
+        const vatPrice = detail.vatTotalPrice ?? 0;
         return (
-          <div className="flex items-center gap-2 cursor-pointer">
-            <div>
-              <div className="text-sm font-medium text-slate-800 whitespace-nowrap">{itemCount} sản phẩm</div>
-              <div className="text-xs text-slate-500">{totalQty} đơn vị</div>
-            </div>
-            <ChevronRight
-              className={cn(
-                'w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150',
-                isExpanded && 'rotate-90 text-primary',
-              )}
-            />
+          <div className="space-y-0.5">
+            <div className="text-sm tabular-nums">{formatCurrency(vatPrice)}</div>
+            <div className="text-xs text-slate-500 tabular-nums">({vatRate}%)</div>
           </div>
         );
       },
@@ -375,53 +286,47 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     {
       key: 'expenses',
       label: 'Chi phí',
-      className: 'text-left',
-      render: (order) => (
-        <span className="text-sm font-medium text-amber-600 tabular-nums">
-          {formatCurrency(order.totalExpenses)}
-        </span>
-      ),
+      grouped: true,
+      width: 130,
+      type: 'number',
+      render: (group: OrderGroup) => formatCurrency(group.totalExpenses),
     },
     {
       key: 'totalOrderValueExcludingVAT',
       label: 'Tổng trước thuế',
-      className: 'text-left',
-      render: (order) => (
-        <span className="text-sm font-medium text-emerald-600 tabular-nums">
-          {formatCurrency(order.totalAmount)}
-        </span>
-      ),
+      grouped: true,
+      width: 150,
+      type: 'number',
+      render: (group: OrderGroup) => formatCurrency(group.totalAmount),
     },
     {
       key: 'totalVatValue',
-      label: 'VAT',
-      className: 'text-left',
-      render: (order) => (
-        <span className="text-sm font-medium text-amber-500 tabular-nums">
-          {formatCurrency(order.totalVat)}
-        </span>
-      ),
+      label: 'Tổng VAT',
+      grouped: true,
+      width: 120,
+      type: 'number',
+      render: (group: OrderGroup) => formatCurrency(group.totalVat),
     },
     {
       key: 'totalOrderValue',
       label: 'Tổng sau thuế',
-      className: 'text-left',
-      render: (order) => (
-        <span className="text-sm font-bold text-emerald-700 tabular-nums">
-          {formatCurrency(order.totalVatAmount)}
-        </span>
-      ),
+      grouped: true,
+      width: 150,
+      type: 'number',
+      render: (group: OrderGroup) => formatCurrency(group.totalVatAmount),
     },
     {
       key: 'paid',
       label: 'Thanh toán',
-      className: 'text-left',
-      render: (order) => {
-        const paid = order.totalPaidAmount ?? 0;
-        const debt = order.remainingDebt ?? Math.max(0, (order.totalAmount ?? 0) - paid);
+      grouped: true,
+      width: 160,
+      type: 'number',
+      render: (group: OrderGroup) => {
+        const paid = group.totalPaidAmount ?? 0;
+        const debt = group.remainingDebt ?? Math.max(0, (group.totalAmount ?? 0) - paid);
         return (
           <div className="space-y-0.5">
-            <div className="text-sm font-medium text-emerald-600 tabular-nums flex items-center gap-1">
+            <div className="text-sm font-medium text-emerald-600 tabular-nums flex items-center justify-end gap-1">
               <Banknote className="w-3 h-3 shrink-0" />
               {formatCurrency(paid)}
             </div>
@@ -435,19 +340,23 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     {
       key: 'status',
       label: 'Trạng thái',
-      className: 'w-40',
-      onCellClick: (_, e) => e.stopPropagation(),
-      render: (order) => (
-        <StatusSelect order={order} onUpdateStatus={onUpdateStatus} hasPermission={hasPermission} />
+      width: 160,
+      grouped: true,
+      render: (group: OrderGroup) => (
+        <div onClick={(e) => e.stopPropagation()} className="w-full">
+          <StatusSelect order={group} onUpdateStatus={onUpdateStatus} hasPermission={hasPermission} />
+        </div>
       ),
     },
     {
       key: 'completedAt',
       label: 'Ngày hoàn thành',
-      render: (order) => (
+      grouped: true,
+      width: 140,
+      render: (group: OrderGroup) => (
         <div className="text-sm text-slate-800">
-          {order.completedAt
-            ? format(new Date(order.completedAt), 'dd/MM/yyyy')
+          {group.completedAt
+            ? format(new Date(group.completedAt), 'dd/MM/yyyy')
             : <span className="text-slate-400">—</span>}
         </div>
       ),
@@ -455,25 +364,29 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     {
       key: 'creator',
       label: 'Người tạo đơn',
-      render: (order) => (
+      grouped: true,
+      width: 150,
+      render: (group: OrderGroup) => (
         <div className="text-sm text-slate-800">
-          {order.creator?.username || <span className="text-slate-400">—</span>}
+          {group.creator?.username || <span className="text-slate-400">—</span>}
         </div>
       ),
     },
     {
       key: 'note',
       label: 'Ghi chú',
-      cellClassName: 'w-48 relative p-0 h-16',
-      onCellClick: (_, e) => e.stopPropagation(),
-      render: (order) => (
+      width: 300,
+      cellClassName: 'relative p-0 h-16',
+      grouped: true,
+      render: (group: OrderGroup) => (
         <div
           className="absolute inset-0 w-full h-full flex items-center justify-center text-center
             text-sm p-2 overflow-auto hover:bg-muted/50 focus:bg-background
             focus:outline-none focus:ring-1 focus:ring-ring break-words whitespace-pre-wrap select-text"
           contentEditable
           suppressContentEditableWarning={true}
-          onBlur={(e) => onUpdateQuickNote?.(order.id, e.currentTarget.textContent || '')}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => onUpdateQuickNote?.(group.id, e.currentTarget.textContent || '')}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -481,71 +394,80 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
             }
           }}
         >
-          {order.note || ''}
+          {group.note || ''}
         </div>
       ),
     },
     {
       key: 'actions',
-      label: '',
-      render: (order) => (
-        <ActionsMenu
-          order={order}
-          dialogActions={dialogActions}
-          orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
-        />
+      label: 'Thao tác',
+      width: 60,
+      grouped: true,
+      render: (group: OrderGroup) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ActionsMenu
+            order={group}
+            dialogActions={dialogActions}
+            orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
+          />
+        </div>
       ),
     },
-  ], [
-    availableTags, expandedIds, orderType, toggleExpand,
-    onUpdateStatus, hasPermission,
-    dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote,
-  ]);
+  ];
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export const OrderDataTable: React.FC<OrderDataTableProps> = ({
+  orders, summary,
+  isLoading, total, pagination, onPaginationChange,
+  selectedIds, onSelectedIdsChange,
+  orderType, availableTags,
+  onUpdateStatus, hasPermission, dialogActions,
+  orderHasLinkedSlipsCache, onUpdateQuickNote,
+}) => {
+  const groups = useMemo(
+    (): OrderGroup[] => orders.map(order => ({
+      ...order,
+      id: order.id,
+      rows: order.details || []
+    })),
+    [orders]
+  );
+
+  const columns = useMemo(
+    () => buildOrderColumns({
+      availableTags, orderType,
+      onUpdateStatus, hasPermission,
+      dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote,
+    }),
+    [availableTags, orderType, onUpdateStatus, hasPermission, dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote],
+  );
 
   const footer = useMemo(() => (
-    <TableRow className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/60">
-      {[
-        { label: 'Tổng cộng', className: 'text-slate-600 font-semibold' },
-        { label: `${orders.length} đơn`, className: 'text-slate-600' },
-        { label: '', colSpan: 3 },
-        { label: formatCurrency(Number(summary?.totalExpenses) || 0), className: 'text-[16px] font-semibold text-amber-600 tabular-nums' },
-        // { label: formatCurrency(Number(summary?.totalVat) || 0), className: 'text-amber-600 tabular-nums' },
-        // { label: formatCurrency(Number(summary?.totalVatAmount) || 0), className: 'text-emerald-700 font-bold tabular-nums' },
-        { label: '', colSpan: 2 },
-        { label: formatCurrency(Number(summary?.totalAmount) || 0), className: 'text-[16px] font-semibold text-amber-600 tabular-nums' },
-        { label: formatCurrency(Number(summary?.totalDebt) || 0), className: 'text-[16px] font-semibold text-red-600 tabular-nums' },
-        { label: '', colSpan: 5 },
-      ].map((cell, i) => (
-        <TableCell
-          key={i}
-          colSpan={cell.colSpan}
-          className={cn('px-3 py-2.5 text-sm whitespace-nowrap', cell.className)}
-        >
-          {cell.label}
-        </TableCell>
-      ))}
-    </TableRow>
+    <div className="flex items-center gap-6 text-sm">
+      <span className="font-semibold text-slate-600">Tổng cộng</span>
+      <span className="text-slate-600">{orders.length} đơn</span>
+      <span className="text-slate-400">Chi phí:</span>
+      <span className="font-semibold text-amber-600 tabular-nums">{formatCurrency(Number(summary?.totalExpenses) || 0)}</span>
+      <span className="text-slate-400">Tổng tiền(số đơn/trang):</span>
+      <span className="font-semibold text-amber-600 tabular-nums">{formatCurrency(Number(summary?.totalAmount) || 0)}</span>
+      <span className="text-slate-400">Công nợ(số đơn/trang):</span>
+      <span className="font-semibold text-red-600 tabular-nums">{formatCurrency(Number(summary?.totalDebt) || 0)}</span>
+    </div>
   ), [orders.length, summary]);
 
   return (
-    <StripedDataTable
-      data={orders}
+    <GroupedRowTable<OrderDetailSchemaType, OrderGroup>
+      groups={groups}
       columns={columns}
       isLoading={isLoading}
       total={total}
       filters={{ page: pagination.page, limit: pagination.limit }}
       onFiltersChange={(f) => onPaginationChange({ page: f.page, limit: f.limit })}
       selectedIds={selectedIds}
-      onSelectedIdsChange={onSelectedIdsChange}
-      onRowClick={(order) => dialogActions.openView(order)}
-      renderSubRow={(order, colSpan, rowIndex) => (
-        <OrderItemsSection
-          items={order.details}
-          isExpanded={expandedIds.has(order.id)}
-          colSpan={colSpan}
-          rowIndex={rowIndex}
-        />
-      )}
+      onSelectedIdsChange={(ids) => onSelectedIdsChange(ids as string[])}
+      onRowClick={(_, group) => dialogActions.openView(group)}
       footer={footer}
     />
   );
