@@ -52,9 +52,9 @@ export const OrderProductsTable: React.FC<OrderProductsTableProps> = ({
       )}
     </CardHeader>
     <CardContent className="p-0">
-      <Table>
+      <Table className="border border-slate-200">
         <TableHeader className="bg-slate-50/50">
-          <TableRow>
+          <TableRow className="divide-x divide-slate-200">
             <TableHead className="w-10 text-left"></TableHead>
             <TableHead className="text-left">Tên sản phẩm</TableHead>
             <TableHead className="w-24 text-left">Số lượng</TableHead>
@@ -65,9 +65,9 @@ export const OrderProductsTable: React.FC<OrderProductsTableProps> = ({
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="divide-y divide-slate-200">
           {fields.map((field, idx) => (
-            <TableRow key={field.id}>
+            <TableRow key={field.id} className="divide-x divide-slate-200">
               <TableCell className="text-left text-sm">{idx + 1}</TableCell>
               <TableCell className="text-left">
                 <Controller

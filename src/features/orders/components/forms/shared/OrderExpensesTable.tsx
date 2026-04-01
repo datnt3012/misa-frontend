@@ -44,9 +44,9 @@ export const OrderExpensesTable: React.FC<OrderExpensesTableProps> = ({
         </p>
       ) : (
         <>
-          <Table>
+          <Table className="border border-slate-200">
             <TableHeader className="bg-slate-50/50">
-              <TableRow>
+              <TableRow className="divide-x divide-slate-200">
                 <TableHead className="text-left">Tên chi phí</TableHead>
                 <TableHead className="w-40 text-left">Số tiền</TableHead>
                 <TableHead className="text-left">Ghi chú</TableHead>
@@ -55,7 +55,7 @@ export const OrderExpensesTable: React.FC<OrderExpensesTableProps> = ({
             </TableHeader>
             <TableBody>
               {fields.map((field, idx) => (
-                <TableRow key={field.id}>
+                <TableRow key={field.id} className="divide-x divide-slate-200">
                   <TableCell className="text-left">
                     <Controller
                       name={`expenses.${idx}.name`}
