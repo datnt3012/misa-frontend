@@ -209,25 +209,25 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
 
                         {/* Products Table */}
                         <Card className="shadow-premium border-none overflow-hidden">
-                            <CardHeader className="pb-3 border-b border-slate-50">
+                            <CardHeader className="pb-3 border-b border-slate-50/80">
                                 <CardTitle className="text-sm font-bold  tracking-tight text-slate-500 flex items-center gap-2">
                                     <Package className="w-4 h-4 text-emerald-600" /> Sản phẩm
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-0">
-                                <Table>
+                                <Table className="border border-slate-200">
                                     <TableHeader className="bg-slate-50/50">
-                                        <TableRow>
-                                            <TableHead className="w-10 text-center">#</TableHead>
+                                        <TableRow className="divide-x divide-slate-200">
+                                            <TableHead className="w-10"></TableHead>
                                             <TableHead>Tên SP</TableHead>
                                             <TableHead className="w-32">Hãng SX</TableHead>
-                                            <TableHead className="w-20 text-center">SL</TableHead>
-                                            <TableHead className="w-32 text-left">Đơn giá</TableHead>
-                                            <TableHead className="w-32 text-left">Thuế (VAT)</TableHead>
-                                            <TableHead className="w-32 text-left">Tổng tiền (có VAT)</TableHead>
+                                            <TableHead className="w-20">SL</TableHead>
+                                            <TableHead className="w-32">Đơn giá</TableHead>
+                                            <TableHead className="w-32">Thuế (VAT)</TableHead>
+                                            <TableHead className="w-32">Tổng tiền (có VAT)</TableHead>
                                         </TableRow>
                                     </TableHeader>
-                                    <TableBody>
+                                    <TableBody className="divide-y divide-slate-200">
                                         {orderDetails.details?.map((item, idx) => {
                                             const itemTotal = item.vatTotalPrice ?? item.totalPrice ?? 0;
                                             const itemBase = item.totalPrice ?? 0;
@@ -235,7 +235,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                             return (
                                                 <TableRow
                                                     key={item.id || idx}
-                                                    className="hover:bg-slate-50/80 transition-colors"
+                                                    className="hover:bg-slate-50/80 transition-colors divide-x divide-slate-200"
                                                 >
                                                     <TableCell className="text-left text-slate-400 font-medium">{idx + 1}</TableCell>
                                                     <TableCell className="py-3">
@@ -247,11 +247,11 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                                     <TableCell className="text-sm text-slate-500">
                                                         {item.product.manufacturer || "-"}
                                                     </TableCell>
-                                                    <TableCell className="text-left font-medium text-sm">{item.quantity}</TableCell>
-                                                    <TableCell className="text-left font-medium text-sm">
+                                                    <TableCell className="text-right font-medium text-sm">{item.quantity}</TableCell>
+                                                    <TableCell className="text-right font-medium text-sm">
                                                         {formatCurrency(item.unitPrice || 0)}
                                                     </TableCell>
-                                                    <TableCell className="text-left">
+                                                    <TableCell className="text-right">
                                                         <div className="text-sm text-slate-900 font-medium">
                                                             {formatCurrency(itemVat)}
                                                         </div>
@@ -259,29 +259,31 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                                             variant="outline"
                                                             className="text-sm text-slate-400 mt-0.5 bg-slate-50"
                                                         >
-                                                            {item.vatPercentage ?? 0}% VAT
+                                                            {item.vatPercentage ?? 0}%
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell className="text-left font-bold text-sm text-slate-900">
+                                                    <TableCell className="text-right font-bold text-sm text-slate-900">
                                                         {formatCurrency(itemTotal)}
                                                     </TableCell>
                                                 </TableRow>
                                             );
                                         })}
                                     </TableBody>
-                                    <tfoot>
-                                        <TableRow className="bg-slate-50/30">
-                                            <TableCell colSpan={3} className="pl-6 font-bold text-slate-900 text-left">
+                                    <tfoot className="border-t border-slate-200 bg-slate-50/80">
+                                        <TableRow className="divide-x divide-slate-200">
+                                            <TableCell />
+                                            <TableCell className="pl-6 font-bold text-slate-900 text-left">
                                                 Tổng cộng
                                             </TableCell>
-                                            <TableCell className="text-left font-bold text-slate-900">
+                                            <TableCell />
+                                            <TableCell className="text-right font-bold text-slate-900">
                                                 {totalQuantity}
                                             </TableCell>
                                             <TableCell />
-                                            <TableCell className="text-left font-bold text-slate-900">
+                                            <TableCell className="text-right font-bold text-slate-900">
                                                 {formatCurrency(orderDetails.totalVat)}
                                             </TableCell>
-                                            <TableCell className="text-left font-bold text-slate-900">
+                                            <TableCell className="text-right font-bold text-slate-900">
                                                 {formatCurrency(totalAmountInclVat)}
                                             </TableCell>
                                         </TableRow>
