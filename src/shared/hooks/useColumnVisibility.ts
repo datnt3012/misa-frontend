@@ -44,7 +44,13 @@ export const useColumnVisibility = ({
 
   // Update when persistenceKey or defaults change
   useEffect(() => {
-    setColumnVisibility(getInitialState());
+    setColumnVisibility(prev => {
+      const nextState = getInitialState();
+      if (JSON.stringify(prev) === JSON.stringify(nextState)) {
+        return prev;
+      }
+      return nextState;
+    });
   }, [getInitialState]);
 
   // Load from API (Sync background)
