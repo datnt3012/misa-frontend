@@ -446,10 +446,16 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
     [availableTags, orderType, onUpdateStatus, hasPermission, dialogActions, orderHasLinkedSlipsCache, onUpdateQuickNote],
   );
 
+  const alwaysVisibleKeys = useMemo(() => ['orderCode', 'actions'], []);
+  const defaultVisibility = useMemo(
+    () => allColumns.reduce((acc, col) => ({ ...acc, [String(col.key)]: true }), {} as Record<string, boolean>),
+    [allColumns]
+  );
+
   const { columnVisibility, toggleColumn, resetToDefaults, setAllVisible, isVisible, alwaysVisible } =
     useColumnVisibility({
-      alwaysVisible: ['orderCode', 'actions'],
-      defaults: allColumns.reduce((acc, col) => ({ ...acc, [String(col.key)]: true }), {}),
+      alwaysVisible: alwaysVisibleKeys,
+      defaults: defaultVisibility,
       storageKey: `orders-${orderType}`,
     });
 
