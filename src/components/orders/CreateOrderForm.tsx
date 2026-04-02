@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, Plus, ShoppingCart, ShoppingBag, Search } from "lucide-react";
+import { Trash2, Plus, ShoppingCart, ShoppingBag, Search, CheckCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { customerApi, VatInfo, Customer } from "@/api/customer.api";
@@ -44,7 +44,8 @@ interface OrderItem {
   vat_total_price: number;
   vat_amount: number;
   warehouse_id: string;
-  serialManage?: boolean;
+  serialRequired?: boolean;
+  warrantyMonths?: number;
 }
 interface OrderFormState {
   customer_id: string;
@@ -185,14 +186,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
   const [orderType, setOrderType] = useState<'sale' | 'purchase'>('sale');
   const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
-  const [serialDialogOpen, setSerialDialogOpen] = useState<number | null>(null);
   const [serialNumbers, setSerialNumbers] = useState<Record<number, string[]>>({});
-  const [originalSerialNumbers, setOriginalSerialNumbers] = useState<Record<number, string[]>>({});
-  const [serialsToDelete, setSerialsToDelete] = useState<Record<number, string[]>>({});
-  const [serialInput, setSerialInput] = useState<string>('');
-  const [searchSerial, setSearchSerial] = useState<string>('');
-  const searchSerialRef = useRef<HTMLInputElement>(null);
-  const wasInputSerialFocusedRef = useRef(false);
+  const [serialText, setSerialText] = useState<Record<number,string>>({});
   const customerCardRef = useRef<HTMLDivElement>(null);
   const vatCardRef = useRef<HTMLDivElement>(null);
   const shippingCardRef = useRef<HTMLDivElement>(null);
@@ -272,8 +267,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             vat_total_price: item.vat_total_price || 0,
             vat_amount: item.vat_amount || 0,
             warehouse_id: '',
-            serialManage: item.serialManage || false
+            serialRequired: Array.isArray(item.serials) && item.serials.length > 0,
+            warrantyMonths: item.warrantyMonths || 12,
           })),
+
+
           expenses: (orderData.expenses || []).map((exp: any) => ({
             name: exp.name || '',
             amount: exp.amount || 0,
@@ -297,19 +295,17 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           }
         });
         setSerialNumbers(serials);
+        setSerialText(Object.fromEntries(Object.entries(serials).map(([k,v]) => [k, v.join(', ')])));
       } else {
         // Creating new order
         setNewOrder(createInitialOrderState());
         setOrderType('sale');
         setShippingAddressVersion((v) => v + 1);
         setSerialNumbers({});
-        setOriginalSerialNumbers({});
-        setSerialsToDelete({});
+        setSerialText({});
       }
       
-      setSerialInput('');
-      setSerialDialogOpen(null);
-      setSearchSerial('');
+      // Reset additional serial dialog state removed, no extra reset needed
 
       // Scroll to section based on tab param
       const tab = searchParams.get('tab');
@@ -330,11 +326,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       }
     } else {
       setSerialNumbers({});
-      setOriginalSerialNumbers({});
-      setSerialsToDelete({});
-      setSerialInput('');
-      setSerialDialogOpen(null);
-      setSearchSerial('');
     }
   }, [open, searchParams, orderId, orderData]);
   useEffect(() => {
@@ -345,38 +336,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     const orderTypeValue = orderData.type || orderData.order_type || 'sale';
     setOrderType(orderTypeValue);
     
-    // Fetch product data to get serialManage field for each item
-    const itemsWithSerialManage = await Promise.all(
-      (orderData.items || orderData.order_items || []).map(async (item: any) => {
-        const productId = item.product_id || item.productId || '';
-        let serialManage = item.serialManage || false;
-        
-        // If serialManage is not set, fetch product data to get it
-        if (!serialManage && productId) {
-          try {
-            const product = await productApi.getProduct(productId);
-            serialManage = product?.serialManage || false;
-          } catch (error) {
-            console.error('Error fetching product for serialManage:', error);
-          }
-        }
-        
-        return {
-          id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          product_id: productId,
-          product_code: item.product_code || item.productCode || '',
-          product_name: item.product_name || item.productName || '',
-          quantity: item.quantity || 1,
-          unit_price: item.unit_price || item.unitPrice || 0,
-          total_price: item.total_price || (item.quantity * item.unit_price) || 0,
-          vat_percentage: item.vat_percentage || item.vatPercentage || 0,
-          vat_total_price: item.vat_total_price || 0,
-          vat_amount: item.vat_amount || 0,
-          warehouse_id: '',
-          serialManage: serialManage
-        };
-      })
-    );
+    // Map products for order items and preserve serial flag from existing data
+    const itemsWithSerialRequired = (orderData.items || orderData.order_items || []).map((item: any) => {
+      const productId = item.product_id || item.productId || '';
+      const existingSerials = Array.isArray(item.serials) ? item.serials : [];
+      return {
+        id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        product_id: productId,
+        product_code: item.product_code || item.productCode || '',
+        product_name: item.product_name || item.productName || '',
+        quantity: item.quantity || 1,
+        unit_price: item.unit_price || item.unitPrice || 0,
+        total_price: item.total_price || (item.quantity * item.unit_price) || 0,
+        vat_percentage: item.vat_percentage || item.vatPercentage || 0,
+        vat_total_price: item.vat_total_price || 0,
+        vat_amount: item.vat_amount || 0,
+        warehouse_id: '',
+        serialRequired: existingSerials.length > 0,
+      };
+    });
     
     // Map order data to form state
     const formData: OrderFormState = {
@@ -416,7 +394,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       initial_payment_method: orderData.payment_method || 'cash',
       initial_payment_bank: '',
       order_warehouse_id: '',
-      items: itemsWithSerialManage,
+      items: itemsWithSerialRequired,
       expenses: (orderData.expenses || []).map((exp: any) => ({
         name: exp.name || '',
         amount: exp.amount || 0,
@@ -441,8 +419,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       }
     });
     setSerialNumbers(serials);
-    // Save original serial numbers for comparison during update
-    setOriginalSerialNumbers(serials);
   };
 
   const loadData = async () => {
@@ -533,7 +509,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_percentage: 0,
         vat_total_price: 0,
         vat_amount: 0,
-        warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : "")
+        warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : ""),
+        serialRequired: false,
+        warrantyMonths: 12,
       }]
     }));
   };
@@ -567,7 +545,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             items[index].product_code = product.code;
             items[index].product_name = product.name;
             items[index].unit_price = product.price;
-            items[index].serialManage = product.serialManage || false;
             if (prev.order_warehouse_id) {
               items[index].warehouse_id = prev.order_warehouse_id;
             } else if (!items[index].warehouse_id && warehouses.length === 1) {
@@ -829,34 +806,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         // Order details
         details: newOrder.items.map((it, index) => {
           const currentSerials = serialNumbers[index] || [];
-          const originalSerials = originalSerialNumbers[index] || [];
-          const toDeleteSerials = serialsToDelete[index] || [];
-          
-          // Calculate remaining serials after deletion
-          const remainingSerials = currentSerials.filter(s => !toDeleteSerials.includes(s));
-          
-          // Check if all serials are marked for deletion
-          const allDeleted = toDeleteSerials.length > 0 && 
-            toDeleteSerials.length === originalSerials.length &&
-            toDeleteSerials.every(s => originalSerials.includes(s));
-          
-          // Determine what serials to send
           let serialsToSend: string[] | undefined;
-          if (allDeleted) {
-            // All serials are deleted, send empty array
-            serialsToSend = [];
-          } else if (remainingSerials.length > 0 && 
-            JSON.stringify(remainingSerials.sort()) !== JSON.stringify(originalSerials.sort())) {
-            // Serials have changed, send remaining serials
-            serialsToSend = remainingSerials;
+          if (it.serialRequired || currentSerials.length > 0) {
+            serialsToSend = currentSerials;
           }
-          
+
           return {
             productId: it.product_id,
             vatPercentage: it.vat_percentage || 0,
             quantity: it.quantity,
             unitPrice: it.unit_price,
             ...(serialsToSend !== undefined && { serials: serialsToSend }),
+            ...(it.warrantyMonths !== undefined && { warrantyMonths: it.warrantyMonths }),
           };
         }),
         // Additional expenses
@@ -939,11 +900,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       setOrderType('sale');
       setShippingAddressVersion((v) => v + 1);
       setSerialNumbers({});
-      setOriginalSerialNumbers({});
-      setSerialsToDelete({});
-      setSerialInput('');
-      setSerialDialogOpen(null);
-      setSearchSerial('');
+      setSerialText({});
       onOrderCreated();
     } catch (error) {
       toast({
@@ -998,11 +955,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               setNewOrder(createInitialOrderState());
               setShippingAddressVersion(v => v + 1);
               setSerialNumbers({});
-              setOriginalSerialNumbers({});
-              setSerialsToDelete({});
-              setSerialInput('');
-              setSerialDialogOpen(null);
-              setSearchSerial('');
             }} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="sale" className="flex items-center gap-2">
@@ -1339,10 +1291,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   </TableHeader>
                   <TableBody>
                     {newOrder.items.map((item, index) => (
-                      <TableRow
-                        key={item.id}
-                        className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
-                      >
+                      <>
+                        <TableRow
+                          key={item.id}
+                          className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
+                        >
                         <TableCell className="border-r border-slate-100 align-top pt-4 max-w-[300px]">
                           <Combobox
                             key={`product-select-${item.id}`}
@@ -1365,23 +1318,31 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             emptyMessage="Không có sản phẩm nào"
                             className="w-full"
                           />
-                          {item.serialManage && orderType == 'sale' && (
-                            <div className="mt-1 flex justify-center">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSerialDialogOpen(index);
-                                  const existingSerials = serialNumbers[index] || [];
-                                  setSerialInput(existingSerials.join(','));
-                                }}
-                                className="text-xs"
-                              >
-                                Quản lý serial {serialNumbers[index]?.length ? `(${serialNumbers[index].length})` : ''}
-                              </Button>
-                            </div>
-                          )}
+                          <div className="mt-1">
+                            <label className="inline-flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(item.serialRequired)}
+                                onChange={(e) => {
+                                  updateItem(index, 'serialRequired', e.target.checked);
+                                                          if (!e.target.checked) {
+                                  setSerialNumbers(prev => {
+                                    const clone = { ...prev };
+                                    delete clone[index];
+                                    return clone;
+                                  });
+                                  setSerialText(prev => {
+                                    const clone = { ...prev };
+                                    delete clone[index];
+                                    return clone;
+                                  });
+                                }
+                              }}
+                                className="h-4 w-4"
+                              />
+                              <span>Quản lý serial</span>
+                            </label>
+                          </div>
                         </TableCell>
                         <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
                           <div className="inline-block">
@@ -1433,6 +1394,69 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </Button>
                         </TableCell>
                       </TableRow>
+                      {item.serialRequired && (
+                        <TableRow className="bg-slate-50">
+                          <TableCell colSpan={8} className="p-3">
+                            <div className="space-y-2">
+                              <Label className="mb-1 block font-medium">Mã serial</Label>
+                              <Textarea
+                                value={serialText[index] ?? (serialNumbers[index] || []).join(', ')}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const t = e.currentTarget as HTMLTextAreaElement;
+                                    const text = t.value;
+                                    const cursorPos = t.selectionStart;
+                                    const next = `${text.slice(0, cursorPos)},${text.slice(cursorPos)}`;
+                                    setSerialText(prev => ({ ...prev, [index]: next }));
+                                    const serialList = next
+                                      .split(',')
+                                      .map(s => s.trim())
+                                      .filter(s => s);
+                                    setSerialNumbers(prev => ({ ...prev, [index]: serialList }));
+                                    setTimeout(() => {
+                                      t.selectionStart = t.selectionEnd = cursorPos + 1;
+                                    }, 0);
+                                  }
+                                }}
+                                onChange={(e) => {
+                                  const text = e.target.value;
+                                  setSerialText(prev => ({ ...prev, [index]: text }));
+                                  const serials = text
+                                    .split(',')
+                                    .map(s => s.trim())
+                                    .filter(s => s);
+                                  setSerialNumbers(prev => ({ ...prev, [index]: serials }));
+                                }}
+                                rows={3}
+                                placeholder="Nhập mã serial, ngăn cách bằng dấu phẩy, nhấn Enter để chèn dấu phẩy"
+                                className="w-full"
+                              />
+                              <div className="text-sm">
+                                <span className={((serialNumbers[index] || []).length === item.quantity) ? 'text-emerald-600' : 'text-rose-500'}>
+                                  {((serialNumbers[index] || []).length === item.quantity) ? (
+                                    <CheckCircle className="w-4 h-4 inline mr-2" />
+                                  ) : (
+                                    <AlertCircle className="w-4 h-4 inline mr-2" />
+                                  )}
+                                  {(serialNumbers[index] || []).length}/{item.quantity} Serial
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b></Label>
+                                <NumberInput
+                                  value={item.warrantyMonths ?? 0}
+                                  onChange={(value) => updateItem(index, 'warrantyMonths', Number(value) || 0)}
+                                  min={0}
+                                  className="w-20"
+                                />
+                                <span>tháng (tính từ ngày giao hàng)</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                     ))}
                   </TableBody>
                 </Table>
@@ -1619,219 +1643,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-      {/* Serial Numbers Dialog */}
-      <Dialog open={serialDialogOpen !== null} onOpenChange={(open) => {
-        if (!open) {
-          setSerialDialogOpen(null);
-          setSerialInput('');
-          setSerialsToDelete({});
-        }
-      }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Quản lý số serial - {serialDialogOpen !== null ? newOrder.items[serialDialogOpen]?.product_name : ''}
-            </DialogTitle>
-            <DialogDescription>
-              Nhập số serial
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    ref={searchSerialRef}
-                    placeholder="Tìm kiếm theo sản phẩm, mã hoặc số phiếu..."
-                    value={searchSerial}
-                    onChange={(e) => setSearchSerial(e.target.value)}
-                    onFocus={() => { wasInputSerialFocusedRef.current = true; }}
-                    onBlur={() => { wasInputSerialFocusedRef.current = false; }}
-                    className="pl-10 w-full"
-                  />
-            </div>
-            <div>
-              <div>
-                <Textarea
-                  id="serial-input"
-                  placeholder="Nhập serial..."
-                  value={serialInput}
-                  onChange={(e) => setSerialInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const target = e.target as HTMLTextAreaElement;
-                      const start = target.selectionStart;
-                      const end = target.selectionEnd;
-                      const currentValue = serialInput;
-                      const newValue = currentValue.substring(0, start) + ',' + currentValue.substring(end);
-                      setSerialInput(newValue);
-                      // Set cursor position after the comma
-                      setTimeout(() => {
-                        target.selectionStart = target.selectionEnd = start + 1;
-                      }, 0);
-                    }
-                  }}
-                  className="min-h-[80px]"
-                />  
-              </div>
-              <div className="space-x-4 mt-2 w-full">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const allSerials = serialInput
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(s => s.length > 0);
-                    
-                    // Count occurrences of each serial
-                    const serialCount: Record<string, number> = {};
-                    allSerials.forEach(serial => {
-                      serialCount[serial] = (serialCount[serial] || 0) + 1;
-                    });
-                    
-                    // Find duplicates
-                    const duplicates = Object.entries(serialCount)
-                      .filter(([_, count]) => count > 1)
-                      .map(([serial, count]) => ({ serial, count }));
-                    
-                    // Get unique serials from input
-                    const uniqueSerials = [...new Set(allSerials)];
-                    
-                    // Show warning if there are duplicates
-                    if (duplicates.length > 0) {
-                      const duplicateMessage = duplicates
-                        .map(d => `• ${d.serial}: ${d.count} lần`)
-                        .join('\n');
-                      toast({
-                        title: "Cảnh báo trùng lặp",
-                        description: `Đã loại bỏ các serial trùng lặp:\n${duplicateMessage}`,
-                        variant: "destructive",
-                      });
-                    }
-                    
-                    // Merge with existing serials (avoid duplicates)
-                    setSerialNumbers(prev => {
-                      const existingSerials = prev[serialDialogOpen!] || [];
-                      const mergedSerials = [...new Set([...existingSerials, ...uniqueSerials])];
-                      return {
-                        ...prev,
-                        [serialDialogOpen!]: mergedSerials
-                      };
-                    });
-                    
-                    // Clear input after adding
-                    setSerialInput('');
-                  }}
-                  className="w-full"
-                >
-                  Nhập
-                </Button>
-              </div>
-            </div>
-            {serialDialogOpen !== null && serialNumbers[serialDialogOpen]?.length > 0 && (
-              <div>
-                <Label>Danh sách serial đã nhập ({serialNumbers[serialDialogOpen].length})</Label>
-                <div className="mt-2 max-h-[200px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="text-center bg-slate-50 border-b-2 border-slate-200">
-                        <TableHead className="w-16">STT</TableHead>
-                        <TableHead><div className="text-center">Số serial</div></TableHead>
-                        <TableHead className="w-21"><div className="text-center">Thao tác</div></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {serialNumbers[serialDialogOpen]
-                        .filter(serial => {
-                          if (!searchSerial.trim()) return true;
-                          const searchTerm = searchSerial.toLowerCase().trim();
-                          const serialLower = serial.toLowerCase();
-                          
-                          // Tìm kiếm chính xác
-                          if (serialLower.includes(searchTerm)) return true;
-                          
-                          if (searchTerm.length <= 2) {
-                            // Nếu searchTerm rất ngắn, kiểm tra từng ký tự
-                            return searchTerm.split('').every(char => serialLower.includes(char));
-                          }
-                          
-                          let matchCount = 0;
-                          let searchIndex = 0;
-                          
-                          for (let i = 0; i < serialLower.length && searchIndex < searchTerm.length; i++) {
-                            if (serialLower[i] === searchTerm[searchIndex]) {
-                              matchCount++;
-                              searchIndex++;
-                            }
-                          }
-                          
-                          const matchRatio = matchCount / searchTerm.length;
-                          return matchRatio >= 0.4;
-                        })
-                        .map((serial, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell><div className="text-center">{idx + 1}</div></TableCell>
-                            <TableCell><div className="text-center">{serial}</div></TableCell>
-                            <TableCell>
-                              <div className="flex justify-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    // Add serial to delete list
-                                    setSerialsToDelete(prev => {
-                                      const currentDeletes = prev[serialDialogOpen!] || [];
-                                      if (!currentDeletes.includes(serial)) {
-                                        return {
-                                          ...prev,
-                                          [serialDialogOpen!]: [...currentDeletes, serial]
-                                        };
-                                      }
-                                      return prev;
-                                    });
-                                    // Also remove serial from current list
-                                    setSerialNumbers(prev => {
-                                      const updatedSerials = [...(prev[serialDialogOpen!] || [])];
-                                      const originalIndex = updatedSerials.indexOf(serial);
-                                      if (originalIndex > -1) {
-                                        updatedSerials.splice(originalIndex, 1);
-                                      }
-                                      return {
-                                        ...prev,
-                                        [serialDialogOpen!]: updatedSerials
-                                      };
-                                    });
-                                  }}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setSerialDialogOpen(null);
-                  setSerialInput('');
-                }}
-              >
-                Đóng
-              </Button>
-            </div>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </LoadingWrapper>
