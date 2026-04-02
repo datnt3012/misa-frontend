@@ -10,9 +10,9 @@ import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, Plus, ShoppingCart, ShoppingBag } from "lucide-react";
+import { Trash2, Plus, ShoppingCart, ShoppingBag, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { customerApi, VatInfo, Customer } from "@/api/customer.api";
@@ -20,15 +20,17 @@ import { Supplier, supplierApi } from "@/api/supplier.api";
 import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
-import { stockLevelsApi } from "@/api/stockLevels.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import BankSelector from "./BankSelector";
 import { LoadingWrapper } from "@/components/LoadingWrapper";
+
 interface CreateOrderFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOrderCreated: () => void;
+  orderId?: string;
+  orderData?: any;
 }
 interface OrderItem {
   id: string;
@@ -42,6 +44,7 @@ interface OrderItem {
   vat_total_price: number;
   vat_amount: number;
   warehouse_id: string;
+  serialManage?: boolean;
 }
 interface OrderFormState {
   customer_id: string;
@@ -169,7 +172,7 @@ const createInitialOrderState = (): OrderFormState => ({
   expenses: [{ name: "Chi phí vận chuyển", amount: 0, note: "" }],
   paymentDeadline: "",
 });
-const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
+const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated, orderId, orderData }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -182,6 +185,14 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
   const [orderType, setOrderType] = useState<'sale' | 'purchase'>('sale');
   const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
+  const [serialDialogOpen, setSerialDialogOpen] = useState<number | null>(null);
+  const [serialNumbers, setSerialNumbers] = useState<Record<number, string[]>>({});
+  const [originalSerialNumbers, setOriginalSerialNumbers] = useState<Record<number, string[]>>({});
+  const [serialsToDelete, setSerialsToDelete] = useState<Record<number, string[]>>({});
+  const [serialInput, setSerialInput] = useState<string>('');
+  const [searchSerial, setSearchSerial] = useState<string>('');
+  const searchSerialRef = useRef<HTMLInputElement>(null);
+  const wasInputSerialFocusedRef = useRef(false);
   const customerCardRef = useRef<HTMLDivElement>(null);
   const vatCardRef = useRef<HTMLDivElement>(null);
   const shippingCardRef = useRef<HTMLDivElement>(null);
@@ -190,9 +201,115 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
   useEffect(() => {
     if (open) {
-      setNewOrder(createInitialOrderState());
-      setOrderType('sale');
-      setShippingAddressVersion((v) => v + 1);
+      // If editing, always fetch fresh data from API when orderId is available
+      if (orderId) {
+        const fetchOrderDetails = async () => {
+          try {
+            const freshOrderData = await orderApi.getOrder(orderId);
+            // Populate form with fresh order data
+            populateFormWithOrderData(freshOrderData);
+          } catch (error) {
+            console.error('Error fetching order details:', error);
+            // Fallback to orderData if API call fails
+            if (orderData) {
+              populateFormWithOrderData(orderData);
+            }
+          }
+        };
+        fetchOrderDetails();
+      } else if (orderData) {
+        // If editing with orderData but no orderId, use orderData directly
+        const orderTypeValue = orderData.type || orderData.order_type || 'sale';
+        setOrderType(orderTypeValue);
+        
+        // Map order data to form state
+        const formData: OrderFormState = {
+          customer_id: orderData.customer_id || orderData.customer?.id || '',
+          customer_name: orderData.customer_name || orderData.customer?.name || '',
+          customer_code: orderData.customer_code || orderData.customer?.code || '',
+          customer_phone: orderData.customer_phone || orderData.customer?.phone || '',
+          customer_email: orderData.customer_email || orderData.customer?.email || '',
+          order_type: orderTypeValue,
+          notes: orderData.notes || orderData.note || '',
+          contract_code: orderData.contract_code || '',
+          purchase_order_number: orderData.purchase_order_number || '',
+          vat_tax_code: orderData.taxCode || '',
+          vat_company_name: orderData.companyName || '',
+          vat_company_address: orderData.companyAddress || '',
+          vat_company_phone: orderData.companyPhone || '',
+          vat_company_addressInfo: {
+            provinceCode: '',
+            districtCode: '',
+            wardCode: ''
+          },
+          vat_invoice_email: orderData.vatEmail || '',
+          vat_percentage: undefined,
+          vat_total_price: undefined,
+          shipping_recipient_name: orderData.receiverName || '',
+          shipping_recipient_phone: orderData.receiverPhone || '',
+          shipping_address: orderData.receiverAddress || '',
+          shipping_addressInfo: {
+            provinceCode: orderData.addressInfo?.provinceCode || '',
+            districtCode: orderData.addressInfo?.districtCode || '',
+            wardCode: orderData.addressInfo?.wardCode || '',
+            provinceName: orderData.addressInfo?.province?.name || '',
+            districtName: orderData.addressInfo?.district?.name || '',
+            wardName: orderData.addressInfo?.ward?.name || '',
+          },
+          initial_payment: orderData.initial_payment || 0,
+          initial_payment_method: orderData.payment_method || 'cash',
+          initial_payment_bank: '',
+          order_warehouse_id: '',
+          items: (orderData.items || orderData.order_items || []).map((item: any) => ({
+            id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            product_id: item.product_id || item.productId || '',
+            product_code: item.product_code || item.productCode || '',
+            product_name: item.product_name || item.productName || '',
+            quantity: item.quantity || 1,
+            unit_price: item.unit_price || item.unitPrice || 0,
+            total_price: item.total_price || (item.quantity * item.unit_price) || 0,
+            vat_percentage: item.vat_percentage || item.vatPercentage || 0,
+            vat_total_price: item.vat_total_price || 0,
+            vat_amount: item.vat_amount || 0,
+            warehouse_id: '',
+            serialManage: item.serialManage || false
+          })),
+          expenses: (orderData.expenses || []).map((exp: any) => ({
+            name: exp.name || '',
+            amount: exp.amount || 0,
+            note: exp.note || ''
+          })),
+          paymentDeadline: orderData.paymentDeadline || ''
+        };
+        
+        setNewOrder(formData);
+        setShippingAddressVersion((v) => v + 1);
+        
+        // Load serial numbers from order items
+        const serials: Record<number, string[]> = {};
+        (orderData.items || orderData.order_items || []).forEach((item: any, index: number) => {
+          if (item.serials && item.serials.length > 0) {
+            serials[index] = item.serials.map((s: any) => {
+              if (typeof s === 'string') return s;
+              if (s && typeof s === 'object' && s.serial_number) return s.serial_number;
+              return String(s);
+            });
+          }
+        });
+        setSerialNumbers(serials);
+      } else {
+        // Creating new order
+        setNewOrder(createInitialOrderState());
+        setOrderType('sale');
+        setShippingAddressVersion((v) => v + 1);
+        setSerialNumbers({});
+        setOriginalSerialNumbers({});
+        setSerialsToDelete({});
+      }
+      
+      setSerialInput('');
+      setSerialDialogOpen(null);
+      setSearchSerial('');
 
       // Scroll to section based on tab param
       const tab = searchParams.get('tab');
@@ -211,11 +328,123 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           }
         }, 100);
       }
+    } else {
+      setSerialNumbers({});
+      setOriginalSerialNumbers({});
+      setSerialsToDelete({});
+      setSerialInput('');
+      setSerialDialogOpen(null);
+      setSearchSerial('');
     }
-  }, [open, searchParams]);
+  }, [open, searchParams, orderId, orderData]);
   useEffect(() => {
     loadData();
   }, []);
+
+  const populateFormWithOrderData = async (orderData: any) => {
+    const orderTypeValue = orderData.type || orderData.order_type || 'sale';
+    setOrderType(orderTypeValue);
+    
+    // Fetch product data to get serialManage field for each item
+    const itemsWithSerialManage = await Promise.all(
+      (orderData.items || orderData.order_items || []).map(async (item: any) => {
+        const productId = item.product_id || item.productId || '';
+        let serialManage = item.serialManage || false;
+        
+        // If serialManage is not set, fetch product data to get it
+        if (!serialManage && productId) {
+          try {
+            const product = await productApi.getProduct(productId);
+            serialManage = product?.serialManage || false;
+          } catch (error) {
+            console.error('Error fetching product for serialManage:', error);
+          }
+        }
+        
+        return {
+          id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          product_id: productId,
+          product_code: item.product_code || item.productCode || '',
+          product_name: item.product_name || item.productName || '',
+          quantity: item.quantity || 1,
+          unit_price: item.unit_price || item.unitPrice || 0,
+          total_price: item.total_price || (item.quantity * item.unit_price) || 0,
+          vat_percentage: item.vat_percentage || item.vatPercentage || 0,
+          vat_total_price: item.vat_total_price || 0,
+          vat_amount: item.vat_amount || 0,
+          warehouse_id: '',
+          serialManage: serialManage
+        };
+      })
+    );
+    
+    // Map order data to form state
+    const formData: OrderFormState = {
+      customer_id: orderData.customer_id || orderData.customer?.id || '',
+      customer_name: orderData.customer_name || orderData.customer?.name || '',
+      customer_code: orderData.customer_code || orderData.customer?.code || '',
+      customer_phone: orderData.customer_phone || orderData.customer?.phone || '',
+      customer_email: orderData.customer_email || orderData.customer?.email || '',
+      order_type: orderTypeValue,
+      notes: orderData.notes || orderData.note || '',
+      contract_code: orderData.contract_code || '',
+      purchase_order_number: orderData.purchase_order_number || '',
+      vat_tax_code: orderData.taxCode || '',
+      vat_company_name: orderData.companyName || '',
+      vat_company_address: orderData.companyAddress || '',
+      vat_company_phone: orderData.companyPhone || '',
+      vat_company_addressInfo: {
+        provinceCode: '',
+        districtCode: '',
+        wardCode: ''
+      },
+      vat_invoice_email: orderData.vatEmail || '',
+      vat_percentage: undefined,
+      vat_total_price: undefined,
+      shipping_recipient_name: orderData.receiverName || '',
+      shipping_recipient_phone: orderData.receiverPhone || '',
+      shipping_address: orderData.receiverAddress || '',
+      shipping_addressInfo: {
+        provinceCode: orderData.addressInfo?.provinceCode || '',
+        districtCode: orderData.addressInfo?.districtCode || '',
+        wardCode: orderData.addressInfo?.wardCode || '',
+        provinceName: orderData.addressInfo?.province?.name || '',
+        districtName: orderData.addressInfo?.district?.name || '',
+        wardName: orderData.addressInfo?.ward?.name || '',
+      },
+      initial_payment: orderData.initial_payment || 0,
+      initial_payment_method: orderData.payment_method || 'cash',
+      initial_payment_bank: '',
+      order_warehouse_id: '',
+      items: itemsWithSerialManage,
+      expenses: (orderData.expenses || []).map((exp: any) => ({
+        name: exp.name || '',
+        amount: exp.amount || 0,
+        note: exp.note || ''
+      })),
+      paymentDeadline: orderData.paymentDeadline || ''
+    };
+    
+    setNewOrder(formData);
+    setShippingAddressVersion((v) => v + 1);
+    
+    // Load serial numbers from order items
+    const serials: Record<number, string[]> = {};
+    (orderData.items || orderData.order_items || []).forEach((item: any, index: number) => {
+      if (item.serials && item.serials.length > 0) {
+        // Handle both string[] and object[] formats
+        serials[index] = item.serials.map((s: any) => {
+          if (typeof s === 'string') return s;
+          if (s && typeof s === 'object' && s.serial_number) return s.serial_number;
+          return String(s);
+        });
+      }
+    });
+    setSerialNumbers(serials);
+    // Save original serial numbers for comparison during update
+    setOriginalSerialNumbers(serials);
+  };
+
   const loadData = async () => {
     try {
       const [customersRes, suppliersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
@@ -313,6 +542,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
     }));
+    setSerialNumbers(prev => {
+      const newSerialNumbers: Record<number, string[]> = {};
+      Object.keys(prev).forEach(key => {
+        const numKey = parseInt(key);
+        if (numKey < index) {
+          newSerialNumbers[numKey] = prev[numKey];
+        } else if (numKey > index) {
+          newSerialNumbers[numKey - 1] = prev[numKey];
+        }
+      });
+      return newSerialNumbers;
+    });
   };
   const updateItem = (index: number, field: keyof OrderItem, value: any) => {
     setNewOrder(prev => {
@@ -326,7 +567,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             items[index].product_code = product.code;
             items[index].product_name = product.name;
             items[index].unit_price = product.price;
-            // Gắn kho theo kho của đơn nếu có
+            items[index].serialManage = product.serialManage || false;
             if (prev.order_warehouse_id) {
               items[index].warehouse_id = prev.order_warehouse_id;
             } else if (!items[index].warehouse_id && warehouses.length === 1) {
@@ -391,6 +632,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     try {
       let customerId = newOrder.customer_id;
       let selectedCustomer: Customer | undefined;
+      const isEditing = Boolean(orderId);
 
       // Handle customer/supplier creation/selection (for both sale and purchase orders)
       if (newOrder.customer_id === "__new__") {
@@ -526,8 +768,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         longitude: selectedCustomer.addressInfo.longitude,
       } : undefined;
       const orderVatInfo = extractVatInfoFromOrder(newOrder);
-      // Create order via backend API
-      const orderData = await orderApi.createOrder({
+      
+      // Prepare order data for create or update
+      const orderPayloadRaw = {
         customerId: customerId,
         customerName: newOrder.customer_name || selectedCustomer?.name || "",
         customerPhone: newOrder.customer_phone || selectedCustomer?.phoneNumber || undefined,
@@ -538,7 +781,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         contractCode: newOrder.contract_code || undefined,
         purchaseOrderNumber: newOrder.purchase_order_number || undefined,
         note: newOrder.notes || undefined,
-        status: 'new',
+        status: 'new' as const,
         orderType: orderType, // Use the orderType state
         type: orderType, // Add type parameter for backend
         // VAT Information - removed VAT rate from UI, backend will handle
@@ -584,12 +827,38 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           : undefined,
         paymentDeadline: newOrder.paymentDeadline || undefined,
         // Order details
-        details: newOrder.items.map(it => ({
-          productId: it.product_id,
-          vatPercentage: it.vat_percentage || 0,
-          quantity: it.quantity,
-          unitPrice: it.unit_price,
-        })),
+        details: newOrder.items.map((it, index) => {
+          const currentSerials = serialNumbers[index] || [];
+          const originalSerials = originalSerialNumbers[index] || [];
+          const toDeleteSerials = serialsToDelete[index] || [];
+          
+          // Calculate remaining serials after deletion
+          const remainingSerials = currentSerials.filter(s => !toDeleteSerials.includes(s));
+          
+          // Check if all serials are marked for deletion
+          const allDeleted = toDeleteSerials.length > 0 && 
+            toDeleteSerials.length === originalSerials.length &&
+            toDeleteSerials.every(s => originalSerials.includes(s));
+          
+          // Determine what serials to send
+          let serialsToSend: string[] | undefined;
+          if (allDeleted) {
+            // All serials are deleted, send empty array
+            serialsToSend = [];
+          } else if (remainingSerials.length > 0 && 
+            JSON.stringify(remainingSerials.sort()) !== JSON.stringify(originalSerials.sort())) {
+            // Serials have changed, send remaining serials
+            serialsToSend = remainingSerials;
+          }
+          
+          return {
+            productId: it.product_id,
+            vatPercentage: it.vat_percentage || 0,
+            quantity: it.quantity,
+            unitPrice: it.unit_price,
+            ...(serialsToSend !== undefined && { serials: serialsToSend }),
+          };
+        }),
         // Additional expenses
         expenses: newOrder.expenses
           .filter(exp => (exp.name && exp.name.trim().length > 0) || exp.amount)
@@ -598,7 +867,43 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             amount: exp.amount || 0,
             note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
           })),
-      });
+      };
+      
+      // Helper function to remove undefined/null/empty string values from object
+      const removeEmptyFields = (obj: any): any => {
+        const cleaned: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (value !== undefined && value !== null && value !== '') {
+            if (Array.isArray(value)) {
+              // Keep arrays as-is (they may be empty but valid)
+              cleaned[key] = value;
+            } else if (typeof value === 'object' && value !== null) {
+              // Recursively clean nested objects
+              const cleanedNested = removeEmptyFields(value);
+              if (Object.keys(cleanedNested).length > 0) {
+                cleaned[key] = cleanedNested;
+              }
+            } else {
+              cleaned[key] = value;
+            }
+          }
+        }
+        return cleaned;
+      };
+      
+      // For update, only include fields that have values
+      const orderPayload = isEditing ? removeEmptyFields(orderPayloadRaw) : orderPayloadRaw;
+      
+      // Call create or update API based on mode
+      let orderData;
+      if (isEditing && orderId) {
+        // Update existing order
+        orderData = await orderApi.updateOrder(orderId, orderPayload);
+      } else {
+        // Create new order
+        orderData = await orderApi.createOrder(orderPayload);
+      }
+      
       // Items are included in order payload; adjust if BE requires separate calls
       // TODO: initial payment can be handled via payments API if available
       // Get order code from response
@@ -628,16 +933,22 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       }
       toast({
         title: "Thành công",
-        description: `Đã tạo đơn hàng ${orderCode}`,
+        description: isEditing ? `Đã cập nhật đơn hàng ${orderCode}` : `Đã tạo đơn hàng ${orderCode}`,
       });
       setNewOrder(createInitialOrderState());
       setOrderType('sale');
       setShippingAddressVersion((v) => v + 1);
+      setSerialNumbers({});
+      setOriginalSerialNumbers({});
+      setSerialsToDelete({});
+      setSerialInput('');
+      setSerialDialogOpen(null);
+      setSearchSerial('');
       onOrderCreated();
     } catch (error) {
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể tạo đơn hàng"),
+        description: getErrorMessage(error, orderId ? "Không thể cập nhật đơn hàng" : "Không thể tạo đơn hàng"),
         variant: "destructive",
       });
       // If a new customer was created but order creation failed,
@@ -670,34 +981,41 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       onRetry={() => {
         loadData();
       }}
-      loadingMessage="Đang tải dữ liệu tạo đơn hàng..."
+      loadingMessage={orderId ? "Đang tải dữ liệu chỉnh sửa đơn hàng..." : "Đang tải dữ liệu tạo đơn hàng..."}
     >
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tạo đơn hàng mới</DialogTitle>
+            <DialogTitle>{orderId ? 'Chỉnh sửa đơn hàng' : 'Tạo đơn hàng mới'}</DialogTitle>
             <DialogDescription>
-              Nhập thông tin chi tiết cho đơn hàng mới
+              {orderId ? 'Cập nhật thông tin chi tiết cho đơn hàng' : 'Nhập thông tin chi tiết cho đơn hàng mới'}
             </DialogDescription>
           </DialogHeader>
-          {/* Order Type Tabs */}
-          <Tabs value={orderType} onValueChange={(value) => {
-            setOrderType(value as 'sale' | 'purchase');
-            // Reset form when switching type
-            setNewOrder(createInitialOrderState());
-            setShippingAddressVersion(v => v + 1);
-          }} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="sale" className="flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4" />
-                Bán hàng
-              </TabsTrigger>
-              <TabsTrigger value="purchase" className="flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4" />
-                Mua hàng
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* Order Type Tabs - Only show when creating new order */}
+          {!orderId && (
+            <Tabs value={orderType} onValueChange={(value) => {
+              setOrderType(value as 'sale' | 'purchase');
+              setNewOrder(createInitialOrderState());
+              setShippingAddressVersion(v => v + 1);
+              setSerialNumbers({});
+              setOriginalSerialNumbers({});
+              setSerialsToDelete({});
+              setSerialInput('');
+              setSerialDialogOpen(null);
+              setSearchSerial('');
+            }} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="sale" className="flex items-center gap-2">
+                  <ShoppingCart className="w-4 h-4" />
+                  Bán hàng
+                </TabsTrigger>
+                <TabsTrigger value="purchase" className="flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4" />
+                  Mua hàng
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           <div className="space-y-6">
             {/* Customer/Supplier Information */}
             <Card ref={customerCardRef}>
@@ -996,25 +1314,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   <TableHeader>
                     <TableRow className="bg-slate-50 border-b-2 border-slate-200">
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Sản phẩm <span className="text-red-500">*</span>
+                        <div className="text-center">Sản phẩm <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thuế suất
+                        <div className="text-center">Thuế suất</div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Số lượng <span className="text-red-500">*</span>
+                        <div className="text-center">Số lượng <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Đơn giá <span className="text-red-500">*</span>
+                        <div className="text-center">Đơn giá <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Tiền thuế GTGT
+                        <div className="text-center">Tiền thuế GTGT</div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thành tiền chưa có thuế GTGT
+                        <div className="text-center">Thành tiền chưa có thuế GTGT</div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thành tiền có thuế GTGT
+                        <div className="text-center">Thành tiền có thuế GTGT</div>
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700"></TableHead>
                     </TableRow>
@@ -1047,6 +1365,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             emptyMessage="Không có sản phẩm nào"
                             className="w-full"
                           />
+                          {item.serialManage && orderType == 'sale' && (
+                            <div className="mt-1 flex justify-center">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSerialDialogOpen(index);
+                                  const existingSerials = serialNumbers[index] || [];
+                                  setSerialInput(existingSerials.join(','));
+                                }}
+                                className="text-xs"
+                              >
+                                Quản lý serial {serialNumbers[index]?.length ? `(${serialNumbers[index].length})` : ''}
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
                           <div className="inline-block">
@@ -1280,10 +1615,223 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 Hủy
               </Button>
               <Button onClick={handleSubmit} disabled={loading}>
-                {loading ? "Đang tạo..." : "Tạo đơn hàng"}
+                {loading ? (orderId ? "Đang cập nhật..." : "Đang tạo...") : (orderId ? "Cập nhật đơn hàng" : "Tạo đơn hàng")}
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Serial Numbers Dialog */}
+      <Dialog open={serialDialogOpen !== null} onOpenChange={(open) => {
+        if (!open) {
+          setSerialDialogOpen(null);
+          setSerialInput('');
+          setSerialsToDelete({});
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Quản lý số serial - {serialDialogOpen !== null ? newOrder.items[serialDialogOpen]?.product_name : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Nhập số serial
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    ref={searchSerialRef}
+                    placeholder="Tìm kiếm theo sản phẩm, mã hoặc số phiếu..."
+                    value={searchSerial}
+                    onChange={(e) => setSearchSerial(e.target.value)}
+                    onFocus={() => { wasInputSerialFocusedRef.current = true; }}
+                    onBlur={() => { wasInputSerialFocusedRef.current = false; }}
+                    className="pl-10 w-full"
+                  />
+            </div>
+            <div>
+              <div>
+                <Textarea
+                  id="serial-input"
+                  placeholder="Nhập serial..."
+                  value={serialInput}
+                  onChange={(e) => setSerialInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const target = e.target as HTMLTextAreaElement;
+                      const start = target.selectionStart;
+                      const end = target.selectionEnd;
+                      const currentValue = serialInput;
+                      const newValue = currentValue.substring(0, start) + ',' + currentValue.substring(end);
+                      setSerialInput(newValue);
+                      // Set cursor position after the comma
+                      setTimeout(() => {
+                        target.selectionStart = target.selectionEnd = start + 1;
+                      }, 0);
+                    }
+                  }}
+                  className="min-h-[80px]"
+                />  
+              </div>
+              <div className="space-x-4 mt-2 w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const allSerials = serialInput
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(s => s.length > 0);
+                    
+                    // Count occurrences of each serial
+                    const serialCount: Record<string, number> = {};
+                    allSerials.forEach(serial => {
+                      serialCount[serial] = (serialCount[serial] || 0) + 1;
+                    });
+                    
+                    // Find duplicates
+                    const duplicates = Object.entries(serialCount)
+                      .filter(([_, count]) => count > 1)
+                      .map(([serial, count]) => ({ serial, count }));
+                    
+                    // Get unique serials from input
+                    const uniqueSerials = [...new Set(allSerials)];
+                    
+                    // Show warning if there are duplicates
+                    if (duplicates.length > 0) {
+                      const duplicateMessage = duplicates
+                        .map(d => `• ${d.serial}: ${d.count} lần`)
+                        .join('\n');
+                      toast({
+                        title: "Cảnh báo trùng lặp",
+                        description: `Đã loại bỏ các serial trùng lặp:\n${duplicateMessage}`,
+                        variant: "destructive",
+                      });
+                    }
+                    
+                    // Merge with existing serials (avoid duplicates)
+                    setSerialNumbers(prev => {
+                      const existingSerials = prev[serialDialogOpen!] || [];
+                      const mergedSerials = [...new Set([...existingSerials, ...uniqueSerials])];
+                      return {
+                        ...prev,
+                        [serialDialogOpen!]: mergedSerials
+                      };
+                    });
+                    
+                    // Clear input after adding
+                    setSerialInput('');
+                  }}
+                  className="w-full"
+                >
+                  Nhập
+                </Button>
+              </div>
+            </div>
+            {serialDialogOpen !== null && serialNumbers[serialDialogOpen]?.length > 0 && (
+              <div>
+                <Label>Danh sách serial đã nhập ({serialNumbers[serialDialogOpen].length})</Label>
+                <div className="mt-2 max-h-[200px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="text-center bg-slate-50 border-b-2 border-slate-200">
+                        <TableHead className="w-16">STT</TableHead>
+                        <TableHead><div className="text-center">Số serial</div></TableHead>
+                        <TableHead className="w-21"><div className="text-center">Thao tác</div></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {serialNumbers[serialDialogOpen]
+                        .filter(serial => {
+                          if (!searchSerial.trim()) return true;
+                          const searchTerm = searchSerial.toLowerCase().trim();
+                          const serialLower = serial.toLowerCase();
+                          
+                          // Tìm kiếm chính xác
+                          if (serialLower.includes(searchTerm)) return true;
+                          
+                          if (searchTerm.length <= 2) {
+                            // Nếu searchTerm rất ngắn, kiểm tra từng ký tự
+                            return searchTerm.split('').every(char => serialLower.includes(char));
+                          }
+                          
+                          let matchCount = 0;
+                          let searchIndex = 0;
+                          
+                          for (let i = 0; i < serialLower.length && searchIndex < searchTerm.length; i++) {
+                            if (serialLower[i] === searchTerm[searchIndex]) {
+                              matchCount++;
+                              searchIndex++;
+                            }
+                          }
+                          
+                          const matchRatio = matchCount / searchTerm.length;
+                          return matchRatio >= 0.4;
+                        })
+                        .map((serial, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell><div className="text-center">{idx + 1}</div></TableCell>
+                            <TableCell><div className="text-center">{serial}</div></TableCell>
+                            <TableCell>
+                              <div className="flex justify-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Add serial to delete list
+                                    setSerialsToDelete(prev => {
+                                      const currentDeletes = prev[serialDialogOpen!] || [];
+                                      if (!currentDeletes.includes(serial)) {
+                                        return {
+                                          ...prev,
+                                          [serialDialogOpen!]: [...currentDeletes, serial]
+                                        };
+                                      }
+                                      return prev;
+                                    });
+                                    // Also remove serial from current list
+                                    setSerialNumbers(prev => {
+                                      const updatedSerials = [...(prev[serialDialogOpen!] || [])];
+                                      const originalIndex = updatedSerials.indexOf(serial);
+                                      if (originalIndex > -1) {
+                                        updatedSerials.splice(originalIndex, 1);
+                                      }
+                                      return {
+                                        ...prev,
+                                        [serialDialogOpen!]: updatedSerials
+                                      };
+                                    });
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSerialDialogOpen(null);
+                  setSerialInput('');
+                }}
+              >
+                Đóng
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </LoadingWrapper>

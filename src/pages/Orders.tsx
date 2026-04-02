@@ -24,7 +24,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
-import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
@@ -143,9 +142,9 @@ const OrdersContent: React.FC = () => {
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [showOrderDetailDialog, setShowOrderDetailDialog] = useState(false);
   const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editOrderData, setEditOrderData] = useState<any>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
@@ -430,9 +429,8 @@ const OrdersContent: React.FC = () => {
     if (dialogState.isOpen && dialogState.entityId) {
       // Prevent opening if dialog is already open for the same order
       const isViewOpen = showOrderViewDialog && selectedOrder?.id === dialogState.entityId && dialogState.dialogType === 'view';
-      const isDetailOpen = showOrderDetailDialog && selectedOrder?.id === dialogState.entityId && (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit');
       
-      if (isViewOpen || isDetailOpen) {
+      if (isViewOpen) {
         return; // Already open, don't reopen
       }
 
@@ -442,8 +440,6 @@ const OrdersContent: React.FC = () => {
         setSelectedOrder(order);
         if (dialogState.dialogType === 'view') {
           setShowOrderViewDialog(true);
-        } else if (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit') {
-          setShowOrderDetailDialog(true);
         }
       } else if (orders.length > 0) {
         // Orders loaded but this one not found, try to fetch it
@@ -452,8 +448,6 @@ const OrdersContent: React.FC = () => {
             setSelectedOrder(order);
             if (dialogState.dialogType === 'view') {
               setShowOrderViewDialog(true);
-            } else if (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit') {
-              setShowOrderDetailDialog(true);
             }
           })
           .catch(() => {
@@ -463,7 +457,7 @@ const OrdersContent: React.FC = () => {
       }
       // If orders not loaded yet, wait for them to load
     }
-  }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
+  }, [getDialogState, orders, showOrderViewDialog, selectedOrder, closeDialog]);
 
   // Handle creating export slip
   const handleCreateExportSlip = (order: any, slipType?: string) => {
@@ -1850,8 +1844,9 @@ const OrdersContent: React.FC = () => {
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setSelectedOrder(order);
+                                    setEditOrderData(order);
                                     openDialog('edit', order.id);
-                                    setShowOrderDetailDialog(true);
+                                    setShowCreateDialog(true);
                                   }}
                                   className="cursor-pointer hover:bg-muted"
                                 >
@@ -1981,6 +1976,7 @@ const OrdersContent: React.FC = () => {
           if (!open) {
             isClosingDialogRef.current = true;
             closeDialog();
+            setEditOrderData(null);
             setTimeout(() => {
               isClosingDialogRef.current = false;
             }, 100);
@@ -1991,10 +1987,13 @@ const OrdersContent: React.FC = () => {
           isClosingDialogRef.current = true;
           closeDialog();
           setShowCreateDialog(false);
+          setEditOrderData(null);
           setTimeout(() => {
             isClosingDialogRef.current = false;
           }, 100);
         }}
+        orderId={editOrderData?.id}
+        orderData={editOrderData}
       />
       {/* Order View Dialog (Read-only) */}
       <OrderViewDialog
@@ -2013,35 +2012,7 @@ const OrdersContent: React.FC = () => {
           }
         }}
       />
-      {/* Order Detail Dialog (Editable) */}
-      <OrderDetailDialog
-        order={selectedOrder}
-        open={showOrderDetailDialog}
-        onOpenChange={(open) => {
-          setShowOrderDetailDialog(open);
-          if (!open) {
-            isClosingDialogRef.current = true;
-            closeDialog();
-            setSelectedOrder(null);
-            // Reset flag after a short delay to allow URL to update
-            setTimeout(() => {
-              isClosingDialogRef.current = false;
-            }, 100);
-          }
-        }}
-        onOrderUpdated={() => {
-          fetchOrders();
-          if (selectedOrder) {
-            orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
-          }
-        }}
-        onOpenPaymentDialog={() => {
-          if (selectedOrder?.id) {
-            openDialog('payment', selectedOrder.id);
-          }
-          setShowPaymentDialog(true);
-        }}
-      />
+
       {/* Order Tags Manager */}
       {showTagsManager && selectedOrder && (
         <OrderTagsManager

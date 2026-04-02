@@ -18,6 +18,7 @@ export interface OrderItem {
   category_id?: string;
   category_name?: string;
   vat_price?: number;
+  serials?: string[];
 }
 
 export interface OrderAllocation {
@@ -195,6 +196,8 @@ export interface CreateOrderRequest {
     productId: string;
     quantity: number;
     unitPrice: number;
+    vatPercentage?: number;
+    serials?: string[];
   }[];
   // Additional expenses
   expenses?: {
@@ -256,6 +259,7 @@ export interface UpdateOrderRequest {
     quantity?: number;
     unitPrice?: number;
     vatPercentage?: number;
+    serials?: string[];
   }[];
 }
 export interface CreateOrderItemRequest {
@@ -265,6 +269,7 @@ export interface CreateOrderItemRequest {
   quantity: number;
   unitPrice: number;
   vatPercentage: number;
+  serials?: string[];
 }
 // Shared normalize function for order items
 export const normalizeOrderItem = (it: any): OrderItem => ({
@@ -284,6 +289,7 @@ export const normalizeOrderItem = (it: any): OrderItem => ({
   vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice ?? 0) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
   manufacturer: it.product?.manufacturer ?? it.manufacturer ?? '',
   created_at: it.created_at ?? it.createdAt ?? it.product?.created_at ?? it.product?.createdAt ?? '',
+  serials: Array.isArray(it.serials) ? it.serials : undefined,
 });
 
 // Shared normalize function for orders
@@ -615,6 +621,7 @@ export const orderApi = {
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
       created_at: it.created_at ?? it.createdAt ?? '',
+      serials: Array.isArray(it.serials) ? it.serials : undefined,
     });
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
