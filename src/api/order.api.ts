@@ -18,7 +18,15 @@ export interface OrderItem {
   category_id?: string;
   category_name?: string;
   vat_price?: number;
-  serials?: string[];
+  serials?: OrderSerial[];
+  warranty_months?: number;
+}
+
+export interface OrderSerial {
+  serial_number: string;
+  warrantyMonths?: number;
+  warrantyStartDate?: string;
+  warrantyEndDate?: string;
 }
 
 export interface OrderAllocation {
@@ -198,6 +206,7 @@ export interface CreateOrderRequest {
     unitPrice: number;
     vatPercentage?: number;
     serials?: string[];
+    warrantyMonths?: number;
   }[];
   // Additional expenses
   expenses?: {
@@ -260,6 +269,7 @@ export interface UpdateOrderRequest {
     unitPrice?: number;
     vatPercentage?: number;
     serials?: string[];
+    warrantyMonths?: number;
   }[];
 }
 export interface CreateOrderItemRequest {
@@ -272,25 +282,40 @@ export interface CreateOrderItemRequest {
   serials?: string[];
 }
 // Shared normalize function for order items
-export const normalizeOrderItem = (it: any): OrderItem => ({
-  id: it.id,
-  order_id: it.order_id ?? it.orderId ?? '',
-  product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
-  product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
-  product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-  category_id: it.product?.categoryId ?? it.categoryId ?? it.product?.category ?? it.category_id ?? undefined,
-  category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
-  quantity: Number(it.quantity ?? 0),
-  unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-  unit_vat_price: Number(it.unitVatPrice ?? it.unit_vat_price ?? 0),
-  total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-  vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
-  vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
-  vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice ?? 0) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
-  manufacturer: it.product?.manufacturer ?? it.manufacturer ?? '',
-  created_at: it.created_at ?? it.createdAt ?? it.product?.created_at ?? it.product?.createdAt ?? '',
-  serials: Array.isArray(it.serials) ? it.serials : undefined,
-});
+export const normalizeOrderItem = (it: any): OrderItem => {
+  // Normalize serials to ensure warranty dates are mapped correctly
+  const normalizedSerials = Array.isArray(it.serials) ? it.serials.map((s: any) => ({
+    serial_number: s.serial_number ?? s.serialNumber ?? s.serial ?? '',
+    warrantyMonths: s.warrantyMonths ?? s.warranty_months,
+    warrantyStartDate: s.warrantyStartDate ?? s.warranty_start_date ?? s.warrantyStart,
+    warrantyEndDate: s.warrantyEndDate ?? s.warranty_end_date ?? s.warrantyEnd,
+    warrantyActived: s.warrantyActived ?? s.warrantyActive ?? s.warranty_actived,
+  })) : undefined;
+
+  return {
+    id: it.id,
+    order_id: it.order_id ?? it.orderId ?? '',
+    product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
+    product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
+    product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+    category_id: it.product?.categoryId ?? it.categoryId ?? it.product?.category ?? it.category_id ?? undefined,
+    category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
+    quantity: Number(it.quantity ?? 0),
+    unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+    unit_vat_price: Number(it.unitVatPrice ?? it.unit_vat_price ?? 0),
+    total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+    vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
+    vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
+    vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice ?? 0) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
+    manufacturer: it.product?.manufacturer ?? it.manufacturer ?? '',
+    created_at: it.created_at ?? it.createdAt ?? it.product?.created_at ?? it.product?.createdAt ?? '',
+    serials: normalizedSerials,
+    warranty_months: it.warranty_months ?? it.warrantyMonths ?? 
+      (Array.isArray(it.serials) && it.serials.length > 0 
+        ? it.serials[0]?.warrantyMonths ?? it.serials[0]?.warranty_months ?? 0
+        : 0),
+  };
+};
 
 // Shared normalize function for orders
 export const normalizeOrder = (row: any, options?: { includeAllocationStatus?: boolean }): Order => {

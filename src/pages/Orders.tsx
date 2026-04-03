@@ -11,7 +11,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastAction } from "@/components/ui/toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader, ShoppingCart, ShoppingBag } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader, ShoppingCart, ShoppingBag, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
+import CreateWarrantyTicketForm from "@/components/orders/CreateWarrantyTicketForm";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
@@ -41,6 +42,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { productApi } from "@/api/product.api";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { string } from "yup";
+// import { }
 
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
@@ -148,6 +150,8 @@ const OrdersContent: React.FC = () => {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
+  const [showWarrantyDialog, setShowWarrantyDialog] = useState(false);
+  const [selectedOrderForWarranty, setSelectedOrderForWarranty] = useState<any>(null);
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -1842,9 +1846,16 @@ const OrdersContent: React.FC = () => {
                                   Xem chi tiết
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  onClick={() => {
+                                  onClick={async () => {
                                     setSelectedOrder(order);
-                                    setEditOrderData(order);
+                                    try {
+                                      // Fetch order detail first to get full data including warranty_months
+                                      const orderDetail = await orderApi.getOrder(order.id);
+                                      setEditOrderData(orderDetail);
+                                    } catch (error) {
+                                      console.error('Error fetching order detail:', error);
+                                      setEditOrderData(order);
+                                    }
                                     openDialog('edit', order.id);
                                     setShowCreateDialog(true);
                                   }}
@@ -1900,6 +1911,28 @@ const OrdersContent: React.FC = () => {
                                   {order.type === 'purchase' ? 'Tạo phiếu trả hàng NCC' : 'Tạo phiếu hoàn hàng'}
                                 </DropdownMenuItem>
                                 )}
+                                {(() => {
+                                  const hasSerials = order.items?.some((item: any) => 
+                                    Array.isArray(item.serials) && item.serials.length > 0
+                                  );
+                                  const orderStatus = typeof order.status === 'object' ? order.status?.code : order.status;
+                                  const canCreateWarranty = hasSerials && (orderStatus === 'picked' || orderStatus === 'completed');
+                                  
+                                  if (!canCreateWarranty) return null;
+                                  
+                                  return (
+                                    <DropdownMenuItem 
+                                      onClick={() => {
+                                        setSelectedOrderForWarranty(order);
+                                        setShowWarrantyDialog(true);
+                                      }}
+                                      className="cursor-pointer hover:bg-muted"
+                                    >
+                                      <Shield className="w-4 h-4 mr-2" />
+                                      Tạo phiếu bảo hành
+                                    </DropdownMenuItem>
+                                  );
+                                })()}
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setOrderToDelete(order);
@@ -2102,6 +2135,34 @@ const OrdersContent: React.FC = () => {
           setSelectedOrders(prev => prev.filter(id => id !== orderId));
         }}
       />
+
+      {/* Warranty Ticket Dialog */}
+      <CreateWarrantyTicketForm
+        open={showWarrantyDialog}
+        onOpenChange={(open) => {
+          setShowWarrantyDialog(open);
+          if (!open) {
+            setSelectedOrderForWarranty(null);
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
+        onOrderCreated={() => {
+          fetchOrders();
+          setShowWarrantyDialog(false);
+          setSelectedOrderForWarranty(null);
+          toast({
+            title: "Thành công",
+            description: "Đã tạo phiếu bảo hành cho đơn hàng." 
+          });
+        }}
+        orderId={selectedOrderForWarranty?.id}
+        orderData={selectedOrderForWarranty}
+      />
+
       {/* Export Slip Creation Dialog */}
       <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">

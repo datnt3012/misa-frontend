@@ -44,8 +44,8 @@ interface OrderItem {
   vat_total_price: number;
   vat_amount: number;
   warehouse_id: string;
-  serialRequired?: boolean;
-  warrantyMonths?: number;
+  serial_manage?: boolean;
+  warranty_months?: number;
 }
 interface OrderFormState {
   customer_id: string;
@@ -267,8 +267,11 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             vat_total_price: item.vat_total_price || 0,
             vat_amount: item.vat_amount || 0,
             warehouse_id: '',
-            serialRequired: Array.isArray(item.serials) && item.serials.length > 0,
-            warrantyMonths: item.warrantyMonths || 12,
+            serial_manage: Array.isArray(item.serials) && item.serials.length > 0,
+            warranty_months: item.warranty_months ?? item.warrantyMonths ?? 
+              (Array.isArray(item.serials) && item.serials.length > 0 
+                ? item.serials[0]?.warrantyMonths ?? item.serials[0]?.warranty_months ?? 0
+                : 0),
           })),
 
 
@@ -352,7 +355,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_total_price: item.vat_total_price || 0,
         vat_amount: item.vat_amount || 0,
         warehouse_id: '',
-        serialRequired: existingSerials.length > 0,
+        warranty_months: item.warranty_months ?? item.warrantyMonths ?? (existingSerials.length > 0 ? existingSerials[0]?.warrantyMonths ?? existingSerials[0]?.warranty_months ?? 0 : 0),
+        serial_manage: existingSerials.length > 0,
       };
     });
     
@@ -510,8 +514,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_total_price: 0,
         vat_amount: 0,
         warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : ""),
-        serialRequired: false,
-        warrantyMonths: 12,
+        serial_manage: false,
+        warranty_months: 0,
       }]
     }));
   };
@@ -807,7 +811,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         details: newOrder.items.map((it, index) => {
           const currentSerials = serialNumbers[index] || [];
           let serialsToSend: string[] | undefined;
-          if (it.serialRequired || currentSerials.length > 0) {
+          if (it.serial_manage || currentSerials.length > 0) {
             serialsToSend = currentSerials;
           }
 
@@ -817,7 +821,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             quantity: it.quantity,
             unitPrice: it.unit_price,
             ...(serialsToSend !== undefined && { serials: serialsToSend }),
-            ...(it.warrantyMonths !== undefined && { warrantyMonths: it.warrantyMonths }),
+            ...(it.warranty_months !== undefined && { warrantyMonths: it.warranty_months }),
           };
         }),
         // Additional expenses
@@ -1322,9 +1326,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             <label className="inline-flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
-                                checked={Boolean(item.serialRequired)}
+                                checked={Boolean(item.serial_manage)}
                                 onChange={(e) => {
-                                  updateItem(index, 'serialRequired', e.target.checked);
+                                  updateItem(index, 'serial_manage', e.target.checked);
                                                           if (!e.target.checked) {
                                   setSerialNumbers(prev => {
                                     const clone = { ...prev };
@@ -1394,7 +1398,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </Button>
                         </TableCell>
                       </TableRow>
-                      {item.serialRequired && (
+                      {item.serial_manage && (
                         <TableRow className="bg-slate-50">
                           <TableCell colSpan={8} className="p-3">
                             <div className="space-y-2">
@@ -1445,8 +1449,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                               <div className="flex items-center gap-2">
                                 <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b></Label>
                                 <NumberInput
-                                  value={item.warrantyMonths ?? 0}
-                                  onChange={(value) => updateItem(index, 'warrantyMonths', Number(value) || 0)}
+                                  value={item.warranty_months ?? 0}
+                                  onChange={(value) => updateItem(index, 'warranty_months', Number(value) || 0)}
                                   min={0}
                                   className="w-20"
                                 />
