@@ -149,6 +149,9 @@ export interface WarehouseReceipt {
     firstName?: string;
     lastName?: string;
   };
+  approvedByName?: string;
+  // Backward compatibility
+  approved_by_name?: string;
   pickedBy?: string;
   exportedBy?: string;
   supplierId?: string;
@@ -355,6 +358,8 @@ const normalize = (row: any): WarehouseReceipt => ({
   created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.createdBy === 'object' ? row.createdBy?.firstName ?? row.createdBy?.username : (typeof row.created_by === 'object' ? row.created_by?.username : undefined)), // Backward compat
   approvedBy: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''),
   approved_by: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''), // Backward compat
+  approvedByName: row.approvedByName ?? row.approved_by_name ?? (typeof row.approvedBy === 'object' ? row.approvedBy?.firstName ?? row.approvedBy?.username : (typeof row.approved_by === 'object' ? row.approved_by?.username : undefined)),
+  approved_by_name: row.approvedByName ?? row.approved_by_name ?? (typeof row.approvedBy === 'object' ? row.approvedBy?.firstName ?? row.approvedBy?.username : (typeof row.approved_by === 'object' ? row.approved_by?.username : undefined)), // Backward compat
   supplierId: row.supplierId ?? row.supplier_id ?? undefined,
   supplier_id: row.supplierId ?? row.supplier_id ?? undefined, // Backward compat
   // Full customer object from backend

@@ -1933,6 +1933,49 @@ const OrdersContent: React.FC = () => {
                                     </DropdownMenuItem>
                                   );
                                 })()}
+                                {(() => {
+                                  const hasSerials = order.items?.some((item: any) => 
+                                    Array.isArray(item.serials) && item.serials.length > 0
+                                  );
+                                  if (!hasSerials) return null;
+                                  
+                                  const orderType = order.type || order.order_type;
+                                  if (orderType === 'purchase') return null;
+                                  
+                                  const allSerials = order.items?.flatMap((item: any) => 
+                                    (item.serials || []).map((s: any) => s)
+                                  ) || [];
+                                  const hasUnactivatedSerials = allSerials.some((s: any) => !s.warrantyActived && !s.warrantyActive);
+                                  const orderStatus = typeof order.status === 'object' ? order.status?.code : order.status;
+                                  const canActivateWarranty = orderStatus === 'picked' || orderStatus === 'completed';
+                                  
+                                  if (!canActivateWarranty || !hasUnactivatedSerials) return null;
+                                  
+                                  return (
+                                    <DropdownMenuItem 
+                                      onClick={async () => {
+                                        try {
+                                          const result = await orderApi.activateWarranty(order.id);
+                                          toast({
+                                            title: "Thành công",
+                                            description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
+                                          });
+                                          fetchOrders();
+                                        } catch (error) {
+                                          toast({
+                                            title: "Lỗi",
+                                            description: error.response?.data?.message || error.message || "Không thể kích hoạt bảo hành",
+                                            variant: "destructive",
+                                          });
+                                        }
+                                      }}
+                                      className="cursor-pointer hover:bg-muted"
+                                    >
+                                      <Shield className="w-4 h-4 mr-2" />
+                                      Kích hoạt bảo hành
+                                    </DropdownMenuItem>
+                                  );
+                                })()}
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setOrderToDelete(order);

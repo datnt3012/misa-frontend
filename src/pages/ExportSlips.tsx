@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Shield } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -2318,6 +2318,31 @@ function ExportSlipsContent() {
                               ))}
                             </SelectContent>
                           </Select>
+                        )}
+                        {slip.orderId && slip.status === 'exported' && slip.type === 'export' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const result = await orderApi.activateWarranty(slip.orderId!, slip.id);
+                                toast({
+                                  title: "Thành công",
+                                  description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: "Lỗi",
+                                  description: error.response?.data?.message || error.message || "Không thể kích hoạt bảo hành",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                            className="h-8 px-2 text-xs whitespace-nowrap"
+                          >
+                            <Shield className="w-3 h-3 mr-1" />
+                            Kích hoạt BH
+                          </Button>
                         )}
                       </div>
                     </TableCell>

@@ -737,6 +737,23 @@ export const orderApi = {
   deleteOrder: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DELETE(id));
   },
+  // Activate warranty for order (all items or specific receipt)
+  activateWarranty: async (orderId: string, receiptId?: string): Promise<{
+    activatedCount: number;
+    serials: Array<{
+      id: string;
+      serialNumber: string;
+      warrantyStartDate: string;
+      warrantyActived: boolean;
+    }>;
+  }> => {
+    const data = receiptId ? { receiptId } : {};
+    const response = await api.put<any>(API_ENDPOINTS.ORDERS.WARRANTY_ACTIVE(orderId), data);
+    return {
+      activatedCount: response.activatedCount ?? response.data?.activatedCount ?? 0,
+      serials: response.serials ?? response.data?.serials ?? [],
+    };
+  },
   // Get order items
   getOrderItems: async (orderId: string): Promise<OrderItem[]> => {
     return api.get<OrderItem[]>(API_ENDPOINTS.ORDERS.ITEMS(orderId));
