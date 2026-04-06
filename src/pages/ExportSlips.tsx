@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Shield } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -410,7 +410,8 @@ function ExportSlipsContent() {
           id: s.id || '',
           code: s.code || '',
           type: s.type || '',
-          order_id: s.order_id || '',
+          order_id: s.orderId || s.order_id || '',
+          orderId: s.orderId || s.order_id || undefined,
           warehouse_id: s.warehouse_id || undefined,
           warehouse_name: s.warehouse_name || undefined,
           status: s.status || 'pending',
@@ -2319,13 +2320,14 @@ function ExportSlipsContent() {
                             </SelectContent>
                           </Select>
                         )}
-                        {slip.orderId && slip.status === 'exported' && slip.type === 'export' && (
+                        {(slip.orderId || slip.order?.id) && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={async () => {
                               try {
-                                const result = await orderApi.activateWarranty(slip.orderId!, slip.id);
+                                const orderId = slip.orderId || slip.order?.id;
+                                const result = await orderApi.activateWarranty(orderId!);
                                 toast({
                                   title: "Thành công",
                                   description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
@@ -2340,7 +2342,7 @@ function ExportSlipsContent() {
                             }}
                             className="h-8 px-2 text-xs whitespace-nowrap"
                           >
-                            <Shield className="w-3 h-3 mr-1" />
+                            <Zap className="w-3 h-3 mr-1" />
                             Kích hoạt BH
                           </Button>
                         )}

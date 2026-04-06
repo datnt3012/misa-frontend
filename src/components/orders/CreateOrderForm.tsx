@@ -1447,7 +1447,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b></Label>
+                                <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
                                 <NumberInput
                                   value={item.warranty_months ?? 0}
                                   onChange={(value) => updateItem(index, 'warranty_months', Number(value) || 0)}
