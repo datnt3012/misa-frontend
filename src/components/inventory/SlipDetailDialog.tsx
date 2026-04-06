@@ -388,9 +388,7 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
                   <div>
                     <Label className="font-medium text-sm">Người duyệt:</Label>
                     <p className="text-sm text-muted-foreground">
-                      {typeof slip.approved_by === 'object' && slip.approved_by !== null ? 
-                        (slip.approved_by.firstName ? `${slip.approved_by.firstName} ${slip.approved_by.lastName || ''}` : slip.approved_by.username || slip.approved_by.email) : 
-                        String(slip.approved_by)}
+                      {slip.approvedByName || String(slip.approved_by)}
                     </p>
                   </div>
                 )}
@@ -398,9 +396,7 @@ export const SlipDetailDialog: React.FC<SlipDetailDialogProps> = ({
                   <div>
                     <Label className="font-medium text-sm">Người tạo:</Label>
                     <p className="text-sm text-muted-foreground">
-                      {typeof slip.created_by === 'object' && slip.created_by !== null ? 
-                        (slip.created_by.firstName ? `${slip.created_by.firstName} ${slip.created_by.lastName || ''}` : slip.created_by.username || slip.created_by.email) : 
-                        String(slip.created_by)}
+                      {slip.createdByName || String(slip.created_by)}
                     </p>
                   </div>
                 )}
