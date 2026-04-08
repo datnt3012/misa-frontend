@@ -48,9 +48,8 @@ const SummaryBlock: React.FC<SummaryBlockProps> = ({ totals, showBreakdown }) =>
       <p className="text-xs font-medium text-slate-400  tracking-wider">
         Tổng giá trị đơn hàng
       </p>
-      <p className="text-3xl font-black text-slate-900 tabular-nums leading-tight">
+      <p className="text-3xl font-semibold text-slate-900 tabular-nums leading-tight">
         {formatCurrency(totals.grandTotal)}
-        <span className="text-base font-semibold text-slate-400 ml-1">đ</span>
       </p>
     </div>
 
@@ -86,7 +85,7 @@ const BreakdownRow: React.FC<BreakdownRowProps> = ({ label, value, valueClass = 
   <div className="flex items-center justify-between text-sm">
     <span className="text-slate-500">{label}</span>
     <span className={`font-semibold tabular-nums ${valueClass}`}>
-      {formatCurrency(value)} đ
+      {formatCurrency(value)}
     </span>
   </div>
 );
@@ -249,7 +248,7 @@ const DebtSummary: React.FC<DebtSummaryProps> = ({ totals, mode }) => {
         <p className="text-xs text-amber-500">
           Đã thu vượt{" "}
           <span className="font-bold tabular-nums">
-            {formatCurrency(Math.abs(totals.debt))} đ
+            {formatCurrency(Math.abs(totals.debt))}
           </span>
         </p>
       </div>
@@ -263,16 +262,16 @@ const DebtSummary: React.FC<DebtSummaryProps> = ({ totals, mode }) => {
           <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           <span className="text-sm font-semibold text-emerald-700">Đã thanh toán đủ</span>
         </div>
-        <span className="text-sm font-bold tabular-nums text-emerald-600">0 đ</span>
+        <span className="text-sm font-bold tabular-nums text-emerald-600">0</span>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 flex items-center justify-between">
-      <span className="text-sm font-semibold text-orange-700">Còn nợ</span>
-      <span className="text-xl font-black tabular-nums text-orange-600">
-        {formatCurrency(totals.debt)} đ
+    <div className="rounded-lg bg-red-50 border border-red-200 p-3 flex items-center justify-between">
+      <span className="text-sm font-semibold text-red-600">Còn nợ</span>
+      <span className="text-xl font-bold tabular-nums text-red-600">
+        {formatCurrency(totals.debt)}
       </span>
     </div>
   );

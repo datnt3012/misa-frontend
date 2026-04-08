@@ -203,10 +203,10 @@ const Ordersv1Content: React.FC = () => {
 
             <div className="w-full mx-auto space-y-6 p-4 md:p-8">
                 {/* Header with Title and Add New Action */}
-                <OrderPageHeader
+                {/* <OrderPageHeader
                     onCreateClick={() => navigate('/orders/create')}
                     description="Theo dõi và quản lý tất cả đơn hàng bán và mua của bạn."
-                />
+                /> */}
 
                 <OrderFilter
                     filters={filters}

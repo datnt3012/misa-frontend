@@ -60,8 +60,8 @@ export const OrderProductsTable: React.FC<OrderProductsTableProps> = ({
             <TableHead className="w-24 text-left">Số lượng</TableHead>
             <TableHead className="w-32 text-left">Đơn giá</TableHead>
             <TableHead className="w-20 text-left">VAT%</TableHead>
-            <TableHead className="w-36 text-left">Thành tiền</TableHead>
-            <TableHead className="w-36 text-left pr-4">Tổng tiền</TableHead>
+            <TableHead className="w-36 text-right">Thành tiền</TableHead>
+            <TableHead className="w-36 text-right pr-4">Tổng tiền</TableHead>
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
@@ -114,12 +114,12 @@ export const OrderProductsTable: React.FC<OrderProductsTableProps> = ({
                   )}
                 />
               </TableCell>
-              <TableCell className="text-left font-medium text-sm">
+              <TableCell className="text-right font-medium text-sm">
                 {formatCurrency(
                   (currentDetails[idx]?.quantity || 0) * (currentDetails[idx]?.unitPrice || 0)
                 )}
               </TableCell>
-              <TableCell className="text-left pr-4 font-bold text-sm">
+              <TableCell className="text-right pr-4 font-bold text-sm">
                 {formatCurrency(
                   (currentDetails[idx]?.quantity || 0) *
                   (currentDetails[idx]?.unitPrice || 0) *

@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import {
   Eye, Edit, Tag, CreditCard, Package, Banknote,
   Trash2, Download, MoreHorizontal, RotateCw,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -25,6 +26,7 @@ import { OrderDetailSchemaType, OrderSchemaType, OrderSummarySchemaType } from '
 import { GroupedRowTable, GroupedRowColumn, GroupedRowGroup } from '@/shared/components/GroupedRowTable';
 import { useColumnVisibility } from '@/shared/hooks';
 import { ColumnVisibilityPopover } from '@/shared/components/data-tables/ColumnVisibilityPopover';
+import { useNavigate } from 'react-router-dom';
 
 // ─── Prop types ───────────────────────────────────────────────────────────────
 
@@ -253,6 +255,17 @@ function buildOrderColumns(params: {
       ),
     },
     {
+      key: 'category',
+      label: 'Hãng sản xuất',
+      grouped: false,
+      width: 200,
+      render: (detail: OrderDetailSchemaType) => (
+        <span className="text-sm tabular-nums">
+          {detail.product?.category?.name}
+        </span>
+      ),
+    },
+    {
       key: 'unitPrice',
       label: 'Đơn giá',
       grouped: false,
@@ -295,7 +308,7 @@ function buildOrderColumns(params: {
     },
     {
       key: 'totalOrderValueExcludingVAT',
-      label: 'Tổng trước thuế',
+      label: 'Tổng giá trị chưa có thuế GTGT',
       grouped: true,
       width: 150,
       type: 'number',
@@ -303,7 +316,7 @@ function buildOrderColumns(params: {
     },
     {
       key: 'totalVatValue',
-      label: 'Tổng VAT',
+      label: 'Tổng tiền thuế GTGT',
       grouped: true,
       width: 120,
       type: 'number',
@@ -311,7 +324,7 @@ function buildOrderColumns(params: {
     },
     {
       key: 'totalOrderValue',
-      label: 'Tổng sau thuế',
+      label: 'Tổng giá trị có thuế GTGT',
       grouped: true,
       width: 150,
       type: 'number',
@@ -428,6 +441,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
   onUpdateStatus, hasPermission, dialogActions,
   orderHasLinkedSlipsCache, onUpdateQuickNote,
 }) => {
+  const navigate = useNavigate();
   const groups = useMemo(
     (): OrderGroup[] => orders.map(order => ({
       ...order,
@@ -493,21 +507,21 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         } else if (key === 'totalOrderValueExcludingVAT') {
           content = (
             <div className="flex flex-col items-end w-full">
-              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tiền trước thuế</span>
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tổng giá trị chưa có thuế GTGT</span>
               <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalAmount || 0)}</span>
             </div>
           );
         } else if (key === 'totalVatValue') {
           content = (
             <div className="flex flex-col items-end w-full">
-              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tổng VAT</span>
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tổng tiền thuế GTGT</span>
               <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalVat || 0)}</span>
             </div>
           );
         } else if (key === 'totalOrderValue') {
           content = (
             <div className="flex flex-col items-end w-full">
-              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tiền sau thuế</span>
+              <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Tổng giá trị có thuế GTGT</span>
               <span className="text-amber-600 font-semibold tabular-nums">{formatCurrency(summary?.totalVatAmount || 0)}</span>
             </div>
           );
@@ -558,6 +572,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         onSelectedIdsChange={(ids) => onSelectedIdsChange(ids as string[])}
         onRowClick={(_, group) => dialogActions.openView(group)}
         footer={footer}
+        containerClassName="h-[calc(100vh-280px)] min-h-[500px]"
       />
     </div>
   );

@@ -21,7 +21,10 @@ export const ProductSchema = yup.object({
   code: yup.string().required(),
   name: yup.string().required(),
   description: yup.string().nullable().optional(),
-  category: yup.string().nullable().optional(),
+  category: yup.object({
+    id: yup.string().required(),
+    name: yup.string().required(),
+  }).nullable().optional(),
   sku: yup.string().nullable().optional(),
   unit: yup.string().nullable().optional(),
   price: yup.number().optional(),

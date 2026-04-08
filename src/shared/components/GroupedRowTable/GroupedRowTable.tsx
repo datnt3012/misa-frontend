@@ -2,6 +2,7 @@ import React from "react";
 
 import { cn } from "@/lib/utils";
 import { GroupedColumn, GroupedRowColumn, GroupedRowGroup, GroupedRowTableProps, RowColumn } from "./GroupedRowTable.type";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -140,19 +141,23 @@ function PaginationBar({
             {/* Page size + total */}
             <div className="flex items-center gap-2 order-2 sm:order-1">
                 <span className="text-sm text-gray-500 whitespace-nowrap">Hiển thị</span>
-                <select
-                    value={limit}
-                    onChange={(e) =>
-                        onFiltersChange({ ...filters, limit: Number(e.target.value), page: 1 })
+                <Select
+                    value={String(limit)}
+                    onValueChange={(value) =>
+                        onFiltersChange({ ...filters, limit: parseInt(value, 10), page: 1 })
                     }
-                    className="h-8 text-xs border border-gray-200 rounded px-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                    {[10, 25, 50, 100].map((opt) => (
-                        <option key={opt} value={opt}>
-                            {opt}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger className="w-[70px] h-8 text-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {[10, 25, 50, 100].map((opt) => (
+                            <SelectItem key={opt} value={String(opt)} className="text-xs">
+                                {opt}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <span className="text-sm text-gray-500 whitespace-nowrap">
                     trong tổng số {total} bản ghi
                 </span>
@@ -223,6 +228,7 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
     filters,
     onFiltersChange,
     footer,
+    containerClassName,
 }: GroupedRowTableProps<TRow, TGroup>) {
 
     // ── Derived ────────────────────────────────────────────────────────────────
@@ -264,7 +270,7 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
             rowSpan={rowCount}
             style={col.width ? { minWidth: col.width } : undefined}
             className={cn(
-                "px-3 py-3 align-middle text-sm text-gray-700",
+                "px-3 py-3 align-middle text-sm text-gray-700 font-medium",
                 "border-r border-gray-200",
                 !isLastGroup && "border-b-2 border-gray-300",
                 cellClass(col.align, col.type),
@@ -289,7 +295,7 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
             key={col.key}
             style={col.width ? { minWidth: col.width } : undefined}
             className={cn(
-                "px-3 py-2 text-sm text-gray-700",
+                "px-3 py-2 text-sm text-[#020817] font-medium",
                 "border-r border-gray-200",
                 !isLastRow && "border-b border-gray-200",
                 isLastRow && !isLastGroup && "border-b-2 border-gray-300",
@@ -305,8 +311,8 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
     return (
         <div className="w-full space-y-4">
             {/* Table */}
-            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                <div className="overflow-x-auto">
+            <div className={cn("overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col", containerClassName)}>
+                <div className="overflow-auto min-h-0 flex-1 relative">
                     <table className="w-full border-collapse text-sm">
 
                         {/* colgroup */}
@@ -321,8 +327,8 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
                         </colgroup>
 
                         {/* Header */}
-                        <thead>
-                            <tr className="bg-gray-100 border-b-2 border-gray-200">
+                        <thead className="sticky top-0 z-10 shadow-[inset_0_-2px_0_0_#e5e7eb]">
+                            <tr className="bg-gray-100">
                                 {hasCheckbox && (
                                     <th className="w-[40px] px-3 py-2.5 border-r border-gray-200">
                                         <Checkbox
@@ -338,7 +344,7 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
                                         key={col.key}
                                         style={col.width ? { minWidth: col.width } : undefined}
                                         className={cn(
-                                            "h-10 px-3 py-2.5 text-xs font-semibold tracking-wider text-gray-500 whitespace-nowrap",
+                                            "h-10 px-3 py-2.5 text-xs font-bold tracking-wider text-gray-600 whitespace-nowrap",
                                             "border-r border-gray-200",
                                             cellClass(col.align, col.type),
                                             col.headerClassName
@@ -427,7 +433,7 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
 
                         {/* Footer */}
                         {footer && (
-                            <tfoot className="border-t border-gray-200 bg-gray-100 font-medium whitespace-nowrap">
+                            <tfoot className="sticky bottom-0 z-20 bg-gray-100 font-medium whitespace-nowrap shadow-[inset_0_1px_0_0_#e5e7eb]">
                                 {footer}
                             </tfoot>
                         )}

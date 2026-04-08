@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ORDER_TYPES, OrderFilterSchemaType, OrderFilterSchema } from "../schemas";
-import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FormProvider, useForm } from "react-hook-form";
@@ -8,6 +8,7 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import { filterOrderConfig } from "../constants";
 import { DynamicFormField } from "@/shared/components/DynamicFormField";
 import { getColSpan } from "@/shared/config";
+import { useNavigate } from "react-router-dom";
 
 interface OrderFilterProps {
     filters: OrderFilterSchemaType;
@@ -27,6 +28,7 @@ export const OrderFilter = ({
     onFilterChange,
     defaultExpanded = false
 }: OrderFilterProps) => {
+    const navigate = useNavigate();
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
     const methods = useForm<OrderFilterSchemaType>({
         defaultValues: { ...defaultValues, ...filters },
@@ -104,6 +106,16 @@ export const OrderFilter = ({
                                 >
                                     {isExpanded ? <ChevronUp className="h-4 w-4 text-primary" /> : <ChevronDown className="h-4 w-4 text-primary" />}
                                     <span>{isExpanded ? "Thu gọn" : "Nâng cao"}</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={() => navigate('/orders/create')}
+                                    className="h-11 px-6 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 transition-all duration-300 active:scale-95 group font-semibold"
+                                >
+                                    <div className="p-1 rounded-md ">
+                                        <Plus className="h-4 w-4" />
+                                    </div>
+                                    Thêm mới
                                 </Button>
                             </div>
                         </div>
