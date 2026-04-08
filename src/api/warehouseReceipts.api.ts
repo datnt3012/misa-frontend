@@ -169,6 +169,8 @@ export interface WarehouseReceipt {
   supplierContact?: string;
   orderId?: string;
   type: string;   // import | export | moving
+  // Serials linked to this receipt
+  serials?: string[];
   // Both details and items - items is from normalized response
   details?: WarehouseReceiptItemDetail[];
   items?: WarehouseReceiptItemDetail[];
@@ -275,6 +277,7 @@ export interface CreateWarehouseReceiptRequest {
   description?: string;
   status?: string;
   orderId?: string; // Order ID if created from order
+  serials?: string[]; // Array of serial IDs to link to this receipt
   type: string; // 'import' | 'export' | 'moving'
   newWarehouseId?: string; // Bắt buộc cho loại moving (kho đích)
   details: Array<{
@@ -283,6 +286,8 @@ export interface CreateWarehouseReceiptRequest {
     unitPrice: number;
     vatPercentage?: number;
     warehouseId?: string;
+    serialNumbers?: string; // Comma-separated serial numbers
+    warrantyMonths?: number;
   }>;
   isDeleted?: boolean;
   isForeignCurrency?: boolean;
@@ -377,6 +382,7 @@ const normalize = (row: any): WarehouseReceipt => ({
   supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined, // Backward compat
   orderId: row.orderId ?? row.order_id ?? undefined,
   order_id: row.orderId ?? row.order_id ?? undefined, // Backward compat
+  serials: row.serials ?? undefined,
   type: row.type ?? 'import',
   totalAmount: row.totalAmount ?? row.total_amount ?? 0,
   total_amount: row.totalAmount ?? row.total_amount ?? 0, // Backward compat

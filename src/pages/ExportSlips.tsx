@@ -14,10 +14,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap, MoreHorizontal, Eye, Edit, Trash } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { warehouseReceiptsApi, type WarehouseReceipt, type WarehouseReceiptImportJobSnapshot, type WarehouseReceiptImportJobStatus } from '@/api/warehouseReceipts.api';
@@ -116,6 +117,12 @@ function ExportSlipsContent() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [total, setTotal] = useState<number>(0);
+
+  // Serial input dialog state
+  const [serialInputOpen, setSerialInputOpen] = useState(false);
+  const [serialInputSlipId, setSerialInputSlipId] = useState<string | null>(null);
+  const [serialInputs, setSerialInputs] = useState<Record<number, string>>({});
+  const [savingSerials, setSavingSerials] = useState(false);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -646,7 +653,6 @@ function ExportSlipsContent() {
           response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported' });
           break;
         case 'cancelled':
-          // Don't send description when cancelling to avoid overriding it
           response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled' });
           break;
         default:
@@ -668,6 +674,46 @@ function ExportSlipsContent() {
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleSerialInputChange = (index: number, value: string, maxQuantity: number) => {
+    setSerialInputs(prev => ({ ...prev, [index]: value }));
+  };
+
+  const handleSaveSerials = async () => {
+    if (!serialInputSlipId) return;
+    
+    try {
+      setSavingSerials(true);
+      const serialsData = Object.entries(serialInputs).map(([index, value]) => {
+        const serials = value.split(',').map(s => s.trim()).filter(s => s);
+        return {
+          productIndex: parseInt(index),
+          serials
+        };
+      });
+
+      await warehouseReceiptsApi.updateReceipt(serialInputSlipId, {
+        serials: serialsData
+      } as any);
+
+      toast({
+        title: "Thành công",
+        description: "Đã lưu serial thành công",
+      });
+      setSerialInputOpen(false);
+      setSerialInputs({});
+      setSerialInputSlipId(null);
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể lưu serial",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSerials(false);
     }
   };
 
@@ -2109,7 +2155,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('code')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Số phiếu
                       {getSortIcon('code')}
                     </div>
@@ -2118,7 +2164,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('orderCode')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Đơn hàng
                       {getSortIcon('orderCode')}
                     </div>
@@ -2127,7 +2173,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('type')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Loại phiếu
                       {getSortIcon('type')}
                     </div>
@@ -2136,7 +2182,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[180px]"
                     onClick={() => handleSort('customerName')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Khách hàng
                       {getSortIcon('customerName')}
                     </div>
@@ -2145,7 +2191,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[130px]"
                     onClick={() => handleSort('totalAmount')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Giá trị
                       {getSortIcon('totalAmount')}
                     </div>
@@ -2154,7 +2200,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('status')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Trạng thái
                       {getSortIcon('status')}
                     </div>
@@ -2163,7 +2209,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                     onClick={() => handleSort('createdAt')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Ngày tạo
                       {getSortIcon('createdAt')}
                     </div>
@@ -2172,7 +2218,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                     onClick={() => handleSort('warehouse')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       kho xuất
                       {getSortIcon('warehouse')}
                     </div>
@@ -2181,13 +2227,13 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                     onClick={() => handleSort('completedAt')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Ngày xuất
                       {getSortIcon('completedAt')}
                     </div>
                   </TableHead>
-                  <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
-                  <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
+                  <TableHead className="font-semibold min-w-[200px]"><div className="text-center">Ghi chú</div></TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]"><div className="text-center">Thao tác</div></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2253,100 +2299,104 @@ function ExportSlipsContent() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center min-w-[180px]">
-                      <div className="flex space-x-2 justify-center">
-                        {/* Chi tiết button - always show */}
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            openDialog('view', slip.id);
-                            setSelectedSlip(slip);
-                            setShowDetailDialog(true);
-                          }}
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Button>
-
-                        {/* Cancel button - show for all statuses except cancelled/rejected */}
-                        {slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStatusUpdateWithSelection(slip.id, 'cancelled', '')}
-                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
-                          >
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Hủy
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="w-4 h-4" />
                           </Button>
-                        )}
-
-                        {/* Approval buttons - Only show when status is pending and user has permission */}
-                        {canApproveExports && slip.status === 'pending' && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => approveExportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
-                            >
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Duyệt
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => rejectExportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
-                            >
-                              <XCircle className="w-3 h-3 mr-1" />
-                              Từ chối
-                            </Button>
-                          </>
-                        )}
-                        {/* Status Update Dropdown - Only show when status is approved or picked */}
-                        {getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
-                          <Select onValueChange={(newStatus) => {
-                            handleStatusUpdateWithSelection(slip.id, newStatus, '');
-                          }}>
-                            <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
-                              <SelectValue placeholder="Cập nhật trạng thái" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {getAvailableStatusOptions(slip.status).map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                        {(slip.orderId || slip.order?.id) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                const orderId = slip.orderId || slip.order?.id;
-                                const result = await orderApi.activateWarranty(orderId!);
-                                toast({
-                                  title: "Thành công",
-                                  description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
-                                });
-                              } catch (error) {
-                                toast({
-                                  title: "Lỗi",
-                                  description: error.response?.data?.message || error.message || "Không thể kích hoạt bảo hành",
-                                  variant: "destructive",
-                                });
-                              }
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              openDialog('view', slip.id);
+                              setSelectedSlip(slip);
+                              setShowDetailDialog(true);
                             }}
-                            className="h-8 px-2 text-xs whitespace-nowrap"
+                            className="cursor-pointer hover:bg-muted"
                           >
-                            <Zap className="w-3 h-3 mr-1" />
-                            Kích hoạt BH
-                          </Button>
-                        )}
-                      </div>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Xem chi tiết
+                          </DropdownMenuItem>
+                          
+                          {slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
+                            <DropdownMenuItem 
+                              onClick={() => handleStatusUpdateWithSelection(slip.id, 'cancelled', '')}
+                              className="cursor-pointer hover:bg-muted text-red-600"
+                            >
+                              <XCircle className="w-4 h-4 mr-2" />
+                              Hủy phiếu
+                            </DropdownMenuItem>
+                          )}
+
+                          {canApproveExports && slip.status === 'pending' && (
+                            <>
+                              <DropdownMenuItem 
+                                onClick={() => approveExportSlip(slip.id)}
+                                className="cursor-pointer hover:bg-muted text-green-600"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Duyệt phiếu
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => rejectExportSlip(slip.id)}
+                                className="cursor-pointer hover:bg-muted text-red-600"
+                              >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Từ chối
+                              </DropdownMenuItem>
+                            </>
+                          )}
+
+                          {getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
+                            <DropdownMenuItem 
+                              onClick={() => handleStatusUpdateWithSelection(slip.id, slip.status === 'approved' ? 'picked' : 'exported', '')}
+                              className="cursor-pointer hover:bg-muted"
+                            >
+                              <Package className="w-4 h-4 mr-2" />
+                              {slip.status === 'approved' ? 'Đánh dấu đã lấy hàng' : 'Đánh dấu đã xuất kho'}
+                            </DropdownMenuItem>
+                          )}
+
+                          {(slip.orderId || slip.order?.id) && (
+                            <DropdownMenuItem 
+                              onClick={async () => {
+                                try {
+                                  const orderId = slip.orderId || slip.order?.id;
+                                  const result = await orderApi.activateWarranty(orderId!);
+                                  toast({
+                                    title: "Thành công",
+                                    description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
+                                  });
+                                } catch (error) {
+                                  toast({
+                                    title: "Lỗi",
+                                    description: error.response?.data?.message || error.message || "Không thể kích hoạt bảo hành",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                              className="cursor-pointer hover:bg-muted"
+                            >
+                              <Zap className="w-4 h-4 mr-2" />
+                              Kích hoạt bảo hành
+                            </DropdownMenuItem>
+                          )}
+
+                          {(slip.details || slip.items || []).length > 0 && (slip.type === 'export' || slip.type === 'return') && (slip.orderId || slip.order?.id) && (
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setSelectedSlip(slip);
+                                setSerialInputSlipId(slip.id);
+                                setSerialInputOpen(true);
+                              }}
+                              className="cursor-pointer hover:bg-muted"
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              Nhập Serial
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -2473,6 +2523,45 @@ function ExportSlipsContent() {
         slipType="export"
         slip={slipDetail}
       />
+      {/* Serial Input Dialog */}
+      <Dialog open={serialInputOpen} onOpenChange={setSerialInputOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Nhập Serial - {selectedSlip?.code}</DialogTitle>
+            <DialogDescription>
+              Nhập mã serial cho các sản phẩm trong phiếu xuất kho
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            {(selectedSlip?.details || selectedSlip?.items || []).map((item, index) => (
+              <div key={index} className="border rounded-lg p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <span className="font-medium">{item.product?.name || item.product_name || 'Sản phẩm'}</span>
+                    <span className="text-muted-foreground ml-2">({item.product?.code || item.product_code})</span>
+                  </div>
+                  <span className="text-sm">SL: {item.quantity}</span>
+                </div>
+                <Textarea
+                  placeholder={`Nhập mã serial, ngăn cách bằng dấu phẩy (${item.quantity} serial)`}
+                  rows={2}
+                  value={serialInputs[index] || ''}
+                  onChange={(e) => handleSerialInputChange(index, e.target.value, item.quantity)}
+                />
+                <div className="text-sm mt-1 text-muted-foreground">
+                  {(serialInputs[index] || '').split(',').filter(s => s.trim()).length}/{item.quantity} serial
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSerialInputOpen(false)}>Hủy</Button>
+            <Button onClick={handleSaveSerials} disabled={savingSerials}>
+              {savingSerials ? 'Đang lưu...' : 'Lưu Serial'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

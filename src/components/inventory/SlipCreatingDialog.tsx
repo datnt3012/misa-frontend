@@ -459,7 +459,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
           productId: item.product_id,
           quantity: item.quantity,
           unitPrice: item.unit_price,
-          vatPercentage: item.vat_percentage
+          vatPercentage: item.vat_percentage,
         })),
       };
 
@@ -820,25 +820,26 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                   <TableHeader>
                     <TableRow className="bg-slate-50 border-b-2 border-slate-200">
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Sản phẩm <span className="text-red-500">*</span>
+                        <div className="text-center">Sản phẩm <span className="text-red-500">*</span></div>
                       </TableHead>
                       {!isImport && (<TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thuế suất
+                        <div className="text-center">Thuế suất</div>
                       </TableHead>)}
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Số lượng <span className="text-red-500">*</span>
+                        <div className="text-center">Số lượng <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Đơn giá <span className="text-red-500">*</span>
+                        <div className="text-center">Đơn giá <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thành tiền
+                        <div className="text-center">Thành tiền</div>
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {form.items.map((item, index) => (
+                      <>
                       <TableRow
                         key={index}
                         className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
@@ -919,6 +920,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                           </Button>
                         </TableCell>
                       </TableRow>
+                    </>
                     ))}
                   </TableBody>
                 </Table>
