@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -97,7 +97,7 @@ const Ordersv1Content: React.FC = () => {
         }
     }, [orders, orderHasLinkedSlipsCache, checkingLinkedSlips, checkOrderHasLinkedSlips]);
 
-    const executeStatusUpdate = async (orderId: string, newStatus: string) => {
+    const executeStatusUpdate = useCallback(async (orderId: string, newStatus: string) => {
         try {
             await ORDER_API.UPDATE_ORDER_STATUS(orderId, { status: newStatus });
             queryClient.invalidateQueries({ queryKey: ['orders', 'list'] });
@@ -140,9 +140,9 @@ const Ordersv1Content: React.FC = () => {
         } finally {
             setPendingStatusUpdate(null);
         }
-    };
+    }, [queryClient, toast]);
 
-    const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    const handleUpdateOrderStatus = useCallback(async (orderId: string, newStatus: string) => {
         if (!hasPermission('ORDERS_UPDATE_STATUS')) {
             toast({ title: 'Không có quyền', description: 'Bạn không có quyền cập nhật trạng thái đơn hàng', variant: 'destructive' });
             return;
@@ -158,33 +158,44 @@ const Ordersv1Content: React.FC = () => {
             }
         }
         await executeStatusUpdate(orderId, newStatus);
-    };
+    }, [hasPermission, toast, orders, executeStatusUpdate]);
 
-    const handleConfirmedStatusUpdate = () => {
+    const handleConfirmedStatusUpdate = useCallback(() => {
         if (pendingStatusUpdate) {
             setShowPaymentWarningDialog(false);
             executeStatusUpdate(pendingStatusUpdate.orderId, pendingStatusUpdate.status);
         }
-    };
+    }, [pendingStatusUpdate, executeStatusUpdate]);
 
-    const handleQuickNote = async (orderId: string, note: string) => {
+    const handleQuickNote = useCallback(async (orderId: string, note: string) => {
         try {
             await ORDER_API.UPDATE_ORDER(orderId, { note });
             queryClient.invalidateQueries({ queryKey: ['orders', 'list'] });
         } catch (error) {
             toast({ title: 'Lỗi', description: getErrorMessage(error, 'Không thể cập nhật ghi chú'), variant: 'destructive' });
         }
-    };
+    }, [queryClient, toast]);
 
-    const handleFilterChange = (newFilters: Partial<OrderFilterSchemaType>) => {
+    const handleFilterChange = useCallback((newFilters: Partial<OrderFilterSchemaType>) => {
         setFilters(prev => ({
             ...prev,
             ...newFilters,
         }));
-    };
+    }, []);
+
+    const dialogActions = useMemo(() => ({
+        openView: (order: any) => navigate(`/orders/${order.id}`),
+        openEdit: (order: any) => navigate(`/orders/${order.id}/edit`),
+        openPayment: (order: any) => dialogManagerRef.current?.openPayment(order),
+        openTagsManager: (order: any) => dialogManagerRef.current?.openTagsManager(order),
+        openExportDelivery: (order: any) => dialogManagerRef.current?.openExportDelivery(order),
+        openExportSlip: (order: any) => dialogManagerRef.current?.openExportSlip(order, order.type === 'purchase' ? 'import' : 'export'),
+        openReturnSlip: (order: any) => dialogManagerRef.current?.openExportSlip(order, order.type === 'purchase' ? 'purchase_return' : 'sale_return'),
+        openDelete: (order: any) => dialogManagerRef.current?.openDelete(order),
+    }), [navigate]);
 
     return (
-        <div className="min-h-screen bg-background pb-10">
+        <div className="min-h-screen bg-slate-50/50 dark:bg-background pb-10">
             {/* Payment Warning Dialog */}
             <AlertDialog open={showPaymentWarningDialog} onOpenChange={setShowPaymentWarningDialog}>
                 <AlertDialogContent>
@@ -245,16 +256,7 @@ const Ordersv1Content: React.FC = () => {
                             hasPermission={hasPermission}
                             orderHasLinkedSlipsCache={orderHasLinkedSlipsCache}
                             onUpdateQuickNote={handleQuickNote}
-                            dialogActions={{
-                                openView: (order) => navigate(`/orders/${order.id}`),
-                                openEdit: (order) => navigate(`/orders/${order.id}/edit`),
-                                openPayment: (order) => dialogManagerRef.current?.openPayment(order),
-                                openTagsManager: (order) => dialogManagerRef.current?.openTagsManager(order),
-                                openExportDelivery: (order) => dialogManagerRef.current?.openExportDelivery(order),
-                                openExportSlip: (order) => dialogManagerRef.current?.openExportSlip(order, order.type === 'purchase' ? 'import' : 'export'),
-                                openReturnSlip: (order) => dialogManagerRef.current?.openExportSlip(order, order.type === 'purchase' ? 'purchase_return' : 'sale_return'),
-                                openDelete: (order) => dialogManagerRef.current?.openDelete(order),
-                            }}
+                            dialogActions={dialogActions}
                         />
                     </CardContent>
                 </Card>

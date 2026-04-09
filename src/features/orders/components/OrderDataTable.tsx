@@ -550,16 +550,25 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
   ), [columns, total, summary]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-end pr-2 gap-2">
-        <ColumnVisibilityPopover
-          columns={allColumns}
-          visibility={columnVisibility}
-          onToggle={toggleColumn}
-          onReset={resetToDefaults}
-          onSetAll={setAllVisible}
-          alwaysVisible={alwaysVisible}
-        />
+    <div className="flex flex-col w-full">
+      <div className="flex items-center justify-between px-6 py-4 bg-background border-b border-border/40">
+        <div className="flex flex-col gap-1">
+            <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
+                Danh sách chi tiết {orderType === 'sale' ? 'bán hàng' : 'mua hàng'}
+            </h3>
+            <p className="text-[13px] text-muted-foreground mr-2">Quản lý và theo dõi thông tin các đơn hàng</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+            <ColumnVisibilityPopover
+                columns={allColumns}
+                visibility={columnVisibility}
+                onToggle={toggleColumn}
+                onReset={resetToDefaults}
+                onSetAll={setAllVisible}
+                alwaysVisible={alwaysVisible}
+                className="h-9 px-4 rounded-lg bg-muted/40 hover:bg-muted/80 border-border/50 text-[13px]"
+            />
+        </div>
       </div>
       <GroupedRowTable<OrderDetailSchemaType, OrderGroup>
         groups={groups}
@@ -572,7 +581,7 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         onSelectedIdsChange={(ids) => onSelectedIdsChange(ids as string[])}
         onRowClick={(_, group) => dialogActions.openView(group)}
         footer={footer}
-        containerClassName="h-[calc(100vh-280px)] min-h-[500px]"
+        containerClassName="h-[calc(100vh-320px)] min-h-[500px] border-0 rounded-none shadow-none"
       />
     </div>
   );

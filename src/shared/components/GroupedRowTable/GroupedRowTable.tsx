@@ -270,9 +270,9 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
             rowSpan={rowCount}
             style={col.width ? { minWidth: col.width } : undefined}
             className={cn(
-                "px-3 py-3 align-middle text-sm text-gray-700 font-medium",
-                "border-r border-gray-200",
-                !isLastGroup && "border-b-2 border-gray-300",
+                "px-5 py-4 align-middle text-sm text-slate-700 font-medium leading-relaxed",
+                "border-r border-slate-200/60",
+                !isLastGroup && "border-b-2 border-slate-200",
                 cellClass(col.align, col.type),
                 col.cellClassName
             )}
@@ -295,10 +295,10 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
             key={col.key}
             style={col.width ? { minWidth: col.width } : undefined}
             className={cn(
-                "px-3 py-2 text-sm text-[#020817] font-medium",
-                "border-r border-gray-200",
-                !isLastRow && "border-b border-gray-200",
-                isLastRow && !isLastGroup && "border-b-2 border-gray-300",
+                "px-5 py-3 text-sm text-[#020817] font-medium leading-relaxed",
+                "border-r border-slate-200/60",
+                !isLastRow && "border-b border-slate-100",
+                isLastRow && !isLastGroup && "border-b-2 border-slate-200",
                 cellClass(col.align, col.type),
                 col.cellClassName
             )}
@@ -327,10 +327,10 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
                         </colgroup>
 
                         {/* Header */}
-                        <thead className="sticky top-0 z-10 shadow-[inset_0_-2px_0_0_#e5e7eb]">
-                            <tr className="bg-gray-100">
+                        <thead className="sticky top-0 z-10 shadow-[inset_0_-1px_0_0_#e2e8f0]">
+                            <tr className="bg-slate-50 text-slate-600">
                                 {hasCheckbox && (
-                                    <th className="w-[40px] px-3 py-2.5 border-r border-gray-200">
+                                    <th className="w-[40px] px-5 py-3.5 border-r border-slate-200/60">
                                         <Checkbox
                                             checked={isAllSelected}
                                             indeterminate={isSomeSelected}
@@ -344,8 +344,8 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
                                         key={col.key}
                                         style={col.width ? { minWidth: col.width } : undefined}
                                         className={cn(
-                                            "h-10 px-3 py-2.5 text-xs font-bold tracking-wider text-gray-600 whitespace-nowrap",
-                                            "border-r border-gray-200",
+                                            "px-5 py-3.5 text-[13px] font-semibold tracking-wide text-slate-600 whitespace-nowrap",
+                                            "border-r border-slate-200/60",
                                             cellClass(col.align, col.type),
                                             col.headerClassName
                                         )}
