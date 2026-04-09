@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingCart, ShoppingBag } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, RotateCcw, Plus, FunnelPlus, FunnelX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDialogUrl } from '@/hooks/useDialogUrl';
@@ -12,7 +12,6 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { useOrderList, useOrderCatalogs } from '@/features/orders/hooks';
 import { ORDER_API } from '@/features/orders/api/order.api';
 import { OrderFilter } from '@/features/orders/components/OrderFilter';
-import { OrderPageHeader } from '@/features/orders/components/OrderPageHeader';
 import { OrderDialogManager, type OrderDialogManagerHandle } from '@/features/orders/components/OrderDialogManager';
 import { OrderBulkActions } from '@/features/orders/components/OrderBulkActions';
 import { OrderDataTable } from '@/features/orders/components/OrderDataTable';
@@ -20,21 +19,26 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ToastAction } from "@/components/ui/toast";
 import { warehouseReceiptsApi } from "@/api/warehouseReceipts.api";
 import { ORDER_TYPES, OrderFilterSchemaType } from '@/features/orders/schemas';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+
+const DEFAULT_FILTERS: OrderFilterSchemaType = {
+    keyword: '',
+    page: 1,
+    limit: 50,
+    type: ORDER_TYPES[0],
+}
 
 const Ordersv1Content: React.FC = () => {
     const dialogManagerRef = useRef<OrderDialogManagerHandle>(null);
     const navigate = useNavigate();
+    const [isExpanded, setIsExpanded] = useState(false);
     const { hasPermission } = usePermissions();
     const { openDialog, closeDialog, getDialogState } = useDialogUrl('orders');
     const location = useLocation();
 
     // ── Hooks ──────────────────────────────────────────────────────────────────
-    const [filters, setFilters] = useState<OrderFilterSchemaType>({
-        keyword: '',
-        page: 1,
-        limit: 50,
-        type: ORDER_TYPES[0],
-    });
+    const [filters, setFilters] = useState<OrderFilterSchemaType>(DEFAULT_FILTERS);
     const catalogs = useOrderCatalogs();
     const { data, isLoading, isFetching } = useOrderList(filters);
     const orders = data?.data?.rows ?? [];
@@ -213,24 +217,65 @@ const Ordersv1Content: React.FC = () => {
             </AlertDialog>
 
             <div className="w-full mx-auto space-y-6 p-4 md:p-8">
-                {/* Header with Title and Add New Action */}
-                {/* <OrderPageHeader
-                    onCreateClick={() => navigate('/orders/create')}
-                    description="Theo dõi và quản lý tất cả đơn hàng bán và mua của bạn."
-                /> */}
 
-                <OrderFilter
-                    filters={filters}
-                    onFilterChange={handleFilterChange}
-                    defaultExpanded={false}
-                />
+                <div className='flex gap-2'>
+                    <Tabs value={filters.type ?? ORDER_TYPES[0]} onValueChange={(value) => handleFilterChange({ type: value as any })} className="w-full">
+                        <TabsList className="grid grid-cols-2 lg:w-[400px]">
+                            <TabsTrigger value={ORDER_TYPES[0]} className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" />Bán hàng</TabsTrigger>
+                            <TabsTrigger value={ORDER_TYPES[1]} className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" />Mua hàng</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
 
-                <Tabs value={filters.type ?? ORDER_TYPES[0]} onValueChange={(value) => handleFilterChange({ type: value as any })} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-                        <TabsTrigger value={ORDER_TYPES[0]} className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" />Bán hàng</TabsTrigger>
-                        <TabsTrigger value={ORDER_TYPES[1]} className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" />Mua hàng</TabsTrigger>
-                    </TabsList>
-                </Tabs>
+                    {/* Search */}
+                    <div className="flex items-center gap-2">
+                        <Input
+                            placeholder="Tìm kiếm đơn hàng..."
+                            value={filters.keyword}
+                            onChange={(e) => handleFilterChange({ keyword: e.target.value })}
+                            className='w-80'
+                        />
+
+                    </div>
+
+                    {/* reset filter */}
+                    <Button
+                        type="button"
+                        onClick={() => setFilters(DEFAULT_FILTERS)}
+                        variant="outline"
+                        className="px-6 gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-95"
+                        title="Làm mới bộ lọc"
+                    >
+                        <RotateCcw className="h-4 w-4" />
+                    </Button>
+
+                    {/* Show filter button */}
+                    <Button
+                        type="button"
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        variant="outline"
+                        className="px-6 gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-95"
+                        title="Bộ lọc"
+                    >
+                        {isExpanded ? <FunnelX className="h-4 w-4" /> : <FunnelPlus className="h-4 w-4" />}
+                    </Button>
+
+                    {/* Add order button */}
+                    <Button
+                        type="button"
+                        onClick={() => navigate('/orders/create')}
+                        className="px-6 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 transition-all duration-300 active:scale-95 group font-semibold"
+                    >
+                        <Plus className="h-4 w-4" />
+                        <span>Thêm mới</span>
+                    </Button>
+                </div>
+
+                {isExpanded && (
+                    <OrderFilter
+                        filters={filters}
+                        onFilterChange={handleFilterChange}
+                    />
+                )}
 
                 <OrderBulkActions
                     selectedCount={selectedIds.length}
