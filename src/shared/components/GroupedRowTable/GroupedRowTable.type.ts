@@ -88,4 +88,7 @@ export interface GroupedRowTableProps<TRow, TGroup extends GroupedRowGroup<TRow>
 
     // ── Footer ─────────────────────────────────────────────────────────────────
     footer?: React.ReactNode;
+
+    // ── Table container styling ────────────────────────────────────────────────
+    containerClassName?: string;
 }

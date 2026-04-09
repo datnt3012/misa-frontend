@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ORDER_TYPES, OrderFilterSchemaType, OrderFilterSchema } from "../schemas";
-import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FormProvider, useForm } from "react-hook-form";
@@ -8,6 +8,7 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import { filterOrderConfig } from "../constants";
 import { DynamicFormField } from "@/shared/components/DynamicFormField";
 import { getColSpan } from "@/shared/config";
+import { useNavigate } from "react-router-dom";
 
 interface OrderFilterProps {
     filters: OrderFilterSchemaType;
@@ -27,6 +28,7 @@ export const OrderFilter = ({
     onFilterChange,
     defaultExpanded = false
 }: OrderFilterProps) => {
+    const navigate = useNavigate();
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
     const methods = useForm<OrderFilterSchemaType>({
         defaultValues: { ...defaultValues, ...filters },
@@ -60,8 +62,7 @@ export const OrderFilter = ({
         <div className="space-y-4">
             <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 shadow-premium overflow-hidden transition-all duration-500 hover:shadow-premium-hover">
                 <FormProvider {...methods}>
-                    <form onSubmit={onFormSubmit} className="p-5 md:p-8 space-y-6">
-                        {/* Main Filter Row */}
+                    <form onSubmit={onFormSubmit} className="p-5 md:p-8 space-y-2">
                         <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-5">
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-5">
                                 {filterOrderConfig.slice(0, 3).map((config) => (
@@ -80,7 +81,6 @@ export const OrderFilter = ({
                                 ))}
                             </div>
 
-                            {/* Actions Group */}
                             <div className="flex items-center gap-2.5 min-w-fit">
                                 <Button
                                     type="button"
@@ -105,10 +105,19 @@ export const OrderFilter = ({
                                     {isExpanded ? <ChevronUp className="h-4 w-4 text-primary" /> : <ChevronDown className="h-4 w-4 text-primary" />}
                                     <span>{isExpanded ? "Thu gọn" : "Nâng cao"}</span>
                                 </Button>
+                                <Button
+                                    type="button"
+                                    onClick={() => navigate('/orders/create')}
+                                    className="h-11 px-6 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 transition-all duration-300 active:scale-95 group font-semibold"
+                                >
+                                    <div className="p-1 rounded-md ">
+                                        <Plus className="h-4 w-4" />
+                                    </div>
+                                    Thêm mới
+                                </Button>
                             </div>
                         </div>
 
-                        {/* Collapsible Advanced Filters Section */}
                         <div
                             className={cn(
                                 "grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-6 pt-6 border-t border-border/40 transition-all duration-500 ease-in-out origin-top",

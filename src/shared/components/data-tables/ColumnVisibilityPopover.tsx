@@ -33,7 +33,7 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
   className,
 }: ColumnVisibilityPopoverProps<TColumn>) {
   // Filter out the 'actions' and 'empty' columns from toggling if they are always visible or not needed
-  const displayColumns = columns.filter(col => 
+  const displayColumns = columns.filter(col =>
     col.key !== 'actions' && String(col.key).indexOf('empty') === -1
   );
 
@@ -44,9 +44,9 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button 
-          variant="outline" 
-          size="sm" 
+        <Button
+          variant="outline"
+          size="sm"
           className={cn("h-8 gap-2 bg-background border-border/60 hover:bg-muted/50", className)}
         >
           <Settings2 className="w-4 h-4 text-muted-foreground" />
@@ -61,20 +61,20 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
               Hiển thị cột
             </h4>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Chọn các cột muốn hiển thị trên bảng
           </p>
         </div>
-        
+
         <Separator className="bg-border/60" />
 
         <div className="px-3 py-2 flex items-center justify-between bg-muted/10">
-          <div 
+          <div
             className="flex items-center space-x-2 cursor-pointer hover:bg-muted/40 p-1 px-2 rounded -ml-2 transition-colors"
             onClick={() => onSetAll(!allSelected)}
           >
-            <Checkbox 
-              id="col-all" 
+            <Checkbox
+              id="col-all"
               checked={allSelected}
               onCheckedChange={() => onSetAll(!allSelected)}
               className="h-3.5 w-3.5"
@@ -95,7 +95,7 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
               const isChecked = isLocked || visibility[key] !== false;
 
               const content = (
-                <div 
+                <div
                   key={key}
                   className={cn(
                     "flex items-center space-x-2 px-2 py-1.5 rounded-md transition-colors",
@@ -103,7 +103,7 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
                   )}
                   onClick={() => !isLocked && onToggle(key)}
                 >
-                  <Checkbox 
+                  <Checkbox
                     id={`col-${key}`}
                     checked={isChecked}
                     onCheckedChange={() => !isLocked && onToggle(key)}
@@ -111,10 +111,10 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
                     className="h-3.5 w-3.5"
                   />
                   <div className="flex-1 flex items-center justify-between min-w-0">
-                    <label 
+                    <label
                       htmlFor={`col-${key}`}
                       className={cn(
-                        "text-xs font-medium leading-none truncate cursor-pointer",
+                        "text-sm font-medium leading-none truncate cursor-pointer",
                         isLocked && "cursor-not-allowed"
                       )}
                     >
@@ -148,10 +148,10 @@ export function ColumnVisibilityPopover<TColumn extends { key: any; label: React
         <Separator className="bg-border/60" />
 
         <div className="p-2 bg-muted/10">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="w-full h-8 text-[11px] font-medium justify-center gap-2 hover:bg-muted/50"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-8 text-sm font-medium justify-center gap-2 hover:bg-muted/50"
             onClick={onReset}
           >
             <RefreshCcw className="w-3.5 h-3.5" />
