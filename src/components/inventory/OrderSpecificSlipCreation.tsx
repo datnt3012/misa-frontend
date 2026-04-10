@@ -396,13 +396,15 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
             details: validItems.map(item => {
               const orderItem = orderItemsMap.get(item.product_id);
               const itemSerials = item.serial_manage ? (serialNumbers[slip.id]?.[slip.items.indexOf(item)] || []) : [];
+              const orderItemSerials = orderItem?.serials || [];
+              const warrantyFromOrder = orderItemSerials.length > 0 ? orderItemSerials[0].warrantyMonths : undefined;
               return {
                 productId: item.product_id,
                 quantity: item.quantity,
                 unitPrice: orderItem?.unit_price || 0,
                 warehouseId: slip.warehouse_id,
                 serialNumbers: itemSerials.length > 0 ? itemSerials.join(',') : undefined,
-                warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : 1,
+                warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : (warrantyFromOrder !== undefined ? warrantyFromOrder : 1),
               };
             })
           };

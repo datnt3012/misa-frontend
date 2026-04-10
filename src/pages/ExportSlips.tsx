@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap, MoreHorizontal, Eye, Edit, Trash, X } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap, MoreHorizontal, Eye, Edit, Trash, X, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -2414,11 +2414,9 @@ function ExportSlipsContent() {
                                       if (serialNumbers.length > 0) {
                                         existingSerials[index] = serialNumbers.join(', ');
                                       }
-                                    }
-                                    if (item.warranty_months !== undefined && item.warranty_months !== null) {
-                                      existingWarranty[index] = item.warranty_months;
-                                    } else if (item.warrantyMonths !== undefined && item.warrantyMonths !== null) {
-                                      existingWarranty[index] = item.warrantyMonths;
+                                      if (item.serials.length > 0 && item.serials[0].warrantyMonths !== undefined) {
+                                        existingWarranty[index] = item.serials[0].warrantyMonths;
+                                      }
                                     }
                                   });
                                   setSerialInputs(existingSerials);
@@ -2565,7 +2563,14 @@ function ExportSlipsContent() {
         slip={slipDetail}
       />
       {/* Serial Input Dialog */}
-      <Dialog open={serialInputOpen} onOpenChange={setSerialInputOpen}>
+      <Dialog open={serialInputOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSerialInputs({});
+          setNewSerialInputs({});
+          setWarrantyMonths({});
+        }
+        setSerialInputOpen(open);
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nhập Serial - {selectedSlip?.code}</DialogTitle>
@@ -2627,8 +2632,15 @@ function ExportSlipsContent() {
                       className="flex-1 min-w-[100px] outline-none bg-transparent border-none text-sm"
                     />
                   </div>
-                  <div className="text-sm mt-1 text-muted-foreground">
-                    {existingSerials.length}/{item.quantity} serial
+                  <div className="text-sm mt-1">
+                    <span className={existingSerials.length === item.quantity ? 'text-emerald-600' : 'text-rose-500'}>
+                      {existingSerials.length === item.quantity ? (
+                        <CheckCircle className="w-4 h-4 inline mr-2" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 inline mr-2" />
+                      )}
+                      {existingSerials.length}/{item.quantity} serial
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
@@ -2652,7 +2664,12 @@ function ExportSlipsContent() {
               const total = details.length;
               return (
                 <div className="text-sm font-medium mt-4 pt-2 border-t">
-                  <span className={filledCount === total ? 'text-emerald-600' : 'text-amber-600'}>
+                  <span className={filledCount === total ? 'text-emerald-600' : 'text-rose-500'}>
+                    {filledCount === total ? (
+                      <CheckCircle className="w-4 h-4 inline mr-2" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                    )}
                     Tổng: {filledCount}/{total} sản phẩm đã nhập đủ Serial
                   </span>
                 </div>
