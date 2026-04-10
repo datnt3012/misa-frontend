@@ -29,7 +29,6 @@ import { GroupedRowTable, GroupedRowColumn, GroupedRowGroup } from '@/shared/com
 import { useColumnVisibility } from '@/shared/hooks';
 import { ColumnVisibilityPopover } from '@/shared/components/data-tables/ColumnVisibilityPopover';
 import { useNavigate } from 'react-router-dom';
-import { PaginationBar } from '@/shared/components/Pagination';
 
 // ─── Prop types ───────────────────────────────────────────────────────────────
 
@@ -272,24 +271,16 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
 
   return (
     <div className="flex flex-col w-full">
-      <div className="flex items-center justify-between px-6 py-4 bg-background border-b border-border/40">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
-            Danh sách chi tiết {orderType === 'sale' ? 'bán hàng' : 'mua hàng'}
-          </h3>
-          <p className="text-[13px] text-muted-foreground mr-2">Quản lý và theo dõi thông tin các đơn hàng</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <ColumnVisibilityPopover
-            columns={allColumns}
-            visibility={columnVisibility}
-            onToggle={toggleColumn}
-            onReset={resetToDefaults}
-            onSetAll={setAllVisible}
-            alwaysVisible={alwaysVisible}
-            className="h-9 px-4 rounded-lg bg-muted/40 hover:bg-muted/80 border-border/50 text-[13px]"
-          />
-        </div>
+      <div className="flex items-center justify-end px-4 py-2 bg-background border-b border-border/40">
+        <ColumnVisibilityPopover
+          columns={allColumns}
+          visibility={columnVisibility}
+          onToggle={toggleColumn}
+          onReset={resetToDefaults}
+          onSetAll={setAllVisible}
+          alwaysVisible={alwaysVisible}
+          className="h-8 px-3 rounded-lg bg-muted/40 hover:bg-muted/80 border-border/50 text-[13px]"
+        />
       </div>
       <GroupedRowTable<OrderDetailSchemaType, OrderGroup>
         groups={groups}
@@ -303,13 +294,6 @@ export const OrderDataTable: React.FC<OrderDataTableProps> = ({
         onRowClick={(_, group) => dialogActions.openView(group)}
         footer={footer}
         containerClassName="h-[calc(100vh-320px)] min-h-[500px] border-0 rounded-none shadow-none"
-      />
-
-      {/* Pagination */}
-      <PaginationBar
-        filters={{ page: pagination.page, limit: pagination.limit }}
-        total={total}
-        onFiltersChange={(f) => onPaginationChange({ page: f.page, limit: f.limit })}
       />
     </div>
   );

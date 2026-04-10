@@ -21,6 +21,7 @@ import { warehouseReceiptsApi } from "@/api/warehouseReceipts.api";
 import { ORDER_TYPES, OrderFilterSchemaType } from '@/features/orders/schemas';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { PaginationBar } from '@/shared/components/Pagination';
 
 const DEFAULT_FILTERS: OrderFilterSchemaType = {
     keyword: '',
@@ -199,7 +200,7 @@ const Ordersv1Content: React.FC = () => {
     }), [navigate]);
 
     return (
-        <div className="min-h-screen bg-slate-50/50 dark:bg-background pb-10">
+        <div className="min-h-[calc(100vh-63px)] bg-slate-50/50 dark:bg-background">
             {/* Payment Warning Dialog */}
             <AlertDialog open={showPaymentWarningDialog} onOpenChange={setShowPaymentWarningDialog}>
                 <AlertDialogContent>
@@ -232,7 +233,7 @@ const Ordersv1Content: React.FC = () => {
                             placeholder="Tìm kiếm đơn hàng..."
                             value={filters.keyword}
                             onChange={(e) => handleFilterChange({ keyword: e.target.value })}
-                            className='w-80'
+                            className='w-50'
                         />
 
                     </div>
@@ -284,7 +285,7 @@ const Ordersv1Content: React.FC = () => {
                     onClearSelection={() => setSelectedIds([])}
                 />
 
-                <Card className="shadow-premium border-none overflow-hidden">
+                <Card className="shadow-md border border-slate-200/50 overflow-hidden">
                     <CardContent className="p-0">
                         <OrderDataTable
                             orders={orders}
@@ -305,6 +306,16 @@ const Ordersv1Content: React.FC = () => {
                         />
                     </CardContent>
                 </Card>
+
+                {/* Pagination */}
+                {/* <div className='mt-0'>
+                   
+                </div> */}
+                <PaginationBar
+                    filters={{ page: filters.page, limit: filters.limit }}
+                    total={data?.data?.count ?? 0}
+                    onFiltersChange={(f) => handleFilterChange({ page: f.page, limit: f.limit })}
+                />
 
                 {/* Encapsulated Dialog States and Logic */}
                 <OrderDialogManager

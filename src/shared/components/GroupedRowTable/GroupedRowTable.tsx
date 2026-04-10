@@ -324,15 +324,6 @@ export function GroupedRowTable<TRow, TGroup extends GroupedRowGroup<TRow>>({
                     </table>
                 </div>
             </div>
-
-            {/* Pagination */}
-            {/* {filters && onFiltersChange && (
-                <PaginationBar
-                    filters={filters}
-                    total={total}
-                    onFiltersChange={onFiltersChange}
-                />
-            )} */}
         </div>
     );
 }

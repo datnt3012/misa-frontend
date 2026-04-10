@@ -37,7 +37,7 @@ export const PaginationBar = ({
     }
 
     return (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-1 py-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             {/* Page size + total */}
             <div className="flex items-center gap-2 order-2 sm:order-1">
                 <span className="text-sm text-gray-500 whitespace-nowrap">Hiển thị</span>
