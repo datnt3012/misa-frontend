@@ -402,7 +402,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                 unitPrice: orderItem?.unit_price || 0,
                 warehouseId: slip.warehouse_id,
                 serialNumbers: itemSerials.length > 0 ? itemSerials.join(',') : undefined,
-                warrantyMonths: item.warranty_months || 0,
+                warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : 1,
               };
             })
           };
@@ -607,9 +607,6 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
               const allocatedQuantity = alloc?.allocatedQuantity ?? 0;
               const returnedQuantity = alloc?.returnedQuantity ?? 0;
               const remainingQuantity = alloc?.remainingQuantity ?? 0;
-
-              // Debug log
-              console.log('Allocation for product:', item.product_id, alloc);
               
               return (
                 <div
@@ -856,13 +853,14 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                 </Button>
                                 </TableCell>
                               </TableRow>
-                              {!isImportSlip && item.serial_manage && selectedOrderItem?.serials && selectedOrderItem.serials.length > 0 && (
+                              {!isImportSlip && item.serial_manage && (
                                 <TableRow>
                                   <TableCell colSpan={4} className="p-3 bg-slate-50">
                                     <div className="space-y-2">
-                                      <div className="flex items-center gap-2">
-                                        <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
-                                        <MultiSelect
+                                      {selectedOrderItem?.serials && selectedOrderItem.serials.length > 0 && (
+                                        <div className="flex items-center gap-2">
+                                          <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
+                                          <MultiSelect
                                           options={selectedOrderItem.serials.map(s => ({ value: s.serial_number, label: s.serial_number }))}
                                           value={(selectedOrderSerials[slip.id]?.[itemIndex] || []).join(',')}
                                           onValueChange={(value) => {
@@ -886,6 +884,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                           className="flex-1 max-w-[400px]"
                                         />
                                       </div>
+                                      )}
                                       <div className="w-full">
                                         <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                                           {(selectedOrderSerials[slip.id]?.[itemIndex] || []).map((serialNum, sidx) => (
@@ -1000,9 +999,9 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                       <div className="flex items-center gap-2">
                                         <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
                                         <NumberInput
-                                          value={item.warranty_months ?? 0}
-                                          onChange={(value) => updateSlipItem(slip.id, itemIndex, 'warranty_months', Number(value) || 0)}
-                                          min={0}
+                                          value={item.warranty_months ?? 1}
+                                          onChange={(value) => updateSlipItem(slip.id, itemIndex, 'warranty_months', Number(value) || 1)}
+                                          min={1}
                                           className="w-20"
                                         />
                                         <span className="text-xs">tháng (tính từ ngày giao hàng)</span>

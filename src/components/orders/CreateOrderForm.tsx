@@ -270,8 +270,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             serial_manage: Array.isArray(item.serials) && item.serials.length > 0,
             warranty_months: item.warranty_months ?? item.warrantyMonths ?? 
               (Array.isArray(item.serials) && item.serials.length > 0 
-                ? item.serials[0]?.warrantyMonths ?? item.serials[0]?.warranty_months ?? 0
-                : 0),
+                ? item.serials[0]?.warrantyMonths ?? item.serials[0]?.warranty_months ?? 1
+                : 1),
           })),
 
 
@@ -355,7 +355,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_total_price: item.vat_total_price || 0,
         vat_amount: item.vat_amount || 0,
         warehouse_id: '',
-        warranty_months: item.warranty_months ?? item.warrantyMonths ?? (existingSerials.length > 0 ? existingSerials[0]?.warrantyMonths ?? existingSerials[0]?.warranty_months ?? 0 : 0),
+        warranty_months: item.warranty_months ?? item.warrantyMonths ?? (existingSerials.length > 0 ? existingSerials[0]?.warrantyMonths ?? existingSerials[0]?.warranty_months ?? 1 : 1),
         serial_manage: existingSerials.length > 0,
       };
     });
@@ -1449,9 +1449,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                               <div className="flex items-center gap-2">
                                 <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
                                 <NumberInput
-                                  value={item.warranty_months ?? 0}
-                                  onChange={(value) => updateItem(index, 'warranty_months', Number(value) || 0)}
-                                  min={0}
+                                  value={item.warranty_months ?? 1}
+                                  onChange={(value) => updateItem(index, 'warranty_months', Number(value) || 1)}
+                                  min={1}
                                   className="w-20"
                                 />
                                 <span>tháng (tính từ ngày giao hàng)</span>

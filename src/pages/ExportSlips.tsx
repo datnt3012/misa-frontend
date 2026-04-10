@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap, MoreHorizontal, Eye, Edit, Trash } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap, MoreHorizontal, Eye, Edit, Trash, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -122,6 +122,8 @@ function ExportSlipsContent() {
   const [serialInputOpen, setSerialInputOpen] = useState(false);
   const [serialInputSlipId, setSerialInputSlipId] = useState<string | null>(null);
   const [serialInputs, setSerialInputs] = useState<Record<number, string>>({});
+  const [newSerialInputs, setNewSerialInputs] = useState<Record<number, string>>({});
+  const [warrantyMonths, setWarrantyMonths] = useState<Record<number, number>>({});
   const [savingSerials, setSavingSerials] = useState(false);
 
   const handleResetFilters = () => {
@@ -686,11 +688,21 @@ function ExportSlipsContent() {
     
     try {
       setSavingSerials(true);
-      const serialsData = Object.entries(serialInputs).map(([index, value]) => {
+      
+      const allSerials: Record<number, string> = { ...serialInputs };
+      Object.entries(newSerialInputs).forEach(([index, value]) => {
+        const newSerials = value.split(',').map(s => s.trim()).filter(s => s);
+        const existing = (allSerials[parseInt(index)] || '').split(',').map(s => s.trim()).filter(s => s);
+        const combined = [...existing, ...newSerials];
+        allSerials[parseInt(index)] = combined.join(', ');
+      });
+
+      const serialsData = Object.entries(allSerials).map(([index, value]) => {
         const serials = value.split(',').map(s => s.trim()).filter(s => s);
         return {
           productIndex: parseInt(index),
-          serials
+          serials,
+          warrantyMonths: warrantyMonths[parseInt(index)] ?? 1
         };
       });
 
@@ -704,6 +716,8 @@ function ExportSlipsContent() {
       });
       setSerialInputOpen(false);
       setSerialInputs({});
+      setNewSerialInputs({});
+      setWarrantyMonths({});
       setSerialInputSlipId(null);
       fetchExportSlips();
     } catch (error: any) {
@@ -2382,11 +2396,38 @@ function ExportSlipsContent() {
                             </DropdownMenuItem>
                           )}
 
-                          {(slip.details || slip.items || []).length > 0 && (slip.type === 'export' || slip.type === 'return') && (slip.orderId || slip.order?.id) && (
+                          {(slip.details || slip.items || []).length > 0 && (slip.type === 'export' || slip.type === 'return') && (slip.orderId || slip.order?.id) && slip.status !== 'cancelled' && slip.status !== 'rejected' && (
                             <DropdownMenuItem 
-                              onClick={() => {
+                              onClick={async () => {
                                 setSelectedSlip(slip);
                                 setSerialInputSlipId(slip.id);
+                                try {
+                                  const fullReceipt = await warehouseReceiptsApi.getReceipt(slip.id);
+                                  const existingSerials: Record<number, string> = {};
+                                  const existingWarranty: Record<number, number> = {};
+                                  const details = fullReceipt.details || fullReceipt.items || [];
+                                  details.forEach((item: any, index: number) => {
+                                    if (item.serials && Array.isArray(item.serials)) {
+                                      const serialNumbers = item.serials
+                                        .map((s: any) => s.serial_number || s.serialNumber || s.serial)
+                                        .filter((s: string) => s);
+                                      if (serialNumbers.length > 0) {
+                                        existingSerials[index] = serialNumbers.join(', ');
+                                      }
+                                    }
+                                    if (item.warranty_months !== undefined && item.warranty_months !== null) {
+                                      existingWarranty[index] = item.warranty_months;
+                                    } else if (item.warrantyMonths !== undefined && item.warrantyMonths !== null) {
+                                      existingWarranty[index] = item.warrantyMonths;
+                                    }
+                                  });
+                                  setSerialInputs(existingSerials);
+                                  setWarrantyMonths(existingWarranty);
+                                } catch (error) {
+                                  console.error('Failed to fetch receipt details for serial input:', error);
+                                  setSerialInputs({});
+                                  setWarrantyMonths({});
+                                }
                                 setSerialInputOpen(true);
                               }}
                               className="cursor-pointer hover:bg-muted"
@@ -2533,26 +2574,90 @@ function ExportSlipsContent() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            {(selectedSlip?.details || selectedSlip?.items || []).map((item, index) => (
-              <div key={index} className="border rounded-lg p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <div>
-                    <span className="font-medium">{item.product?.name || item.product_name || 'Sản phẩm'}</span>
-                    <span className="text-muted-foreground ml-2">({item.product?.code || item.product_code})</span>
+            {(selectedSlip?.details || selectedSlip?.items || []).map((item: any, index) => {
+              const existingSerials = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+              return (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <div>
+                      <span className="font-medium">{item.product?.name || item.product_name || 'Sản phẩm'}</span>
+                      <span className="text-muted-foreground ml-2">({item.product?.code || item.product_code})</span>
+                    </div>
+                    <span className="text-sm">SL: {item.quantity}</span>
                   </div>
-                  <span className="text-sm">SL: {item.quantity}</span>
+                  <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    {existingSerials.map((serialNum, sidx) => (
+                      <span
+                        key={sidx}
+                        className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm h-6"
+                      >
+                        <span>{serialNum}</span>
+                        <button
+                          type="button"
+                          className="hover:bg-blue-200 rounded-full p-0.5"
+                          onClick={() => {
+                            const newSerials = existingSerials.filter((_, i) => i !== sidx);
+                            setSerialInputs(prev => ({ ...prev, [index]: newSerials.join(', ') }));
+                          }}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      value={newSerialInputs[index] || ''}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const t = e.currentTarget as HTMLInputElement;
+                          const text = t.value.trim();
+                          if (text) {
+                            const newSerialsList = text.split(',').map(s => s.trim()).filter(s => s);
+                            const allSerials = [...existingSerials, ...newSerialsList];
+                            setSerialInputs(prev => ({ ...prev, [index]: allSerials.join(', ') }));
+                            setNewSerialInputs(prev => ({ ...prev, [index]: '' }));
+                          }
+                        }
+                      }}
+                      onChange={(e) => {
+                        setNewSerialInputs(prev => ({ ...prev, [index]: e.target.value }));
+                      }}
+                      placeholder="Nhập serial mới..."
+                      className="flex-1 min-w-[100px] outline-none bg-transparent border-none text-sm"
+                    />
+                  </div>
+                  <div className="text-sm mt-1 text-muted-foreground">
+                    {existingSerials.length}/{item.quantity} serial
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
+                    <NumberInput
+                      value={warrantyMonths[index] ?? 1}
+                      onChange={(value) => setWarrantyMonths(prev => ({ ...prev, [index]: Number(value) || 1 }))}
+                      min={1}
+                      className="w-20"
+                    />
+                    <span className="text-xs">tháng (tính từ ngày giao hàng)</span>
+                  </div>
                 </div>
-                <Textarea
-                  placeholder={`Nhập mã serial, ngăn cách bằng dấu phẩy (${item.quantity} serial)`}
-                  rows={2}
-                  value={serialInputs[index] || ''}
-                  onChange={(e) => handleSerialInputChange(index, e.target.value, item.quantity)}
-                />
-                <div className="text-sm mt-1 text-muted-foreground">
-                  {(serialInputs[index] || '').split(',').filter(s => s.trim()).length}/{item.quantity} serial
+              );
+            })}
+            {(() => {
+              const details = selectedSlip?.details || selectedSlip?.items || [];
+              const filledCount = details.filter((item: any, index: number) => {
+                const serials = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+                return serials.length >= item.quantity;
+              }).length;
+              const total = details.length;
+              return (
+                <div className="text-sm font-medium mt-4 pt-2 border-t">
+                  <span className={filledCount === total ? 'text-emerald-600' : 'text-amber-600'}>
+                    Tổng: {filledCount}/{total} sản phẩm đã nhập đủ Serial
+                  </span>
                 </div>
-              </div>
-            ))}
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSerialInputOpen(false)}>Hủy</Button>

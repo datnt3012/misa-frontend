@@ -142,7 +142,7 @@ export function MultiSelect({
                 handleToggle(option.value)
               }}
             >
-              <Checkbox checked={value.includes(option.value) && option.value !== allValue} />
+              <Checkbox checked={currentValueArray.includes(option.value) && option.value !== allValue} />
               <span className="text-sm">{option.label}</span>
             </div>
           ))}
