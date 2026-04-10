@@ -2581,6 +2581,8 @@ function ExportSlipsContent() {
           <div className="space-y-4 max-h-[60vh] overflow-y-auto">
             {(selectedSlip?.details || selectedSlip?.items || []).map((item: any, index) => {
               const existingSerials = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+              const newSerials = (newSerialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+              const allSerials = [...existingSerials, ...newSerials];
               return (
                 <div key={index} className="border rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
@@ -2601,8 +2603,8 @@ function ExportSlipsContent() {
                           type="button"
                           className="hover:bg-blue-200 rounded-full p-0.5"
                           onClick={() => {
-                            const newSerials = existingSerials.filter((_, i) => i !== sidx);
-                            setSerialInputs(prev => ({ ...prev, [index]: newSerials.join(', ') }));
+                            const newSerialsList = existingSerials.filter((_, i) => i !== sidx);
+                            setSerialInputs(prev => ({ ...prev, [index]: newSerialsList.join(', ') }));
                           }}
                         >
                           <X className="w-3 h-3" />
@@ -2619,8 +2621,8 @@ function ExportSlipsContent() {
                           const text = t.value.trim();
                           if (text) {
                             const newSerialsList = text.split(',').map(s => s.trim()).filter(s => s);
-                            const allSerials = [...existingSerials, ...newSerialsList];
-                            setSerialInputs(prev => ({ ...prev, [index]: allSerials.join(', ') }));
+                            const allSerialsList = [...existingSerials, ...newSerialsList];
+                            setSerialInputs(prev => ({ ...prev, [index]: allSerialsList.join(', ') }));
                             setNewSerialInputs(prev => ({ ...prev, [index]: '' }));
                           }
                         }
@@ -2633,13 +2635,13 @@ function ExportSlipsContent() {
                     />
                   </div>
                   <div className="text-sm mt-1">
-                    <span className={existingSerials.length === item.quantity ? 'text-emerald-600' : 'text-rose-500'}>
-                      {existingSerials.length === item.quantity ? (
+                    <span className={allSerials.length === item.quantity ? 'text-emerald-600' : 'text-rose-500'}>
+                      {allSerials.length === item.quantity ? (
                         <CheckCircle className="w-4 h-4 inline mr-2" />
                       ) : (
                         <AlertCircle className="w-4 h-4 inline mr-2" />
                       )}
-                      {existingSerials.length}/{item.quantity} serial
+                      {allSerials.length}/{item.quantity} serial
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
@@ -2658,8 +2660,9 @@ function ExportSlipsContent() {
             {(() => {
               const details = selectedSlip?.details || selectedSlip?.items || [];
               const filledCount = details.filter((item: any, index: number) => {
-                const serials = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
-                return serials.length >= item.quantity;
+                const existing = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+                const newSerials = (newSerialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+                return (existing.length + newSerials.length) >= item.quantity;
               }).length;
               const total = details.length;
               return (

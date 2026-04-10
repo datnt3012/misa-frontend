@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Combobox } from '@/components/ui/combobox';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Trash2, ExternalLink, Loader } from 'lucide-react';
-import { orderApi, type Order } from '@/api/order.api';
+import { Plus, Trash2, ExternalLink, Loader, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { orderApi, type Order, type OrderSerial } from '@/api/order.api';
 import { customerApi, type Customer } from '@/api/customer.api';
 import { warehouseReceiptsApi } from '@/api/warehouseReceipts.api';
 import { warehouseApi, type Warehouse } from '@/api/warehouse.api';
@@ -39,6 +40,8 @@ interface SlipFormItem {
   total_price: number;
   current_stock?: number;
   vat_percentage?: number;
+  serial_manage?: boolean;
+  warranty_months?: number;
 }
 
 interface SlipExpense {
@@ -91,6 +94,9 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState<Order | null>(null);
   const [allocatedQuantityByProduct, setAllocatedQuantityByProduct] = useState<Record<string, number>>({});
+  const [serialNumbers, setSerialNumbers] = useState<Record<number, string[]>>({});
+  const [serialText, setSerialText] = useState<Record<number, string>>({});
+  const [selectedOrderSerials, setSelectedOrderSerials] = useState<Record<number, string[]>>({});
 
   const generateSlipCode = () => {
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -455,12 +461,21 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
       const request: any = {
         warehouseId: selectedWarehouse,
         description: form.notes,
-        details: form.items.map(item => ({
-          productId: item.product_id,
-          quantity: item.quantity,
-          unitPrice: item.unit_price,
-          vatPercentage: item.vat_percentage,
-        })),
+        details: form.items.map((item, index) => {
+          const itemSerials = item.serial_manage ? (serialNumbers[index] || []) : [];
+          const orderSerials = selectedOrderSerials[index] || [];
+          const allSerials = [...orderSerials, ...itemSerials];
+          const existingSerials = selectedOrderForAllocation?.items?.find(i => i.product_id === item.product_id)?.serials || [];
+          const warrantyFromOrder = existingSerials.length > 0 ? existingSerials[0].warrantyMonths : undefined;
+          return {
+            productId: item.product_id,
+            quantity: item.quantity,
+            unitPrice: item.unit_price,
+            vatPercentage: item.vat_percentage,
+            serialNumbers: item.serial_manage && allSerials.length > 0 ? allSerials.join(',') : undefined,
+            warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : (warrantyFromOrder !== undefined ? warrantyFromOrder : 1),
+          };
+        }),
       };
 
       // Add optional fields only if provided
@@ -507,34 +522,43 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
   };
 
   const handleClose = () => {
-    setForm({
-      code: '',
-      order_id: orderId || '',
-      warehouse_id: '',
-      customer_id: '',
-      customer_name: '',
-      customer_phone: '',
-      customer_email: '',
-      contract_code: '',
-      supplier_id: '',
-      supplier_name: '',
-      supplier_contact: '',
-      supplier_email: '',
-      supplier_address: '',
-      notes: '',
-      items: [],
-      expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
-    });
-    setOrder(null);
-    setSelectedOrderForAllocation(null);
-    setSelectedWarehouse('');
-    setAllocatedQuantityByProduct({});
     onOpenChange(false);
+  };
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      setForm({
+        code: '',
+        order_id: orderId || '',
+        warehouse_id: '',
+        customer_id: '',
+        customer_name: '',
+        customer_phone: '',
+        customer_email: '',
+        contract_code: '',
+        supplier_id: '',
+        supplier_name: '',
+        supplier_contact: '',
+        supplier_email: '',
+        supplier_address: '',
+        notes: '',
+        items: [],
+        expenses: [{ name: 'Chi phí vận chuyển', amount: 0, note: '' }]
+      });
+      setOrder(null);
+      setSelectedOrderForAllocation(null);
+      setSelectedWarehouse('');
+      setAllocatedQuantityByProduct({});
+      setSerialNumbers({});
+      setSerialText({});
+      setSelectedOrderSerials({});
+    }
+    onOpenChange(isOpen);
   };
 
   if (initialLoading) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-4xl">
           <div className="flex items-center justify-center py-8">
             <Loader className="w-8 h-8 animate-spin text-primary" />
@@ -546,7 +570,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -877,6 +901,19 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                               </div>
                             )}
                           </div>
+                          {!isImport && item.product_id && (
+                            <div className="space-y-1 flex justify-center mt-2">
+                              <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(item.serial_manage)}
+                                  onChange={(e) => updateItem(index, 'serial_manage', e.target.checked)}
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-blue-600">Quản lý serial</span>
+                              </label>
+                            </div>
+                          )}
                         </TableCell>
                         {!isImport && (<TableCell className="border-r border-slate-100 align-top pt-4 justify-items-center">
                           <div className="space-y-1 flex justify-center">
@@ -920,6 +957,112 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                           </Button>
                         </TableCell>
                       </TableRow>
+                      {!isImport && item.serial_manage && item.product_id && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="p-3 bg-slate-50">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
+                                {item.serial_manage && selectedOrderForAllocation?.items?.find(i => i.product_id === item.product_id)?.serials && (
+                                  <MultiSelect
+                                    options={selectedOrderForAllocation.items.find(i => i.product_id === item.product_id)?.serials?.map(s => ({ value: s.serial_number, label: s.serial_number })) || []}
+                                    value={(selectedOrderSerials[index] || []).join(',')}
+                                    onValueChange={(value) => {
+                                      const newSelected = typeof value === 'string' ? value.split(',').filter(v => v) : value;
+                                      const currentInputText = serialText[index] || '';
+                                      const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
+                                      setSelectedOrderSerials(prev => ({ ...prev, [index]: newSelected }));
+                                      setSerialNumbers(prev => ({ ...prev, [index]: [...newSelected, ...inputSerials] }));
+                                      setSerialText(prev => ({ ...prev, [index]: inputSerials.join(', ') }));
+                                    }}
+                                    placeholder="Chọn serial..."
+                                    className="flex-1 max-w-[400px]"
+                                  />
+                                )}
+                              </div>
+                              <div className="w-full">
+                                <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                                  {(selectedOrderSerials[index] || []).map((serialNum, sidx) => (
+                                    <span key={sidx} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm h-6">
+                                      <span>{serialNum}</span>
+                                      <button
+                                        type="button"
+                                        className="hover:bg-blue-200 rounded-full p-0.5"
+                                        onClick={() => {
+                                          const currentSelected = selectedOrderSerials[index] || [];
+                                          const newSelected = currentSelected.filter(s => s !== serialNum);
+                                          const currentInputText = serialText[index] || '';
+                                          const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
+                                          setSelectedOrderSerials(prev => ({ ...prev, [index]: newSelected }));
+                                          setSerialNumbers(prev => ({ ...prev, [index]: [...newSelected, ...inputSerials] }));
+                                          setSerialText(prev => ({ ...prev, [index]: inputSerials.join(', ') }));
+                                        }}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </span>
+                                  ))}
+                                  <input
+                                    type="text"
+                                    value={serialText[index] ?? ''}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const t = e.currentTarget as HTMLInputElement;
+                                        const text = t.value;
+                                        const cursorPos = t.selectionStart;
+                                        const next = `${text.slice(0, cursorPos)},${text.slice(cursorPos)}`;
+                                        const newText = next.trim();
+                                        setSerialText(prev => ({ ...prev, [index]: newText }));
+                                        const serialList = next.split(',').map(s => s.trim()).filter(s => s);
+                                        const selectedFromOrder = selectedOrderSerials[index] || [];
+                                        const currentSerials = serialNumbers[index] || [];
+                                        const existingManual = currentSerials.filter(s => !selectedFromOrder.includes(s));
+                                        setSerialNumbers(prev => ({ ...prev, [index]: [...selectedFromOrder, ...existingManual, ...serialList] }));
+                                        setTimeout(() => { t.selectionStart = t.selectionEnd = cursorPos + 1; }, 0);
+                                      }
+                                    }}
+                                    onChange={(e) => {
+                                      const text = e.target.value;
+                                      setSerialText(prev => ({ ...prev, [index]: text }));
+                                      const allSerials = text.split(',').map(s => s.trim()).filter(s => s);
+                                      const currentSerials = serialNumbers[index] || [];
+                                      const selectedFromOrder = selectedOrderSerials[index] || [];
+                                      const manualSerials = currentSerials.filter(s => !selectedFromOrder.includes(s));
+                                      setSerialNumbers(prev => ({ 
+                                        ...prev, 
+                                        [index]: [...selectedFromOrder, ...manualSerials, ...allSerials] 
+                                      }));
+                                    }}
+                                    placeholder={(selectedOrderSerials[index] || []).length === 0 ? "Nhập mã serial, ngăn cách bằng dấu phẩy..." : ""}
+                                    className="flex-1 min-w-[100px] outline-none bg-transparent border-none text-sm"
+                                  />
+                                </div>
+                                <div className="text-sm mt-1">
+                                  <span className={((serialNumbers[index] || []).length === item.quantity) ? 'text-emerald-600' : 'text-rose-500'}>
+                                    {((serialNumbers[index] || []).length === item.quantity) ? (
+                                      <CheckCircle className="w-4 h-4 inline mr-2" />
+                                    ) : (
+                                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                                    )}
+                                    {(serialNumbers[index] || []).length}/{item.quantity} Serial
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
+                                  <NumberInput
+                                    value={item.warranty_months ?? 1}
+                                    onChange={(value) => updateItem(index, 'warranty_months', Number(value) || 1)}
+                                    min={1}
+                                    className="w-20"
+                                  />
+                                  <span className="text-xs">tháng (tính từ ngày giao hàng)</span>
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </>
                     ))}
                   </TableBody>
