@@ -36,6 +36,7 @@ const formatDays = (dateString: string | Date) => {
         warrantyEnd.setHours(23, 59, 59, 999);
         
         const now = new Date();
+        now.setHours(0, 0, 0, 0);
         const diff = differenceInDays(warrantyEnd, now);
         
         if (Number.isNaN(diff)) return null;
@@ -50,6 +51,18 @@ const formatDays = (dateString: string | Date) => {
                 expiredDate: format(dt, "yyyy-MM-dd")
             };
         }
+    } catch {
+        return null;
+    }
+};
+
+const calculateWarrantyEndDate = (startDateStr: string | undefined, months: number | undefined): string | null => {
+    if (!startDateStr || !months) return null;
+    try {
+        const startDate = parseISO(startDateStr);
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + months);
+        return endDate.toISOString();
     } catch {
         return null;
     }
@@ -98,11 +111,15 @@ const CreateWarrantyTicketForm: React.FC<CreateWarrantyTicketFormProps> = ({ ope
                 if (typeof s === 'string') {
                     return { serial_number: s };
                 }
+                const serialNumber = s.serial_number || s.serialNumber || s;
+                const warrantyStartDate = s.warrantyStartDate || s.warranty_start_date;
+                const warrantyMonths = s.warrantyMonths ?? s.warranty_months;
+                const warrantyEndDate = s.warrantyEndDate || s.warranty_end_date || calculateWarrantyEndDate(warrantyStartDate, warrantyMonths);
                 return {
-                    serial_number: s.serial_number || s.serialNumber || s,
-                    warrantyMonths: s.warrantyMonths,
-                    warrantyStartDate: s.warrantyStartDate || s.warranty_start_date,
-                    warrantyEndDate: s.warrantyEndDate || s.warranty_end_date,
+                    serial_number: serialNumber,
+                    warrantyMonths: warrantyMonths,
+                    warrantyStartDate: warrantyStartDate,
+                    warrantyEndDate: warrantyEndDate,
                     warrantyActived: s.warrantyActived ?? s.warrantyActive
                 };
             }) : [];
@@ -320,7 +337,7 @@ const CreateWarrantyTicketForm: React.FC<CreateWarrantyTicketFormProps> = ({ ope
                                                                             </Badge>
                                                                         ) : (
                                                                             <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 border-red-200">
-                                                                                Hết hạn từ {warrantyInfo.expiredDate}
+                                                                                Đã hết hạn từ ngày {format(parseISO(warrantyInfo.expiredDate), "dd/MM/yyyy")}
                                                                             </Badge>
                                                                         )
                                                                     ) : (

@@ -1912,13 +1912,11 @@ const OrdersContent: React.FC = () => {
                                 </DropdownMenuItem>
                                 )}
                                 {(() => {
-                                  const hasSerials = order.items?.some((item: any) => 
-                                    Array.isArray(item.serials) && item.serials.length > 0
+                                  const hasManageSerials = order.items?.some((item: any) => 
+                                    item.manageSerials === true
                                   );
-                                  const orderStatus = typeof order.status === 'object' ? order.status?.code : order.status;
-                                  const canCreateWarranty = hasSerials && (orderStatus === 'picked' || orderStatus === 'completed');
                                   
-                                  if (!canCreateWarranty) return null;
+                                  if (!hasManageSerials) return null;
                                   
                                   return (
                                     <DropdownMenuItem 

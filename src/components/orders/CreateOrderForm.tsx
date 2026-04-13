@@ -214,52 +214,57 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         fetchOrderDetails();
       } else if (orderData) {
         // If editing with orderData but no orderId, use orderData directly
-        const orderTypeValue = orderData.type || orderData.order_type || 'sale';
+        // Handle both { data: {...} } and direct data formats
+        const actualOrderData = orderData.data || orderData;
+        const orderTypeValue = actualOrderData.type || actualOrderData.order_type || 'sale';
         setOrderType(orderTypeValue);
-        
+
         // Map order data to form state
         const formData: OrderFormState = {
-          customer_id: orderData.customer_id || orderData.customer?.id || '',
-          customer_name: orderData.customer_name || orderData.customer?.name || '',
-          customer_code: orderData.customer_code || orderData.customer?.code || '',
-          customer_phone: orderData.customer_phone || orderData.customer?.phone || '',
-          customer_email: orderData.customer_email || orderData.customer?.email || '',
+          customer_id: actualOrderData.customer_id || actualOrderData.customer?.id || '',
+          customer_name: actualOrderData.customer_name || actualOrderData.customer?.name || '',
+          customer_code: actualOrderData.customer_code || actualOrderData.customer?.code || '',
+          customer_phone: actualOrderData.customer_phone || actualOrderData.customer?.phone || '',
+          customer_email: actualOrderData.customer_email || actualOrderData.customer?.email || '',
           order_type: orderTypeValue,
-          notes: orderData.notes || orderData.note || '',
-          contract_code: orderData.contract_code || '',
-          purchase_order_number: orderData.purchase_order_number || '',
-          vat_tax_code: orderData.taxCode || '',
-          vat_company_name: orderData.companyName || '',
-          vat_company_address: orderData.companyAddress || '',
-          vat_company_phone: orderData.companyPhone || '',
+          notes: actualOrderData.notes || actualOrderData.note || '',
+          contract_code: actualOrderData.contract_code || '',
+          purchase_order_number: actualOrderData.purchase_order_number || '',
+          vat_tax_code: actualOrderData.taxCode || '',
+          vat_company_name: actualOrderData.companyName || '',
+          vat_company_address: actualOrderData.companyAddress || '',
+          vat_company_phone: actualOrderData.companyPhone || '',
           vat_company_addressInfo: {
             provinceCode: '',
             districtCode: '',
             wardCode: ''
           },
-          vat_invoice_email: orderData.vatEmail || '',
+          vat_invoice_email: actualOrderData.vatEmail || '',
           vat_percentage: undefined,
           vat_total_price: undefined,
-          shipping_recipient_name: orderData.receiverName || '',
-          shipping_recipient_phone: orderData.receiverPhone || '',
-          shipping_address: orderData.receiverAddress || '',
+          shipping_recipient_name: actualOrderData.receiverName || '',
+          shipping_recipient_phone: actualOrderData.receiverPhone || '',
+          shipping_address: actualOrderData.receiverAddress || '',
           shipping_addressInfo: {
-            provinceCode: orderData.addressInfo?.provinceCode || '',
-            districtCode: orderData.addressInfo?.districtCode || '',
-            wardCode: orderData.addressInfo?.wardCode || '',
-            provinceName: orderData.addressInfo?.province?.name || '',
-            districtName: orderData.addressInfo?.district?.name || '',
-            wardName: orderData.addressInfo?.ward?.name || '',
+            provinceCode: actualOrderData.addressInfo?.provinceCode || '',
+            districtCode: actualOrderData.addressInfo?.districtCode || '',
+            wardCode: actualOrderData.addressInfo?.wardCode || '',
+            provinceName: actualOrderData.addressInfo?.province?.name || '',
+            districtName: actualOrderData.addressInfo?.district?.name || '',
+            wardName: actualOrderData.addressInfo?.ward?.name || '',
           },
-          initial_payment: orderData.initial_payment || 0,
-          initial_payment_method: orderData.payment_method || 'cash',
+          initial_payment: actualOrderData.initial_payment || 0,
+          initial_payment_method: actualOrderData.payment_method || 'cash',
           initial_payment_bank: '',
           order_warehouse_id: '',
-          items: (orderData.items || orderData.order_items || []).map((item: any) => ({
+items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).map((item: any) => {
+            console.log('Processing item:', item); // Debug log
+            console.log('manageSerials value:', item.manageSerials); // Debug log
+            const result = {
             id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            product_id: item.product_id || item.productId || '',
-            product_code: item.product_code || item.productCode || '',
-            product_name: item.product_name || item.productName || '',
+            product_id: item.product_id || item.productId || item.product?.id || '',
+            product_code: item.product_code || item.productCode || item.product?.code || '',
+            product_name: item.product_name || item.productName || item.product?.name || '',
             quantity: item.quantity || 1,
             unit_price: item.unit_price || item.unitPrice || 0,
             total_price: item.total_price || (item.quantity * item.unit_price) || 0,
@@ -267,22 +272,25 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             vat_total_price: item.vat_total_price || 0,
             vat_amount: item.vat_amount || 0,
             warehouse_id: '',
-            serial_manage: Array.isArray(item.serials) && item.serials.length > 0,
+            serial_manage: (item.manageSerials ?? false) || (Array.isArray(item.serials) && item.serials.length > 0),
             warranty_months: item.warranty_months ?? item.warrantyMonths ?? 
               (Array.isArray(item.serials) && item.serials.length > 0 
                 ? item.serials[0]?.warrantyMonths ?? item.serials[0]?.warranty_months ?? 1
                 : 1),
-          })),
+            };
+            console.log('Result serial_manage:', result.serial_manage); // Debug log
+            return result;
+          }),
 
 
-          expenses: (orderData.expenses || []).map((exp: any) => ({
+          expenses: (actualOrderData.expenses || []).map((exp: any) => ({
             name: exp.name || '',
             amount: exp.amount || 0,
             note: exp.note || ''
           })),
-          paymentDeadline: orderData.paymentDeadline || ''
+          paymentDeadline: actualOrderData.paymentDeadline || ''
         };
-        
+
         setNewOrder(formData);
         setShippingAddressVersion((v) => v + 1);
         
@@ -336,18 +344,20 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   }, []);
 
   const populateFormWithOrderData = async (orderData: any) => {
-    const orderTypeValue = orderData.type || orderData.order_type || 'sale';
+    // Handle both { data: {...} } and direct data formats
+    const actualOrderData = orderData.data || orderData;
+    const orderTypeValue = actualOrderData.type || actualOrderData.order_type || 'sale';
     setOrderType(orderTypeValue);
     
     // Map products for order items and preserve serial flag from existing data
-    const itemsWithSerialRequired = (orderData.items || orderData.order_items || []).map((item: any) => {
-      const productId = item.product_id || item.productId || '';
+    const itemsWithSerialRequired = (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).map((item: any) => {
+      const productId = item.product_id || item.productId || item.product?.id || '';
       const existingSerials = Array.isArray(item.serials) ? item.serials : [];
-      return {
+      const result = {
         id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         product_id: productId,
-        product_code: item.product_code || item.productCode || '',
-        product_name: item.product_name || item.productName || '',
+        product_code: item.product_code || item.productCode || item.product?.code || '',
+        product_name: item.product_name || item.productName || item.product?.name || '',
         quantity: item.quantity || 1,
         unit_price: item.unit_price || item.unitPrice || 0,
         total_price: item.total_price || (item.quantity * item.unit_price) || 0,
@@ -355,56 +365,57 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_total_price: item.vat_total_price || 0,
         vat_amount: item.vat_amount || 0,
         warehouse_id: '',
-        warranty_months: item.warranty_months ?? item.warrantyMonths ?? (existingSerials.length > 0 ? existingSerials[0]?.warrantyMonths ?? existingSerials[0]?.warranty_months ?? 1 : 1),
-        serial_manage: existingSerials.length > 0,
+        warranty_months: item.warranty_months ?? item.warrantyMonths ?? (existingSerials.length > 0 ? existingSerials[0]?.warrantyMonths ?? existingSerials[0]?.warranty_months ?? 1 : (item.manageSerials ? 1 : 0)),
+        serial_manage: (item.manageSerials ?? false) || (existingSerials.length > 0),
       };
+      return result;
     });
     
     // Map order data to form state
     const formData: OrderFormState = {
-      customer_id: orderData.customer_id || orderData.customer?.id || '',
-      customer_name: orderData.customer_name || orderData.customer?.name || '',
-      customer_code: orderData.customer_code || orderData.customer?.code || '',
-      customer_phone: orderData.customer_phone || orderData.customer?.phone || '',
-      customer_email: orderData.customer_email || orderData.customer?.email || '',
+      customer_id: actualOrderData.customer_id || actualOrderData.customer?.id || '',
+      customer_name: actualOrderData.customer_name || actualOrderData.customer?.name || '',
+      customer_code: actualOrderData.customer_code || actualOrderData.customer?.code || '',
+      customer_phone: actualOrderData.customer_phone || actualOrderData.customer?.phone || '',
+      customer_email: actualOrderData.customer_email || actualOrderData.customer?.email || '',
       order_type: orderTypeValue,
-      notes: orderData.notes || orderData.note || '',
-      contract_code: orderData.contract_code || '',
-      purchase_order_number: orderData.purchase_order_number || '',
-      vat_tax_code: orderData.taxCode || '',
-      vat_company_name: orderData.companyName || '',
-      vat_company_address: orderData.companyAddress || '',
-      vat_company_phone: orderData.companyPhone || '',
+      notes: actualOrderData.notes || actualOrderData.note || '',
+      contract_code: actualOrderData.contract_code || '',
+      purchase_order_number: actualOrderData.purchase_order_number || '',
+      vat_tax_code: actualOrderData.taxCode || '',
+      vat_company_name: actualOrderData.companyName || '',
+      vat_company_address: actualOrderData.companyAddress || '',
+      vat_company_phone: actualOrderData.companyPhone || '',
       vat_company_addressInfo: {
         provinceCode: '',
         districtCode: '',
         wardCode: ''
       },
-      vat_invoice_email: orderData.vatEmail || '',
+      vat_invoice_email: actualOrderData.vatEmail || '',
       vat_percentage: undefined,
       vat_total_price: undefined,
-      shipping_recipient_name: orderData.receiverName || '',
-      shipping_recipient_phone: orderData.receiverPhone || '',
-      shipping_address: orderData.receiverAddress || '',
+      shipping_recipient_name: actualOrderData.receiverName || '',
+      shipping_recipient_phone: actualOrderData.receiverPhone || '',
+      shipping_address: actualOrderData.receiverAddress || '',
       shipping_addressInfo: {
-        provinceCode: orderData.addressInfo?.provinceCode || '',
-        districtCode: orderData.addressInfo?.districtCode || '',
-        wardCode: orderData.addressInfo?.wardCode || '',
-        provinceName: orderData.addressInfo?.province?.name || '',
-        districtName: orderData.addressInfo?.district?.name || '',
-        wardName: orderData.addressInfo?.ward?.name || '',
+        provinceCode: actualOrderData.addressInfo?.provinceCode || '',
+        districtCode: actualOrderData.addressInfo?.districtCode || '',
+        wardCode: actualOrderData.addressInfo?.wardCode || '',
+        provinceName: actualOrderData.addressInfo?.province?.name || '',
+        districtName: actualOrderData.addressInfo?.district?.name || '',
+        wardName: actualOrderData.addressInfo?.ward?.name || '',
       },
-      initial_payment: orderData.initial_payment || 0,
-      initial_payment_method: orderData.payment_method || 'cash',
+      initial_payment: actualOrderData.initial_payment || 0,
+      initial_payment_method: actualOrderData.payment_method || 'cash',
       initial_payment_bank: '',
       order_warehouse_id: '',
       items: itemsWithSerialRequired,
-      expenses: (orderData.expenses || []).map((exp: any) => ({
+      expenses: (actualOrderData.expenses || []).map((exp: any) => ({
         name: exp.name || '',
         amount: exp.amount || 0,
         note: exp.note || ''
       })),
-      paymentDeadline: orderData.paymentDeadline || ''
+      paymentDeadline: actualOrderData.paymentDeadline || ''
     };
     
     setNewOrder(formData);
@@ -412,7 +423,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     
     // Load serial numbers from order items
     const serials: Record<number, string[]> = {};
-    (orderData.items || orderData.order_items || []).forEach((item: any, index: number) => {
+    (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).forEach((item: any, index: number) => {
       if (item.serials && item.serials.length > 0) {
         // Handle both string[] and object[] formats
         serials[index] = item.serials.map((s: any) => {
@@ -423,6 +434,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       }
     });
     setSerialNumbers(serials);
+    setSerialText(Object.fromEntries(Object.entries(serials).map(([k,v]) => [k, v.join(', ')])));
   };
 
   const loadData = async () => {
@@ -515,7 +527,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_amount: 0,
         warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : ""),
         serial_manage: false,
-        warranty_months: 0,
+        warranty_months: 1,
       }]
     }));
   };
@@ -809,18 +821,23 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         paymentDeadline: newOrder.paymentDeadline || undefined,
         // Order details
         details: newOrder.items.map((it, index) => {
-          const currentSerials = serialNumbers[index] || [];
-          let serialsToSend: string[] | undefined;
-          if (it.serial_manage || currentSerials.length > 0) {
-            serialsToSend = currentSerials;
-          }
-
-          return {
+          const baseDetail = {
             productId: it.product_id,
             vatPercentage: it.vat_percentage || 0,
             quantity: it.quantity,
             unitPrice: it.unit_price,
-            ...(serialsToSend !== undefined && { serials: serialsToSend }),
+          };
+
+          // Only include serial-related fields if serial_manage is true
+          if (!it.serial_manage) {
+            return baseDetail;
+          }
+
+          const currentSerials = serialNumbers[index] || [];
+          return {
+            ...baseDetail,
+            manageSerials: true,
+            ...(currentSerials.length > 0 && { serials: currentSerials }),
             ...(it.warranty_months !== undefined && { warrantyMonths: it.warranty_months }),
           };
         }),

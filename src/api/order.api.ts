@@ -20,6 +20,7 @@ export interface OrderItem {
   vat_price?: number;
   serials?: OrderSerial[];
   warranty_months?: number;
+  manageSerials?: boolean;
 }
 
 export interface OrderSerial {
@@ -205,6 +206,7 @@ export interface CreateOrderRequest {
     quantity: number;
     unitPrice: number;
     vatPercentage?: number;
+    manageSerials?: boolean;
     serials?: string[];
     warrantyMonths?: number;
   }[];
@@ -268,6 +270,7 @@ export interface UpdateOrderRequest {
     quantity?: number;
     unitPrice?: number;
     vatPercentage?: number;
+    manageSerials?: boolean;
     serials?: string[];
     warrantyMonths?: number;
   }[];
@@ -312,8 +315,9 @@ export const normalizeOrderItem = (it: any): OrderItem => {
     serials: normalizedSerials,
     warranty_months: it.warranty_months ?? it.warrantyMonths ?? 
       (Array.isArray(it.serials) && it.serials.length > 0 
-        ? it.serials[0]?.warrantyMonths ?? it.serials[0]?.warranty_months ?? 0
-        : 0),
+        ? it.serials[0]?.warrantyMonths ?? it.serials[0]?.warranty_months ?? undefined
+        : undefined),
+    manageSerials: it.manageSerials ?? false,
   };
 };
 
