@@ -75,7 +75,7 @@ export const warehouseReceiptStatusLogSchema = yup.object().shape({
  */
 export type WarehouseReceiptStatusLog = yup.InferType<typeof warehouseReceiptStatusLogSchema> & {
     id: string; // UUID - auto-generated
-    performedAt: Date; // auto-generated
+    performedAt: string; // auto-generated
 };
 
 /**

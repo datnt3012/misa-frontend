@@ -3,8 +3,7 @@ import * as yup from 'yup';
 import { warehouseReceiptStatusLogSchema } from './status-log.schema';
 
 export const inventoryLogFilter = paginationSchema.concat(
-    warehouseReceiptStatusLogSchema
-        .omit(['receiptType', 'warehouseId']).required()
+    warehouseReceiptStatusLogSchema.required()
 );
 
 export type InventoryLogFilterSchemaType = yup.InferType<typeof inventoryLogFilter>;
