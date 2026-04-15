@@ -97,7 +97,7 @@ export function DataTable<T extends { id: string }>({
                                     <TableHead
                                         key={String(col.key)}
                                         className={cn(
-                                            "h-10 px-3 text-sm text-left font-semibold uppercase tracking-wider text-muted-foreground/70 whitespace-nowrap",
+                                            "h-10 px-3 text-sm text-left font-semibold tracking-wider text-muted-foreground/70 whitespace-nowrap",
                                             col.className
                                         )}
                                     >

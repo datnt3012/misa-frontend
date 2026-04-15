@@ -5,20 +5,21 @@ import { TrendingDown, TrendingUp, History, ArrowRight } from "lucide-react";
 import ExportSlips from "@/pages/ExportSlips";
 import ImportSlips from "@/pages/ImportSlips";
 import MovingSlips from "@/components/inventory/MovingSlips";
-import InventoryHistory from "@/components/inventory/InventoryHistory";
+// import InventoryHistory from "@/components/inventory/InventoryHistory";
 import { useToast } from "@/hooks/use-toast";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { usePermissions } from "@/hooks/usePermissions";
+import { InventoryHistory } from "@/features/inventory/components/InventoryHistory";
 
 const ExportImportContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
   // Initialize tab from URL or default to 'exports'
   const getTabFromUrl = () => {
     const tab = searchParams.get('tab');
     return tab && ['exports', 'imports', 'moving', 'history'].includes(tab) ? tab : 'exports';
   };
-  
+
   const [activeTab, setActiveTab] = useState(() => getTabFromUrl());
   const { hasPermission } = usePermissions();
 
@@ -95,7 +96,7 @@ const ExportImportContent = () => {
 
           {/* History Tab */}
           <TabsContent value="history" className="space-y-6">
-            <PermissionGuard 
+            <PermissionGuard
               requiredPermissions={['WAREHOUSE_RECEIPTS_VIEW']}
               requireAll={false}
             >
