@@ -30,6 +30,7 @@ export const warehouseReceiptStatusLogSchema = yup.object().shape({
         .required('Action is required'),
 
     performedBy: yup.string().required('Performed By is required'),
+    performedByName: yup.string().required('Performed By Name is required'),
 
     // Optional Fields
     receiptCode: yup

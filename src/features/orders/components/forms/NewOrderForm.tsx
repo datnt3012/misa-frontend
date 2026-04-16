@@ -93,6 +93,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
 
   const onSubmit = async (data: CreateOrderSchemaType) => {
     const clean = sanitizeData(data);
+    console.log("clean", clean);
     try {
       let resolvedCustomerId = clean.customerId;
       if (clean.customerId === "__new__") {
@@ -101,15 +102,18 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
             name: clean.customer.name,
             phoneNumber: clean.customer.phoneNumber,
             email: clean.customer.email || null,
-            address: clean.customer.address || null,
+            address: clean.receiverAddress || null,
             addressInfo: clean.addressInfo || null,
           };
           const customer = await createCustomerMutation.mutateAsync(payload) as BackendResponse<CustomerSchemaType>;
           resolvedCustomerId = customer.data.id;
         } else {
           const supplier = await createSupplierMutation.mutateAsync({
-            ...clean.customer,
-            addressInfo: clean.addressInfo,
+            name: clean.customer.name,
+            phoneNumber: clean.customer.phoneNumber,
+            email: clean.customer.email || null,
+            address: clean.receiverAddress || null,
+            addressInfo: clean.addressInfo || null,
           }) as BackendResponse<SupplierSchemaType>;
           resolvedCustomerId = supplier.data.id;
         }
@@ -133,7 +137,8 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
       <FormProvider {...methods}>
         <form
           noValidate
-          onSubmit={handleSubmit(onSubmit, () => {
+          onSubmit={handleSubmit(onSubmit, (errors) => {
+            console.log("errors", errors);
             toast({ title: "Lỗi xác thực", description: "Vui lòng kiểm tra lại các trường bắt buộc.", variant: "destructive" });
           })}
           className="animate-in fade-in duration-500 space-y-6"

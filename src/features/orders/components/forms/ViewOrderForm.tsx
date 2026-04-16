@@ -337,7 +337,8 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                         className="w-full text-sm h-9 justify-start font-medium"
                                         onClick={() => setShowSlipDialog(true)}
                                     >
-                                        <FileText className="w-3.5 h-3.5 mr-2 text-slate-400" /> Tạo phiếu xuất kho
+                                        <FileText className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                                        {isPurchase ? "Tạo phiếu nhập kho" : "Tạo phiếu xuất kho"}
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -498,16 +499,33 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                 </div>
             </div>
 
-            <SlipCreatingDialog
-                open={showSlipDialog}
-                onOpenChange={setShowSlipDialog}
-                slipType="export"
-                orderId={orderId}
-                onSlipCreated={() => {
-                    setShowSlipDialog(false);
-                    invalidateData();
-                }}
-            />
+            {/* Order type = purchase => show export slip dialog */}
+            {orderDetails.type === "purchase" && (
+                <SlipCreatingDialog
+                    open={showSlipDialog}
+                    onOpenChange={setShowSlipDialog}
+                    slipType="import"
+                    orderId={orderId}
+                    onSlipCreated={() => {
+                        setShowSlipDialog(false);
+                        invalidateData();
+                    }}
+                />
+            )}
+
+            {/* Order type = export => show import slip dialog */}
+            {orderDetails.type === "sale" && (
+                <SlipCreatingDialog
+                    open={showSlipDialog}
+                    onOpenChange={setShowSlipDialog}
+                    slipType="export"
+                    orderId={orderId}
+                    onSlipCreated={() => {
+                        setShowSlipDialog(false);
+                        invalidateData();
+                    }}
+                />
+            )}
 
             <PaymentDialog
                 open={showPaymentDialog}
