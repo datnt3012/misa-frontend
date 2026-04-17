@@ -96,4 +96,24 @@ export const WarehouseReceiptTypeClassName = {
     [WarehouseReceiptType.PURCHASE_RETURN_NOTE]: 'border-purple-500 text-purple-500 bg-purple-500/10',
 } as const;
 
+export const WarehouseReceiptTypeQuantityClassName = {
+    [WarehouseReceiptType.IMPORT]: 'text-green-500',
+    [WarehouseReceiptType.EXPORT]: 'text-red-500',
+    [WarehouseReceiptType.MOVING]: 'text-yellow-500',
+    [WarehouseReceiptType.STOCK_TRANSFER_OUT]: 'text-yellow-500',
+    [WarehouseReceiptType.STOCK_TRANSFER_IN]: 'text-yellow-500',
+    [WarehouseReceiptType.SALE_RETURN_NOTE]: 'text-blue-500',
+    [WarehouseReceiptType.PURCHASE_RETURN_NOTE]: 'text-purple-500',
+} as const;
+
+export const WarehouseReceiptTypeSign = {
+    [WarehouseReceiptType.IMPORT]: '+',
+    [WarehouseReceiptType.EXPORT]: '-',
+    [WarehouseReceiptType.MOVING]: '↔',
+    [WarehouseReceiptType.STOCK_TRANSFER_OUT]: '↔',
+    [WarehouseReceiptType.STOCK_TRANSFER_IN]: '↔',
+    [WarehouseReceiptType.SALE_RETURN_NOTE]: '+',
+    [WarehouseReceiptType.PURCHASE_RETURN_NOTE]: '-',
+} as const;
+
 export type WarehouseReceiptTypeType = (typeof WarehouseReceiptType)[keyof typeof WarehouseReceiptType];
