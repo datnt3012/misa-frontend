@@ -1,7 +1,12 @@
-import { InventoryLogFilterSchemaType } from "./schemas";
+import { InventoryLogFilterSchemaType, WarehouseReceiptFilterSchemaType } from "./schemas";
 
 export const INVENTORY_LOG_QUERY_KEY = {
     list: (params: Partial<InventoryLogFilterSchemaType>) => ['inventory-logs', 'list', params] as const,
+} as const;
+
+export const WAREHOUSE_RECEIPT_QUERY_KEY = {
+    list: (params: Partial<WarehouseReceiptFilterSchemaType>) => ['warehouse-receipts', 'list', params] as const,
+    byOrderId: (orderId: string) => ['warehouse-receipts', 'by-order-id', orderId] as const,
 } as const;
 
 /**
