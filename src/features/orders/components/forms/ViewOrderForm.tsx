@@ -1,8 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, CreditCard, FileText, Package, Pencil, Plus } from "lucide-react";
-import { useState } from "react";
+import { Building2, Copy, CreditCard, FileText, MapPin, Package, Pencil, Plus, Truck, Warehouse } from "lucide-react";
+import { useEffect, useState } from "react";
 import { formatCurrency } from "../../utils/formatters";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -26,6 +26,8 @@ import { useNavigate } from "react-router-dom";
 import { OrderFormHeader } from "./shared/OrderFormHeader";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
+import { useWareHouseReceiptByOrderIdQuery, useWareHouseReceiptQuery } from "@/features/inventory/hooks/useWareHouseReceiptQuery";
+import { ReceiptStatusClassName, ReceiptStatusLabel } from "@/features/inventory/constants";
 
 interface ViewFormProps {
     orderId: string;
@@ -45,6 +47,7 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
     const { toast } = useToast();
     const [showSlipDialog, setShowSlipDialog] = useState(false);
     const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+    const { data: warehouseReceipts } = useWareHouseReceiptByOrderIdQuery(orderId);
 
     const isPurchase = orderDetails?.type === ORDER_TYPES[1];
 
@@ -291,6 +294,88 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                 </Table>
                             </CardContent>
                         </Card>
+
+                        {/* Import Export Warehouse History */}
+                        <Card className="shadow-premium border-none">
+                            <CardHeader className="p-4 pb-2">
+                                <CardTitle className="text-sm font-bold flex items-center gap-2 tracking-wider text-slate-500">
+                                    <Warehouse className="w-4 h-4" />
+                                    {isPurchase ? "Lịch sử nhập kho" : "Lịch sử xuất kho"} <span className="text-xs text-slate-400">({warehouseReceipts?.data.count || 0} phiếu)</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0 space-y-4">
+                                {!warehouseReceipts?.data.count || warehouseReceipts.data.count === 0 ? (
+                                    <div className="text-center py-8 text-slate-400 text-sm italic border-t border-slate-100">
+                                        Chưa có lịch sử {isPurchase ? "nhập" : "xuất"} kho cho đơn hàng này.
+                                    </div>
+                                ) : (
+                                    warehouseReceipts.data.rows.map((receipt) => (
+                                        <div key={receipt.id} className="space-y-4 border-t border-slate-200 first:border-t-0 pt-4 first:pt-0">
+                                            <div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Label className="text-sm text-slate-900 font-bold">{receipt.code}</Label>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={ReceiptStatusClassName[receipt.status as keyof typeof ReceiptStatusClassName] || ""}
+                                                        >
+                                                            {ReceiptStatusLabel[receipt.status as keyof typeof ReceiptStatusLabel] || receipt.status}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-sm text-slate-500">
+                                                        {formatDateTime(receipt.createdAt)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                <div>
+                                                    <Label className="text-xs text-slate-500 flex items-center gap-2">
+                                                        <Warehouse className="w-4 h-4" /> {isPurchase ? "Kho nhập" : "Kho xuất"}
+                                                    </Label>
+                                                    <p className="text-sm font-bold text-slate-900 pl-6 pt-1">
+                                                        {receipt.warehouse?.name || "N/A"}
+                                                    </p>
+                                                </div>
+                                                <div className="col-span-1 md:col-span-1 lg:col-span-2">
+                                                    <Label className="text-xs text-slate-500 flex items-center gap-2">
+                                                        <MapPin className="w-4 h-4" /> {isPurchase ? "Địa chỉ kho" : "Giao đến"}
+                                                    </Label>
+                                                    <p className="text-sm font-medium text-slate-700 pl-6 pt-1">
+                                                        {isPurchase ? receipt.warehouse?.address : (orderDetails.receiverAddress || "N/A")}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="rounded-md border border-slate-100 overflow-hidden">
+                                                <Table>
+                                                    <TableHeader className="bg-slate-50/50">
+                                                        <TableRow className="h-9 divide-x divide-slate-200">
+                                                            <TableHead className="text-xs font-bold uppercase tracking-wider">SKU</TableHead>
+                                                            <TableHead className="text-xs font-bold uppercase tracking-wider">Sản phẩm</TableHead>
+                                                            <TableHead className="text-xs font-bold uppercase tracking-wider text-center w-20">SL</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {receipt.details?.map((detail: any) => (
+                                                            <TableRow key={detail.id} className="h-9 hover:bg-slate-50/30 divide-x divide-slate-100">
+                                                                <TableCell className="py-2 text-sm font-mono text-slate-500">
+                                                                    {detail.product?.code || "N/A"}
+                                                                </TableCell>
+                                                                <TableCell className="py-2 text-sm font-medium text-slate-700">
+                                                                    {detail.product?.name || "N/A"}
+                                                                </TableCell>
+                                                                <TableCell className="py-2 text-sm text-center font-bold text-slate-900">
+                                                                    {detail.quantity}
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* Sidebar */}
@@ -337,7 +422,8 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                         className="w-full text-sm h-9 justify-start font-medium"
                                         onClick={() => setShowSlipDialog(true)}
                                     >
-                                        <FileText className="w-3.5 h-3.5 mr-2 text-slate-400" /> Tạo phiếu xuất kho
+                                        <FileText className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                                        {isPurchase ? "Tạo phiếu nhập kho" : "Tạo phiếu xuất kho"}
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -498,16 +584,33 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                 </div>
             </div>
 
-            <SlipCreatingDialog
-                open={showSlipDialog}
-                onOpenChange={setShowSlipDialog}
-                slipType="export"
-                orderId={orderId}
-                onSlipCreated={() => {
-                    setShowSlipDialog(false);
-                    invalidateData();
-                }}
-            />
+            {/* Order type = purchase => show export slip dialog */}
+            {orderDetails.type === "purchase" && (
+                <SlipCreatingDialog
+                    open={showSlipDialog}
+                    onOpenChange={setShowSlipDialog}
+                    slipType="import"
+                    orderId={orderId}
+                    onSlipCreated={() => {
+                        setShowSlipDialog(false);
+                        invalidateData();
+                    }}
+                />
+            )}
+
+            {/* Order type = export => show import slip dialog */}
+            {orderDetails.type === "sale" && (
+                <SlipCreatingDialog
+                    open={showSlipDialog}
+                    onOpenChange={setShowSlipDialog}
+                    slipType="export"
+                    orderId={orderId}
+                    onSlipCreated={() => {
+                        setShowSlipDialog(false);
+                        invalidateData();
+                    }}
+                />
+            )}
 
             <PaymentDialog
                 open={showPaymentDialog}

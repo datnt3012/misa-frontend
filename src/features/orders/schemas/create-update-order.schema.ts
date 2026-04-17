@@ -93,6 +93,7 @@ export const CreateOrderSchema = yup.object()
             then: (s) => s.required('Địa chỉ người nhận không được để trống'),
             otherwise: (s) => s.nullable().optional(),
         }),
+
         addressInfo: yup.object({
             provinceCode: yup.number().nullable().optional(),
             wardCode: yup.number().nullable().optional(),

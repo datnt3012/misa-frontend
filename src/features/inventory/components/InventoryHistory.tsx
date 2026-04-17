@@ -6,11 +6,11 @@ import { WarehouseReceiptStatusLog as InvTransLog } from "../schemas/status-log.
 import { Badge } from "@/components/ui/badge";
 import { PaginationBar } from "@/shared/components/Pagination";
 import { CircleArrowDown, CircleArrowUp } from "lucide-react";
-import { format } from "date-fns";
-import { ReceiptStatusLabel, ReceiptStatusClassName, WarehouseReceiptTypeLabel, WarehouseReceiptTypeClassName, ReceiptStatus, WarehouseReceiptType } from "../constants";
+import { ReceiptStatusLabel, ReceiptStatusClassName, WarehouseReceiptTypeLabel, WarehouseReceiptTypeClassName, ReceiptStatus, WarehouseReceiptType, WarehouseReceiptTypeSign, WarehouseReceiptTypeQuantityClassName } from "../constants";
 import { Input } from "@/components/ui/input";
 import { Autocomplete } from "@/shared/components/autocomplete";
 import { useWarehouseList } from "@/features/warehouses";
+
 
 const filterDefault = {
     page: 1,
@@ -24,7 +24,6 @@ export const InventoryHistory = () => {
     const { data, isLoading, error } = useStatusLogsQuery(filter);
     const { data: warehouse, isLoading: isLoadingWarehouse, error: warehouseError } = useWarehouseList({ page: 1, limit: 1000 });
     const logRecords = data?.data.rows || [];
-    const { page, limit, count, totalPage } = data?.data || {};
     const warehouseOptions = useMemo(() => {
         if (isLoadingWarehouse) return [];
         return warehouse?.data.rows.map((item) => ({
@@ -84,9 +83,13 @@ export const InventoryHistory = () => {
             key: 'quantity',
             label: 'Số lượng',
             align: 'text-right',
-            render: (record: InvTransLog) => (
-                <span className="block">{record.quantity}</span>
-            ),
+            render: (record: InvTransLog) => {
+                const quantity = `${WarehouseReceiptTypeSign[record.receiptType]} ${record.quantity}`;
+                const className = WarehouseReceiptTypeQuantityClassName[record.receiptType];
+                return (
+                    <span className={`block ${className}`}>{quantity}</span>
+                )
+            },
         },
         {
             key: 'warehouse',
@@ -105,7 +108,7 @@ export const InventoryHistory = () => {
             align: 'text-left',
             render: (record: InvTransLog) => (
                 <span className="block">
-                    {/* {record.performedBy} */}
+                    {record.performedByName}
                 </span>
             ),
         },
@@ -133,9 +136,20 @@ export const InventoryHistory = () => {
             key: 'performedAt',
             label: 'Thời gian',
             align: 'text-left',
-            render: (record: InvTransLog) => (
-                <span className="block">{format(record.performedAt, 'dd/MM/yyyy HH:mm:ss')}</span>
-            ),
+            render: (record: InvTransLog) => {
+                const formatDate = (date: string) => {
+                    return new Date(date).toLocaleString("vi-VN", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                    });
+                };
+                return (
+                    <span className="block">{formatDate(record.performedAt)}</span>
+                )
+            }
         },
         {
             key: 'note',
@@ -207,7 +221,7 @@ export const InventoryHistory = () => {
                     <table className="w-full border-collapse text-sm">
                         <thead className="sticky top-0 z-10 bg-slate-50 shadow-[inset_0_-1px_0_0_#e2e8f0]">
                             <tr className="h-14 text-slate-600">
-                                {/* <th className="border-r border-gray-200 px-4 py-2 last:border-r-0 font-semibold text-left text-[13px] whitespace-nowrap"></th> */}
+                                <th className="border-r border-gray-200 px-4 py-2 last:border-r-0 font-semibold text-left text-[13px] whitespace-nowrap"></th>
                                 {columns.map((column) => (
                                     <th key={column.key} className="border-r border-gray-200 px-4 py-2 last:border-r-0 font-semibold text-left text-[13px] whitespace-nowrap">{column.label}</th>
                                 ))}
@@ -216,9 +230,9 @@ export const InventoryHistory = () => {
                         <tbody>
                             {logRecords.map((record, index) => (
                                 <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                                    {/* <td className="text-center border-r border-b border-gray-200 px-4 py-3 last:border-r-0 text-sm">
-                                        {index + 1}
-                                    </td> */}
+                                    <td className="text-center border-r border-b border-gray-200 px-4 py-3 last:border-r-0 text-sm">
+                                        {((filter.page - 1) * filter.limit) + index + 1}
+                                    </td>
                                     {columns.map((column) => (
                                         <td key={column.key} className={`${column.align} ${column.width} border-r border-b border-gray-200 px-4 py-3 last:border-r-0 text-sm`}>{column.render(record)}</td>
                                     ))}

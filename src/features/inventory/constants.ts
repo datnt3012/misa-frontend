@@ -1,7 +1,12 @@
-import { InventoryLogFilterSchemaType } from "./schemas";
+import { InventoryLogFilterSchemaType, WarehouseReceiptFilterSchemaType } from "./schemas";
 
 export const INVENTORY_LOG_QUERY_KEY = {
     list: (params: Partial<InventoryLogFilterSchemaType>) => ['inventory-logs', 'list', params] as const,
+} as const;
+
+export const WAREHOUSE_RECEIPT_QUERY_KEY = {
+    list: (params: Partial<WarehouseReceiptFilterSchemaType>) => ['warehouse-receipts', 'list', params] as const,
+    byOrderId: (orderId: string) => ['warehouse-receipts', 'by-order-id', orderId] as const,
 } as const;
 
 /**
@@ -89,6 +94,26 @@ export const WarehouseReceiptTypeClassName = {
     [WarehouseReceiptType.STOCK_TRANSFER_IN]: 'border-yellow-500 text-yellow-500 bg-yellow-500/10',
     [WarehouseReceiptType.SALE_RETURN_NOTE]: 'border-blue-500 text-blue-500 bg-blue-500/10',
     [WarehouseReceiptType.PURCHASE_RETURN_NOTE]: 'border-purple-500 text-purple-500 bg-purple-500/10',
+} as const;
+
+export const WarehouseReceiptTypeQuantityClassName = {
+    [WarehouseReceiptType.IMPORT]: 'text-green-500',
+    [WarehouseReceiptType.EXPORT]: 'text-red-500',
+    [WarehouseReceiptType.MOVING]: 'text-yellow-500',
+    [WarehouseReceiptType.STOCK_TRANSFER_OUT]: 'text-yellow-500',
+    [WarehouseReceiptType.STOCK_TRANSFER_IN]: 'text-yellow-500',
+    [WarehouseReceiptType.SALE_RETURN_NOTE]: 'text-blue-500',
+    [WarehouseReceiptType.PURCHASE_RETURN_NOTE]: 'text-purple-500',
+} as const;
+
+export const WarehouseReceiptTypeSign = {
+    [WarehouseReceiptType.IMPORT]: '+',
+    [WarehouseReceiptType.EXPORT]: '-',
+    [WarehouseReceiptType.MOVING]: '↔',
+    [WarehouseReceiptType.STOCK_TRANSFER_OUT]: '↔',
+    [WarehouseReceiptType.STOCK_TRANSFER_IN]: '↔',
+    [WarehouseReceiptType.SALE_RETURN_NOTE]: '+',
+    [WarehouseReceiptType.PURCHASE_RETURN_NOTE]: '-',
 } as const;
 
 export type WarehouseReceiptTypeType = (typeof WarehouseReceiptType)[keyof typeof WarehouseReceiptType];
