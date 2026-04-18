@@ -26,6 +26,7 @@ import "./utils/test-fallback"; // Auto-test fallback system
 import { Ordersv1 } from "./pages/app/Ordersv1";
 import { OrderFormPage } from "./features/orders/pages";
 import { ProductsPage } from "./pages/app/ProductsPage";
+import Warranty from "./pages/Warranty";
 
 const queryClient = new QueryClient();
 
@@ -165,6 +166,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Layout><ExportImport /></Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/warranty"
+                element={
+                  <ProtectedRoute>
+                    <Layout><Warranty /></Layout>
                   </ProtectedRoute>
                 }
               />

@@ -317,7 +317,7 @@ export const normalizeOrderItem = (it: any): OrderItem => {
       (Array.isArray(it.serials) && it.serials.length > 0 
         ? it.serials[0]?.warrantyMonths ?? it.serials[0]?.warranty_months ?? undefined
         : undefined),
-    manageSerials: it.manageSerials ?? false,
+    manageSerials: it.product?.manageSerials ?? it.manageSerials ?? false,
   };
 };
 
@@ -497,6 +497,7 @@ export const orderApi = {
     manufacturers?: string | string[];
     bank?: string;
     type?: 'sale' | 'purchase';
+    serialManage?: boolean;
     includeAllocationStatus?: boolean;
   }): Promise<{
     orders: Order[]; 
@@ -577,6 +578,7 @@ export const orderApi = {
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
     if (params?.bank) queryParams.append('bank', params.bank);
     if (params?.type) queryParams.append('type', params.type);
+    if (params?.serialManage) queryParams.append('serialManage', 'true');
     if (params?.includeAllocationStatus) queryParams.append('includeAllocationStatus', 'true');
 
     const url = queryParams.toString() 

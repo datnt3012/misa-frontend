@@ -138,6 +138,17 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
     }
   }, [orderId, open]);
 
+  // Fetch stock level when warehouse changes (for all products with product_id)
+  useEffect(() => {
+    if (selectedWarehouse && form.items.length > 0) {
+      form.items.forEach((item, index) => {
+        if (item.product_id) {
+          fetchStockLevel(index, item.product_id, selectedWarehouse);
+        }
+      });
+    }
+  }, [selectedWarehouse]);
+
   const loadInitialData = async () => {
     setInitialLoading(true);
     try {
@@ -465,6 +476,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
           const itemSerials = item.serial_manage ? (serialNumbers[index] || []) : [];
           const orderSerials = selectedOrderSerials[index] || [];
           const allSerials = [...orderSerials, ...itemSerials];
+          const hasSerials = allSerials.length > 0;
           const existingSerials = selectedOrderForAllocation?.items?.find(i => i.product_id === item.product_id)?.serials || [];
           const warrantyFromOrder = existingSerials.length > 0 ? existingSerials[0].warrantyMonths : undefined;
           return {
@@ -472,8 +484,8 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
             quantity: item.quantity,
             unitPrice: item.unit_price,
             vatPercentage: item.vat_percentage,
-            serialNumbers: item.serial_manage && allSerials.length > 0 ? allSerials.join(',') : undefined,
-            warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : (warrantyFromOrder !== undefined ? warrantyFromOrder : 1),
+            serialNumbers: item.serial_manage && hasSerials ? allSerials.join(',') : undefined,
+            ...(hasSerials && { warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : (warrantyFromOrder !== undefined ? warrantyFromOrder : 1) }),
           };
         }),
       };
@@ -1025,13 +1037,20 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                                     onChange={(e) => {
                                       const text = e.target.value;
                                       setSerialText(prev => ({ ...prev, [index]: text }));
-                                      const allSerials = text.split(',').map(s => s.trim()).filter(s => s);
-                                      const currentSerials = serialNumbers[index] || [];
                                       const selectedFromOrder = selectedOrderSerials[index] || [];
-                                      const manualSerials = currentSerials.filter(s => !selectedFromOrder.includes(s));
+                                      
+                                      // When text is empty/cleared, use only order serials (reset manual)
+                                      // Otherwise, combine order serials with newly entered serials
+                                      const newSerials = text.trim() 
+                                        ? text.split(',').map(s => s.trim()).filter(s => s)
+                                        : [];
+                                      const newSerialList = newSerials.length > 0 
+                                        ? [...selectedFromOrder, ...newSerials]
+                                        : selectedFromOrder;
+                                      
                                       setSerialNumbers(prev => ({ 
                                         ...prev, 
-                                        [index]: [...selectedFromOrder, ...manualSerials, ...allSerials] 
+                                        [index]: newSerialList
                                       }));
                                     }}
                                     placeholder={(selectedOrderSerials[index] || []).length === 0 ? "Nhập mã serial, ngăn cách bằng dấu phẩy..." : ""}

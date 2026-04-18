@@ -2181,10 +2181,6 @@ const OrdersContent: React.FC = () => {
           fetchOrders();
           setShowWarrantyDialog(false);
           setSelectedOrderForWarranty(null);
-          toast({
-            title: "Thành công",
-            description: "Đã tạo phiếu bảo hành cho đơn hàng." 
-          });
         }}
         orderId={selectedOrderForWarranty?.id}
         orderData={selectedOrderForWarranty}

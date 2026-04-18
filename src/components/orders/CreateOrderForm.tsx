@@ -258,8 +258,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           initial_payment_bank: '',
           order_warehouse_id: '',
 items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).map((item: any) => {
-            console.log('Processing item:', item); // Debug log
-            console.log('manageSerials value:', item.manageSerials); // Debug log
             const result = {
             id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             product_id: item.product_id || item.productId || item.product?.id || '',
@@ -278,7 +276,6 @@ items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.
                 ? item.serials[0]?.warrantyMonths ?? item.serials[0]?.warranty_months ?? 1
                 : 1),
             };
-            console.log('Result serial_manage:', result.serial_manage); // Debug log
             return result;
           }),
 
@@ -838,7 +835,7 @@ items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.
             ...baseDetail,
             manageSerials: true,
             ...(currentSerials.length > 0 && { serials: currentSerials }),
-            ...(it.warranty_months !== undefined && { warrantyMonths: it.warranty_months }),
+            ...(currentSerials.length > 0 && it.warranty_months !== undefined && { warrantyMonths: it.warranty_months }),
           };
         }),
         // Additional expenses
@@ -1311,15 +1308,13 @@ items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {newOrder.items.map((item, index) => (
-                      <>
+{newOrder.items.map((item, index) => (
+                      <React.Fragment key={item.id}>
                         <TableRow
-                          key={item.id}
                           className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                         >
                         <TableCell className="border-r border-slate-100 align-top pt-4 max-w-[300px]">
                           <Combobox
-                            key={`product-select-${item.id}`}
                             options={products
                               .filter(product => {
                                 // Loại bỏ sản phẩm đã được chọn trong các item khác
@@ -1477,7 +1472,7 @@ items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
