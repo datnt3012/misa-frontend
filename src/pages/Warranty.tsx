@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Filter, MoreHorizontal, Eye, Edit, Trash2, RotateCw, Loader, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Search, Filter, MoreHorizontal, Eye, Edit, Trash2, RotateCw, Loader, ChevronDown, ChevronUp, Plus, Printer } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { warrantyTicketApi } from "@/api/warrantyTicket.api";
@@ -657,7 +657,32 @@ const fetchTickets = useCallback(async () => {
                   ) : (
                     tickets.map((ticket) => {
                       const canProcessWarranty = hasPermission('WARRANTY_TICKETS_MANAGE') || user?.id === ticket.personInCharge?.id;
-                      return (
+    const handleExportTicket = async (ticketId: string, ticketCode?: string) => {
+      try {
+        const blob = await warrantyTicketApi.exportWarrantyTicket(ticketId);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `phieu-bao-hanh-${ticketCode || ticketId}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast({
+          title: "Thành công",
+          description: "Đã tải file xuống",
+        });
+      } catch (error: any) {
+        console.error("Error exporting ticket:", error);
+        toast({
+          title: "Lỗi",
+          description: error.response?.data?.message || error.message || "Không thể xuất file",
+          variant: "destructive",
+        });
+      }
+    };
+
+   return (
                       <TableRow key={ticket.id}>
                         <TableCell className="font-medium text-center min-w-[120px]">
                           <div className="truncate" title={ticket.code || ticket.id}>
@@ -785,10 +810,10 @@ const fetchTickets = useCallback(async () => {
                                 <Edit className="mr-2 h-4 w-4" />
                                 Đổi người phụ trách
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Edit className="mr-2 h-4 w-4" />
-                                In phiếu
-                              </DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleExportTicket(ticket.id, ticket.code)}>
+                                 <Printer className="mr-2 h-4 w-4" />
+                                 In phiếu
+                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={(e) => handleConfirmDelete(ticket, e)}
                                 className="text-red-600"

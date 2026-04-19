@@ -1,3 +1,4 @@
+import apiClient from '@/lib/api';
 import { api } from '@/lib/api';
 
 export const warrantyTicketApi = {
@@ -52,16 +53,23 @@ export const warrantyTicketApi = {
     return response;
   },
 
-  processWarranty: async (id: string, data: {
-    detail: {
-      detailId: string;
-      serialNumber?: string;
-      processStatus: string;
-      note?: string;
-    }[];
-    note?: string;
-  }) => {
-    const response = await api.post(`/warranty-tickets/${id}/process`, data);
-    return response;
-  },
-};
+   processWarranty: async (id: string, data: {
+     detail: {
+       detailId: string;
+       serialNumber?: string;
+       processStatus: string;
+       note?: string;
+     }[];
+     note?: string;
+   }) => {
+     const response = await api.post(`/warranty-tickets/${id}/process`, data);
+     return response;
+   },
+
+   exportWarrantyTicket: async (id: string, format: string = 'xlsx') => {
+     const response = await apiClient.get(`/warranty-tickets/${id}/export?format=${format}`, {
+       responseType: 'blob',
+     });
+     return response.data;
+   },
+ };

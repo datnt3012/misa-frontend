@@ -144,9 +144,31 @@ export const WarrantyTicketDetailDialog: React.FC<WarrantyTicketDetailDialogProp
     return WARRANTY_STATUS_NAMES[statusKey as keyof typeof WARRANTY_STATUS_NAMES] || status || "Không xác định";
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+   const handlePrint = async () => {
+     if (!ticketDetail?.id) return;
+     try {
+       const blob = await warrantyTicketApi.exportWarrantyTicket(ticketDetail.id);
+       const url = window.URL.createObjectURL(blob);
+       const link = document.createElement('a');
+       link.href = url;
+       link.download = `phieu-bao-hanh-${ticketDetail.code || ticketDetail.id}.xlsx`;
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+       window.URL.revokeObjectURL(url);
+       toast({
+         title: "Thành công",
+         description: "Đã tải file xuống",
+       });
+     } catch (error: any) {
+       console.error("Error exporting ticket:", error);
+       toast({
+         title: "Lỗi",
+         description: error.response?.data?.message || error.message || "Không thể xuất file",
+         variant: "destructive",
+       });
+     }
+   };
 
   if (!ticketDetail) return null;
 
@@ -192,18 +214,16 @@ export const WarrantyTicketDetailDialog: React.FC<WarrantyTicketDetailDialogProp
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {ticketDetail.status !== 'completed' && ticketDetail.status !== 'cancelled' && (
-                  <Button variant="outline" onClick={() => setShowProcessDialog(true)}>
-                    <FileEdit className="h-4 w-4 mr-2" />
-                    Xử lý bảo hành
-                  </Button>
-                )}
-                <Button variant="outline" onClick={handlePrint}>
-                  <Printer className="h-4 w-4 mr-2" />
-                  In phiếu
-                </Button>
-              </div>
+               <div className="flex items-center gap-2">
+                 <Button variant="outline" onClick={() => setShowProcessDialog(true)}>
+                   <FileEdit className="h-4 w-4 mr-2" />
+                   Xử lý bảo hành
+                 </Button>
+                 <Button variant="outline" onClick={handlePrint}>
+                   <Printer className="h-4 w-4 mr-2" />
+                   In phiếu
+                 </Button>
+               </div>
             </div>
 
             {/* Info Cards */}
