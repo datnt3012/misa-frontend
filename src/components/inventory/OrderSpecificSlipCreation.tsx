@@ -859,34 +859,41 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                 <TableRow>
                                   <TableCell colSpan={4} className="p-3 bg-slate-50">
                                     <div className="space-y-2">
-                                      {selectedOrderItem?.serials && selectedOrderItem.serials.length > 0 && (
-                                        <div className="flex items-center gap-2">
-                                          <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
-                                          <MultiSelect
-                                          options={selectedOrderItem.serials.map(s => ({ value: s.serial_number, label: s.serial_number }))}
-                                          value={(selectedOrderSerials[slip.id]?.[itemIndex] || []).join(',')}
-                                          onValueChange={(value) => {
-                                            const newSelected = typeof value === 'string' ? value.split(',').filter(v => v) : value;
-                                            const currentInputText = serialText[slip.id]?.[itemIndex] || '';
-                                            const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
-                                            setSelectedOrderSerials(prev => ({
-                                              ...prev,
-                                              [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: newSelected }
-                                            }));
-                                            setSerialNumbers(prev => ({
-                                              ...prev,
-                                              [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...newSelected, ...inputSerials] }
-                                            }));
-                                            setSerialText(prev => ({
-                                              ...prev,
-                                              [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: inputSerials.join(', ') }
-                                            }));
-                                          }}
-                                          placeholder="Chọn serial..."
-                                          className="flex-1 max-w-[400px]"
-                                        />
-                                      </div>
-                                      )}
+{selectedOrderItem?.serials && selectedOrderItem.serials.length > 0 && (() => {
+                                        const selectedSerials = selectedOrderSerials[slip.id]?.[itemIndex] || [];
+                                        const currentInputText = serialText[slip.id]?.[itemIndex] || '';
+                                        const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
+                                        const allSelectedSet = new Set([...selectedSerials, ...inputSerials].map(s => s.toLowerCase()));
+                                        const availableSerials = selectedOrderItem.serials
+                                          .filter(s => !allSelectedSet.has(s.serial_number.toLowerCase()))
+                                          .map(s => ({ value: s.serial_number, label: s.serial_number }));
+                                        return availableSerials.length > 0 ? (
+                                          <div className="flex items-center gap-2">
+                                            <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
+                                            <Combobox
+                                              options={availableSerials}
+                                              value=""
+                                              onValueChange={(value) => {
+                                                if (value) {
+                                                  const newSelected = [...selectedSerials, value];
+                                                  setSelectedOrderSerials(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: newSelected }
+                                                  }));
+                                                  setSerialNumbers(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...newSelected, ...inputSerials] }
+                                                  }));
+                                                }
+                                              }}
+                                              placeholder="Tìm và chọn serial..."
+                                              searchPlaceholder="Tìm serial..."
+                                              emptyMessage="Không tìm thấy serial"
+                                              className="flex-1 max-w-[400px]"
+                                            />
+                                          </div>
+                                        ) : null;
+                                      })()}
                                       <div className="w-full">
                                         <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                                           {(selectedOrderSerials[slip.id]?.[itemIndex] || []).map((serialNum, sidx) => (

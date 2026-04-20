@@ -459,6 +459,17 @@ const normalize = (row: any): WarehouseReceipt => ({
           total_price: Number(oi.total_price ?? oi.totalPrice ?? oi.quantity * (oi.unit_price ?? oi.unitPrice ?? 0)),
         }))
       : undefined,
+    // Include order details with serials from backend response
+    details: Array.isArray(row.order.details)
+      ? row.order.details.map((oi: any) => ({
+          id: oi.id,
+          productId: oi.productId ?? oi.product?.id,
+          product: oi.product,
+          quantity: Number(oi.quantity ?? 0),
+          unitPrice: Number(oi.unit_price ?? oi.unitPrice ?? 0),
+          serials: oi.serials,
+        }))
+      : undefined,
   } : undefined,
 });
 
