@@ -32,8 +32,8 @@ export interface PaginatedResponse<T> extends PaginationMeta {
 
 // Dạng response backend trả về { rows, count, page, limit }
 export interface BackendPaginatedResponse<T> {
-  code: number;
   message: string;
+  code: number;
   data: {
     rows: T[];
     count: number;

@@ -12,14 +12,6 @@ export type FilterOrderFieldConfig = GenericFormFieldConfig<OrderFilterSchemaTyp
 
 export const filterOrderConfig: FilterOrderFieldConfig[] = [
     {
-        label: "Tìm kiếm",
-        name: "keyword",
-        type: "text",
-        placeholder: "Tìm kiếm...",
-        colSpan: 3,
-        colSpanMd: 3,
-    },
-    {
         label: "Người tạo",
         name: "createdBy",
         type: "autocomplete",
@@ -36,8 +28,8 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
             };
         },
         multiple: true,
-        colSpan: 3,
-        colSpanMd: 3,
+        colSpan: 6,
+        colSpanMd: 6,
     },
     {
         label: "Trạng thái",
@@ -46,48 +38,10 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
         placeholder: "Tất cả",
         multiple: true,
         options: ORDER_STATUSES.map((status) => ({ value: status, label: status })),
-        colSpan: 3,
-        colSpanMd: 3,
-    },
-    // {
-    //     label: "Loại đơn hàng",
-    //     name: "type",
-    //     type: "select",
-    //     placeholder: "Tất cả",
-    //     options: [
-    //         { value: "sale", label: "Bán hàng" },
-    //         { value: "return", label: "Trả hàng" },
-    //         { value: "purchase", label: "Mua hàng" },
-    //     ],
-    //     colSpan: 1,
-    // },
-    {
-        label: "Ngày tạo",
-        name: "startDate",
-        type: "dateRange",
-        minField: "startDate",
-        maxField: "endDate",
         colSpan: 6,
         colSpanMd: 6,
     },
-    {
-        label: "Khoảng giá",
-        name: "minTotalAmount",
-        type: "numberRange",
-        minField: "minTotalAmount",
-        maxField: "maxTotalAmount",
-        colSpan: 6,
-        colSpanMd: 6,
-    },
-    {
-        label: "Ngày hoàn thành",
-        name: "completedStartDate",
-        type: "dateRange",
-        minField: "completedStartDate",
-        maxField: "completedEndDate",
-        colSpan: 6,
-        colSpanMd: 6,
-    },
+
     {
         label: "Phương thức thanh toán",
         name: "paymentMethods",
@@ -123,7 +77,7 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
         colSpanMd: 6,
     },
     {
-        label: "Dòng sản phẩm/Danh mục",
+        label: "Hãng sản xuất",
         name: "categories",
         type: "autocomplete",
         placeholder: "Tất cả",
@@ -139,6 +93,33 @@ export const filterOrderConfig: FilterOrderFieldConfig[] = [
                 isFetching,
             };
         },
+        colSpan: 6,
+        colSpanMd: 6,
+    },
+    {
+        label: "Ngày tạo",
+        name: "startDate",
+        type: "dateRange",
+        minField: "startDate",
+        maxField: "endDate",
+        colSpan: 6,
+        colSpanMd: 6,
+    },
+    {
+        label: "Khoảng giá",
+        name: "minTotalAmount",
+        type: "numberRange",
+        minField: "minTotalAmount",
+        maxField: "maxTotalAmount",
+        colSpan: 6,
+        colSpanMd: 6,
+    },
+    {
+        label: "Ngày hoàn thành",
+        name: "completedStartDate",
+        type: "dateRange",
+        minField: "completedStartDate",
+        maxField: "completedEndDate",
         colSpan: 6,
         colSpanMd: 6,
     },
@@ -326,3 +307,25 @@ export const receiverFields: GenericFormFieldConfig<CreateOrderSchemaType>[] = [
     },
     { name: "receiverAddress", label: "Địa chỉ chi tiết giao hàng", type: "textarea", placeholder: "Nhập địa chỉ chi tiết giao hàng", required: true, colSpan: 12 },
 ];
+
+// Order table column metadata
+export const ORDER_TABLE_COLUMN_METADATA = {
+  orderCode: { key: 'orderCode', label: 'Mã đơn hàng', grouped: true, width: 230 },
+  contractCode: { key: 'contractCode', label: 'Mã số hợp đồng', grouped: true, width: 140 },
+  partner: { key: 'partner', grouped: true, width: 220 },
+  product: { key: 'product', label: 'Sản phẩm', grouped: false, width: 250 },
+  category: { key: 'category', label: 'Hãng sản xuất', grouped: false, width: 200 },
+  unitPrice: { key: 'unitPrice', label: 'Đơn giá', grouped: false, width: 130, type: 'number' as const },
+  quantity: { key: 'quantity', label: 'Số lượng', grouped: false, width: 100, type: 'number' as const },
+  vat: { key: 'vat', label: 'Thuế suất', grouped: false, width: 100, type: 'number' as const },
+  expenses: { key: 'expenses', label: 'Chi phí', grouped: true, width: 130, type: 'number' as const },
+  totalOrderValueExcludingVAT: { key: 'totalOrderValueExcludingVAT', label: 'Tổng giá trị chưa có thuế GTGT', grouped: true, width: 150, type: 'number' as const },
+  totalVatValue: { key: 'totalVatValue', label: 'Tổng tiền thuế GTGT', grouped: true, width: 120, type: 'number' as const },
+  totalOrderValue: { key: 'totalOrderValue', label: 'Tổng giá trị có thuế GTGT', grouped: true, width: 150, type: 'number' as const },
+  paid: { key: 'paid', label: 'Thanh toán', grouped: true, width: 160, type: 'number' as const },
+  status: { key: 'status', label: 'Trạng thái', width: 160, grouped: true },
+  completedAt: { key: 'completedAt', label: 'Ngày hoàn thành', grouped: true, width: 140 },
+  creator: { key: 'creator', label: 'Người tạo đơn', grouped: true, width: 150 },
+  note: { key: 'note', label: 'Ghi chú', width: 300, cellClassName: 'relative p-0 h-16', grouped: true },
+  actions: { key: 'actions', label: 'Thao tác', width: 60, grouped: true },
+} as const;

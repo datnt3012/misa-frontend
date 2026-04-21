@@ -118,7 +118,8 @@ export const API = {
       EXPORT_ASYNC: '/warehouse-receipts/import/export/async',
       STATUS: '/warehouse-receipts/import/status',
       JOB_STATUS: (jobId: string) => `/warehouse-receipts/import/status/${jobId}`,
-    }
+    },
+    STATUS_LOGS: '/warehouse-receipts-status-logs',
   },
   PAYMENTS: {
     ROOT: '/payments',
