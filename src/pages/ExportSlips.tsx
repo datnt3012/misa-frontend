@@ -38,6 +38,12 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { SlipCreatingDialog } from '@/components/inventory/SlipCreatingDialog';
 import { SlipDetailDialog } from '@/components/inventory/SlipDetailDialog';
 
+type OrderSerialItem = {
+  id?: string;
+  serialNumber: string;
+  exported?: boolean;
+};
+
 function ExportSlipsContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,7 +131,7 @@ function ExportSlipsContent() {
   const [newSerialInputs, setNewSerialInputs] = useState<Record<number, string>>({});
   const [warrantyMonths, setWarrantyMonths] = useState<Record<number, number>>({});
   const [savingSerials, setSavingSerials] = useState(false);
-  const [orderSerials, setOrderSerials] = useState<Record<number, string[]>>({});
+  const [orderSerials, setOrderSerials] = useState<Record<number, OrderSerialItem[]>>({});
   const [selectedOrderSerials, setSelectedOrderSerials] = useState<Record<number, string[]>>({});
 
   const [serialWarningOpen, setSerialWarningOpen] = useState(false);
@@ -606,14 +612,14 @@ function ExportSlipsContent() {
       
       const existingSerials: Record<number, string> = {};
       const existingWarranty: Record<number, number> = {};
-      const loadedOrderSerials: Record<number, string[]> = {};
+      const loadedOrderSerials: Record<number, OrderSerialItem[]> = {};
       const details = receipt.details || receipt.items || [];
       const orderDetails = receipt.order?.details || [];
       
       details.forEach((item: any, index: number) => {
         const productCode = item.product?.code;
         const productId = item.product?.id;
-        let foundOrderSerials: string[] = [];
+        let foundOrderSerials: OrderSerialItem[] = [];
         
         for (const od of orderDetails) {
           if (!od.serials || !Array.isArray(od.serials) || od.serials.length === 0) continue;
@@ -625,8 +631,12 @@ function ExportSlipsContent() {
           
           if (isMatch) {
             foundOrderSerials = od.serials
-              .map((s: any) => s.serial_number || s.serialNumber || s.serial)
-              .filter((s: string) => s);
+              .map((s: any) => ({
+                id: s.id,
+                serialNumber: s.serial_number || s.serialNumber || s.serial || '',
+                exported: s.exported,
+              }))
+              .filter((s: OrderSerialItem) => s.serialNumber);
             break;
           }
         }
@@ -2658,7 +2668,7 @@ function ExportSlipsContent() {
                                   setSelectedSlip(fullReceipt);
                                   const existingSerials: Record<number, string> = {};
                                   const existingWarranty: Record<number, number> = {};
-                                  const loadedOrderSerials: Record<number, string[]> = {};
+                                  const loadedOrderSerials: Record<number, OrderSerialItem[]> = {};
                                   const details = fullReceipt.details || fullReceipt.items || [];
                                   const orderDetails = fullReceipt.order?.details || [];
                                   
@@ -2666,7 +2676,7 @@ function ExportSlipsContent() {
                                     // Load order serials from order.details for dropdown selection
                                     const productCode = item.product?.code;
                                     const productId = item.product?.id;
-                                    let foundOrderSerials: string[] = [];
+                                    let foundOrderSerials: OrderSerialItem[] = [];
                                     
                                     // Find matching order detail
                                     for (const od of orderDetails) {
@@ -2685,8 +2695,12 @@ function ExportSlipsContent() {
                                       
                                       if (isMatch) {
                                         foundOrderSerials = od.serials
-                                          .map((s: any) => s.serial_number || s.serialNumber || s.serial)
-                                          .filter((s: string) => s);
+                                          .map((s: any) => ({
+                                            id: s.id,
+                                            serialNumber: s.serial_number || s.serialNumber || s.serial || '',
+                                            exported: s.exported,
+                                          }))
+                                          .filter((s: { serialNumber: string }) => s.serialNumber);
                                         break;
                                       }
                                     }
@@ -2904,7 +2918,7 @@ function ExportSlipsContent() {
               const selectedOrderItemSerials = selectedOrderSerials[index] || [];
               const allSerials = [...existingSerials, ...selectedOrderItemSerials, ...newSerials];
               const allSerialsSet = new Set(allSerials.map(s => s.toLowerCase()));
-              const availableOrderSerials = (orderSerials[index] || []).filter(s => !allSerialsSet.has(s.toLowerCase()));
+              const availableOrderSerials = (orderSerials[index] || []).filter(s => !allSerialsSet.has(s.serialNumber.toLowerCase()));
               return (
                 <div key={index} className="border rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
@@ -2920,7 +2934,12 @@ function ExportSlipsContent() {
                     <div className="mb-3">
                       <Label className="font-medium text-sm text-muted-foreground mb-1 block">Chọn serial từ đơn hàng:</Label>
                       <Combobox
-                        options={availableOrderSerials.map(s => ({ value: s, label: s }))}
+                        options={availableOrderSerials.map(s => ({ 
+                          value: s.serialNumber, 
+                          label: s.serialNumber,
+                          disabled: !!s.exported,
+                          badge: s.exported ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Đã xuất</span> : undefined,
+                        }))}
                         value=""
                         onValueChange={(value) => {
                           if (value) {

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/popover"
 
 interface ComboboxProps {
-  options: { label: string; value: string; badge?: React.ReactNode }[]
+  options: { label: string; value: string; badge?: React.ReactNode; disabled?: boolean }[]
   value?: string | string[]
   onValueChange?: (value: string | string[]) => void
   placeholder?: string
@@ -134,14 +134,19 @@ export function Combobox({
           <CommandList onWheel={(e) => e.stopPropagation()}>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {options.map((option) => (
+              {options.map((option, index) => (
                 <CommandItem
-                  key={option.value}
+                  key={`${option.value}-${index}`}
                   value={`${option.label} ${option.value}`}
                   onSelect={() => {
+                    if (option.disabled) return
                     handleSelect(option.value)
                   }}
-                  className="flex items-start justify-between gap-2"
+                  disabled={option.disabled}
+                  className={cn(
+                    "flex items-start justify-between gap-2",
+                    option.disabled && "opacity-50 cursor-not-allowed"
+                  )}
                 >
                   <div className="flex items-start">
                     <Check
@@ -150,7 +155,7 @@ export function Combobox({
                         isSelected(option.value) ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="whitespace-normal">{option.label}</span>
+                    <span className={cn("whitespace-normal", option.disabled && "text-muted-foreground line-through")}>{option.label}</span>
                   </div>
                   {option.badge && <span className="shrink-0">{option.badge}</span>}
                 </CommandItem>

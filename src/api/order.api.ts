@@ -24,10 +24,12 @@ export interface OrderItem {
 }
 
 export interface OrderSerial {
+  id?: string;
   serial_number: string;
   warrantyMonths?: number;
   warrantyStartDate?: string;
   warrantyEndDate?: string;
+  exported?: boolean;
 }
 
 export interface OrderAllocation {
@@ -288,11 +290,13 @@ export interface CreateOrderItemRequest {
 export const normalizeOrderItem = (it: any): OrderItem => {
   // Normalize serials to ensure warranty dates are mapped correctly
   const normalizedSerials = Array.isArray(it.serials) ? it.serials.map((s: any) => ({
+    id: s.id,
     serial_number: s.serial_number ?? s.serialNumber ?? s.serial ?? '',
     warrantyMonths: s.warrantyMonths ?? s.warranty_months,
     warrantyStartDate: s.warrantyStartDate ?? s.warranty_start_date ?? s.warrantyStart,
     warrantyEndDate: s.warrantyEndDate ?? s.warranty_end_date ?? s.warrantyEnd,
     warrantyActived: s.warrantyActived ?? s.warrantyActive ?? s.warranty_actived,
+    exported: s.exported,
   })) : undefined;
 
   return {

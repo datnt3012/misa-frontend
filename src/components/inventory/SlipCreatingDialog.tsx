@@ -174,13 +174,11 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
     }
   };
 
-  const loadOrder = async (id: string) => {
+const loadOrder = async (id: string) => {
     try {
-      const orderData = await orderApi.getOrder(id, { includeDeleted: true });
-      setOrder(orderData);
+      const orderData = await orderApi.getOrder(id, { includeDeleted: true, includeAllocationStatus: true });
+      setSelectedOrderForAllocation(orderData);
       
-      // For import orders (purchase), populate supplier fields
-      // For export orders (sale), populate customer fields
       if (isImport) {
         setForm(prev => ({
           ...prev,
@@ -203,8 +201,15 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
         }));
       }
 
-      // Load allocated quantities
-      await loadAllocatedQuantities(id);
+      if (orderData.allocationStatus?.allocations) {
+        const quantities: Record<string, number> = {};
+        orderData.allocationStatus.allocations.forEach(allocation => {
+          quantities[allocation.productId] = allocation.allocatedQuantity;
+        });
+        setAllocatedQuantityByProduct(quantities);
+      } else {
+        await loadAllocatedQuantities(id);
+      }
     } catch (error) {
       console.error('Error loading order:', error);
     }
@@ -269,6 +274,11 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
 
     const selectedOrder = orders.find(o => o.id === value);
     if (selectedOrder) {
+      setForm(prev => ({
+        ...prev,
+        items: []
+      }));
+      setAllocatedQuantityByProduct({});
       await loadOrder(value);
       setSelectedOrderForAllocation(selectedOrder);
     }
@@ -333,6 +343,15 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
           items[index].unit_price = product.price || product.costPrice || 0;
           items[index].vat_percentage = 10;
         }
+        
+        // Auto-check serial_manage if product in order has serial management
+        if (selectedOrderForAllocation && value) {
+          const orderItem = selectedOrderForAllocation.items?.find(i => i.product_id === value);
+          if (orderItem?.manageSerials || orderItem?.serial_manage) {
+            items[index].serial_manage = true;
+          }
+        }
+        
         // Fetch stock level when product changes
         if (value && selectedWarehouse) {
           fetchStockLevel(index, value, selectedWarehouse);
@@ -485,6 +504,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
             unitPrice: item.unit_price,
             vatPercentage: item.vat_percentage,
             serialNumbers: item.serial_manage && hasSerials ? allSerials.join(',') : undefined,
+            manageSerials: item.serial_manage || false,
             ...(hasSerials && { warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : (warrantyFromOrder !== undefined ? warrantyFromOrder : 1) }),
           };
         }),
@@ -572,6 +592,10 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{isImport ? 'Tạo phiếu nhập kho mới' : 'Tạo phiếu xuất kho mới'}</DialogTitle>
+            <DialogDescription>Đang tải dữ liệu...</DialogDescription>
+          </DialogHeader>
           <div className="flex items-center justify-center py-8">
             <Loader className="w-8 h-8 animate-spin text-primary" />
             <span className="ml-2">Đang tải...</span>
@@ -875,9 +899,8 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                   </TableHeader>
                   <TableBody>
                     {form.items.map((item, index) => (
-                      <>
+                      <React.Fragment key={item.product_id || `item-${index}`}>
                       <TableRow
-                        key={index}
                         className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
                       >
                         <TableCell className="border-r border-slate-100 align-top pt-4">
@@ -975,22 +998,39 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                             <div className="space-y-2">
                               <div className="flex items-center gap-2">
                                 <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
-                                {item.serial_manage && selectedOrderForAllocation?.items?.find(i => i.product_id === item.product_id)?.serials && (
-                                  <MultiSelect
-                                    options={selectedOrderForAllocation.items.find(i => i.product_id === item.product_id)?.serials?.map(s => ({ value: s.serial_number, label: s.serial_number })) || []}
-                                    value={(selectedOrderSerials[index] || []).join(',')}
-                                    onValueChange={(value) => {
-                                      const newSelected = typeof value === 'string' ? value.split(',').filter(v => v) : value;
-                                      const currentInputText = serialText[index] || '';
-                                      const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
-                                      setSelectedOrderSerials(prev => ({ ...prev, [index]: newSelected }));
-                                      setSerialNumbers(prev => ({ ...prev, [index]: [...newSelected, ...inputSerials] }));
-                                      setSerialText(prev => ({ ...prev, [index]: inputSerials.join(', ') }));
-                                    }}
-                                    placeholder="Chọn serial..."
-                                    className="flex-1 max-w-[400px]"
-                                  />
-                                )}
+                                {item.serial_manage && selectedOrderForAllocation?.items?.find(i => i.product_id === item.product_id)?.serials && (() => {
+                                  const orderItemSerials = selectedOrderForAllocation.items.find(i => i.product_id === item.product_id)?.serials || [];
+                                  const selectedSerials = selectedOrderSerials[index] || [];
+                                  const currentInputText = serialText[index] || '';
+                                  const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
+                                  const allSelectedSet = new Set([...selectedSerials, ...inputSerials].map(s => s.toLowerCase()));
+                                  console.log(orderItemSerials);
+                                  const availableSerials = orderItemSerials
+                                    .filter(s => !allSelectedSet.has(s.serial_number.toLowerCase()))
+                                    .map(s => ({ 
+                                      value: s.serial_number, 
+                                      label: s.serial_number,
+                                      disabled: !!s.exported,
+                                      badge: s.exported ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Đã xuất</span> : undefined,
+                                    }));
+                                  return availableSerials.length > 0 ? (
+                                    <Combobox
+                                      options={availableSerials}
+                                      value=""
+                                      onValueChange={(value) => {
+                                        if (value) {
+                                          const newSelected = [...selectedSerials, value];
+                                          setSelectedOrderSerials(prev => ({ ...prev, [index]: newSelected }));
+                                          setSerialNumbers(prev => ({ ...prev, [index]: [...newSelected, ...inputSerials] }));
+                                        }
+                                      }}
+                                      placeholder="Tìm và chọn serial..."
+                                      searchPlaceholder="Tìm serial..."
+                                      emptyMessage="Không tìm thấy serial"
+                                      className="flex-1 max-w-[400px]"
+                                    />
+                                  ) : null;
+                                })()}
                               </div>
                               <div className="w-full">
                                 <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
@@ -1082,7 +1122,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>

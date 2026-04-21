@@ -866,7 +866,12 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                         const allSelectedSet = new Set([...selectedSerials, ...inputSerials].map(s => s.toLowerCase()));
                                         const availableSerials = selectedOrderItem.serials
                                           .filter(s => !allSelectedSet.has(s.serial_number.toLowerCase()))
-                                          .map(s => ({ value: s.serial_number, label: s.serial_number }));
+                                          .map(s => ({ 
+                                            value: s.serial_number, 
+                                            label: s.serial_number,
+                                            disabled: !!s.exported,
+                                            badge: s.exported ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Đã xuất</span> : undefined,
+                                          }));
                                         return availableSerials.length > 0 ? (
                                           <div className="flex items-center gap-2">
                                             <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
