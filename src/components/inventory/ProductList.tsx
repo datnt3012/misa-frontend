@@ -582,6 +582,10 @@ const ProductList: React.FC<ProductListProps> = ({
       if (updatingProduct.barcode && updatingProduct.barcode.trim()) {
         productData.barcode = updatingProduct.barcode.trim();
       }
+      // If addOld mode, pass parentProductId
+      if (productDialogMode === 'addOld' && updatingProduct.id) {
+        productData.parentProductId = updatingProduct.id;
+      }
       const response = await productApi.createProduct(productData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
       loadProducts();
@@ -589,7 +593,7 @@ const ProductList: React.FC<ProductListProps> = ({
         onProductsUpdate();
       }
       // Close dialog and clear form
-      setUpdatingProduct(newProductRequest);
+setUpdatingProduct({...newProductRequest});
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
@@ -1387,7 +1391,8 @@ const ProductList: React.FC<ProductListProps> = ({
                         const originalProductData = { 
                           ...updatingProduct, 
                           name: updatingProduct?.name?.replace('-USED', ''),
-                          code: updatingProduct?.code?.replace('-USED', '')
+                          code: updatingProduct?.code?.replace('-USED', ''),
+                          barcode: updatingProduct._originalBarcode || updatingProduct.barcode
                         };
                         setUpdatingProduct(originalProductData);
                         setProductDialogMode('edit');
@@ -1395,7 +1400,9 @@ const ProductList: React.FC<ProductListProps> = ({
                         const newProductData = { 
                           ...updatingProduct, 
                           name: `${updatingProduct?.name}-USED`,
-                          code: `${updatingProduct?.code}-USED` 
+                          code: `${updatingProduct?.code}-USED`,
+                          _originalBarcode: updatingProduct.barcode,
+                          barcode: ''
                         };
                         setUpdatingProduct(newProductData);
                         setProductDialogMode('addOld');
@@ -1425,8 +1432,8 @@ const ProductList: React.FC<ProductListProps> = ({
                   disabled={isUpdatingProduct}
                 >
                   {isUpdatingProduct 
-                      ? (productDialogMode === 'add' ? 'Đang thêm...' : 'Đang cập nhật...') 
-                      : (productDialogMode === 'add' ? 'Thêm sản phẩm' : 'Cập nhật')}
+                      ? (productDialogMode === 'add' || productDialogMode === 'addOld' ? 'Đang thêm...' : 'Đang cập nhật...') 
+                      : (productDialogMode === 'add' || productDialogMode === 'addOld' ? 'Thêm sản phẩm' : 'Cập nhật')}
                 </Button>
               </DialogFooter>
             </DialogContent>
