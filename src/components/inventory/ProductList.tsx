@@ -24,6 +24,8 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { el, se } from "date-fns/locale";
+import { set } from "date-fns";
 
 interface ProductListProps {
   warehouses: any[];
@@ -46,6 +48,22 @@ interface ProductListProps {
     totalPages: number;
   } | null;
 }
+
+const newProductRequest = {
+  name: '',
+  code: '',
+  category: '',
+  costPrice: 0,
+  price: 0,
+  unit: 'cái',
+  barcode: '',
+  lowStockThreshold: 0,
+  manufacturer: '',
+  description: '',
+  isForeignCurrency: false,
+  exchangeRate: 1
+}
+
 const IMPORT_STATUS_LABELS: Record<string, string> = {
   queued: 'Đang chờ xử lý',
   processing: 'Đang xử lý',
@@ -99,31 +117,18 @@ const ProductList: React.FC<ProductListProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
-  const [categoryComboOpen, setCategoryComboOpen] = useState(false);
-  const [editCategoryComboOpen, setEditCategoryComboOpen] = useState(false);
-  const [categorySearchTerm, setCategorySearchTerm] = useState('');
-  const [editCategorySearchTerm, setEditCategorySearchTerm] = useState('');
-  const [newProduct, setNewProduct] = useState({
-    name: '',
-    code: '',
-    category: '',
-    costPrice: 0,
-    price: 0,
-    unit: 'cái',
-    barcode: '',
-    lowStockThreshold: 0,
-    manufacturer: '',
-    description: '',
-    isForeignCurrency: false,
-    exchangeRate: 1
-  });
-  const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [isAddingProduct, setIsAddingProduct] = useState(false);
-  const [isEditingProduct, setIsEditingProduct] = useState(false);
-  const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
-  const [isEditProductDialogOpen, setIsEditProductDialogOpen] = useState(false);
+  const [updatingProduct, setUpdatingProduct] = useState<any>(null);
+  const [isUpdatingProduct, setIsUpdatingProduct] = useState(false);
+  const [productDialogMode, setProductDialogMode] = useState<'add' | 'edit' | 'addOld'>('add');
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const handleProductDialogClose = (open: boolean) => {
+    if (!open) {
+      setUpdatingProduct({...newProductRequest});
+      setProductDialogMode('add');
+    }
+    setIsProductDialogOpen(open);
+  };
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -184,6 +189,7 @@ const ProductList: React.FC<ProductListProps> = ({
   // Load products when pagination or filters change
   React.useEffect(() => {
     loadProducts();
+    setUpdatingProduct(newProductRequest);
   }, [loadProducts]);
 
   // Use ref to store onProductsUpdate to prevent infinite loop when parent re-renders
@@ -257,25 +263,7 @@ const ProductList: React.FC<ProductListProps> = ({
     },
     [findCategoryByValue]
   );
-  // Update form data when editing product changes
-  React.useEffect(() => {
-    if (editingProduct) {
-      setNewProduct({
-        name: editingProduct.name,
-        code: editingProduct.code,
-        category: findCategoryByValue(editingProduct.category)?.id || editingProduct.category || '',
-        costPrice: editingProduct.originalCostPrice || 0,
-        price: editingProduct.price || 0,
-        unit: editingProduct.unit || 'cái',
-        barcode: editingProduct.barcode || '',
-        lowStockThreshold: editingProduct.lowStockThreshold || 0,
-        manufacturer: editingProduct.manufacturer || '',
-        description: editingProduct.description || '',
-        isForeignCurrency: Boolean(editingProduct.isForeignCurrency),
-        exchangeRate: editingProduct.exchangeRate || 1
-      });
-    }
-  }, [editingProduct, findCategoryByValue]);
+
   // Products are already filtered by API, no need for additional filtering
   const filteredProducts = products;
   // Load categories from categories API
@@ -293,41 +281,7 @@ const ProductList: React.FC<ProductListProps> = ({
   React.useEffect(() => {
     loadCategories();
   }, [loadCategories]);
-  React.useEffect(() => {
-    if (categoryComboOpen) {
-      setCategorySearchTerm('');
-      if (!categories.length) {
-        loadCategories();
-      }
-    }
-  }, [categoryComboOpen]);
-  React.useEffect(() => {
-    if (editCategoryComboOpen) {
-      setEditCategorySearchTerm('');
-      if (!categories.length) {
-        loadCategories();
-      }
-    }
-  }, [editCategoryComboOpen]);
-  // Reset form when add dialog opens
-  React.useEffect(() => {
-    if (isAddProductDialogOpen) {
-      setNewProduct({
-        name: '',
-        code: '',
-        category: '',
-        costPrice: 0,
-        price: 0,
-        unit: 'cái',
-        barcode: '',
-        lowStockThreshold: 0,
-        manufacturer: '',
-        description: '',
-        isForeignCurrency: false,
-        exchangeRate: 1
-      });
-    }
-  }, [isAddProductDialogOpen]);
+
   const ensureCategoryId = React.useCallback(async (categoryValue?: string | null) => {
     if (!categoryValue) return null;
     const trimmed = typeof categoryValue === "string" ? categoryValue.trim() : categoryValue;
@@ -550,6 +504,7 @@ const ProductList: React.FC<ProductListProps> = ({
       return null;
     });
   };
+
   // Get sort icon
   const getSortIcon = (key: string) => {
     if (!sortConfig || sortConfig.key !== key) {
@@ -559,89 +514,16 @@ const ProductList: React.FC<ProductListProps> = ({
       ? <ArrowUp className="h-4 w-4 ml-1" />
       : <ArrowDown className="h-4 w-4 ml-1" />;
   };
-  const addProduct = async () => {
-    if (!newProduct.name) {
-      toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
-      return;
-    }
-    // Giá bán không còn bắt buộc
-    if (newProduct.price && newProduct.price <= 0) {
-      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
-      return;
-    }
-    try {
-      setIsAddingProduct(true);
-      const categoryId = await ensureCategoryId(newProduct.category);
-      const productData: any = {
-        name: newProduct.name,
-        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
-        category: categoryId ?? undefined,
-        unit: newProduct.unit,
-      };
-      // Optional price - only include if provided and > 0
-      if (newProduct.price && newProduct.price > 0) {
-        productData.price = newProduct.price;
-      }
-      // Optional costPrice - only include if provided
-      if (newProduct.costPrice && newProduct.costPrice > 0) {
-        productData.costPrice = newProduct.costPrice;
-      }
-      // Optional foreign currency fields
-      if (newProduct.isForeignCurrency) {
-        productData.isForeignCurrency = newProduct.isForeignCurrency;
-        productData.exchangeRate = newProduct.exchangeRate;
-      }
-      // lowStockThreshold - include if provided (can be 0 or positive number)
-      if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
-        productData.lowStockThreshold = newProduct.lowStockThreshold;
-      }
-      // manufacturer - include if provided (non-empty string)
-      if (newProduct.manufacturer && newProduct.manufacturer.trim()) {
-        productData.manufacturer = newProduct.manufacturer.trim();
-      }
-      // description - include if provided (non-empty string)
-      if (newProduct.description && newProduct.description.trim()) {
-        productData.description = newProduct.description.trim();
-      }
-      // barcode - include if provided (non-empty string)
-      if (newProduct.barcode && newProduct.barcode.trim()) {
-        productData.barcode = newProduct.barcode.trim();
-      }
-      const response = await productApi.createProduct(productData);
-      toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
-      loadProducts();
-      if (onProductsUpdate) {
-        onProductsUpdate();
-      }
-      // Close dialog and clear form
-      setIsAddProductDialogOpen(false);
-      setNewProduct({
-        name: '',
-        code: '',
-        category: '',
-        costPrice: 0,
-        price: 0,
-        unit: 'cái',
-        barcode: '',
-        lowStockThreshold: 0,
-        manufacturer: '',
-        description: '',
-        isForeignCurrency: false,
-        exchangeRate: 1
-      });
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
-      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
-    } finally {
-      setIsAddingProduct(false);
-    }
-  };
-  const startEditProduct = async (product: any) => {
+
+  const startUpdateProduct = async (product: any) => {
     try {
       // Fetch full product details from API to ensure we have all fields including foreign currency data
       const fullProductDetails = await productApi.getProduct(product.id);
-      setEditingProduct(fullProductDetails);
-      setIsEditProductDialogOpen(true);
+      if (productDialogMode === 'addOld') { 
+        fullProductDetails.name = `${fullProductDetails.name}-USED`;
+        fullProductDetails.code = `${fullProductDetails.code}-USED`; 
+      }
+      setUpdatingProduct(fullProductDetails);
     } catch (error) {
       toast({
         title: 'Lỗi',
@@ -650,84 +532,142 @@ const ProductList: React.FC<ProductListProps> = ({
       });
     }
   };
-  const updateProduct = async () => {
-    if (!newProduct.name) {
+
+  const handleCreateProduct = async () => {
+    setIsUpdatingProduct(true);
+    if (!updatingProduct.name) {
       toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
       return;
     }
     // Giá bán không còn bắt buộc
-    if (newProduct.price && newProduct.price <= 0) {
+    if (updatingProduct.price && updatingProduct.price <= 0) {
       toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
       return;
     }
     try {
-      setIsEditingProduct(true);
-      const categoryId = await ensureCategoryId(newProduct.category);
-      const updateData: any = {
-        name: newProduct.name,
-        ...(newProduct.code && { code: newProduct.code }), // Only include code if provided
+      setProductDialogMode('add');
+      const categoryId = await ensureCategoryId(updatingProduct.category);
+      const productData: any = {
+        name: updatingProduct.name,
+        ...(updatingProduct.code && { code: updatingProduct.code }), // Only include code if provided
         category: categoryId ?? undefined,
-        unit: newProduct.unit,
+        unit: updatingProduct.unit,
       };
       // Optional price - only include if provided and > 0
-      if (newProduct.price && newProduct.price > 0) {
-        updateData.price = newProduct.price;
+      if (updatingProduct.price && updatingProduct.price > 0) {
+        productData.price = updatingProduct.price;
       }
       // Optional costPrice - only include if provided
-      if (newProduct.costPrice && newProduct.costPrice > 0) {
-        updateData.costPrice = newProduct.costPrice;
+      if (updatingProduct.costPrice && updatingProduct.costPrice > 0) {
+        productData.costPrice = updatingProduct.costPrice;
       }
       // Optional foreign currency fields
-      if (newProduct.isForeignCurrency) {
-        updateData.isForeignCurrency = newProduct.isForeignCurrency;
-        updateData.exchangeRate = newProduct.exchangeRate;
+      if (updatingProduct.isForeignCurrency) {
+        productData.isForeignCurrency = updatingProduct.isForeignCurrency;
+        productData.exchangeRate = updatingProduct.exchangeRate;
       }
       // lowStockThreshold - include if provided (can be 0 or positive number)
-      if (newProduct.lowStockThreshold !== undefined && newProduct.lowStockThreshold !== null && newProduct.lowStockThreshold >= 0) {
-        updateData.lowStockThreshold = newProduct.lowStockThreshold;
+      if (updatingProduct.lowStockThreshold !== undefined && updatingProduct.lowStockThreshold !== null && updatingProduct.lowStockThreshold >= 0) {
+        productData.lowStockThreshold = updatingProduct.lowStockThreshold;
       }
       // manufacturer - include if provided (non-empty string)
-      if (newProduct.manufacturer && newProduct.manufacturer.trim()) {
-        updateData.manufacturer = newProduct.manufacturer.trim();
+      if (updatingProduct.manufacturer && updatingProduct.manufacturer.trim()) {
+        productData.manufacturer = updatingProduct.manufacturer.trim();
       }
       // description - include if provided (non-empty string)
-      if (newProduct.description && newProduct.description.trim()) {
-        updateData.description = newProduct.description.trim();
+      if (updatingProduct.description && updatingProduct.description.trim()) {
+        productData.description = updatingProduct.description.trim();
       }
       // barcode - include if provided (non-empty string)
-      if (newProduct.barcode && newProduct.barcode.trim()) {
-        updateData.barcode = newProduct.barcode.trim();
+      if (updatingProduct.barcode && updatingProduct.barcode.trim()) {
+        productData.barcode = updatingProduct.barcode.trim();
       }
-      const response = await productApi.updateProduct(editingProduct.id, updateData);
+      const response = await productApi.createProduct(productData);
+      toast({ title: 'Thành công', description: (response as any)?.message || 'Đã thêm sản phẩm vào danh mục!' });
+      loadProducts();
+      if (onProductsUpdate) {
+        onProductsUpdate();
+      }
+      // Close dialog and clear form
+      setUpdatingProduct(newProductRequest);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi thêm sản phẩm';
+      toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
+    } finally {
+      setIsProductDialogOpen(false);
+      setIsUpdatingProduct(false);
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    setIsUpdatingProduct(true);
+    if (!updatingProduct.name) {
+      toast({ title: 'Lỗi', description: 'Tên sản phẩm là bắt buộc', variant: 'destructive' });
+      return;
+    }
+    // Giá bán không còn bắt buộc
+    if (updatingProduct.price && updatingProduct.price <= 0) {
+      toast({ title: 'Lỗi', description: 'Giá bán phải lớn hơn 0 nếu có', variant: 'destructive' });
+      return;
+    }
+    try {
+      setProductDialogMode('edit');
+      setIsProductDialogOpen(true);
+      const categoryId = await ensureCategoryId(updatingProduct.category);
+      const updateData: any = {
+        name: updatingProduct.name,
+        ...(updatingProduct.code && { code: updatingProduct.code }), // Only include code if provided
+        category: categoryId ?? undefined,
+        unit: updatingProduct.unit,
+      };
+      // Optional price - only include if provided and > 0
+      if (updatingProduct.price && updatingProduct.price > 0) {
+        updateData.price = updatingProduct.price;
+      }
+      // Optional costPrice - only include if provided
+      if (updatingProduct.costPrice && updatingProduct.costPrice > 0) {
+        updateData.costPrice = updatingProduct.costPrice;
+      }
+      // Optional foreign currency fields
+      if (updatingProduct.isForeignCurrency) {
+        updateData.isForeignCurrency = updatingProduct.isForeignCurrency;
+        updateData.exchangeRate = updatingProduct.exchangeRate;
+      }
+      // lowStockThreshold - include if provided (can be 0 or positive number)
+      if (updatingProduct.lowStockThreshold !== undefined && updatingProduct.lowStockThreshold !== null && updatingProduct.lowStockThreshold >= 0) {
+        updateData.lowStockThreshold = updatingProduct.lowStockThreshold;
+      }
+      // manufacturer - include if provided (non-empty string)
+      if (updatingProduct.manufacturer && updatingProduct.manufacturer.trim()) {
+        updateData.manufacturer = updatingProduct.manufacturer.trim();
+      }
+      // description - include if provided (non-empty string)
+      if (updatingProduct.description && updatingProduct.description.trim()) {
+        updateData.description = updatingProduct.description.trim();
+      }
+      // barcode - include if provided (non-empty string)
+      if (updatingProduct.barcode && updatingProduct.barcode.trim()) {
+        updateData.barcode = updatingProduct.barcode.trim();
+      }
+      const response = await productApi.updateProduct(updatingProduct.id, updateData);
       toast({ title: 'Thành công', description: (response as any)?.message || 'Đã cập nhật sản phẩm!' });
       loadProducts();
       if (onProductsUpdate) {
         onProductsUpdate();
       }
-      setEditingProduct(null);
-      setNewProduct({
-        name: '',
-        code: '',
-        category: '',
-        costPrice: 0,
-        price: 0,
-        unit: 'cái',
-        barcode: '',
-        lowStockThreshold: 0,
-        manufacturer: '',
-        description: '',
-        isForeignCurrency: false,
-        exchangeRate: 1
-      });
-      setIsEditProductDialogOpen(false);
+      setUpdatingProduct(null);
+      setIsProductDialogOpen(false);
+      setProductDialogMode('add');
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi khi cập nhật sản phẩm';
       toast({ title: 'Lỗi', description: convertPermissionCodesInMessage(errorMessage), variant: 'destructive' });
     } finally {
-      setIsEditingProduct(false);
+      setIsProductDialogOpen(false);
+      setIsUpdatingProduct(false);
     }
   };
-  const deleteProduct = async (productId: string, productName: string) => {
+
+  const handleDeleteProduct = async (productId: string, productName: string) => {
     if (!confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${productName}"?`)) {
       return;
     }
@@ -1256,243 +1196,43 @@ const ProductList: React.FC<ProductListProps> = ({
                 </Dialog>
               )}
               {canManageProducts && (
-                <Dialog open={isAddProductDialogOpen} onOpenChange={setIsAddProductDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full sm:w-auto">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Thêm sản phẩm
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>Thêm Sản Phẩm Mới</DialogTitle>
-                      <DialogDescription>
-                        Nhập thông tin sản phẩm vào danh mục
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-name" className="text-right">Tên sản phẩm <span className="text-red-500">*</span></Label>
-                        <Input 
-                          id="product-name" 
-                          className="col-span-3"
-                          value={newProduct.name}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Nhập tên sản phẩm"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="product-code" className="text-right">Mã sản phẩm <span className="text-red-500">*</span></Label>
-                        <Input 
-                          id="product-code" 
-                          className="col-span-3"
-                          value={newProduct.code}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Nhập mã sản phẩm"
-                        />
-                      </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="product-category" className="text-right">Loại sản phẩm <span className="text-red-500">*</span></Label>
-                  <div className="col-span-3">
-                    <Popover open={categoryComboOpen} onOpenChange={setCategoryComboOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={categoryComboOpen}
-                          className="w-full justify-between"
-                        >
-                          {getCategoryNameFromValue(newProduct.category) || "Chọn hoặc nhập loại sản phẩm..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
-                        <Command>
-                          <CommandInput 
-                            placeholder="Tìm kiếm hoặc nhập loại mới..." 
-                            value={categorySearchTerm}
-                            onValueChange={setCategorySearchTerm}
-                          />
-                          <CommandList>
-                            <CommandEmpty>
-                              {categorySearchTerm ? (
-                                <div className="p-2">
-                                  <div className="text-sm text-muted-foreground mb-2">Không tìm thấy loại này</div>
-                                  <Button 
-                                    size="sm" 
-                                    className="w-full"
-                                    onClick={() => {
-                                      if (categorySearchTerm.trim()) {
-                                        setNewProduct(prev => ({ ...prev, category: categorySearchTerm.trim() }));
-                                      }
-                                      setCategoryComboOpen(false);
-                                      setCategorySearchTerm('');
-                                    }}
-                                  >
-                                    Sử dụng "{categorySearchTerm}"
-                                  </Button>
-                                </div>
-                              ) : (
-                                "Nhập tên loại sản phẩm..."
-                              )}
-                            </CommandEmpty>
-                            <CommandGroup>
-                              {sortedCategories.map((category) => (
-                                <CommandItem
-                                  key={category.id}
-                                  value={category.name}
-                                  onSelect={() => {
-                                    setNewProduct(prev => ({ ...prev, category: category.id }));
-                                    setCategoryComboOpen(false);
-                                    setCategorySearchTerm('');
-                                  }}
-                                >
-                                  <Check
-                                    className={`mr-2 h-4 w-4 ${newProduct.category === category.id ? "opacity-100" : "opacity-0"}`}
-                                  />
-                                  {category.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="unit" className="text-right">Đơn vị tính <span className="text-red-500">*</span></Label>
-                        <Input 
-                          id="unit" 
-                          className="col-span-3"
-                          value={newProduct.unit}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, unit: e.target.value }))}
-                          placeholder="Đơn vị (cái, kg, m...)"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="lowStockThreshold" className="text-right">Ngưỡng hàng sắp hết</Label>
-                        <NumberInput 
-                          id="lowStockThreshold" 
-                          className="col-span-3"
-                          value={newProduct.lowStockThreshold}
-                          onChange={(value) => setNewProduct(prev => ({ ...prev, lowStockThreshold: value }))}
-                          placeholder="0"
-                          min={0}
-                        />
-                        <div className="col-span-1"></div>
-                        <p className="col-span-3 text-xs text-muted-foreground">Cảnh báo khi tồn kho &lt;= giá trị này</p>
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="manufacturer" className="text-right">Hãng sản xuất</Label>
-                        <Input 
-                          id="manufacturer" 
-                          className="col-span-3"
-                          value={newProduct.manufacturer}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, manufacturer: e.target.value }))}
-                          placeholder="Nhập hãng sản xuất (tùy chọn)"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="description" className="text-right">Mô tả sản phẩm</Label>
-                        <Textarea 
-                          id="description" 
-                          className="col-span-3"
-                          value={newProduct.description}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Nhập mô tả sản phẩm (tùy chọn)"
-                          rows={3}
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="barcode" className="text-right">Barcode</Label>
-                        <Input 
-                          id="barcode" 
-                          className="col-span-3"
-                          value={newProduct.barcode}
-                          onChange={(e) => setNewProduct(prev => ({ ...prev, barcode: e.target.value }))}
-                          placeholder="Mã vạch (tùy chọn)"
-                        />
-                      </div>
-                      {canViewCostPrice && (
-                        <>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="cost-price" className="text-right">Giá vốn</Label>
-                            <CurrencyInput
-                              id="cost-price"
-                              className="col-span-3"
-                              value={newProduct.costPrice}
-                              onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <div></div>
-                            <div className="col-span-3 flex items-center gap-4">
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  key="add-foreign-currency"
-                                  type="checkbox"
-                                  id="is-foreign-currency"
-                                  checked={Boolean(newProduct.isForeignCurrency)}
-                                  onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
-                                  className="h-4 w-4"
-                                />
-                                <Label htmlFor="is-foreign-currency" className="text-sm">Ngoại tệ</Label>
-                              </div>
-                              {newProduct.isForeignCurrency && (
-                                <div className="flex items-center gap-2">
-                                  <Label htmlFor="exchange-rate" className="text-sm">Tỷ giá:</Label>
-                                  <NumberInput
-                                    id="exchange-rate"
-                                    value={newProduct.exchangeRate}
-                                    onChange={(value) => setNewProduct(prev => ({ ...prev, exchangeRate: value }))}
-                                    placeholder="1"
-                                    min={0.01}
-                                    step={0.01}
-                                    className="w-24"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sell-price" className="text-right">Giá bán</Label>
-                        <CurrencyInput 
-                          id="sell-price" 
-                          className="col-span-3"
-                          value={newProduct.price}
-                          onChange={(value) => setNewProduct(prev => ({ ...prev, price: value }))}
-                          placeholder="0"
-                        />
-                      </div>
-
-                    </div>
-                    <DialogFooter>
-                      <Button 
-                        type="submit" 
-                        onClick={addProduct}
-                        disabled={isAddingProduct}
-                      >
-                        {isAddingProduct ? 'Đang thêm...' : 'Thêm Sản Phẩm'}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                <Button 
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    setProductDialogMode('add');
+                    setUpdatingProduct({...newProductRequest});
+                    setIsProductDialogOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm sản phẩm
+                </Button>
               )}
             </div>
           </div>
         </div>
         {/* Edit Product Dialog */}
         {canManageProducts && (
-          <Dialog open={isEditProductDialogOpen} onOpenChange={setIsEditProductDialogOpen}>
+          <Dialog open={isProductDialogOpen} onOpenChange={handleProductDialogClose}>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Chỉnh Sửa Sản Phẩm</DialogTitle>
+                <DialogTitle>
+                  {
+                    productDialogMode === 'edit' 
+                    ? 'Chỉnh Sửa Sản Phẩm' 
+                    : productDialogMode === 'addOld' 
+                    ? 'Tạo Sản Phẩm cũ' 
+                    : 'Thêm sản phẩm mới'
+                  }
+                </DialogTitle>
                 <DialogDescription>
-                  Cập nhật thông tin sản phẩm
+                  {
+                    productDialogMode === 'edit'
+                    ? 'Cập nhật thông tin sản phẩm'
+                    : productDialogMode === 'addOld'
+                    ? 'Tạo sản phẩm mới dựa trên sản phẩm cũ đã có trong hệ thống'
+                    : 'Nhập thông tin sản phẩm mới vào hệ thống'
+                  }
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -1501,97 +1241,40 @@ const ProductList: React.FC<ProductListProps> = ({
                   <Input 
                     id="edit-product-name" 
                     className="col-span-3"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                    value={updatingProduct?.name ?? ''}
+                    onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), name: e.target.value }))}
                     placeholder="Nhập tên sản phẩm"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-product-code" className="text-right">Mã sản phẩm (tùy chọn)</Label>
+                  <Label htmlFor="product-code" className="text-right">Mã sản phẩm <span className="text-red-500">*</span></Label>
                   <Input 
                     id="edit-product-code" 
                     className="col-span-3"
-                    value={newProduct.code}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, code: e.target.value }))}
-                    placeholder="Để trống để hệ thống tự tạo"
+                    value={updatingProduct?.code ?? ''}
+                    onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), code: e.target.value }))}
+                    placeholder="Nhập mã sản phẩm"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-product-category" className="text-right">Loại sản phẩm</Label>
-                  <div className="col-span-3">
-                    <Popover open={editCategoryComboOpen} onOpenChange={setEditCategoryComboOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={editCategoryComboOpen}
-                          className="w-full justify-between"
-                        >
-                          {getCategoryNameFromValue(newProduct.category) || "Chọn hoặc nhập loại sản phẩm..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
-                        <Command>
-                          <CommandInput 
-                            placeholder="Tìm kiếm hoặc nhập loại mới..." 
-                            value={editCategorySearchTerm}
-                            onValueChange={setEditCategorySearchTerm}
-                          />
-                          <CommandList>
-                            <CommandEmpty>
-                              {editCategorySearchTerm ? (
-                                <div className="p-2">
-                                  <div className="text-sm text-muted-foreground mb-2">Không tìm thấy loại này</div>
-                                  <Button 
-                                    size="sm" 
-                                    className="w-full"
-                                    onClick={() => {
-                                      if (editCategorySearchTerm.trim()) {
-                                        setNewProduct(prev => ({ ...prev, category: editCategorySearchTerm.trim() }));
-                                      }
-                                      setEditCategoryComboOpen(false);
-                                      setEditCategorySearchTerm('');
-                                    }}
-                                  >
-                                    Sử dụng "{editCategorySearchTerm}"
-                                  </Button>
-                                </div>
-                              ) : (
-                                "Nhập tên loại sản phẩm..."
-                              )}
-                            </CommandEmpty>
-                            <CommandGroup>
-                              {sortedCategories.map((category) => (
-                                <CommandItem
-                                  key={category.id}
-                                  value={category.name}
-                                  onSelect={() => {
-                                    setNewProduct(prev => ({ ...prev, category: category.id }));
-                                    setEditCategoryComboOpen(false);
-                                    setEditCategorySearchTerm('');
-                                  }}
-                                >
-                                  <Check
-                                    className={`mr-2 h-4 w-4 ${newProduct.category === category.id ? "opacity-100" : "opacity-0"}`}
-                                  />
-                                  {category.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  <Combobox
+                    id="edit-product-category"
+                    className="col-span-3"
+                    options={sortedCategories.map(cat => ({ label: cat.name, value: cat.id }))}
+                    value={updatingProduct?.category ?? ''}
+                    onValueChange={(val) => setUpdatingProduct(prev => ({ ...(prev || {}), category: val }))}
+                    placeholder="Chọn loại sản phẩm..."
+                    searchPlaceholder="Tìm kiếm loại..."
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-unit" className="text-right">Đơn vị tính <span className="text-red-500">*</span></Label>
                   <Input 
                     id="edit-unit" 
                     className="col-span-3"
-                    value={newProduct.unit}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, unit: e.target.value }))}
+                    value={updatingProduct?.unit ?? ''}
+                    onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), unit: e.target.value }))}
                     placeholder="Đơn vị (cái, kg, m...)"
                   />
                 </div>
@@ -1600,8 +1283,8 @@ const ProductList: React.FC<ProductListProps> = ({
                   <NumberInput 
                     id="edit-lowStockThreshold" 
                     className="col-span-3"
-                    value={newProduct.lowStockThreshold}
-                    onChange={(value) => setNewProduct(prev => ({ ...prev, lowStockThreshold: value }))}
+                    value={updatingProduct?.lowStockThreshold ?? 0}
+                    onChange={(value) => setUpdatingProduct(prev => ({ ...(prev || {}), lowStockThreshold: value }))}
                     placeholder="0"
                     min={0}
                   />
@@ -1613,8 +1296,8 @@ const ProductList: React.FC<ProductListProps> = ({
                   <Input 
                     id="edit-manufacturer" 
                     className="col-span-3"
-                    value={newProduct.manufacturer}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, manufacturer: e.target.value }))}
+                    value={updatingProduct?.manufacturer ?? ''}
+                    onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), manufacturer: e.target.value }))}
                     placeholder="Nhập hãng sản xuất (tùy chọn)"
                   />
                 </div>
@@ -1623,8 +1306,8 @@ const ProductList: React.FC<ProductListProps> = ({
                   <Textarea 
                     id="edit-description" 
                     className="col-span-3"
-                    value={newProduct.description}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                    value={updatingProduct?.description ?? ''}
+                    onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), description: e.target.value }))}
                     placeholder="Nhập mô tả sản phẩm (tùy chọn)"
                     rows={3}
                   />
@@ -1634,8 +1317,8 @@ const ProductList: React.FC<ProductListProps> = ({
                   <Input 
                     id="edit-barcode" 
                     className="col-span-3"
-                    value={newProduct.barcode}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, barcode: e.target.value }))}
+                    value={updatingProduct?.barcode ?? ''}
+                    onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), barcode: e.target.value }))}
                     placeholder="Mã vạch (tùy chọn)"
                   />
                 </div>
@@ -1646,8 +1329,8 @@ const ProductList: React.FC<ProductListProps> = ({
                       <CurrencyInput
                         id="edit-cost-price"
                         className="col-span-3"
-                        value={newProduct.costPrice}
-                        onChange={(value) => setNewProduct(prev => ({ ...prev, costPrice: value }))}
+                        value={updatingProduct?.costPrice ?? 0}
+                        onChange={(value) => setUpdatingProduct(prev => ({ ...(prev || {}), costPrice: value }))}
                         placeholder="0"
                       />
                     </div>
@@ -1656,22 +1339,22 @@ const ProductList: React.FC<ProductListProps> = ({
                       <div className="col-span-3 flex items-center gap-4">
                         <div className="flex items-center space-x-2">
                           <input
-                            key={`edit-foreign-currency-${editingProduct?.id || 'new'}`}
+                            key={`edit-foreign-currency-${updatingProduct?.id || 'new'}`}
                             type="checkbox"
                             id="edit-is-foreign-currency"
-                            checked={Boolean(newProduct.isForeignCurrency)}
-                            onChange={(e) => setNewProduct(prev => ({ ...prev, isForeignCurrency: e.target.checked }))}
+                            checked={Boolean(updatingProduct?.isForeignCurrency)}
+                            onChange={(e) => setUpdatingProduct(prev => ({ ...(prev || {}), isForeignCurrency: e.target.checked }))}
                             className="h-4 w-4"
                           />
                           <Label htmlFor="edit-is-foreign-currency" className="text-sm">Ngoại tệ</Label>
                         </div>
-                        {newProduct.isForeignCurrency && (
+                        {updatingProduct?.isForeignCurrency && (
                           <div className="flex items-center gap-2">
                             <Label htmlFor="edit-exchange-rate" className="text-sm">Tỷ giá:</Label>
                             <NumberInput
                               id="edit-exchange-rate"
-                              value={newProduct.exchangeRate}
-                              onChange={(value) => setNewProduct(prev => ({ ...prev, exchangeRate: value }))}
+                              value={updatingProduct?.exchangeRate ?? 1}
+                              onChange={(value) => setUpdatingProduct(prev => ({ ...(prev || {}), exchangeRate: value }))}
                               placeholder="1"
                               min={0.01}
                               step={0.01}
@@ -1688,43 +1371,62 @@ const ProductList: React.FC<ProductListProps> = ({
                   <CurrencyInput 
                     id="edit-sell-price" 
                     className="col-span-3"
-                    value={newProduct.price}
-                    onChange={(value) => setNewProduct(prev => ({ ...prev, price: value }))}
+                    value={updatingProduct?.price ?? 0}
+                    onChange={(value) => setUpdatingProduct(prev => ({ ...(prev || {}), price: value }))}
                     placeholder="0"
                   />
                 </div>
 
               </div>
               <DialogFooter>
+                {(productDialogMode === 'edit' || productDialogMode === 'addOld') && (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      if (productDialogMode === 'addOld') {
+                        const originalProductData = { 
+                          ...updatingProduct, 
+                          name: updatingProduct?.name?.replace('-USED', ''),
+                          code: updatingProduct?.code?.replace('-USED', '')
+                        };
+                        setUpdatingProduct(originalProductData);
+                        setProductDialogMode('edit');
+                      } else {
+                        const newProductData = { 
+                          ...updatingProduct, 
+                          name: `${updatingProduct?.name}-USED`,
+                          code: `${updatingProduct?.code}-USED` 
+                        };
+                        setUpdatingProduct(newProductData);
+                        setProductDialogMode('addOld');
+                      }
+                    }}
+                  >
+                    {productDialogMode === 'addOld' ? '← Chỉnh sửa sản phẩm' : 'Tạo sản phẩm cũ'}
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   onClick={() => {
-                    setIsEditProductDialogOpen(false);
-                    setEditingProduct(null);
-                    setNewProduct({
-                      name: '',
-                      code: '',
-                      category: '',
-                      costPrice: 0,
-                      price: 0,
-                      unit: 'cái',
-                      barcode: '',
-                      lowStockThreshold: 0,
-                      manufacturer: '',
-                      description: '',
-                      isForeignCurrency: false,
-                      exchangeRate: 1,
-                    });
+                    setUpdatingProduct({...newProductRequest});
+                    setProductDialogMode('add');
+                    setIsProductDialogOpen(false);
                   }}
                 >
                   Hủy
                 </Button>
                 <Button 
                   type="submit" 
-                  onClick={updateProduct}
-                  disabled={isEditingProduct}
+                  onClick={
+                    productDialogMode === 'edit' 
+                    ? handleUpdateProduct 
+                    : handleCreateProduct
+                  }
+                  disabled={isUpdatingProduct}
                 >
-                  {isEditingProduct ? 'Đang cập nhật...' : 'Cập nhật'}
+                  {isUpdatingProduct 
+                      ? (productDialogMode === 'add' ? 'Đang thêm...' : 'Đang cập nhật...') 
+                      : (productDialogMode === 'add' ? 'Thêm sản phẩm' : 'Cập nhật')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1868,14 +1570,19 @@ const ProductList: React.FC<ProductListProps> = ({
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => startEditProduct(product)}
+                            onClick={() => {
+                                setProductDialogMode('edit');
+                                startUpdateProduct(product);
+                                setIsProductDialogOpen(true);
+                              }
+                            }
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => deleteProduct(product.id, product.name)}
+                            onClick={() => handleDeleteProduct(product.id, product.name)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
