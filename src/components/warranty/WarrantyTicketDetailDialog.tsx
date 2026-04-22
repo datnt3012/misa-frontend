@@ -5,6 +5,7 @@ import { vi } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -34,6 +35,7 @@ import {
   UserCog,
   FileEdit,
   Clock,
+  Search,
 } from "lucide-react";
 
 const formatWarrantyRemaining = (serial: any): { text: string; type: string } => {
@@ -100,6 +102,7 @@ export const WarrantyTicketDetailDialog: React.FC<WarrantyTicketDetailDialogProp
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [editingPersonInCharge, setEditingPersonInCharge] = useState(false);
   const [updatingPersonInCharge, setUpdatingPersonInCharge] = useState(false);
+  const [serialSearch, setSerialSearch] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -117,7 +120,13 @@ export const WarrantyTicketDetailDialog: React.FC<WarrantyTicketDetailDialogProp
       };
       fetchUsers();
     }
-  }, [editingPersonInCharge]);
+  }, [editingPersonInCharge, users.length]);
+
+  useEffect(() => {
+    if (!open) {
+      setSerialSearch("");
+    }
+  }, [open]);
 
   const handleUpdatePersonInCharge = async (userId: string) => {
     if (!userId) return;
@@ -306,7 +315,20 @@ export const WarrantyTicketDetailDialog: React.FC<WarrantyTicketDetailDialogProp
 
             {/* Products Table */}
             <div>
-              <div className="text-sm font-medium mb-2">Sản phẩm bảo hành</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">Sản phẩm bảo hành</div>
+                <div className="w-64">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Tìm kiếm serial..."
+                      value={serialSearch}
+                      onChange={(e) => setSerialSearch(e.target.value)}
+                      className="pl-9 h-8"
+                    />
+                  </div>
+                </div>
+              </div>
               {(() => {
                 const total = (ticketDetail.details || []).length;
                 const processed = (ticketDetail.details || []).filter((d: any) => d.processed === true || !!d.processStatus).length;
@@ -319,72 +341,83 @@ export const WarrantyTicketDetailDialog: React.FC<WarrantyTicketDetailDialogProp
                   </div>
                 );
               })()}
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-slate-50">
-                    <TableRow>
-                      <TableHead className="text-center w-12">STT</TableHead>
-                      <TableHead className="text-left">Sản phẩm</TableHead>
-                      <TableHead className="text-center w-20">SL BH</TableHead>
-                      <TableHead className="text-center w-24">Đã xử lý</TableHead>
-                      <TableHead className="text-center w-24">Còn lại</TableHead>
-                      <TableHead className="text-left w-48">Serial</TableHead>
-                      <TableHead className="text-center w-32">Hạn BH</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(ticketDetail.details || []).map((detail: any, index: number) => {
-                      const serialNumber = detail.serialNumber || "-";
-                      const productName = detail.productName || detail.product?.name || "-";
-                      const isProcessed = detail.processed === true || !!detail.processStatus;
-                      const processedAt = detail.processedAt;
-                      const warrantyStartDate = detail.warrantyStartDate;
-                      const warrantyMonths = detail.warrantyMonths || 12;
-                      const isExpanded = expandedProducts.has(detail.id || index.toString());
+              {(() => {
+                const filteredDetails = (ticketDetail.details || []).filter((d: any) => {
+                  if (!serialSearch) return true;
+                  const serial = (d.serialNumber || "").toLowerCase();
+                  const product = (d.productName || d.product?.name || "").toLowerCase();
+                  const search = serialSearch.toLowerCase();
+                  return serial.includes(search) || product.includes(search);
+                });
+                return (
+                  <div className={`border rounded-lg overflow-hidden ${filteredDetails.length > 5 ? "max-h-[300px] overflow-y-auto" : ""}`}>
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead className="text-center w-12">STT</TableHead>
+                          <TableHead className="text-left">Sản phẩm</TableHead>
+                          <TableHead className="text-center w-20">SL BH</TableHead>
+                          <TableHead className="text-center w-24">Đã xử lý</TableHead>
+                          <TableHead className="text-center w-24">Còn lại</TableHead>
+                          <TableHead className="text-left w-48">Serial</TableHead>
+                          <TableHead className="text-center w-32">Hạn BH</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredDetails.map((detail: any, index: number) => {
+                          const serialNumber = detail.serialNumber || "-";
+                          const productName = detail.productName || detail.product?.name || "-";
+                          const isProcessed = detail.processed === true || !!detail.processStatus;
+                          const processedAt = detail.processedAt;
+                          const warrantyStartDate = detail.warrantyStartDate;
+                          const warrantyMonths = detail.warrantyMonths || 12;
+                          const isExpanded = expandedProducts.has(detail.id || index.toString());
 
-                      return (
-                        <React.Fragment key={detail.id || index}>
-                          <TableRow>
-                            <TableCell className="text-center">{index + 1}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span>{productName}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center font-medium">1</TableCell>
-                            <TableCell className="text-center">
-                              {isProcessed ? (
-                                <span className="text-green-600 font-medium">1</span>
-                              ) : (
-                                <span className="text-muted-foreground">0</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge className={isProcessed ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
-                                {isProcessed ? 0 : 1}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">
-                                <span className="font-mono">{serialNumber}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {warrantyStartDate && (
-                                <Badge
-                                  className={formatWarrantyRemaining(detail).type === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}
-                                >
-                                  {formatWarrantyRemaining(detail).text}
-                                </Badge>
-                              )}
-                            </TableCell>
-                            </TableRow>
-                        </React.Fragment>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                          return (
+                            <React.Fragment key={detail.id || index}>
+                              <TableRow>
+                                <TableCell className="text-center">{index + 1}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <span>{productName}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center font-medium">1</TableCell>
+                                <TableCell className="text-center">
+                                  {isProcessed ? (
+                                    <span className="text-green-600 font-medium">1</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">0</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className={isProcessed ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                                    {isProcessed ? 0 : 1}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="text-sm">
+                                    <span className="font-mono">{serialNumber}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {warrantyStartDate && (
+                                    <Badge
+                                      className={formatWarrantyRemaining(detail).type === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}
+                                    >
+                                      {formatWarrantyRemaining(detail).text}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            </React.Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* History Section */}
