@@ -10,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Package, Plus, CheckCircle, Clock, Bell, Trash2 } from "lucide-react";
-import { orderApi, type Order, type OrderItem, type OrderAllocationStatus } from "@/api/order.api";
+import { Package, Plus, CheckCircle, Clock, Bell, Trash2, AlertCircle, X } from "lucide-react";
+import { orderApi, type Order, type OrderItem, type OrderAllocationStatus, type OrderSerial } from "@/api/order.api";
 import { warehouseReceiptsApi, type CreateWarehouseReceiptRequest } from "@/api/warehouseReceipts.api";
 import { warehouseApi, type Warehouse } from "@/api/warehouse.api";
 import { stockLevelsApi } from "@/api/stockLevels.api";
@@ -30,6 +31,9 @@ interface ExportSlipFormItem {
   product_id: string;
   quantity: number;
   current_stock?: number;
+  serial_manage?: boolean;
+  serials?: string[];
+  warranty_months?: number;
 }
 
 interface ExportSlipForm {
@@ -69,6 +73,10 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
   const [exportedQuantityByProduct, setExportedQuantityByProduct] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [orderLoading, setOrderLoading] = useState(true);
+  const [serialNumbers, setSerialNumbers] = useState<Record<string, Record<number, string[]>>>({});
+  const [serialText, setSerialText] = useState<Record<string, Record<number, string>>>({});
+  const [selectedOrderSerials, setSelectedOrderSerials] = useState<Record<string, Record<number, string[]>>>({});
+  const [productWarnings, setProductWarnings] = useState<Record<string, Record<number, string>>>({});
   const { user } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -102,6 +110,11 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
   
   const removeExportSlip = (slipId: string) => {
     setExportSlips(prev => prev.filter(slip => slip.id !== slipId));
+    setProductWarnings(prev => {
+      const newWarnings = { ...prev };
+      delete newWarnings[slipId];
+      return newWarnings;
+    });
   };
   
   const updateExportSlip = (slipId: string, field: keyof ExportSlipForm, value: any) => {
@@ -146,6 +159,11 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
       }
       return slip;
     }));
+    setProductWarnings(prev => {
+      const slipWarnings = { ...(prev[slipId] || {}) };
+      delete slipWarnings[itemIndex];
+      return { ...prev, [slipId]: slipWarnings };
+    });
   };
   
   const updateSlipItem = (slipId: string, itemIndex: number, field: keyof ExportSlipFormItem, value: any) => {
@@ -160,6 +178,30 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
           setTimeout(() => {
             void fetchStockLevelForSlipItem(slipId, itemIndex, value, slip.warehouse_id);
           }, 0);
+        }
+        
+        // Check if product in order has serials - show warning if not
+        if (field === 'product_id' && order && !isImportSlip) {
+          const orderItem = order.items?.find(oi => oi.product_id === value);
+          const orderItemSerials = orderItem?.serials || [];
+          
+          // Auto-check serial_manage if product in order has serial management
+          if (orderItem?.manageSerials || orderItem?.serial_manage) {
+            items[itemIndex].serial_manage = true;
+          }
+          
+          if (value && orderItem && orderItemSerials.length === 0) {
+            setProductWarnings(prev => ({
+              ...prev,
+              [slipId]: { ...(prev[slipId] || {}), [itemIndex]: 'Sản phẩm trong đơn hàng không có serial' }
+            }));
+          } else {
+            setProductWarnings(prev => {
+              const slipWarnings = { ...(prev[slipId] || {}) };
+              delete slipWarnings[itemIndex];
+              return { ...prev, [slipId]: slipWarnings };
+            });
+          }
         }
         
         return updatedSlip;
@@ -200,7 +242,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
     try {
       setOrderLoading(true);
       // Use includeAllocationStatus=true to get allocation data from backend
-      const orderData = await orderApi.getOrder(orderId, { includeDeleted: true, includeAllocationStatus: true });
+      const orderData = await orderApi.getOrder(orderId, { includeDeleted: true, includeAllocationStatus: true, includeSerials: true });
       setOrder(orderData);
       
       // Set allocation status from API response
@@ -388,11 +430,16 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
             status: 'pending',
             details: validItems.map(item => {
               const orderItem = orderItemsMap.get(item.product_id);
+              const itemSerials = item.serial_manage ? (serialNumbers[slip.id]?.[slip.items.indexOf(item)] || []) : [];
+              const orderItemSerials = orderItem?.serials || [];
+              const warrantyFromOrder = orderItemSerials.length > 0 ? orderItemSerials[0].warrantyMonths : undefined;
               return {
                 productId: item.product_id,
                 quantity: item.quantity,
                 unitPrice: orderItem?.unit_price || 0,
-                warehouseId: slip.warehouse_id
+                warehouseId: slip.warehouse_id,
+                serialNumbers: itemSerials.length > 0 ? itemSerials.join(',') : undefined,
+                warrantyMonths: item.warranty_months !== undefined ? item.warranty_months : (warrantyFromOrder !== undefined ? warrantyFromOrder : 1),
               };
             })
           };
@@ -597,9 +644,6 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
               const allocatedQuantity = alloc?.allocatedQuantity ?? 0;
               const returnedQuantity = alloc?.returnedQuantity ?? 0;
               const remainingQuantity = alloc?.remainingQuantity ?? 0;
-
-              // Debug log
-              console.log('Allocation for product:', item.product_id, alloc);
               
               return (
                 <div
@@ -750,9 +794,9 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Sản phẩm</TableHead>
-                            <TableHead className="text-center">Số lượng</TableHead>
-                            <TableHead>Thông tin</TableHead>
+                            <TableHead><div className="text-center">Sản phẩm</div></TableHead>
+                            <TableHead><div className="text-center">Số lượng</div></TableHead>
+                            <TableHead><div className="text-center">Thông tin</div></TableHead>
                             <TableHead className="w-12"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -767,8 +811,9 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                             const availableItems = availableOrderItems.filter(oi => 
                               !selectedProductIds.includes(oi.product_id) || oi.product_id === item.product_id
                             );
-                            
+                             
                             return (
+                              <>
                               <TableRow key={itemIndex}>
                                 <TableCell className="w-[300px] min-w-[200px] max-w-[400px]">
                                   <Combobox
@@ -788,6 +833,19 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                     emptyMessage="Không có sản phẩm nào"
                                     className="w-full"
                                   />
+                                  {!isImportSlip && item.product_id && (
+                                    <div className="mt-2 flex items-center gap-4 justify-center">
+                                      <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={Boolean(item.serial_manage)}
+                                          onChange={(e) => updateSlipItem(slip.id, itemIndex, 'serial_manage', e.target.checked)}
+                                          className="w-4 h-4"
+                                        />
+                                        <span className="text-blue-600">Quản lý serial</span>
+                                      </label>
+                                    </div>
+                                  )}
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap flex items-center justify-center">
                                   <NumberInput
@@ -817,6 +875,12 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                           )}
                                         </div>
                                       )}
+                                      {item.product_id && productWarnings[slip.id]?.[itemIndex] && (
+                                        <div className="flex items-center justify-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1 text-center">
+                                          <AlertCircle className="w-3 h-3" />
+                                          <span>{productWarnings[slip.id][itemIndex]}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   ) : (
                                     <span className="text-sm text-muted-foreground">Chưa chọn sản phẩm</span>
@@ -824,17 +888,187 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                 </TableCell>
                                 <TableCell>
                                   <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => removeItemFromSlip(slip.id, itemIndex)}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => removeItemFromSlip(slip.id, itemIndex)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                                 </TableCell>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
+                              {!isImportSlip && item.serial_manage && (
+                                <TableRow>
+                                  <TableCell colSpan={4} className="p-3 bg-slate-50">
+                                    <div className="space-y-2">
+{selectedOrderItem?.serials && selectedOrderItem.serials.length > 0 && (() => {
+                                        const selectedSerials = selectedOrderSerials[slip.id]?.[itemIndex] || [];
+                                        const currentInputText = serialText[slip.id]?.[itemIndex] || '';
+                                        const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
+                                        const allSelectedSet = new Set([...selectedSerials, ...inputSerials].map(s => s.toLowerCase()));
+                                        const availableSerials = selectedOrderItem.serials
+                                          .filter(s => !allSelectedSet.has(s.serial_number.toLowerCase()))
+                                          .map(s => ({ 
+                                            value: s.serial_number, 
+                                            label: s.serial_number,
+                                            disabled: !!s.exported,
+                                            badge: s.exported ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Đã xuất</span> : undefined,
+                                          }));
+                                        return availableSerials.length > 0 ? (
+                                          <div className="flex items-center gap-2">
+                                            <Label className="mb-0 font-medium whitespace-nowrap">Chọn serial từ đơn:</Label>
+                                            <Combobox
+                                              options={availableSerials}
+                                              value=""
+                                              onValueChange={(value) => {
+                                                if (value) {
+                                                  const newSelected = [...selectedSerials, value];
+                                                  setSelectedOrderSerials(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: newSelected }
+                                                  }));
+                                                  setSerialNumbers(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...newSelected, ...inputSerials] }
+                                                  }));
+                                                }
+                                              }}
+                                              placeholder="Tìm và chọn serial..."
+                                              searchPlaceholder="Tìm serial..."
+                                              emptyMessage="Không tìm thấy serial"
+                                              className="flex-1 max-w-[400px]"
+                                            />
+                                          </div>
+                                        ) : null;
+                                      })()}
+                                      <div className="w-full">
+                                        <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                                          {(selectedOrderSerials[slip.id]?.[itemIndex] || []).map((serialNum, sidx) => (
+                                            <span
+                                              key={sidx}
+                                              className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm h-6"
+                                            >
+                                              <span>{serialNum}</span>
+                                              <button
+                                                type="button"
+                                                className="hover:bg-blue-200 rounded-full p-0.5"
+                                                onClick={() => {
+                                                  const currentSelected = selectedOrderSerials[slip.id]?.[itemIndex] || [];
+                                                  const newSelected = currentSelected.filter(s => s !== serialNum);
+                                                  const currentInputText = serialText[slip.id]?.[itemIndex] || '';
+                                                  const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
+                                                  setSelectedOrderSerials(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: newSelected }
+                                                  }));
+                                                  setSerialNumbers(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...newSelected, ...inputSerials] }
+                                                  }));
+                                                  setSerialText(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: inputSerials.join(', ') }
+                                                  }));
+                                                }}
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </span>
+                                          ))}
+                                          <input
+                                            type="text"
+                                            value={serialText[slip.id]?.[itemIndex] ?? ''}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const t = e.currentTarget as HTMLInputElement;
+                                                const text = t.value;
+                                                const cursorPos = t.selectionStart;
+                                                const next = `${text.slice(0, cursorPos)},${text.slice(cursorPos)}`;
+                                                const newText = next.trim();
+                                                setSerialText(prev => ({ 
+                                                  ...prev, 
+                                                  [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: newText } 
+                                                }));
+                                                const serialList = next.split(',').map(s => s.trim()).filter(s => s);
+                                                const selectedSerials = selectedOrderSerials[slip.id]?.[itemIndex] || [];
+                                                setSerialNumbers(prev => ({ 
+                                                  ...prev, 
+                                                  [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...selectedSerials, ...serialList] }
+                                                }));
+                                                setTimeout(() => {
+                                                  t.selectionStart = t.selectionEnd = cursorPos + 1;
+                                                }, 0);
+                                              } else if (e.key === 'Backspace' && !(serialText[slip.id]?.[itemIndex] ?? '')) {
+                                                const currentSelected = selectedOrderSerials[slip.id]?.[itemIndex] || [];
+                                                if (currentSelected.length > 0) {
+                                                  const newSelected = currentSelected.slice(0, -1);
+                                                  setSelectedOrderSerials(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: newSelected }
+                                                  }));
+                                                  const currentAllSerials = serialNumbers[slip.id]?.[itemIndex] || [];
+                                                  const manualSerials = currentAllSerials.filter(
+                                                    s => !currentSelected.includes(s)
+                                                  );
+                                                  setSerialNumbers(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...newSelected, ...manualSerials] }
+                                                  }));
+                                                  const currentInputText = serialText[slip.id]?.[itemIndex] || '';
+                                                  const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s && !newSelected.includes(s));
+                                                  setSerialText(prev => ({
+                                                    ...prev,
+                                                    [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: inputSerials.join(', ') }
+                                                  }));
+                                                }
+                                              }
+                                            }}
+                                            onChange={(e) => {
+                                              const text = e.target.value;
+                                              setSerialText(prev => ({
+                                                ...prev,
+                                                [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: text }
+                                              }));
+                                              const currentSelected = selectedOrderSerials[slip.id]?.[itemIndex] || [];
+                                              const inputSerials = text.split(',').map(s => s.trim()).filter(s => s);
+                                              setSerialNumbers(prev => ({
+                                                ...prev,
+                                                [slip.id]: { ...(prev[slip.id] || {}), [itemIndex]: [...currentSelected, ...inputSerials] }
+                                              }));
+                                            }}
+                                            placeholder={(selectedOrderSerials[slip.id]?.[itemIndex] || []).length === 0 ? "Nhập mã serial, ngăn cách bằng dấu phẩy..." : ""}
+                                            className="flex-1 min-w-[100px] outline-none bg-transparent border-none text-sm"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="text-sm">
+                                        <span className={((serialNumbers[slip.id]?.[itemIndex] || []).length === item.quantity) ? 'text-emerald-600' : 'text-rose-500'}>
+                                          {((serialNumbers[slip.id]?.[itemIndex] || []).length === item.quantity) ? (
+                                            <CheckCircle className="w-4 h-4 inline mr-2" />
+                                          ) : (
+                                            <AlertCircle className="w-4 h-4 inline mr-2" />
+                                          )}
+                                          {(serialNumbers[slip.id]?.[itemIndex] || []).length}/{item.quantity} Serial
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
+                                        <NumberInput
+                                          value={item.warranty_months ?? 1}
+                                          onChange={(value) => updateSlipItem(slip.id, itemIndex, 'warranty_months', Number(value) || 1)}
+                                          min={1}
+                                          className="w-20"
+                                        />
+                                        <span className="text-xs">tháng (tính từ ngày giao hàng)</span>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          );
+                        })}
+                      </TableBody>
                       </Table>
                     </div>
                   </div>

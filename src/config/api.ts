@@ -143,6 +143,7 @@ export const API_ENDPOINTS = {
     PAYMENTS: (id: string) => `/orders/${id}/payments`,
     HISTORY: (id: string) => `/orders/${id}/history`,
     BANKS: '/orders/banks',
+    WARRANTY_ACTIVE: (id: string) => `/orders/${id}/warrantyActive`,
   },
 
   // History

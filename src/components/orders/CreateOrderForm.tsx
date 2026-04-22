@@ -10,9 +10,9 @@ import { Combobox } from "@/components/ui/combobox";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, Plus, ShoppingCart, ShoppingBag } from "lucide-react";
+import { Trash2, Plus, ShoppingCart, ShoppingBag, Search, CheckCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { customerApi, VatInfo, Customer } from "@/api/customer.api";
@@ -20,15 +20,17 @@ import { Supplier, supplierApi } from "@/api/supplier.api";
 import { productApi } from "@/api/product.api";
 import { warehouseApi } from "@/api/warehouse.api";
 import { orderApi } from "@/api/order.api";
-import { stockLevelsApi } from "@/api/stockLevels.api";
 import { getErrorMessage } from "@/lib/error-utils";
 import { AddressFormSeparate } from "@/components/common/AddressFormSeparate";
 import BankSelector from "./BankSelector";
 import { LoadingWrapper } from "@/components/LoadingWrapper";
+
 interface CreateOrderFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOrderCreated: () => void;
+  orderId?: string;
+  orderData?: any;
 }
 interface OrderItem {
   id: string;
@@ -42,6 +44,8 @@ interface OrderItem {
   vat_total_price: number;
   vat_amount: number;
   warehouse_id: string;
+  serial_manage?: boolean;
+  warranty_months?: number;
 }
 interface OrderFormState {
   customer_id: string;
@@ -169,7 +173,7 @@ const createInitialOrderState = (): OrderFormState => ({
   expenses: [{ name: "Chi phí vận chuyển", amount: 0, note: "" }],
   paymentDeadline: "",
 });
-const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated }) => {
+const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, onOrderCreated, orderId, orderData }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -182,6 +186,8 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
   const [newOrder, setNewOrder] = useState<OrderFormState>(() => createInitialOrderState());
   const [orderType, setOrderType] = useState<'sale' | 'purchase'>('sale');
   const [shippingAddressVersion, setShippingAddressVersion] = useState(0);
+  const [serialNumbers, setSerialNumbers] = useState<Record<number, string[]>>({});
+  const [serialText, setSerialText] = useState<Record<number,string>>({});
   const customerCardRef = useRef<HTMLDivElement>(null);
   const vatCardRef = useRef<HTMLDivElement>(null);
   const shippingCardRef = useRef<HTMLDivElement>(null);
@@ -190,9 +196,124 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
 
   useEffect(() => {
     if (open) {
-      setNewOrder(createInitialOrderState());
-      setOrderType('sale');
-      setShippingAddressVersion((v) => v + 1);
+      // If editing, always fetch fresh data from API when orderId is available
+      if (orderId) {
+        const fetchOrderDetails = async () => {
+          try {
+            const freshOrderData = await orderApi.getOrder(orderId);
+            // Populate form with fresh order data
+            populateFormWithOrderData(freshOrderData);
+          } catch (error) {
+            console.error('Error fetching order details:', error);
+            // Fallback to orderData if API call fails
+            if (orderData) {
+              populateFormWithOrderData(orderData);
+            }
+          }
+        };
+        fetchOrderDetails();
+      } else if (orderData) {
+        // If editing with orderData but no orderId, use orderData directly
+        // Handle both { data: {...} } and direct data formats
+        const actualOrderData = orderData.data || orderData;
+        const orderTypeValue = actualOrderData.type || actualOrderData.order_type || 'sale';
+        setOrderType(orderTypeValue);
+
+        // Map order data to form state
+        const formData: OrderFormState = {
+          customer_id: actualOrderData.customer_id || actualOrderData.customer?.id || '',
+          customer_name: actualOrderData.customer_name || actualOrderData.customer?.name || '',
+          customer_code: actualOrderData.customer_code || actualOrderData.customer?.code || '',
+          customer_phone: actualOrderData.customer_phone || actualOrderData.customer?.phone || '',
+          customer_email: actualOrderData.customer_email || actualOrderData.customer?.email || '',
+          order_type: orderTypeValue,
+          notes: actualOrderData.notes || actualOrderData.note || '',
+          contract_code: actualOrderData.contract_code || '',
+          purchase_order_number: actualOrderData.purchase_order_number || '',
+          vat_tax_code: actualOrderData.taxCode || '',
+          vat_company_name: actualOrderData.companyName || '',
+          vat_company_address: actualOrderData.companyAddress || '',
+          vat_company_phone: actualOrderData.companyPhone || '',
+          vat_company_addressInfo: {
+            provinceCode: '',
+            districtCode: '',
+            wardCode: ''
+          },
+          vat_invoice_email: actualOrderData.vatEmail || '',
+          vat_percentage: undefined,
+          vat_total_price: undefined,
+          shipping_recipient_name: actualOrderData.receiverName || '',
+          shipping_recipient_phone: actualOrderData.receiverPhone || '',
+          shipping_address: actualOrderData.receiverAddress || '',
+          shipping_addressInfo: {
+            provinceCode: actualOrderData.addressInfo?.provinceCode || '',
+            districtCode: actualOrderData.addressInfo?.districtCode || '',
+            wardCode: actualOrderData.addressInfo?.wardCode || '',
+            provinceName: actualOrderData.addressInfo?.province?.name || '',
+            districtName: actualOrderData.addressInfo?.district?.name || '',
+            wardName: actualOrderData.addressInfo?.ward?.name || '',
+          },
+          initial_payment: actualOrderData.initial_payment || 0,
+          initial_payment_method: actualOrderData.payment_method || 'cash',
+          initial_payment_bank: '',
+          order_warehouse_id: '',
+items: (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).map((item: any) => {
+            const result = {
+            id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            product_id: item.product_id || item.productId || item.product?.id || '',
+            product_code: item.product_code || item.productCode || item.product?.code || '',
+            product_name: item.product_name || item.productName || item.product?.name || '',
+            quantity: item.quantity || 1,
+            unit_price: item.unit_price || item.unitPrice || 0,
+            total_price: item.total_price || (item.quantity * item.unit_price) || 0,
+            vat_percentage: item.vat_percentage || item.vatPercentage || 0,
+            vat_total_price: item.vat_total_price || 0,
+            vat_amount: item.vat_amount || 0,
+            warehouse_id: '',
+            serial_manage: (item.manageSerials ?? false) || (Array.isArray(item.serials) && item.serials.length > 0),
+            warranty_months: item.warranty_months ?? item.warrantyMonths ?? 
+              (Array.isArray(item.serials) && item.serials.length > 0 
+                ? item.serials[0]?.warrantyMonths ?? item.serials[0]?.warranty_months ?? 1
+                : 1),
+            };
+            return result;
+          }),
+
+
+          expenses: (actualOrderData.expenses || []).map((exp: any) => ({
+            name: exp.name || '',
+            amount: exp.amount || 0,
+            note: exp.note || ''
+          })),
+          paymentDeadline: actualOrderData.paymentDeadline || ''
+        };
+
+        setNewOrder(formData);
+        setShippingAddressVersion((v) => v + 1);
+        
+        // Load serial numbers from order items
+        const serials: Record<number, string[]> = {};
+        (orderData.items || orderData.order_items || []).forEach((item: any, index: number) => {
+          if (item.serials && item.serials.length > 0) {
+            serials[index] = item.serials.map((s: any) => {
+              if (typeof s === 'string') return s;
+              if (s && typeof s === 'object' && s.serial_number) return s.serial_number;
+              return String(s);
+            });
+          }
+        });
+        setSerialNumbers(serials);
+        setSerialText(Object.fromEntries(Object.entries(serials).map(([k,v]) => [k, v.join(', ')])));
+      } else {
+        // Creating new order
+        setNewOrder(createInitialOrderState());
+        setOrderType('sale');
+        setShippingAddressVersion((v) => v + 1);
+        setSerialNumbers({});
+        setSerialText({});
+      }
+      
+      // Reset additional serial dialog state removed, no extra reset needed
 
       // Scroll to section based on tab param
       const tab = searchParams.get('tab');
@@ -211,11 +332,108 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           }
         }, 100);
       }
+    } else {
+      setSerialNumbers({});
     }
-  }, [open, searchParams]);
+  }, [open, searchParams, orderId, orderData]);
   useEffect(() => {
     loadData();
   }, []);
+
+  const populateFormWithOrderData = async (orderData: any) => {
+    // Handle both { data: {...} } and direct data formats
+    const actualOrderData = orderData.data || orderData;
+    const orderTypeValue = actualOrderData.type || actualOrderData.order_type || 'sale';
+    setOrderType(orderTypeValue);
+    
+    // Map products for order items and preserve serial flag from existing data
+    const itemsWithSerialRequired = (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).map((item: any) => {
+      const productId = item.product_id || item.productId || item.product?.id || '';
+      const existingSerials = Array.isArray(item.serials) ? item.serials : [];
+      const result = {
+        id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        product_id: productId,
+        product_code: item.product_code || item.productCode || item.product?.code || '',
+        product_name: item.product_name || item.productName || item.product?.name || '',
+        quantity: item.quantity || 1,
+        unit_price: item.unit_price || item.unitPrice || 0,
+        total_price: item.total_price || (item.quantity * item.unit_price) || 0,
+        vat_percentage: item.vat_percentage || item.vatPercentage || 0,
+        vat_total_price: item.vat_total_price || 0,
+        vat_amount: item.vat_amount || 0,
+        warehouse_id: '',
+        warranty_months: item.warranty_months ?? item.warrantyMonths ?? (existingSerials.length > 0 ? existingSerials[0]?.warrantyMonths ?? existingSerials[0]?.warranty_months ?? 1 : (item.manageSerials ? 1 : 0)),
+        serial_manage: (item.manageSerials ?? false) || (existingSerials.length > 0),
+      };
+      return result;
+    });
+    
+    // Map order data to form state
+    const formData: OrderFormState = {
+      customer_id: actualOrderData.customer_id || actualOrderData.customer?.id || '',
+      customer_name: actualOrderData.customer_name || actualOrderData.customer?.name || '',
+      customer_code: actualOrderData.customer_code || actualOrderData.customer?.code || '',
+      customer_phone: actualOrderData.customer_phone || actualOrderData.customer?.phone || '',
+      customer_email: actualOrderData.customer_email || actualOrderData.customer?.email || '',
+      order_type: orderTypeValue,
+      notes: actualOrderData.notes || actualOrderData.note || '',
+      contract_code: actualOrderData.contract_code || '',
+      purchase_order_number: actualOrderData.purchase_order_number || '',
+      vat_tax_code: actualOrderData.taxCode || '',
+      vat_company_name: actualOrderData.companyName || '',
+      vat_company_address: actualOrderData.companyAddress || '',
+      vat_company_phone: actualOrderData.companyPhone || '',
+      vat_company_addressInfo: {
+        provinceCode: '',
+        districtCode: '',
+        wardCode: ''
+      },
+      vat_invoice_email: actualOrderData.vatEmail || '',
+      vat_percentage: undefined,
+      vat_total_price: undefined,
+      shipping_recipient_name: actualOrderData.receiverName || '',
+      shipping_recipient_phone: actualOrderData.receiverPhone || '',
+      shipping_address: actualOrderData.receiverAddress || '',
+      shipping_addressInfo: {
+        provinceCode: actualOrderData.addressInfo?.provinceCode || '',
+        districtCode: actualOrderData.addressInfo?.districtCode || '',
+        wardCode: actualOrderData.addressInfo?.wardCode || '',
+        provinceName: actualOrderData.addressInfo?.province?.name || '',
+        districtName: actualOrderData.addressInfo?.district?.name || '',
+        wardName: actualOrderData.addressInfo?.ward?.name || '',
+      },
+      initial_payment: actualOrderData.initial_payment || 0,
+      initial_payment_method: actualOrderData.payment_method || 'cash',
+      initial_payment_bank: '',
+      order_warehouse_id: '',
+      items: itemsWithSerialRequired,
+      expenses: (actualOrderData.expenses || []).map((exp: any) => ({
+        name: exp.name || '',
+        amount: exp.amount || 0,
+        note: exp.note || ''
+      })),
+      paymentDeadline: actualOrderData.paymentDeadline || ''
+    };
+    
+    setNewOrder(formData);
+    setShippingAddressVersion((v) => v + 1);
+    
+    // Load serial numbers from order items
+    const serials: Record<number, string[]> = {};
+    (actualOrderData.items || actualOrderData.order_items || actualOrderData.details || []).forEach((item: any, index: number) => {
+      if (item.serials && item.serials.length > 0) {
+        // Handle both string[] and object[] formats
+        serials[index] = item.serials.map((s: any) => {
+          if (typeof s === 'string') return s;
+          if (s && typeof s === 'object' && s.serial_number) return s.serial_number;
+          return String(s);
+        });
+      }
+    });
+    setSerialNumbers(serials);
+    setSerialText(Object.fromEntries(Object.entries(serials).map(([k,v]) => [k, v.join(', ')])));
+  };
+
   const loadData = async () => {
     try {
       const [customersRes, suppliersRes, productsRes, warehousesRes, banksRes] = await Promise.all([
@@ -304,7 +522,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         vat_percentage: 0,
         vat_total_price: 0,
         vat_amount: 0,
-        warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : "")
+        warehouse_id: prev.order_warehouse_id || (warehouses.length === 1 ? warehouses[0].id : ""),
+        serial_manage: false,
+        warranty_months: 1,
       }]
     }));
   };
@@ -313,6 +533,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
     }));
+    setSerialNumbers(prev => {
+      const newSerialNumbers: Record<number, string[]> = {};
+      Object.keys(prev).forEach(key => {
+        const numKey = parseInt(key);
+        if (numKey < index) {
+          newSerialNumbers[numKey] = prev[numKey];
+        } else if (numKey > index) {
+          newSerialNumbers[numKey - 1] = prev[numKey];
+        }
+      });
+      return newSerialNumbers;
+    });
   };
   const updateItem = (index: number, field: keyof OrderItem, value: any) => {
     setNewOrder(prev => {
@@ -326,7 +558,6 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             items[index].product_code = product.code;
             items[index].product_name = product.name;
             items[index].unit_price = product.price;
-            // Gắn kho theo kho của đơn nếu có
             if (prev.order_warehouse_id) {
               items[index].warehouse_id = prev.order_warehouse_id;
             } else if (!items[index].warehouse_id && warehouses.length === 1) {
@@ -391,6 +622,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
     try {
       let customerId = newOrder.customer_id;
       let selectedCustomer: Customer | undefined;
+      const isEditing = Boolean(orderId);
 
       // Handle customer/supplier creation/selection (for both sale and purchase orders)
       if (newOrder.customer_id === "__new__") {
@@ -526,8 +758,9 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         longitude: selectedCustomer.addressInfo.longitude,
       } : undefined;
       const orderVatInfo = extractVatInfoFromOrder(newOrder);
-      // Create order via backend API
-      const orderData = await orderApi.createOrder({
+      
+      // Prepare order data for create or update
+      const orderPayloadRaw = {
         customerId: customerId,
         customerName: newOrder.customer_name || selectedCustomer?.name || "",
         customerPhone: newOrder.customer_phone || selectedCustomer?.phoneNumber || undefined,
@@ -538,7 +771,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
         contractCode: newOrder.contract_code || undefined,
         purchaseOrderNumber: newOrder.purchase_order_number || undefined,
         note: newOrder.notes || undefined,
-        status: 'new',
+        status: 'new' as const,
         orderType: orderType, // Use the orderType state
         type: orderType, // Add type parameter for backend
         // VAT Information - removed VAT rate from UI, backend will handle
@@ -584,12 +817,27 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
           : undefined,
         paymentDeadline: newOrder.paymentDeadline || undefined,
         // Order details
-        details: newOrder.items.map(it => ({
-          productId: it.product_id,
-          vatPercentage: it.vat_percentage || 0,
-          quantity: it.quantity,
-          unitPrice: it.unit_price,
-        })),
+        details: newOrder.items.map((it, index) => {
+          const baseDetail = {
+            productId: it.product_id,
+            vatPercentage: it.vat_percentage || 0,
+            quantity: it.quantity,
+            unitPrice: it.unit_price,
+          };
+
+          // Only include serial-related fields if serial_manage is true
+          if (!it.serial_manage) {
+            return baseDetail;
+          }
+
+          const currentSerials = serialNumbers[index] || [];
+          return {
+            ...baseDetail,
+            manageSerials: true,
+            ...(currentSerials.length > 0 && { serials: currentSerials }),
+            ...(currentSerials.length > 0 && it.warranty_months !== undefined && { warrantyMonths: it.warranty_months }),
+          };
+        }),
         // Additional expenses
         expenses: newOrder.expenses
           .filter(exp => (exp.name && exp.name.trim().length > 0) || exp.amount)
@@ -598,7 +846,43 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
             amount: exp.amount || 0,
             note: exp.note && exp.note.trim().length > 0 ? exp.note.trim() : undefined,
           })),
-      });
+      };
+      
+      // Helper function to remove undefined/null/empty string values from object
+      const removeEmptyFields = (obj: any): any => {
+        const cleaned: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (value !== undefined && value !== null && value !== '') {
+            if (Array.isArray(value)) {
+              // Keep arrays as-is (they may be empty but valid)
+              cleaned[key] = value;
+            } else if (typeof value === 'object' && value !== null) {
+              // Recursively clean nested objects
+              const cleanedNested = removeEmptyFields(value);
+              if (Object.keys(cleanedNested).length > 0) {
+                cleaned[key] = cleanedNested;
+              }
+            } else {
+              cleaned[key] = value;
+            }
+          }
+        }
+        return cleaned;
+      };
+      
+      // For update, only include fields that have values
+      const orderPayload = isEditing ? removeEmptyFields(orderPayloadRaw) : orderPayloadRaw;
+      
+      // Call create or update API based on mode
+      let orderData;
+      if (isEditing && orderId) {
+        // Update existing order
+        orderData = await orderApi.updateOrder(orderId, orderPayload);
+      } else {
+        // Create new order
+        orderData = await orderApi.createOrder(orderPayload);
+      }
+      
       // Items are included in order payload; adjust if BE requires separate calls
       // TODO: initial payment can be handled via payments API if available
       // Get order code from response
@@ -628,16 +912,18 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       }
       toast({
         title: "Thành công",
-        description: `Đã tạo đơn hàng ${orderCode}`,
+        description: isEditing ? `Đã cập nhật đơn hàng ${orderCode}` : `Đã tạo đơn hàng ${orderCode}`,
       });
       setNewOrder(createInitialOrderState());
       setOrderType('sale');
       setShippingAddressVersion((v) => v + 1);
+      setSerialNumbers({});
+      setSerialText({});
       onOrderCreated();
     } catch (error) {
       toast({
         title: "Lỗi",
-        description: getErrorMessage(error, "Không thể tạo đơn hàng"),
+        description: getErrorMessage(error, orderId ? "Không thể cập nhật đơn hàng" : "Không thể tạo đơn hàng"),
         variant: "destructive",
       });
       // If a new customer was created but order creation failed,
@@ -670,34 +956,36 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
       onRetry={() => {
         loadData();
       }}
-      loadingMessage="Đang tải dữ liệu tạo đơn hàng..."
+      loadingMessage={orderId ? "Đang tải dữ liệu chỉnh sửa đơn hàng..." : "Đang tải dữ liệu tạo đơn hàng..."}
     >
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tạo đơn hàng mới</DialogTitle>
+            <DialogTitle>{orderId ? 'Chỉnh sửa đơn hàng' : 'Tạo đơn hàng mới'}</DialogTitle>
             <DialogDescription>
-              Nhập thông tin chi tiết cho đơn hàng mới
+              {orderId ? 'Cập nhật thông tin chi tiết cho đơn hàng' : 'Nhập thông tin chi tiết cho đơn hàng mới'}
             </DialogDescription>
           </DialogHeader>
-          {/* Order Type Tabs */}
-          <Tabs value={orderType} onValueChange={(value) => {
-            setOrderType(value as 'sale' | 'purchase');
-            // Reset form when switching type
-            setNewOrder(createInitialOrderState());
-            setShippingAddressVersion(v => v + 1);
-          }} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="sale" className="flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4" />
-                Bán hàng
-              </TabsTrigger>
-              <TabsTrigger value="purchase" className="flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4" />
-                Mua hàng
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* Order Type Tabs - Only show when creating new order */}
+          {!orderId && (
+            <Tabs value={orderType} onValueChange={(value) => {
+              setOrderType(value as 'sale' | 'purchase');
+              setNewOrder(createInitialOrderState());
+              setShippingAddressVersion(v => v + 1);
+              setSerialNumbers({});
+            }} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="sale" className="flex items-center gap-2">
+                  <ShoppingCart className="w-4 h-4" />
+                  Bán hàng
+                </TabsTrigger>
+                <TabsTrigger value="purchase" className="flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4" />
+                  Mua hàng
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           <div className="space-y-6">
             {/* Customer/Supplier Information */}
             <Card ref={customerCardRef}>
@@ -996,38 +1284,37 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                   <TableHeader>
                     <TableRow className="bg-slate-50 border-b-2 border-slate-200">
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Sản phẩm <span className="text-red-500">*</span>
+                        <div className="text-center">Sản phẩm <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thuế suất
+                        <div className="text-center">Thuế suất</div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Số lượng <span className="text-red-500">*</span>
+                        <div className="text-center">Số lượng <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Đơn giá <span className="text-red-500">*</span>
+                        <div className="text-center">Đơn giá <span className="text-red-500">*</span></div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Tiền thuế GTGT
+                        <div className="text-center">Tiền thuế GTGT</div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thành tiền chưa có thuế GTGT
+                        <div className="text-center">Thành tiền chưa có thuế GTGT</div>
                       </TableHead>
                       <TableHead className="border-r border-slate-200 font-semibold text-slate-700">
-                        Thành tiền có thuế GTGT
+                        <div className="text-center">Thành tiền có thuế GTGT</div>
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {newOrder.items.map((item, index) => (
-                      <TableRow
-                        key={item.id}
-                        className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
-                      >
+{newOrder.items.map((item, index) => (
+                      <React.Fragment key={item.id}>
+                        <TableRow
+                          className="border-b border-slate-100 hover:bg-slate-50/50 h-20"
+                        >
                         <TableCell className="border-r border-slate-100 align-top pt-4 max-w-[300px]">
                           <Combobox
-                            key={`product-select-${item.id}`}
                             options={products
                               .filter(product => {
                                 // Loại bỏ sản phẩm đã được chọn trong các item khác
@@ -1047,6 +1334,31 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                             emptyMessage="Không có sản phẩm nào"
                             className="w-full"
                           />
+                          <div className="mt-1">
+                            <label className="inline-flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(item.serial_manage)}
+                                onChange={(e) => {
+                                  updateItem(index, 'serial_manage', e.target.checked);
+                                                          if (!e.target.checked) {
+                                  setSerialNumbers(prev => {
+                                    const clone = { ...prev };
+                                    delete clone[index];
+                                    return clone;
+                                  });
+                                  setSerialText(prev => {
+                                    const clone = { ...prev };
+                                    delete clone[index];
+                                    return clone;
+                                  });
+                                }
+                              }}
+                                className="h-4 w-4"
+                              />
+                              <span>Quản lý serial</span>
+                            </label>
+                          </div>
                         </TableCell>
                         <TableCell className="border-r border-slate-100 align-top pt-4 text-center">
                           <div className="inline-block">
@@ -1098,6 +1410,69 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                           </Button>
                         </TableCell>
                       </TableRow>
+                      {item.serial_manage && (
+                        <TableRow className="bg-slate-50">
+                          <TableCell colSpan={8} className="p-3">
+                            <div className="space-y-2">
+                              <Label className="mb-1 block font-medium">Mã serial</Label>
+                              <Textarea
+                                value={serialText[index] ?? (serialNumbers[index] || []).join(', ')}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const t = e.currentTarget as HTMLTextAreaElement;
+                                    const text = t.value;
+                                    const cursorPos = t.selectionStart;
+                                    const next = `${text.slice(0, cursorPos)},${text.slice(cursorPos)}`;
+                                    setSerialText(prev => ({ ...prev, [index]: next }));
+                                    const serialList = next
+                                      .split(',')
+                                      .map(s => s.trim())
+                                      .filter(s => s);
+                                    setSerialNumbers(prev => ({ ...prev, [index]: serialList }));
+                                    setTimeout(() => {
+                                      t.selectionStart = t.selectionEnd = cursorPos + 1;
+                                    }, 0);
+                                  }
+                                }}
+                                onChange={(e) => {
+                                  const text = e.target.value;
+                                  setSerialText(prev => ({ ...prev, [index]: text }));
+                                  const serials = text
+                                    .split(',')
+                                    .map(s => s.trim())
+                                    .filter(s => s);
+                                  setSerialNumbers(prev => ({ ...prev, [index]: serials }));
+                                }}
+                                rows={3}
+                                placeholder="Nhập mã serial, ngăn cách bằng dấu phẩy, nhấn Enter để chèn dấu phẩy"
+                                className="w-full"
+                              />
+                              <div className="text-sm">
+                                <span className={((serialNumbers[index] || []).length === item.quantity) ? 'text-emerald-600' : 'text-rose-500'}>
+                                  {((serialNumbers[index] || []).length === item.quantity) ? (
+                                    <CheckCircle className="w-4 h-4 inline mr-2" />
+                                  ) : (
+                                    <AlertCircle className="w-4 h-4 inline mr-2" />
+                                  )}
+                                  {(serialNumbers[index] || []).length}/{item.quantity} Serial
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
+                                <NumberInput
+                                  value={item.warranty_months ?? 1}
+                                  onChange={(value) => updateItem(index, 'warranty_months', Number(value) || 1)}
+                                  min={1}
+                                  className="w-20"
+                                />
+                                <span>tháng (tính từ ngày giao hàng)</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
@@ -1280,7 +1655,7 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({ open, onOpenChange, o
                 Hủy
               </Button>
               <Button onClick={handleSubmit} disabled={loading}>
-                {loading ? "Đang tạo..." : "Tạo đơn hàng"}
+                {loading ? (orderId ? "Đang cập nhật..." : "Đang tạo...") : (orderId ? "Cập nhật đơn hàng" : "Tạo đơn hàng")}
               </Button>
             </div>
           </div>

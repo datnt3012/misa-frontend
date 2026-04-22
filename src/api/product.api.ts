@@ -46,6 +46,7 @@ export interface Product {
    originalCostPrice?: number;
    stockLevel?: ProductStockLevel[];
 }
+
 export interface ProductWithStock extends Product {
   current_stock: number;
   location?: string;

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/popover"
 
 interface ComboboxProps {
-  options: { label: string; value: string }[]
+  options: { label: string; value: string; badge?: React.ReactNode; disabled?: boolean }[]
   value?: string | string[]
   onValueChange?: (value: string | string[]) => void
   placeholder?: string
@@ -128,27 +128,36 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start" sideOffset={4} onWheelCapture={(e) => e.stopPropagation()}>
+      <PopoverContent className="w-auto min-w-[350px] max-w-[500px] p-0" align="start" sideOffset={4} onWheelCapture={(e) => e.stopPropagation()}>
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList onWheel={(e) => e.stopPropagation()}>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
-              {options.map((option) => (
+              {options.map((option, index) => (
                 <CommandItem
-                  key={option.value}
+                  key={`${option.value}-${index}`}
                   value={`${option.label} ${option.value}`}
                   onSelect={() => {
+                    if (option.disabled) return
                     handleSelect(option.value)
                   }}
+                  disabled={option.disabled}
+                  className={cn(
+                    "flex items-start justify-between gap-2",
+                    option.disabled && "opacity-50 cursor-not-allowed"
+                  )}
                 >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      isSelected(option.value) ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {option.label}
+                  <div className="flex items-start">
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4 shrink-0 mt-0.5",
+                        isSelected(option.value) ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className={cn("whitespace-normal", option.disabled && "text-muted-foreground line-through")}>{option.label}</span>
+                  </div>
+                  {option.badge && <span className="shrink-0">{option.badge}</span>}
                 </CommandItem>
               ))}
             </CommandGroup>

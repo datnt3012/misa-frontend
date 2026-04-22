@@ -14,10 +14,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { NumberInput } from '@/components/ui/number-input';
-import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown } from 'lucide-react';
+import { CheckCircle, Package, FileText, Clock, Search, ChevronUp, ChevronDown, ChevronsUpDown, Truck, ArrowRight, XCircle, Download, PlusCircle, Plus, Trash2, ExternalLink, Upload, ChevronRight, Filter, Warehouse, RotateCw, Loader, Printer, FileDown, Zap, MoreHorizontal, Eye, Edit, Trash, X, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Progress } from '@/components/ui/progress';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { warehouseReceiptsApi, type WarehouseReceipt, type WarehouseReceiptImportJobSnapshot, type WarehouseReceiptImportJobStatus } from '@/api/warehouseReceipts.api';
@@ -36,6 +37,12 @@ import { set } from 'date-fns';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { SlipCreatingDialog } from '@/components/inventory/SlipCreatingDialog';
 import { SlipDetailDialog } from '@/components/inventory/SlipDetailDialog';
+
+type OrderSerialItem = {
+  id?: string;
+  serialNumber: string;
+  exported?: boolean;
+};
 
 function ExportSlipsContent() {
   const navigate = useNavigate();
@@ -116,6 +123,20 @@ function ExportSlipsContent() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [total, setTotal] = useState<number>(0);
+
+  // Serial input dialog state
+  const [serialInputOpen, setSerialInputOpen] = useState(false);
+  const [serialInputSlipId, setSerialInputSlipId] = useState<string | null>(null);
+  const [serialInputs, setSerialInputs] = useState<Record<number, string>>({});
+  const [newSerialInputs, setNewSerialInputs] = useState<Record<number, string>>({});
+  const [warrantyMonths, setWarrantyMonths] = useState<Record<number, number>>({});
+  const [savingSerials, setSavingSerials] = useState(false);
+  const [orderSerials, setOrderSerials] = useState<Record<number, OrderSerialItem[]>>({});
+  const [selectedOrderSerials, setSelectedOrderSerials] = useState<Record<number, string[]>>({});
+
+  const [serialWarningOpen, setSerialWarningOpen] = useState(false);
+  const [missingSerials, setMissingSerials] = useState<Array<{ productName: string; required: number; entered: number }>>([]);
+  const [pendingStatusAction, setPendingStatusAction] = useState<{ slipId: string; action: string } | null>(null);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -410,7 +431,8 @@ function ExportSlipsContent() {
           id: s.id || '',
           code: s.code || '',
           type: s.type || '',
-          order_id: s.order_id || '',
+          order_id: s.orderId || s.order_id || '',
+          orderId: s.orderId || s.order_id || undefined,
           warehouse_id: s.warehouse_id || undefined,
           warehouse_name: s.warehouse_name || undefined,
           status: s.status || 'pending',
@@ -524,39 +546,191 @@ function ExportSlipsContent() {
     }
   };
 
-  // Approve export slip using warehouseReceiptsApi
   const approveExportSlip = async (slipId: string) => {
     try {
       await warehouseReceiptsApi.approveReceipt(slipId);
-      toast({
-        title: "Thành công",
-        description: "Đã phê duyệt phiếu xuất kho",
-      });
+      toast({ title: "Thành công", description: "Đã phê duyệt phiếu xuất kho" });
       fetchExportSlips();
     } catch (error: any) {
-      toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể phê duyệt phiếu xuất kho",
-        variant: "destructive",
-      });
+      toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể phê duyệt phiếu xuất kho", variant: "destructive" });
     }
   };
 
-  // Reject export slip using warehouseReceiptsApi
   const rejectExportSlip = async (slipId: string) => {
     try {
       await warehouseReceiptsApi.rejectReceipt(slipId);
-      toast({
-        title: "Thành công",
-        description: "Đã từ chối phiếu xuất kho",
-      });
+      toast({ title: "Thành công", description: "Đã từ chối phiếu xuất kho" });
       fetchExportSlips();
     } catch (error: any) {
-      toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || error.message || "Không thể từ chối phiếu xuất kho",
-        variant: "destructive",
+      toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể từ chối phiếu xuất kho", variant: "destructive" });
+    }
+  };
+
+  const cancelExportSlip = async (slipId: string) => {
+    try {
+      await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled' });
+      toast({ title: "Thành công", description: "Đã hủy phiếu xuất kho" });
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể hủy phiếu xuất kho", variant: "destructive" });
+    }
+  };
+
+  const checkMissingSerials = (receipt: WarehouseReceipt): Array<{ productName: string; required: number; entered: number }> => {
+    const missing: Array<{ productName: string; required: number; entered: number }> = [];
+    const details = receipt.details || receipt.items || [];
+    
+    for (const item of details) {
+      const productName = item.product?.name || item.product_name || 'Sản phẩm không tên';
+      const requiredQty = parseInt(item.quantity as any) || 0;
+      
+      let enteredSerials = 0;
+      
+      if (item.serials && Array.isArray(item.serials)) {
+        enteredSerials = item.serials.length;
+      } else if (item.serialNumbers && typeof item.serialNumbers === 'string') {
+        enteredSerials = item.serialNumbers.split(',').filter(s => s.trim()).length;
+      } else if (item.serial_numbers && typeof item.serial_numbers === 'string') {
+        enteredSerials = item.serial_numbers.split(',').filter(s => s.trim()).length;
+      }
+      
+      if (requiredQty > 0 && enteredSerials < requiredQty) {
+        missing.push({ productName, required: requiredQty, entered: enteredSerials });
+      }
+    }
+    
+    return missing;
+  };
+
+  const openSerialInputForPendingAction = async (slipId: string, action: string) => {
+    try {
+      const receipt = await warehouseReceiptsApi.getReceipt(slipId);
+      setSelectedSlip(receipt);
+      setSerialInputSlipId(slipId);
+      setSelectedOrderSerials({});
+      setOrderSerials({});
+      
+      const existingSerials: Record<number, string> = {};
+      const existingWarranty: Record<number, number> = {};
+      const loadedOrderSerials: Record<number, OrderSerialItem[]> = {};
+      const details = receipt.details || receipt.items || [];
+      const orderDetails = receipt.order?.details || [];
+      
+      details.forEach((item: any, index: number) => {
+        const productCode = item.product?.code;
+        const productId = item.product?.id;
+        let foundOrderSerials: OrderSerialItem[] = [];
+        
+        for (const od of orderDetails) {
+          if (!od.serials || !Array.isArray(od.serials) || od.serials.length === 0) continue;
+          
+          const odProductCode = od.product?.code;
+          const odProductId = od.product?.id || od.productId;
+          
+          const isMatch = (odProductCode === productCode) || (odProductId === productId);
+          
+          if (isMatch) {
+            foundOrderSerials = od.serials
+              .map((s: any) => ({
+                id: s.id,
+                serialNumber: s.serial_number || s.serialNumber || s.serial || '',
+                exported: s.exported,
+              }))
+              .filter((s: OrderSerialItem) => s.serialNumber);
+            break;
+          }
+        }
+        
+        if (foundOrderSerials.length > 0) {
+          loadedOrderSerials[index] = foundOrderSerials;
+        }
+        
+        if (item.serials && Array.isArray(item.serials) && item.serials.length > 0) {
+          const serials = item.serials
+            .map((s: any) => s.serial_number || s.serialNumber || s.serial)
+            .filter((s: string) => s);
+          if (serials.length > 0) {
+            existingSerials[index] = serials.join(', ');
+          }
+          const firstSerial = item.serials[0];
+          if (firstSerial?.warrantyMonths !== undefined) {
+            existingWarranty[index] = firstSerial.warrantyMonths;
+          } else if (firstSerial?.warranty_months !== undefined) {
+            existingWarranty[index] = firstSerial.warranty_months;
+          }
+        } else if (item.serialNumbers && typeof item.serialNumbers === 'string') {
+          const serials = item.serialNumbers.split(',').map(s => s.trim()).filter(s => s);
+          if (serials.length > 0) {
+            existingSerials[index] = serials.join(', ');
+          }
+          if (item.warrantyMonths !== undefined) {
+            existingWarranty[index] = item.warrantyMonths;
+          } else if (item.warranty_months !== undefined) {
+            existingWarranty[index] = item.warranty_months;
+          }
+        } else if (item.serial_numbers && typeof item.serial_numbers === 'string') {
+          const serials = item.serial_numbers.split(',').map(s => s.trim()).filter(s => s);
+          if (serials.length > 0) {
+            existingSerials[index] = serials.join(', ');
+          }
+          if (item.warrantyMonths !== undefined) {
+            existingWarranty[index] = item.warrantyMonths;
+          } else if (item.warranty_months !== undefined) {
+            existingWarranty[index] = item.warranty_months;
+          }
+        }
       });
+      
+      setSerialInputs(existingSerials);
+      setWarrantyMonths(existingWarranty);
+      setOrderSerials(loadedOrderSerials);
+      setSerialInputOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch receipt for serial input:', error);
+      toast({ title: "Lỗi", description: "Không thể tải thông tin phiếu xuất kho", variant: "destructive" });
+    }
+  };
+
+  const handleStatusActionWithSerialCheck = async (slipId: string, action: string) => {
+    if (action !== 'picked' && action !== 'exported') {
+      handleStatusAction(slipId, action);
+      return;
+    }
+
+    try {
+      const receipt = await warehouseReceiptsApi.getReceipt(slipId);
+      const missing = checkMissingSerials(receipt);
+      
+      if (missing.length > 0) {
+        setMissingSerials(missing);
+        setPendingStatusAction({ slipId, action });
+        setSerialWarningOpen(true);
+        return;
+      }
+
+      handleStatusAction(slipId, action);
+    } catch (error: any) {
+      toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể kiểm tra Serial", variant: "destructive" });
+    }
+  };
+
+  const markAsPicked = async (slipId: string) => {
+    try {
+      await warehouseReceiptsApi.updateReceipt(slipId, { status: 'picked' });
+      toast({ title: "Thành công", description: "Đã đánh dấu đã lấy hàng" });
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái", variant: "destructive" });
+    }
+  };
+
+  const markAsExported = async (slipId: string) => {
+    try {
+      await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported' });
+      toast({ title: "Thành công", description: "Đã đánh dấu đã xuất kho" });
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái", variant: "destructive" });
     }
   };
 
@@ -645,7 +819,6 @@ function ExportSlipsContent() {
           response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'exported' });
           break;
         case 'cancelled':
-          // Don't send description when cancelling to avoid overriding it
           response = await warehouseReceiptsApi.updateReceipt(slipId, { status: 'cancelled' });
           break;
         default:
@@ -667,6 +840,69 @@ function ExportSlipsContent() {
         description: error.response?.data?.message || error.message || "Không thể cập nhật trạng thái",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleSerialInputChange = (index: number, value: string, maxQuantity: number) => {
+    setSerialInputs(prev => ({ ...prev, [index]: value }));
+  };
+
+  const handleSaveSerials = async () => {
+    if (!serialInputSlipId) return;
+    
+    try {
+      setSavingSerials(true);
+      
+      const allSerials: Record<number, string> = { ...serialInputs };
+      
+      // Merge selected order serials
+      Object.entries(selectedOrderSerials).forEach(([index, selectedSerials]) => {
+        const existing = (allSerials[parseInt(index)] || '').split(',').map(s => s.trim()).filter(s => s);
+        const combined = [...existing, ...selectedSerials];
+        allSerials[parseInt(index)] = combined.join(', ');
+      });
+      
+      // Merge new input serials
+      Object.entries(newSerialInputs).forEach(([index, value]) => {
+        const newSerials = value.split(',').map(s => s.trim()).filter(s => s);
+        const existing = (allSerials[parseInt(index)] || '').split(',').map(s => s.trim()).filter(s => s);
+        const combined = [...existing, ...newSerials];
+        allSerials[parseInt(index)] = combined.join(', ');
+      });
+
+      const serialsData = Object.entries(allSerials).map(([index, value]) => {
+        const serials = value.split(',').map(s => s.trim()).filter(s => s);
+        return {
+          productIndex: parseInt(index),
+          serials,
+          warrantyMonths: warrantyMonths[parseInt(index)] ?? 1
+        };
+      });
+
+      await warehouseReceiptsApi.updateReceipt(serialInputSlipId, {
+        serials: serialsData
+      } as any);
+
+      toast({
+        title: "Thành công",
+        description: "Đã lưu serial thành công",
+      });
+      setSerialInputOpen(false);
+      setSerialInputs({});
+      setNewSerialInputs({});
+      setWarrantyMonths({});
+      setOrderSerials({});
+      setSelectedOrderSerials({});
+      setSerialInputSlipId(null);
+      fetchExportSlips();
+    } catch (error: any) {
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || error.message || "Không thể lưu serial",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSerials(false);
     }
   };
 
@@ -697,16 +933,95 @@ function ExportSlipsContent() {
       case 'approved':
         return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã duyệt</Badge>;
       case 'rejected':
-        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã từ chối</Badge>;
       case 'picked':
         return <Badge variant="outline" className="whitespace-nowrap text-blue-600"><Package className="w-3 h-3 mr-1" />Đã lấy hàng</Badge>;
       case 'exported':
         return <Badge variant="outline" className="whitespace-nowrap text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Đã xuất kho</Badge>;
       case 'cancelled':
-        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Hủy lấy hàng</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap bg-red-100 text-red-800 border-red-200"><XCircle className="w-3 h-3 mr-1" />Đã hủy</Badge>;
       default:
         return <Badge variant="outline" className="whitespace-nowrap">{status}</Badge>;
     }
+  };
+
+  const getStatusDropdownOptions = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return [
+          { value: 'approve', label: 'Duyệt', icon: CheckCircle, className: 'text-green-600' },
+          { value: 'reject', label: 'Từ chối', icon: XCircle, className: 'text-red-600' },
+        ];
+      case 'approved':
+        return [
+          { value: 'picked', label: 'Đã lấy hàng', icon: Package, className: 'text-blue-600' },
+          canSeeExportedOption() ? { value: 'exported', label: 'Đã xuất kho', icon: CheckCircle, className: 'text-green-600' } : null,
+          { value: 'cancel', label: 'Hủy phiếu', icon: XCircle, className: 'text-red-600' },
+        ].filter(Boolean) as any;
+      case 'picked':
+        return canSeeExportedOption() ? [
+          { value: 'exported', label: 'Đã xuất kho', icon: CheckCircle, className: 'text-green-600' },
+          { value: 'cancel', label: 'Hủy phiếu', icon: XCircle, className: 'text-red-600' },
+        ] : [
+          { value: 'cancel', label: 'Hủy phiếu', icon: XCircle, className: 'text-red-600' },
+        ];
+      case 'exported':
+        return [
+          { value: 'cancel', label: 'Hủy phiếu', icon: XCircle, className: 'text-red-600' },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const handleStatusAction = (slipId: string, action: string) => {
+    switch (action) {
+      case 'approve':
+        approveExportSlip(slipId);
+        break;
+      case 'reject':
+        rejectExportSlip(slipId);
+        break;
+      case 'picked':
+      case 'exported':
+        handleStatusActionWithSerialCheck(slipId, action);
+        break;
+      case 'cancel':
+        cancelExportSlip(slipId);
+        break;
+    }
+  };
+
+  const StatusDropdown = ({ slip }: { slip: WarehouseReceipt }) => {
+    const options = getStatusDropdownOptions(slip.status);
+    const isActionable = options.length > 0 && canApproveExports;
+
+    if (!isActionable) {
+      return getStatusBadge(slip.status);
+    }
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-auto p-1 hover:bg-muted focus:bg-muted gap-1">
+            {getStatusBadge(slip.status)}
+            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="bg-background border shadow-lg z-50 min-w-[140px]">
+          {options.map((option) => (
+            <DropdownMenuItem
+              key={option.value}
+              onClick={() => handleStatusAction(slip.id, option.value)}
+              className={`cursor-pointer hover:bg-muted ${option.className}`}
+            >
+              <option.icon className="w-4 h-4 mr-2" />
+              {option.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   };
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -1486,6 +1801,47 @@ function ExportSlipsContent() {
         slipType="export"
         onSlipCreated={fetchExportSlips}
       />
+      <Dialog open={serialWarningOpen} onOpenChange={setSerialWarningOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-500" />
+              Không thể chuyển trạng thái
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Các sản phẩm sau chưa nhập đủ Serial:
+            </p>
+            <div className="bg-muted/50 rounded-md p-3 space-y-2 max-h-[200px] overflow-y-auto">
+              {missingSerials.map((item, index) => (
+                <div key={index} className="flex justify-between text-sm">
+                  <span>• {item.productName}:</span>
+                  <span className="font-medium text-red-600">{item.entered}/{item.required} Serial</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Vui lòng nhập đủ Serial trước khi chuyển trạng thái.
+            </p>
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="outline" onClick={() => setSerialWarningOpen(false)}>
+              Đóng
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingStatusAction) {
+                  setSerialWarningOpen(false);
+                  openSerialInputForPendingAction(pendingStatusAction.slipId, pendingStatusAction.action);
+                }
+              }}
+            >
+              Đi đến Nhập Serial
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Card>
         <CardHeader>
           <div className="flex items-center justify-end">
@@ -2108,7 +2464,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('code')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Số phiếu
                       {getSortIcon('code')}
                     </div>
@@ -2117,7 +2473,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('orderCode')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Đơn hàng
                       {getSortIcon('orderCode')}
                     </div>
@@ -2126,7 +2482,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('type')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Loại phiếu
                       {getSortIcon('type')}
                     </div>
@@ -2135,7 +2491,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[180px]"
                     onClick={() => handleSort('customerName')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Khách hàng
                       {getSortIcon('customerName')}
                     </div>
@@ -2144,7 +2500,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[130px]"
                     onClick={() => handleSort('totalAmount')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Giá trị
                       {getSortIcon('totalAmount')}
                     </div>
@@ -2153,7 +2509,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[120px]"
                     onClick={() => handleSort('status')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Trạng thái
                       {getSortIcon('status')}
                     </div>
@@ -2162,7 +2518,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                     onClick={() => handleSort('createdAt')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Ngày tạo
                       {getSortIcon('createdAt')}
                     </div>
@@ -2171,7 +2527,7 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                     onClick={() => handleSort('warehouse')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       kho xuất
                       {getSortIcon('warehouse')}
                     </div>
@@ -2180,13 +2536,13 @@ function ExportSlipsContent() {
                     className="cursor-pointer hover:bg-gray-50 select-none font-semibold text-center min-w-[150px]"
                     onClick={() => handleSort('completedAt')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex justify-center items-center gap-1">
                       Ngày xuất
                       {getSortIcon('completedAt')}
                     </div>
                   </TableHead>
-                  <TableHead className="font-semibold text-center min-w-[200px]">Ghi chú</TableHead>
-                  <TableHead className="font-semibold text-center min-w-[180px]">Thao tác</TableHead>
+                  <TableHead className="font-semibold min-w-[200px]"><div className="text-center">Ghi chú</div></TableHead>
+                  <TableHead className="font-semibold text-center min-w-[180px]"><div className="text-center">Thao tác</div></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2236,7 +2592,9 @@ function ExportSlipsContent() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center min-w-[120px]">{getStatusBadge(slip.status)}</TableCell>
+                    <TableCell className="text-center min-w-[140px]">
+                      <StatusDropdown slip={slip} />
+                    </TableCell>
                     <TableCell className="text-center min-w-[150px] text-muted-foreground text-sm">
                       {new Date(slip.created_at).toLocaleString('vi-VN')}
                     </TableCell>
@@ -2252,74 +2610,163 @@ function ExportSlipsContent() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center min-w-[180px]">
-                      <div className="flex space-x-2 justify-center">
-                        {/* Chi tiết button - always show */}
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            openDialog('view', slip.id);
-                            setSelectedSlip(slip);
-                            setShowDetailDialog(true);
-                          }}
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Button>
-
-                        {/* Cancel button - show for all statuses except cancelled/rejected */}
-                        {slip.status !== 'cancelled' && slip.status !== 'rejected' && slip.status !== 'pending' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStatusUpdateWithSelection(slip.id, 'cancelled', '')}
-                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
-                          >
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Hủy
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="w-4 h-4" />
                           </Button>
-                        )}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              openDialog('view', slip.id);
+                              setSelectedSlip(slip);
+                              setShowDetailDialog(true);
+                            }}
+                            className="cursor-pointer hover:bg-muted"
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Xem chi tiết
+                          </DropdownMenuItem>
+                          
 
-                        {/* Approval buttons - Only show when status is pending and user has permission */}
-                        {canApproveExports && slip.status === 'pending' && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => approveExportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 whitespace-nowrap"
+
+                          {(slip.orderId || slip.order?.id) && slip.status !== 'cancelled' && slip.status !== 'rejected' && (
+                            <DropdownMenuItem 
+                              onClick={async () => {
+                                try {
+                                  const orderId = slip.orderId || slip.order?.id;
+                                  const result = await orderApi.activateWarranty(orderId!);
+                                  toast({
+                                    title: "Thành công",
+                                    description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
+                                  });
+                                } catch (error) {
+                                  toast({
+                                    title: "Lỗi",
+                                    description: error.response?.data?.message || error.message || "Không thể kích hoạt bảo hành",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                              className="cursor-pointer hover:bg-muted"
                             >
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Duyệt
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => rejectExportSlip(slip.id)}
-                              className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 whitespace-nowrap"
+                              <Zap className="w-4 h-4 mr-2" />
+                              Kích hoạt bảo hành
+                            </DropdownMenuItem>
+                          )}
+
+                          {(slip.details || slip.items || []).length > 0 && (slip.type === 'export' || slip.type === 'return') && (slip.orderId || slip.order?.id) && slip.status !== 'cancelled' && slip.status !== 'rejected' && (
+                            <DropdownMenuItem 
+                              onClick={async () => {
+                                setSelectedSlip(slip);
+                                setSerialInputSlipId(slip.id);
+                                setSelectedOrderSerials({});
+                                setOrderSerials({});
+                                try {
+                                  const fullReceipt = await warehouseReceiptsApi.getReceipt(slip.id);
+                                  setSelectedSlip(fullReceipt);
+                                  const existingSerials: Record<number, string> = {};
+                                  const existingWarranty: Record<number, number> = {};
+                                  const loadedOrderSerials: Record<number, OrderSerialItem[]> = {};
+                                  const details = fullReceipt.details || fullReceipt.items || [];
+                                  const orderDetails = fullReceipt.order?.details || [];
+                                  
+                                  details.forEach((item: any, index: number) => {
+                                    // Load order serials from order.details for dropdown selection
+                                    const productCode = item.product?.code;
+                                    const productId = item.product?.id;
+                                    let foundOrderSerials: OrderSerialItem[] = [];
+                                    
+                                    // Find matching order detail
+                                    for (const od of orderDetails) {
+                                      if (!od.serials || !Array.isArray(od.serials) || od.serials.length === 0) continue;
+                                      
+                                      const odProductCode = od.product?.code;
+                                      const odProductId = od.product?.id || od.productId;
+                                      const odSerialProductCode = od.serials[0]?.product?.code;
+                                      const odSerialProductId = od.serials[0]?.product?.id || od.serials[0]?.productId;
+                                      
+                                      // Match by product code or product ID
+                                      const isMatch = (odProductCode === productCode) || 
+                                                  (odProductId === productId) ||
+                                                  (odSerialProductCode === productCode) ||
+                                                  (odSerialProductId === productId);
+                                      
+                                      if (isMatch) {
+                                        foundOrderSerials = od.serials
+                                          .map((s: any) => ({
+                                            id: s.id,
+                                            serialNumber: s.serial_number || s.serialNumber || s.serial || '',
+                                            exported: s.exported,
+                                          }))
+                                          .filter((s: { serialNumber: string }) => s.serialNumber);
+                                        break;
+                                      }
+                                    }
+                                    
+                                    if (foundOrderSerials.length > 0) {
+                                      loadedOrderSerials[index] = foundOrderSerials;
+                                    }
+                                    
+                                    // Load receipt serials if already saved
+                                    if (item.serials && Array.isArray(item.serials) && item.serials.length > 0) {
+                                      const serials = item.serials
+                                        .map((s: any) => s.serial_number || s.serialNumber || s.serial)
+                                        .filter((s: string) => s);
+                                      if (serials.length > 0) {
+                                        existingSerials[index] = serials.join(', ');
+                                      }
+                                      const firstSerial = item.serials[0];
+                                      if (firstSerial?.warrantyMonths !== undefined) {
+                                        existingWarranty[index] = firstSerial.warrantyMonths;
+                                      } else if (firstSerial?.warranty_months !== undefined) {
+                                        existingWarranty[index] = firstSerial.warranty_months;
+                                      }
+                                    }
+                                    else if (item.serialNumbers && typeof item.serialNumbers === 'string') {
+                                      const serials = item.serialNumbers.split(',').map(s => s.trim()).filter(s => s);
+                                      if (serials.length > 0) {
+                                        existingSerials[index] = serials.join(', ');
+                                      }
+                                      if (item.warrantyMonths !== undefined) {
+                                        existingWarranty[index] = item.warrantyMonths;
+                                      } else if (item.warranty_months !== undefined) {
+                                        existingWarranty[index] = item.warranty_months;
+                                      }
+                                    }
+                                    else if (item.serial_numbers && typeof item.serial_numbers === 'string') {
+                                      const serials = item.serial_numbers.split(',').map(s => s.trim()).filter(s => s);
+                                      if (serials.length > 0) {
+                                        existingSerials[index] = serials.join(', ');
+                                      }
+                                      if (item.warrantyMonths !== undefined) {
+                                        existingWarranty[index] = item.warrantyMonths;
+                                      } else if (item.warranty_months !== undefined) {
+                                        existingWarranty[index] = item.warranty_months;
+                                      }
+                                    }
+                                  });
+                                  setSerialInputs(existingSerials);
+                                  setWarrantyMonths(existingWarranty);
+                                  setOrderSerials(loadedOrderSerials);
+                                } catch (error) {
+                                  console.error('Failed to fetch receipt details for serial input:', error);
+                                  setSerialInputs({});
+                                  setWarrantyMonths({});
+                                  setOrderSerials({});
+                                  setSelectedOrderSerials({});
+                                }
+                                setSerialInputOpen(true);
+                              }}
+                              className="cursor-pointer hover:bg-muted"
                             >
-                              <XCircle className="w-3 h-3 mr-1" />
-                              Từ chối
-                            </Button>
-                          </>
-                        )}
-                        {/* Status Update Dropdown - Only show when status is approved or picked */}
-                        {getAvailableStatusOptions(slip.status).length > 0 && (slip.status === 'approved' || slip.status === 'picked') && (
-                          <Select onValueChange={(newStatus) => {
-                            handleStatusUpdateWithSelection(slip.id, newStatus, '');
-                          }}>
-                            <SelectTrigger className="w-40 h-8 text-xs bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200 hover:border-blue-300 focus:ring-2 focus:ring-blue-200 transition-all duration-200 shadow-sm">
-                              <SelectValue placeholder="Cập nhật trạng thái" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {getAvailableStatusOptions(slip.status).map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Nhập Serial
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -2446,6 +2893,189 @@ function ExportSlipsContent() {
         slipType="export"
         slip={slipDetail}
       />
+      {/* Serial Input Dialog */}
+      <Dialog open={serialInputOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSerialInputs({});
+          setNewSerialInputs({});
+          setWarrantyMonths({});
+          setOrderSerials({});
+          setSelectedOrderSerials({});
+        }
+        setSerialInputOpen(open);
+      }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Nhập Serial - {selectedSlip?.code}</DialogTitle>
+            <DialogDescription>
+              Nhập mã serial cho các sản phẩm trong phiếu xuất kho
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+            {(selectedSlip?.details || selectedSlip?.items || []).map((item: any, index) => {
+              const existingSerials = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+              const newSerials = (newSerialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+              const selectedOrderItemSerials = selectedOrderSerials[index] || [];
+              const allSerials = [...existingSerials, ...selectedOrderItemSerials, ...newSerials];
+              const allSerialsSet = new Set(allSerials.map(s => s.toLowerCase()));
+              const availableOrderSerials = (orderSerials[index] || []).filter(s => !allSerialsSet.has(s.serialNumber.toLowerCase()));
+              return (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <div>
+                      <span className="font-medium">{item.product?.name || item.product_name || 'Sản phẩm'}</span>
+                      <span className="text-muted-foreground ml-2">({item.product?.code || item.product_code})</span>
+                    </div>
+                    <span className="text-sm">SL: {item.quantity}</span>
+                  </div>
+                  
+                  {/* Dropdown chọn serial từ đơn hàng */}
+                  {availableOrderSerials.length > 0 && (
+                    <div className="mb-3">
+                      <Label className="font-medium text-sm text-muted-foreground mb-1 block">Chọn serial từ đơn hàng:</Label>
+                      <Combobox
+                        options={availableOrderSerials.map(s => ({ 
+                          value: s.serialNumber, 
+                          label: s.serialNumber,
+                          disabled: !!s.exported,
+                          badge: s.exported ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Đã xuất</span> : undefined,
+                        }))}
+                        value=""
+                        onValueChange={(value) => {
+                          if (value) {
+                            const currentSelected = selectedOrderSerials[index] || [];
+                            if (!currentSelected.includes(value)) {
+                              setSelectedOrderSerials(prev => ({ ...prev, [index]: [...currentSelected, value] }));
+                            }
+                          }
+                        }}
+                        placeholder="Tìm và chọn serial..."
+                        searchPlaceholder="Tìm serial..."
+                        emptyMessage="Không tìm thấy serial"
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Hiển thị serial đã chọn */}
+                  <div className="min-h-[60px] border border-input rounded-md p-2 flex flex-wrap gap-1 items-start content-start bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    {/* Serial từ receipt đã lưu */}
+                    {existingSerials.map((serialNum, sidx) => (
+                      <span
+                        key={`existing-${sidx}`}
+                        className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm h-6"
+                      >
+                        <span>{serialNum}</span>
+                        <button
+                          type="button"
+                          className="hover:bg-blue-200 rounded-full p-0.5"
+                          onClick={() => {
+                            const newSerialsList = existingSerials.filter((_, i) => i !== sidx);
+                            setSerialInputs(prev => ({ ...prev, [index]: newSerialsList.join(', ') }));
+                          }}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {/* Serial từ dropdown order */}
+                    {selectedOrderItemSerials.map((serialNum, sidx) => (
+                      <span
+                        key={`selected-${sidx}`}
+                        className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded text-sm h-6"
+                      >
+                        <span>{serialNum}</span>
+                        <button
+                          type="button"
+                          className="hover:bg-green-200 rounded-full p-0.5"
+                          onClick={() => {
+                            const currentSelected = selectedOrderSerials[index] || [];
+                            const newSelectedList = currentSelected.filter(s => s !== serialNum);
+                            setSelectedOrderSerials(prev => ({ ...prev, [index]: newSelectedList }));
+                          }}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {/* Input thêm serial mới */}
+                    <input
+                      type="text"
+                      value={newSerialInputs[index] || ''}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const t = e.currentTarget as HTMLInputElement;
+                          const text = t.value.trim();
+                          if (text) {
+                            const newSerialsList = text.split(',').map(s => s.trim()).filter(s => s);
+                            const allSerialsList = [...selectedOrderItemSerials, ...newSerialsList];
+                            setSerialInputs(prev => ({ ...prev, [index]: allSerialsList.join(', ') }));
+                            setNewSerialInputs(prev => ({ ...prev, [index]: '' }));
+                          }
+                        }
+                      }}
+                      onChange={(e) => {
+                        setNewSerialInputs(prev => ({ ...prev, [index]: e.target.value }));
+                      }}
+                      placeholder="Nhập serial mới..."
+                      className="flex-1 min-w-[100px] outline-none bg-transparent border-none text-sm"
+                    />
+                  </div>
+                  <div className="text-sm mt-1">
+                    <span className={allSerials.length === item.quantity ? 'text-emerald-600' : 'text-rose-500'}>
+                      {allSerials.length === item.quantity ? (
+                        <CheckCircle className="w-4 h-4 inline mr-2" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 inline mr-2" />
+                      )}
+                      {allSerials.length}/{item.quantity} serial
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Label className="font-medium whitespace-nowrap"><b>Bảo hành</b> <span className="text-red-500">*</span></Label>
+                    <NumberInput
+                      value={warrantyMonths[index] ?? 1}
+                      onChange={(value) => setWarrantyMonths(prev => ({ ...prev, [index]: Number(value) || 1 }))}
+                      min={1}
+                      className="w-20"
+                    />
+                    <span className="text-xs">tháng (tính từ ngày giao hàng)</span>
+                  </div>
+                </div>
+              );
+            })}
+            {(() => {
+              const details = selectedSlip?.details || selectedSlip?.items || [];
+              const filledCount = details.filter((item: any, index: number) => {
+                const existing = (serialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+                const selectedFromOrder = (selectedOrderSerials[index] || []).length;
+                const newSerials = (newSerialInputs[index] || '').split(',').map(s => s.trim()).filter(s => s);
+                return (existing.length + selectedFromOrder + newSerials.length) >= item.quantity;
+              }).length;
+              const total = details.length;
+              return (
+                <div className="text-sm font-medium mt-4 pt-2 border-t">
+                  <span className={filledCount === total ? 'text-emerald-600' : 'text-rose-500'}>
+                    {filledCount === total ? (
+                      <CheckCircle className="w-4 h-4 inline mr-2" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                    )}
+                    Tổng: {filledCount}/{total} sản phẩm đã nhập đủ Serial
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSerialInputOpen(false)}>Hủy</Button>
+            <Button onClick={handleSaveSerials} disabled={savingSerials}>
+              {savingSerials ? 'Đang lưu...' : 'Lưu Serial'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

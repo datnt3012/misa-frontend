@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check, ChevronsUpDownIcon } from "lucide-react"
+import { Check, ChevronsUpDownIcon, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,13 +17,14 @@ interface MultiSelectOption {
 
 interface MultiSelectProps {
   options: MultiSelectOption[]
-  value: string[]
+  value: string | string[]
   onValueChange: (value: string[] | string) => void
   placeholder?: string
   className?: string
   selectAllLabel?: string
   allValue?: string
   joinString?: boolean
+  showBadge?: boolean
 }
 
 export function MultiSelect({
@@ -35,6 +36,7 @@ export function MultiSelect({
   selectAllLabel = "Select all",
   allValue = "all",
   joinString = true,
+  showBadge = false,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -70,10 +72,8 @@ export function MultiSelect({
 
   const handleToggle = (optionValue: string) => {
     if (optionValue === allValue) {
-      // When "all" is selected, clear everything
       emitValue([])
     } else if (currentValueArray.includes(allValue)) {
-      // If "all" was selected, start fresh with the new selection
       emitValue([optionValue])
     } else if (currentValueArray.includes(optionValue)) {
       emitValue(currentValueArray.filter(v => v !== optionValue))
@@ -88,44 +88,66 @@ export function MultiSelect({
 
   const isAllSelected = currentValueArray.length === allValues.length && !currentValueArray.includes(allValue)
 
+  const selectedOptions = currentValueArray.filter(v => v !== allValue && labels[v])
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn("w-full justify-between", className)}
-        >
-          <span className="truncate text-left flex-1">
-            {displayText}
-          </span>
-          <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[250px] p-0" align="start">
+    <div className={cn("flex flex-wrap gap-1", className)}>
+      {showBadge && selectedOptions.map((val) => (
         <div
-          className="flex items-center space-x-2 px-2 py-1.5 cursor-pointer hover:bg-accent rounded-sm"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleSelectAll()
-          }}
+          key={val}
+          className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-md text-sm"
         >
-          <Checkbox checked={isAllSelected} />
-          <span className="text-sm">{selectAllLabel}</span>
+          <span>{labels[val] || val}</span>
+          <button
+            type="button"
+            className="hover:bg-primary/20 rounded-full p-0.5"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggle(val)
+            }}
+          >
+            <X className="w-3 h-3" />
+          </button>
         </div>
-        {options.map((option) => (
+      ))}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn("justify-between", showBadge && selectedOptions.length > 0 && "flex-1")}
+          >
+            <span className="truncate text-left flex-1">
+              {displayText}
+            </span>
+            <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[250px] p-0" align="start">
           <div
-            key={option.value}
             className="flex items-center space-x-2 px-2 py-1.5 cursor-pointer hover:bg-accent rounded-sm"
             onClick={(e) => {
               e.stopPropagation()
-              handleToggle(option.value)
+              handleSelectAll()
             }}
           >
-            <Checkbox checked={value.includes(option.value) && option.value !== allValue} />
-            <span className="text-sm">{option.label}</span>
+            <Checkbox checked={isAllSelected} />
+            <span className="text-sm">{selectAllLabel}</span>
           </div>
-        ))}
-      </PopoverContent>
-    </Popover>
+          {options.map((option) => (
+            <div
+              key={option.value}
+              className="flex items-center space-x-2 px-2 py-1.5 cursor-pointer hover:bg-accent rounded-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleToggle(option.value)
+              }}
+            >
+              <Checkbox checked={currentValueArray.includes(option.value) && option.value !== allValue} />
+              <span className="text-sm">{option.label}</span>
+            </div>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </div>
   )
 }

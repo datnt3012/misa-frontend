@@ -11,7 +11,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastAction } from "@/components/ui/toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader, ShoppingCart, ShoppingBag } from "lucide-react";
+import { Search, Plus, Eye, Edit, Tag, DollarSign, ChevronUp, ChevronDown, ChevronsUpDown, MoreHorizontal, CreditCard, Package, Banknote, Trash2, Download, FileDown, Filter, RotateCw, Loader, ShoppingCart, ShoppingBag, Shield, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { orderApi } from "@/api/order.api";
 import { orderTagsApi, OrderTag as ApiOrderTag } from "@/api/orderTags.api";
@@ -24,7 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import CreateOrderForm from "@/components/orders/CreateOrderForm";
-import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
+import CreateWarrantyTicketForm from "@/components/orders/CreateWarrantyTicketForm";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import { OrderTagsManager } from "@/components/orders/OrderTagsManager";
@@ -42,6 +42,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { productApi } from "@/api/product.api";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { string } from "yup";
+// import { }
 
 const normalizeTagLabel = (value?: string | null) => value?.toString().trim().toLowerCase() || "";
 const RECONCILED_TAG_NAMES = ["đã đối soát", "reconciled"];
@@ -143,12 +144,14 @@ const OrdersContent: React.FC = () => {
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [creators, setCreators] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [showOrderDetailDialog, setShowOrderDetailDialog] = useState(false);
   const [showOrderViewDialog, setShowOrderViewDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editOrderData, setEditOrderData] = useState<any>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showMultiplePaymentDialog, setShowMultiplePaymentDialog] = useState(false);
   const [showTagsManager, setShowTagsManager] = useState(false);
+  const [showWarrantyDialog, setShowWarrantyDialog] = useState(false);
+  const [selectedOrderForWarranty, setSelectedOrderForWarranty] = useState<any>(null);
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -430,9 +433,8 @@ const OrdersContent: React.FC = () => {
     if (dialogState.isOpen && dialogState.entityId) {
       // Prevent opening if dialog is already open for the same order
       const isViewOpen = showOrderViewDialog && selectedOrder?.id === dialogState.entityId && dialogState.dialogType === 'view';
-      const isDetailOpen = showOrderDetailDialog && selectedOrder?.id === dialogState.entityId && (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit');
       
-      if (isViewOpen || isDetailOpen) {
+      if (isViewOpen) {
         return; // Already open, don't reopen
       }
 
@@ -442,8 +444,6 @@ const OrdersContent: React.FC = () => {
         setSelectedOrder(order);
         if (dialogState.dialogType === 'view') {
           setShowOrderViewDialog(true);
-        } else if (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit') {
-          setShowOrderDetailDialog(true);
         }
       } else if (orders.length > 0) {
         // Orders loaded but this one not found, try to fetch it
@@ -452,8 +452,6 @@ const OrdersContent: React.FC = () => {
             setSelectedOrder(order);
             if (dialogState.dialogType === 'view') {
               setShowOrderViewDialog(true);
-            } else if (dialogState.dialogType === 'detail' || dialogState.dialogType === 'edit') {
-              setShowOrderDetailDialog(true);
             }
           })
           .catch(() => {
@@ -463,7 +461,7 @@ const OrdersContent: React.FC = () => {
       }
       // If orders not loaded yet, wait for them to load
     }
-  }, [getDialogState, orders, showOrderViewDialog, showOrderDetailDialog, selectedOrder, closeDialog]);
+  }, [getDialogState, orders, showOrderViewDialog, selectedOrder, closeDialog]);
 
   // Handle creating export slip
   const handleCreateExportSlip = (order: any, slipType?: string) => {
@@ -1667,7 +1665,7 @@ const OrdersContent: React.FC = () => {
                                {order.items?.map((item: any, index: number) => (
                                  <div key={index} data-item-row data-item-index={index} className="text-sm py-5 px-5 min-h-[60px] flex items-center justify-center">
                                     <div className="font-medium text-slate-900 text-center leading-tight space-y-0">
-                                      <div className="leading-none">{formatVndNoSymbol(item.vat_price)}</div>
+                                      <div className="leading-none">{formatVndNoSymbol(item.unit_vat_price)}</div>
                                       <div className="text-xs text-slate-500 leading-none">({item.vat_percentage}%)</div>
                                     </div>
                                  </div>
@@ -1848,10 +1846,18 @@ const OrdersContent: React.FC = () => {
                                   Xem chi tiết
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  onClick={() => {
+                                  onClick={async () => {
                                     setSelectedOrder(order);
+                                    try {
+                                      // Fetch order detail first to get full data including warranty_months
+                                      const orderDetail = await orderApi.getOrder(order.id);
+                                      setEditOrderData(orderDetail);
+                                    } catch (error) {
+                                      console.error('Error fetching order detail:', error);
+                                      setEditOrderData(order);
+                                    }
                                     openDialog('edit', order.id);
-                                    setShowOrderDetailDialog(true);
+                                    setShowCreateDialog(true);
                                   }}
                                   className="cursor-pointer hover:bg-muted"
                                 >
@@ -1905,6 +1911,57 @@ const OrdersContent: React.FC = () => {
                                   {order.type === 'purchase' ? 'Tạo phiếu trả hàng NCC' : 'Tạo phiếu hoàn hàng'}
                                 </DropdownMenuItem>
                                 )}
+                                {(() => {
+                                  const orderStatus = typeof order.status === 'object' ? order.status?.code : order.status;
+                                  const hasValidWarrantyStatus = orderStatus === 'picked' || orderStatus === 'completed';
+                                  const hasManageSerials = order.items?.some((item: any) => 
+                                    item.manageSerials === true
+                                  );
+                                  
+                                  if (!hasValidWarrantyStatus || !hasManageSerials) return null;
+                                  
+                                  return (
+                                    <DropdownMenuItem 
+                                      onClick={() => {
+                                        setSelectedOrderForWarranty(order);
+                                        setShowWarrantyDialog(true);
+                                      }}
+                                      className="cursor-pointer hover:bg-muted"
+                                    >
+                                      <Shield className="w-4 h-4 mr-2" />
+                                      Tạo phiếu bảo hành
+                                    </DropdownMenuItem>
+                                  );
+                                })()}
+                                {(() => {
+                                  const orderType = order.type || order.order_type;
+                                  if (orderType === 'purchase') return null;
+                                  
+                                  return (
+                                    <DropdownMenuItem 
+                                      onClick={async () => {
+                                        try {
+                                          const result = await orderApi.activateWarranty(order.id);
+                                          toast({
+                                            title: "Thành công",
+                                            description: `Đã kích hoạt bảo hành cho ${result.activatedCount} serial`,
+                                          });
+                                          fetchOrders();
+                                        } catch (error) {
+                                          toast({
+                                            title: "Lỗi",
+                                            description: error.response?.data?.message || error.message || "Không thể kích hoạt bảo hành",
+                                            variant: "destructive",
+                                          });
+                                        }
+                                      }}
+                                      className="cursor-pointer hover:bg-muted"
+                                    >
+                                      <Zap className="w-4 h-4 mr-2" />
+                                      Kích hoạt bảo hành
+                                    </DropdownMenuItem>
+                                  );
+                                })()}
                                 <DropdownMenuItem 
                                   onClick={() => {
                                     setOrderToDelete(order);
@@ -1981,6 +2038,7 @@ const OrdersContent: React.FC = () => {
           if (!open) {
             isClosingDialogRef.current = true;
             closeDialog();
+            setEditOrderData(null);
             setTimeout(() => {
               isClosingDialogRef.current = false;
             }, 100);
@@ -1991,10 +2049,13 @@ const OrdersContent: React.FC = () => {
           isClosingDialogRef.current = true;
           closeDialog();
           setShowCreateDialog(false);
+          setEditOrderData(null);
           setTimeout(() => {
             isClosingDialogRef.current = false;
           }, 100);
         }}
+        orderId={editOrderData?.id}
+        orderData={editOrderData}
       />
       {/* Order View Dialog (Read-only) */}
       <OrderViewDialog
@@ -2013,35 +2074,7 @@ const OrdersContent: React.FC = () => {
           }
         }}
       />
-      {/* Order Detail Dialog (Editable) */}
-      <OrderDetailDialog
-        order={selectedOrder}
-        open={showOrderDetailDialog}
-        onOpenChange={(open) => {
-          setShowOrderDetailDialog(open);
-          if (!open) {
-            isClosingDialogRef.current = true;
-            closeDialog();
-            setSelectedOrder(null);
-            // Reset flag after a short delay to allow URL to update
-            setTimeout(() => {
-              isClosingDialogRef.current = false;
-            }, 100);
-          }
-        }}
-        onOrderUpdated={() => {
-          fetchOrders();
-          if (selectedOrder) {
-            orderApi.getOrder(selectedOrder.id).then(setSelectedOrder).catch(() => {});
-          }
-        }}
-        onOpenPaymentDialog={() => {
-          if (selectedOrder?.id) {
-            openDialog('payment', selectedOrder.id);
-          }
-          setShowPaymentDialog(true);
-        }}
-      />
+
       {/* Order Tags Manager */}
       {showTagsManager && selectedOrder && (
         <OrderTagsManager
@@ -2131,6 +2164,30 @@ const OrdersContent: React.FC = () => {
           setSelectedOrders(prev => prev.filter(id => id !== orderId));
         }}
       />
+
+      {/* Warranty Ticket Dialog */}
+      <CreateWarrantyTicketForm
+        open={showWarrantyDialog}
+        onOpenChange={(open) => {
+          setShowWarrantyDialog(open);
+          if (!open) {
+            setSelectedOrderForWarranty(null);
+            isClosingDialogRef.current = true;
+            closeDialog();
+            setTimeout(() => {
+              isClosingDialogRef.current = false;
+            }, 100);
+          }
+        }}
+        onOrderCreated={() => {
+          fetchOrders();
+          setShowWarrantyDialog(false);
+          setSelectedOrderForWarranty(null);
+        }}
+        orderId={selectedOrderForWarranty?.id}
+        orderData={selectedOrderForWarranty}
+      />
+
       {/* Export Slip Creation Dialog */}
       <Dialog open={showExportSlipDialog} onOpenChange={setShowExportSlipDialog}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">

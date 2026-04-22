@@ -10,6 +10,7 @@ export interface OrderItem {
   manufacturer: string;
   quantity: number;
   unit_price: number;
+  unit_vat_price?: number;
   total_price: number;
   vat_percentage?: number;
   vat_total_price?: number;
@@ -17,6 +18,18 @@ export interface OrderItem {
   category_id?: string;
   category_name?: string;
   vat_price?: number;
+  serials?: OrderSerial[];
+  warranty_months?: number;
+  manageSerials?: boolean;
+}
+
+export interface OrderSerial {
+  id?: string;
+  serial_number: string;
+  warrantyMonths?: number;
+  warrantyStartDate?: string;
+  warrantyEndDate?: string;
+  exported?: boolean;
 }
 
 export interface OrderAllocation {
@@ -194,6 +207,10 @@ export interface CreateOrderRequest {
     productId: string;
     quantity: number;
     unitPrice: number;
+    vatPercentage?: number;
+    manageSerials?: boolean;
+    serials?: string[];
+    warrantyMonths?: number;
   }[];
   // Additional expenses
   expenses?: {
@@ -255,6 +272,9 @@ export interface UpdateOrderRequest {
     quantity?: number;
     unitPrice?: number;
     vatPercentage?: number;
+    manageSerials?: boolean;
+    serials?: string[];
+    warrantyMonths?: number;
   }[];
 }
 export interface CreateOrderItemRequest {
@@ -264,25 +284,46 @@ export interface CreateOrderItemRequest {
   quantity: number;
   unitPrice: number;
   vatPercentage: number;
+  serials?: string[];
 }
 // Shared normalize function for order items
-export const normalizeOrderItem = (it: any): OrderItem => ({
-  id: it.id,
-  order_id: it.order_id ?? it.orderId ?? '',
-  product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
-  product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
-  product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
-  category_id: it.product?.categoryId ?? it.categoryId ?? it.product?.category ?? it.category_id ?? undefined,
-  category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
-  quantity: Number(it.quantity ?? 0),
-  unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
-  total_price: Number(it.totalPrice ?? it.total_price ?? 0),
-  vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
-  vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
-  vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice ?? 0) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
-  manufacturer: it.product?.manufacturer ?? it.manufacturer ?? '',
-  created_at: it.created_at ?? it.createdAt ?? it.product?.created_at ?? it.product?.createdAt ?? '',
-});
+export const normalizeOrderItem = (it: any): OrderItem => {
+  // Normalize serials to ensure warranty dates are mapped correctly
+  const normalizedSerials = Array.isArray(it.serials) ? it.serials.map((s: any) => ({
+    id: s.id,
+    serial_number: s.serial_number ?? s.serialNumber ?? s.serial ?? '',
+    warrantyMonths: s.warrantyMonths ?? s.warranty_months,
+    warrantyStartDate: s.warrantyStartDate ?? s.warranty_start_date ?? s.warrantyStart,
+    warrantyEndDate: s.warrantyEndDate ?? s.warranty_end_date ?? s.warrantyEnd,
+    warrantyActived: s.warrantyActived ?? s.warrantyActive ?? s.warranty_actived,
+    exported: s.exported,
+  })) : undefined;
+
+  return {
+    id: it.id,
+    order_id: it.order_id ?? it.orderId ?? '',
+    product_id: it.product?.id ?? it.productId ?? it.product_id ?? '',
+    product_name: it.product?.name ?? it.productName ?? it.product_name ?? '',
+    product_code: it.product?.code ?? it.productCode ?? it.product_code ?? '',
+    category_id: it.product?.categoryId ?? it.categoryId ?? it.product?.category ?? it.category_id ?? undefined,
+    category_name: (typeof it.product?.category === 'string' ? it.product?.category : it.product?.category?.name) ?? it.categoryName ?? it.category_name ?? undefined,
+    quantity: Number(it.quantity ?? 0),
+    unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
+    unit_vat_price: Number(it.unitVatPrice ?? it.unit_vat_price ?? 0),
+    total_price: Number(it.totalPrice ?? it.total_price ?? 0),
+    vat_percentage: Number(it.vat_percentage ?? it.vatPercentage ?? 0),
+    vat_total_price: Number(it.vat_total_price ?? it.vatTotalPrice ?? 0),
+    vat_price: (it.vat_percentage ?? it.vatPercentage) > 0 ? Number((it.total_price ?? it.totalPrice ?? 0) * ((it.vat_percentage ?? it.vatPercentage) / 100)) : 0,
+    manufacturer: it.product?.manufacturer ?? it.manufacturer ?? '',
+    created_at: it.created_at ?? it.createdAt ?? it.product?.created_at ?? it.product?.createdAt ?? '',
+    serials: normalizedSerials,
+    warranty_months: it.warranty_months ?? it.warrantyMonths ?? 
+      (Array.isArray(it.serials) && it.serials.length > 0 
+        ? it.serials[0]?.warrantyMonths ?? it.serials[0]?.warranty_months ?? undefined
+        : undefined),
+    manageSerials: it.product?.manageSerials ?? it.manageSerials ?? false,
+  };
+};
 
 // Shared normalize function for orders
 export const normalizeOrder = (row: any, options?: { includeAllocationStatus?: boolean }): Order => {
@@ -460,6 +501,7 @@ export const orderApi = {
     manufacturers?: string | string[];
     bank?: string;
     type?: 'sale' | 'purchase';
+    serialManage?: boolean;
     includeAllocationStatus?: boolean;
   }): Promise<{
     orders: Order[]; 
@@ -540,6 +582,7 @@ export const orderApi = {
     if (params?.manufacturers) queryParams.append('manufacturers', params.manufacturers as string);
     if (params?.bank) queryParams.append('bank', params.bank);
     if (params?.type) queryParams.append('type', params.type);
+    if (params?.serialManage) queryParams.append('serialManage', 'true');
     if (params?.includeAllocationStatus) queryParams.append('includeAllocationStatus', 'true');
 
     const url = queryParams.toString() 
@@ -581,13 +624,16 @@ export const orderApi = {
     };
   },
   // Get order by ID
-  getOrder: async (id: string, params?: { includeAllocationStatus?: boolean; includeDeleted?: boolean }): Promise<Order> => {
+  getOrder: async (id: string, params?: { includeAllocationStatus?: boolean; includeDeleted?: boolean; includeSerials?: boolean }): Promise<Order> => {
     const queryParams = new URLSearchParams();
     if (params?.includeAllocationStatus) {
       queryParams.append('includeAllocationStatus', 'true');
     }
     if (params?.includeDeleted) {
       queryParams.append('includeDeleted', 'true');
+    }
+    if (params?.includeSerials) {
+      queryParams.append('includeSerials', 'true');
     }
     const queryString = queryParams.toString();
     const url = queryString 
@@ -613,6 +659,7 @@ export const orderApi = {
       unit_price: Number(it.unitPrice ?? it.unit_price ?? 0),
       total_price: Number(it.totalPrice ?? it.total_price ?? 0),
       created_at: it.created_at ?? it.createdAt ?? '',
+      serials: Array.isArray(it.serials) ? it.serials : undefined,
     });
     const normalizeOrder = (row: any): Order => ({
       id: row.id,
@@ -702,6 +749,23 @@ export const orderApi = {
   // Delete order
   deleteOrder: async (id: string): Promise<{ message: string }> => {
     return api.delete<{ message: string }>(API_ENDPOINTS.ORDERS.DELETE(id));
+  },
+  // Activate warranty for order (all items or specific receipt)
+  activateWarranty: async (orderId: string, receiptId?: string): Promise<{
+    activatedCount: number;
+    serials: Array<{
+      id: string;
+      serialNumber: string;
+      warrantyStartDate: string;
+      warrantyActived: boolean;
+    }>;
+  }> => {
+    const data = receiptId ? { receiptId } : {};
+    const response = await api.put<any>(API_ENDPOINTS.ORDERS.WARRANTY_ACTIVE(orderId), data);
+    return {
+      activatedCount: response.activatedCount ?? response.data?.activatedCount ?? 0,
+      serials: response.serials ?? response.data?.serials ?? [],
+    };
   },
   // Get order items
   getOrderItems: async (orderId: string): Promise<OrderItem[]> => {

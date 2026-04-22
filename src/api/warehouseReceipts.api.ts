@@ -149,6 +149,9 @@ export interface WarehouseReceipt {
     firstName?: string;
     lastName?: string;
   };
+  approvedByName?: string;
+  // Backward compatibility
+  approved_by_name?: string;
   pickedBy?: string;
   exportedBy?: string;
   supplierId?: string;
@@ -166,6 +169,8 @@ export interface WarehouseReceipt {
   supplierContact?: string;
   orderId?: string;
   type: string;   // import | export | moving
+  // Serials linked to this receipt
+  serials?: string[];
   // Both details and items - items is from normalized response
   details?: WarehouseReceiptItemDetail[];
   items?: WarehouseReceiptItemDetail[];
@@ -272,6 +277,7 @@ export interface CreateWarehouseReceiptRequest {
   description?: string;
   status?: string;
   orderId?: string; // Order ID if created from order
+  serials?: string[]; // Array of serial IDs to link to this receipt
   type: string; // 'import' | 'export' | 'moving'
   newWarehouseId?: string; // Bắt buộc cho loại moving (kho đích)
   details: Array<{
@@ -280,6 +286,8 @@ export interface CreateWarehouseReceiptRequest {
     unitPrice: number;
     vatPercentage?: number;
     warehouseId?: string;
+    serialNumbers?: string; // Comma-separated serial numbers
+    warrantyMonths?: number;
   }>;
   isDeleted?: boolean;
   isForeignCurrency?: boolean;
@@ -355,6 +363,8 @@ const normalize = (row: any): WarehouseReceipt => ({
   created_by_name: row.createdByName ?? row.created_by_name ?? row.creator?.name ?? row.creator?.full_name ?? (typeof row.createdBy === 'object' ? row.createdBy?.firstName ?? row.createdBy?.username : (typeof row.created_by === 'object' ? row.created_by?.username : undefined)), // Backward compat
   approvedBy: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''),
   approved_by: typeof row.approvedBy === 'string' ? row.approvedBy : (typeof row.approved_by === 'string' ? row.approved_by : ''), // Backward compat
+  approvedByName: row.approvedByName ?? row.approved_by_name ?? (typeof row.approvedBy === 'object' ? row.approvedBy?.firstName ?? row.approvedBy?.username : (typeof row.approved_by === 'object' ? row.approved_by?.username : undefined)),
+  approved_by_name: row.approvedByName ?? row.approved_by_name ?? (typeof row.approvedBy === 'object' ? row.approvedBy?.firstName ?? row.approvedBy?.username : (typeof row.approved_by === 'object' ? row.approved_by?.username : undefined)), // Backward compat
   supplierId: row.supplierId ?? row.supplier_id ?? undefined,
   supplier_id: row.supplierId ?? row.supplier_id ?? undefined, // Backward compat
   // Full customer object from backend
@@ -372,6 +382,7 @@ const normalize = (row: any): WarehouseReceipt => ({
   supplier_contact: row.supplier?.phoneNumber ?? row.supplier_contact ?? undefined, // Backward compat
   orderId: row.orderId ?? row.order_id ?? undefined,
   order_id: row.orderId ?? row.order_id ?? undefined, // Backward compat
+  serials: row.serials ?? undefined,
   type: row.type ?? 'import',
   totalAmount: row.totalAmount ?? row.total_amount ?? 0,
   total_amount: row.totalAmount ?? row.total_amount ?? 0, // Backward compat
@@ -446,6 +457,17 @@ const normalize = (row: any): WarehouseReceipt => ({
           quantity: Number(oi.quantity ?? 0),
           unit_price: Number(oi.unit_price ?? oi.unitPrice ?? 0),
           total_price: Number(oi.total_price ?? oi.totalPrice ?? oi.quantity * (oi.unit_price ?? oi.unitPrice ?? 0)),
+        }))
+      : undefined,
+    // Include order details with serials from backend response
+    details: Array.isArray(row.order.details)
+      ? row.order.details.map((oi: any) => ({
+          id: oi.id,
+          productId: oi.productId ?? oi.product?.id,
+          product: oi.product,
+          quantity: Number(oi.quantity ?? 0),
+          unitPrice: Number(oi.unit_price ?? oi.unitPrice ?? 0),
+          serials: oi.serials,
         }))
       : undefined,
   } : undefined,

@@ -49,7 +49,9 @@ interface ImportSlip {
   completed_at: string;
   updated_at: string;
   created_by: string;
+  created_by_name?: string;
   approved_by: string;
+  approved_by_name?: string;
   warehouse_id: string;
   warehouses?: {
     name: string;
@@ -379,7 +381,9 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
         completed_at: r.completed_at,
         updated_at: r.updated_at,
         created_by: r.created_by,
+        created_by_name: r.created_by_name,
         approved_by: r.approved_by,
+        approved_by_name: r.approved_by_name,
         warehouse_id: r.warehouse_id,
         warehouses: {
           name: r.warehouses?.name,
@@ -2234,9 +2238,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 <div>
                   <Label className="font-medium text-sm">Người duyệt:</Label>
                   <p className="text-sm text-muted-foreground">
-                    {typeof selectedSlip.approved_by === 'object' && selectedSlip.approved_by !== null ? 
-                      (selectedSlip.approved_by.firstName ? `${selectedSlip.approved_by.firstName} ${selectedSlip.approved_by.lastName || ''}` : selectedSlip.approved_by.username || selectedSlip.approved_by.email) : 
-                      String(selectedSlip.approved_by)}
+                    {selectedSlip.approved_by_name || String(selectedSlip.approved_by)}
                   </p>
                 </div>
               )}
@@ -2244,9 +2246,7 @@ export default function ImportSlips({ canManageImports, canApproveImports }: Imp
                 <div>
                   <Label className="font-medium text-sm">Người tạo:</Label>
                   <p className="text-sm text-muted-foreground">
-                    {typeof selectedSlip.created_by === 'object' && selectedSlip.created_by !== null ? 
-                      (selectedSlip.created_by.firstName ? `${selectedSlip.created_by.firstName} ${selectedSlip.created_by.lastName || ''}` : selectedSlip.created_by.username || selectedSlip.created_by.email) : 
-                      String(selectedSlip.created_by)}
+                    {selectedSlip.created_by_name || String(selectedSlip.created_by)}
                   </p>
                 </div>
               )}
