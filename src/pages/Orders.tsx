@@ -1912,11 +1912,13 @@ const OrdersContent: React.FC = () => {
                                 </DropdownMenuItem>
                                 )}
                                 {(() => {
+                                  const orderStatus = typeof order.status === 'object' ? order.status?.code : order.status;
+                                  const hasValidWarrantyStatus = orderStatus === 'picked' || orderStatus === 'completed';
                                   const hasManageSerials = order.items?.some((item: any) => 
                                     item.manageSerials === true
                                   );
                                   
-                                  if (!hasManageSerials) return null;
+                                  if (!hasValidWarrantyStatus || !hasManageSerials) return null;
                                   
                                   return (
                                     <DropdownMenuItem 
