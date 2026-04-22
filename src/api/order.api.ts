@@ -624,13 +624,16 @@ export const orderApi = {
     };
   },
   // Get order by ID
-  getOrder: async (id: string, params?: { includeAllocationStatus?: boolean; includeDeleted?: boolean }): Promise<Order> => {
+  getOrder: async (id: string, params?: { includeAllocationStatus?: boolean; includeDeleted?: boolean; includeSerials?: boolean }): Promise<Order> => {
     const queryParams = new URLSearchParams();
     if (params?.includeAllocationStatus) {
       queryParams.append('includeAllocationStatus', 'true');
     }
     if (params?.includeDeleted) {
       queryParams.append('includeDeleted', 'true');
+    }
+    if (params?.includeSerials) {
+      queryParams.append('includeSerials', 'true');
     }
     const queryString = queryParams.toString();
     const url = queryString 

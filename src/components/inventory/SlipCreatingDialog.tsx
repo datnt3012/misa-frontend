@@ -97,6 +97,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
   const [serialNumbers, setSerialNumbers] = useState<Record<number, string[]>>({});
   const [serialText, setSerialText] = useState<Record<number, string>>({});
   const [selectedOrderSerials, setSelectedOrderSerials] = useState<Record<number, string[]>>({});
+  const [productWarnings, setProductWarnings] = useState<Record<number, string>>({});
 
   const generateSlipCode = () => {
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -176,7 +177,7 @@ export const SlipCreatingDialog: React.FC<SlipCreatingDialogProps> = ({
 
 const loadOrder = async (id: string) => {
     try {
-      const orderData = await orderApi.getOrder(id, { includeDeleted: true, includeAllocationStatus: true });
+      const orderData = await orderApi.getOrder(id, { includeDeleted: true, includeAllocationStatus: true, includeSerials: true });
       setSelectedOrderForAllocation(orderData);
       
       if (isImport) {
@@ -269,6 +270,7 @@ const loadOrder = async (id: string) => {
         items: []
       }));
       setSelectedOrderForAllocation(null);
+      setProductWarnings({});
       return;
     }
 
@@ -327,6 +329,11 @@ const loadOrder = async (id: string) => {
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
     }));
+    setProductWarnings(prev => {
+      const newWarnings = { ...prev };
+      delete newWarnings[index];
+      return newWarnings;
+    });
   };
 
   const updateItem = (index: number, field: keyof SlipFormItem, value: any) => {
@@ -349,6 +356,20 @@ const loadOrder = async (id: string) => {
           const orderItem = selectedOrderForAllocation.items?.find(i => i.product_id === value);
           if (orderItem?.manageSerials || orderItem?.serial_manage) {
             items[index].serial_manage = true;
+          }
+          
+          // Check if product in order has serials - show warning if not
+          const orderItemSerials = orderItem?.serials || [];
+          if (selectedOrderForAllocation && orderItem && !isImport) {
+            if (orderItemSerials.length === 0) {
+              setProductWarnings(prev => ({ ...prev, [index]: 'Sản phẩm trong đơn hàng không có serial' }));
+            } else {
+              setProductWarnings(prev => {
+                const newWarnings = { ...prev };
+                delete newWarnings[index];
+                return newWarnings;
+              });
+            }
           }
         }
         
@@ -584,6 +605,7 @@ const loadOrder = async (id: string) => {
       setSerialNumbers({});
       setSerialText({});
       setSelectedOrderSerials({});
+      setProductWarnings({});
     }
     onOpenChange(isOpen);
   };
@@ -936,6 +958,14 @@ const loadOrder = async (id: string) => {
                               </div>
                             )}
                           </div>
+                          {item.product_id && productWarnings[index] && (
+                            <div className="space-y-1 flex justify-center mt-1">
+                              <div className="flex items-center justify-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded text-center">
+                                <AlertCircle className="w-3 h-3" />
+                                <span>{productWarnings[index]}</span>
+                              </div>
+                            </div>
+                          )}
                           {!isImport && item.product_id && (
                             <div className="space-y-1 flex justify-center mt-2">
                               <label className="flex items-center gap-1 text-xs cursor-pointer">
@@ -1004,7 +1034,6 @@ const loadOrder = async (id: string) => {
                                   const currentInputText = serialText[index] || '';
                                   const inputSerials = currentInputText.split(',').map(s => s.trim()).filter(s => s);
                                   const allSelectedSet = new Set([...selectedSerials, ...inputSerials].map(s => s.toLowerCase()));
-                                  console.log(orderItemSerials);
                                   const availableSerials = orderItemSerials
                                     .filter(s => !allSelectedSet.has(s.serial_number.toLowerCase()))
                                     .map(s => ({ 

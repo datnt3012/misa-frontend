@@ -76,6 +76,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
   const [serialNumbers, setSerialNumbers] = useState<Record<string, Record<number, string[]>>>({});
   const [serialText, setSerialText] = useState<Record<string, Record<number, string>>>({});
   const [selectedOrderSerials, setSelectedOrderSerials] = useState<Record<string, Record<number, string[]>>>({});
+  const [productWarnings, setProductWarnings] = useState<Record<string, Record<number, string>>>({});
   const { user } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -109,6 +110,11 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
   
   const removeExportSlip = (slipId: string) => {
     setExportSlips(prev => prev.filter(slip => slip.id !== slipId));
+    setProductWarnings(prev => {
+      const newWarnings = { ...prev };
+      delete newWarnings[slipId];
+      return newWarnings;
+    });
   };
   
   const updateExportSlip = (slipId: string, field: keyof ExportSlipForm, value: any) => {
@@ -153,6 +159,11 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
       }
       return slip;
     }));
+    setProductWarnings(prev => {
+      const slipWarnings = { ...(prev[slipId] || {}) };
+      delete slipWarnings[itemIndex];
+      return { ...prev, [slipId]: slipWarnings };
+    });
   };
   
   const updateSlipItem = (slipId: string, itemIndex: number, field: keyof ExportSlipFormItem, value: any) => {
@@ -167,6 +178,30 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
           setTimeout(() => {
             void fetchStockLevelForSlipItem(slipId, itemIndex, value, slip.warehouse_id);
           }, 0);
+        }
+        
+        // Check if product in order has serials - show warning if not
+        if (field === 'product_id' && order && !isImportSlip) {
+          const orderItem = order.items?.find(oi => oi.product_id === value);
+          const orderItemSerials = orderItem?.serials || [];
+          
+          // Auto-check serial_manage if product in order has serial management
+          if (orderItem?.manageSerials || orderItem?.serial_manage) {
+            items[itemIndex].serial_manage = true;
+          }
+          
+          if (value && orderItem && orderItemSerials.length === 0) {
+            setProductWarnings(prev => ({
+              ...prev,
+              [slipId]: { ...(prev[slipId] || {}), [itemIndex]: 'Sản phẩm trong đơn hàng không có serial' }
+            }));
+          } else {
+            setProductWarnings(prev => {
+              const slipWarnings = { ...(prev[slipId] || {}) };
+              delete slipWarnings[itemIndex];
+              return { ...prev, [slipId]: slipWarnings };
+            });
+          }
         }
         
         return updatedSlip;
@@ -207,7 +242,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
     try {
       setOrderLoading(true);
       // Use includeAllocationStatus=true to get allocation data from backend
-      const orderData = await orderApi.getOrder(orderId, { includeDeleted: true, includeAllocationStatus: true });
+      const orderData = await orderApi.getOrder(orderId, { includeDeleted: true, includeAllocationStatus: true, includeSerials: true });
       setOrder(orderData);
       
       // Set allocation status from API response
@@ -799,7 +834,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                     className="w-full"
                                   />
                                   {!isImportSlip && item.product_id && (
-                                    <div className="mt-2">
+                                    <div className="mt-2 flex items-center gap-4 justify-center">
                                       <label className="flex items-center gap-1 text-xs cursor-pointer">
                                         <input
                                           type="checkbox"
@@ -838,6 +873,12 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
                                               Tồn kho: {item.current_stock}
                                             </span>
                                           )}
+                                        </div>
+                                      )}
+                                      {item.product_id && productWarnings[slip.id]?.[itemIndex] && (
+                                        <div className="flex items-center justify-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded mt-1 text-center">
+                                          <AlertCircle className="w-3 h-3" />
+                                          <span>{productWarnings[slip.id][itemIndex]}</span>
                                         </div>
                                       )}
                                     </div>
