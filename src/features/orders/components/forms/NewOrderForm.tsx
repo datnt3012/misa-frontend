@@ -245,6 +245,7 @@ const NewOrderForm: React.FC<CreateFormProps> = ({ onOrderCreated, onCancel, onD
                 onAppend={() => appendDetail(ORDER_DETAIL_DEFAULT)}
                 onRemove={removeDetail}
                 onProductSelect={handleProductSelect}
+                orderType={currentType}
               />
 
               <OrderExpensesTable

@@ -84,6 +84,9 @@ const EditOrderForm: React.FC<EditFormProps> = ({ orderId, onOrderUpdated, onCan
         quantity: d.quantity,
         unitPrice: d.unitPrice,
         vatPercentage: d.vatPercentage ?? 0,
+        manageSerials: d.manageSerials ?? false,
+        serials: d.serials ?? [],
+        warrantyMonths: d.warrantyMonths ?? 1,
       })),
       expenses: (orderData.expenses ?? []).map((e) => ({
         name: e.name,
@@ -249,6 +252,7 @@ const EditOrderForm: React.FC<EditFormProps> = ({ orderId, onOrderUpdated, onCan
                 onRemove={removeDetail}
                 onProductSelect={handleProductSelect}
                 disabled={isReadOnly}
+                orderType={currentType}
               />
 
               <OrderExpensesTable

@@ -51,6 +51,9 @@ export const OrderDetailSchema = yup.object({
   vatPercentage: yup.number().optional(),
   vatTotalPrice: yup.number().optional(),
   product: ProductSchema.required(),
+  manageSerials: yup.boolean().nullable().optional(),
+  serials: yup.array().of(yup.string()).nullable().optional(),
+  warrantyMonths: yup.number().nullable().optional(),
 });
 
 // --- Order Expense ---
