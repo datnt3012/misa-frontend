@@ -252,6 +252,9 @@ export const ORDER_DETAIL_DEFAULT = {
     quantity: 1,
     unitPrice: 0,
     vatPercentage: 0,
+    manageSerials: false,
+    serials: [],
+    warrantyMonths: 1,
 };
 
 export const ORDER_EXPENSE_DEFAULT = {

@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { formatCurrency } from "../../utils/formatters";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-    ORDER_STATUS_LABELS_VI, ORDER_STATUSES,
-    PURCHASE_ORDER_STATUS_LABELS_VI, PURCHASE_ORDER_STATUSES,
+    ORDER_STATUS_LABELS_VI, ORDER_STATUSES, ORDER_STATUS_CLASSES,
+    PURCHASE_ORDER_STATUS_LABELS_VI, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_STATUS_CLASSES,
 } from "@/constants/order-status.constants";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -28,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { useWareHouseReceiptByOrderIdQuery, useWareHouseReceiptQuery } from "@/features/inventory/hooks/useWareHouseReceiptQuery";
 import { ReceiptStatusClassName, ReceiptStatusLabel } from "@/features/inventory/constants";
+import { OrderSpecificSlipCreation } from "@/components/inventory/OrderSpecificSlipCreation";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ViewFormProps {
     orderId: string;
@@ -388,25 +390,39 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-4 pt-0 space-y-4">
-                                <Select
-                                    value={
-                                        typeof orderDetails.status === "object"
-                                            ? orderDetails.status?.code
-                                            : orderDetails.status
-                                    }
-                                    onValueChange={handleUpdateStatus}
-                                >
-                                    <SelectTrigger className="w-full h-10 font-semibold border-slate-200">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(isPurchase ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((s: string) => (
-                                            <SelectItem key={s} value={s}>
-                                                {(isPurchase ? PURCHASE_ORDER_STATUS_LABELS_VI : ORDER_STATUS_LABELS_VI)[s]}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                {(() => {
+                                    const currentStatus = typeof orderDetails.status === "object"
+                                        ? orderDetails.status?.code
+                                        : orderDetails.status;
+                                    const statusClasses = isPurchase ? PURCHASE_ORDER_STATUS_CLASSES : ORDER_STATUS_CLASSES;
+                                    const currentStatusClass = statusClasses[currentStatus as keyof typeof statusClasses] || "bg-slate-100 text-slate-600";
+
+                                    return (
+                                        <Select
+                                            value={currentStatus}
+                                            onValueChange={handleUpdateStatus}
+                                        >
+                                            <SelectTrigger
+                                                className={`w-full h-10 font-bold border-none transition-all shadow-sm ${currentStatusClass}`}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="p-1">
+                                                {(isPurchase ? PURCHASE_ORDER_STATUSES : ORDER_STATUSES).map((s: string) => (
+                                                    <SelectItem
+                                                        key={s}
+                                                        value={s}
+                                                        className="my-0.5 cursor-pointer rounded-md focus:bg-slate-50"
+                                                    >
+                                                        <div className={`px-2 py-0.5 rounded text-xs font-bold ${statusClasses[s as keyof typeof statusClasses] || "bg-slate-100 text-slate-600"}`}>
+                                                            {(isPurchase ? PURCHASE_ORDER_STATUS_LABELS_VI : ORDER_STATUS_LABELS_VI)[s]}
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    );
+                                })()}
                                 <div className="grid grid-cols-1 gap-2">
                                     <Button
                                         variant="outline"
@@ -584,32 +600,22 @@ const ViewOrderForm: React.FC<ViewFormProps> = ({ orderId, onBack }) => {
                 </div>
             </div>
 
-            {/* Order type = purchase => show export slip dialog */}
-            {orderDetails.type === "purchase" && (
-                <SlipCreatingDialog
-                    open={showSlipDialog}
-                    onOpenChange={setShowSlipDialog}
-                    slipType="import"
-                    orderId={orderId}
-                    onSlipCreated={() => {
-                        setShowSlipDialog(false);
-                        invalidateData();
-                    }}
-                />
-            )}
-
-            {/* Order type = export => show import slip dialog */}
-            {orderDetails.type === "sale" && (
-                <SlipCreatingDialog
-                    open={showSlipDialog}
-                    onOpenChange={setShowSlipDialog}
-                    slipType="export"
-                    orderId={orderId}
-                    onSlipCreated={() => {
-                        setShowSlipDialog(false);
-                        invalidateData();
-                    }}
-                />
+            {showSlipDialog && (
+                <Dialog open={showSlipDialog} onOpenChange={setShowSlipDialog}>
+                    <DialogContent className="max-w-[1200px] min-w-[1200px]!">
+                        <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 100px)" }}>
+                            <OrderSpecificSlipCreation
+                                orderId={orderId}
+                                orderType={orderDetails.type}
+                                slipType={orderDetails.type === "purchase" ? "import" : "export"}
+                                onExportSlipCreated={() => {
+                                    setShowSlipDialog(false);
+                                    invalidateData();
+                                }}
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
             )}
 
             <PaymentDialog

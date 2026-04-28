@@ -2,6 +2,9 @@ import * as yup from 'yup';
 
 export const orderItemSchema = yup.object({
     id: yup.string().required('ID không được để trống'),
+    manageSerials: yup.boolean().optional().nullable(),
+    serials: yup.array().of(yup.string()).optional().nullable(),
+    warrantyMonths: yup.number().min(1, 'Số tháng bảo hành phải lớn hơn hoặc bằng 1').optional().nullable(),
     orderId: yup.string().required('Mã đơn hàng không được để trống'),
     productId: yup.string().required('Mã sản phẩm không được để trống'),
     productName: yup.string().required('Tên sản phẩm không được để trống'),

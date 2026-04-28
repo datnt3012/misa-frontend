@@ -52,6 +52,9 @@ export const OrderDetailItemSchema = yup.object({
         .typeError('Đơn giá phải là số')
         .min(0, 'Đơn giá không được âm')
         .required('Đơn giá là bắt buộc'),
+    manageSerials: yup.boolean().nullable().optional(),
+    serials: yup.array().of(yup.string()).nullable().optional(),
+    warrantyMonths: yup.number().typeError('Thời gian bảo hành phải là số').min(0).nullable().optional(),
 });
 
 // --- Main Schemas ---
