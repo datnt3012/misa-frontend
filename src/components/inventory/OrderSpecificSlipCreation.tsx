@@ -190,7 +190,7 @@ export const OrderSpecificSlipCreation: React.FC<OrderSpecificSlipCreationProps>
             items[itemIndex].serial_manage = true;
           }
           
-          if (value && orderItem && orderItemSerials.length === 0) {
+          if (value && orderItem && orderItemSerials.length === 0 && (orderItem?.serialManage || orderItem?.manageSerials || orderItem?.serial_manage)) {
             setProductWarnings(prev => ({
               ...prev,
               [slipId]: { ...(prev[slipId] || {}), [itemIndex]: 'Sản phẩm trong đơn hàng không có serial' }

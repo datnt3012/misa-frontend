@@ -579,13 +579,27 @@ function ExportSlipsContent() {
   const checkMissingSerials = (receipt: WarehouseReceipt): Array<{ productName: string; required: number; entered: number }> => {
     const missing: Array<{ productName: string; required: number; entered: number }> = [];
     const details = receipt.details || receipt.items || [];
-    
+    const orderDetails = receipt.order?.details || [];
+
     for (const item of details) {
+      const productCode = item.product?.code;
+      const productId = item.product?.id;
+
+      const orderDetail = orderDetails.find(od => {
+        const odProductCode = od.product?.code;
+        const odProductId = od.product?.id || (od as any).productId;
+        return (odProductCode === productCode) || (odProductId === productId);
+      });
+
+      if (!orderDetail?.serialManage && !orderDetail?.manageSerials && !orderDetail?.serial_manage) {
+        continue;
+      }
+
       const productName = item.product?.name || item.product_name || 'Sản phẩm không tên';
       const requiredQty = parseInt(item.quantity as any) || 0;
-      
+
       let enteredSerials = 0;
-      
+
       if (item.serials && Array.isArray(item.serials)) {
         enteredSerials = item.serials.length;
       } else if (item.serialNumbers && typeof item.serialNumbers === 'string') {
@@ -593,12 +607,12 @@ function ExportSlipsContent() {
       } else if (item.serial_numbers && typeof item.serial_numbers === 'string') {
         enteredSerials = item.serial_numbers.split(',').filter(s => s.trim()).length;
       }
-      
+
       if (requiredQty > 0 && enteredSerials < requiredQty) {
         missing.push({ productName, required: requiredQty, entered: enteredSerials });
       }
     }
-    
+
     return missing;
   };
 
