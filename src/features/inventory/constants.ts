@@ -1,7 +1,7 @@
-import { InventoryLogFilterSchemaType, WarehouseReceiptFilterSchemaType } from "./schemas";
+import { InventoryMovementFilterSchemaType, WarehouseReceiptFilterSchemaType } from "./schemas";
 
-export const INVENTORY_LOG_QUERY_KEY = {
-    list: (params: Partial<InventoryLogFilterSchemaType>) => ['inventory-logs', 'list', params] as const,
+export const INVENTORY_MOVEMENT_QUERY_KEY = {
+    list: (params: Partial<InventoryMovementFilterSchemaType>) => ['inventory-movements', 'list', params] as const,
 } as const;
 
 export const WAREHOUSE_RECEIPT_QUERY_KEY = {
@@ -117,3 +117,48 @@ export const WarehouseReceiptTypeSign = {
 } as const;
 
 export type WarehouseReceiptTypeType = (typeof WarehouseReceiptType)[keyof typeof WarehouseReceiptType];
+
+/**
+ * Inventory Movement Type Enum
+ */
+export const MovementType = {
+    IN: 'in',
+    OUT: 'out',
+} as const;
+
+export type MovementTypeType = (typeof MovementType)[keyof typeof MovementType];
+
+export const MovementTypeLabel = {
+    [MovementType.IN]: 'Nhập',
+    [MovementType.OUT]: 'Xuất',
+} as const;
+
+export const MovementTypeClassName = {
+    [MovementType.IN]: 'border-green-500 text-green-500 bg-green-500/10',
+    [MovementType.OUT]: 'border-red-500 text-red-500 bg-red-500/10',
+} as const;
+
+/**
+ * Inventory Reference Type Enum
+ */
+export const ReferenceType = {
+    WAREHOUSE_EXPORT: 'warehouse_export',
+    WAREHOUSE_RECEIPT: 'warehouse_receipt',
+    CANCEL_EXPORT: 'cancel_export',
+    CANCEL_RECEIPT: 'cancel_receipt',
+    STOCK_TRANSFER_OUT: 'stock_transfer_out',
+    STOCK_TRANSFER_IN: 'stock_transfer_in',
+    ADJUSTMENT: 'adjustment',
+} as const;
+
+export type ReferenceTypeType = (typeof ReferenceType)[keyof typeof ReferenceType];
+
+export const ReferenceTypeLabel = {
+    [ReferenceType.WAREHOUSE_EXPORT]: 'Xuất kho',
+    [ReferenceType.WAREHOUSE_RECEIPT]: 'Nhập kho',
+    [ReferenceType.CANCEL_EXPORT]: 'Hủy xuất kho',
+    [ReferenceType.CANCEL_RECEIPT]: 'Hủy nhập kho',
+    [ReferenceType.STOCK_TRANSFER_OUT]: 'Chuyển kho (Xuất)',
+    [ReferenceType.STOCK_TRANSFER_IN]: 'Chuyển kho (Nhập)',
+    [ReferenceType.ADJUSTMENT]: 'Điều chỉnh',
+} as const;

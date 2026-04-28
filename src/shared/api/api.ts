@@ -181,5 +181,8 @@ export const API = {
     ANALYZE_STOCK_LEVEL: '/system-migrate/analyze-stock-level',
     RECEIPTS_STATISTICS: '/system-migrate/receipts-statistics',
     DEBUG_RECEIPTS: '/system-migrate/debug-receipts',
+  },
+  INVENTORY_MOVEMENTS: {
+    ROOT: '/inventory-movements',
   }
 } as const;
