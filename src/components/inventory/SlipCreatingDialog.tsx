@@ -361,7 +361,7 @@ const loadOrder = async (id: string) => {
           // Check if product in order has serials - show warning if not
           const orderItemSerials = orderItem?.serials || [];
           if (selectedOrderForAllocation && orderItem && !isImport) {
-            if (orderItemSerials.length === 0) {
+            if (orderItemSerials.length === 0 && (orderItem?.serialManage || orderItem?.manageSerials || orderItem?.serial_manage)) {
               setProductWarnings(prev => ({ ...prev, [index]: 'Sản phẩm trong đơn hàng không có serial' }));
             } else {
               setProductWarnings(prev => {

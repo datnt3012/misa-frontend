@@ -80,6 +80,7 @@ const formatWarrantyRemaining = (serial: any): { text: string; type: string } =>
 
 interface WarrantyTicket {
   id: string;
+  code?: string;
   order?: {
     id: string;
     code: string;
@@ -100,21 +101,35 @@ interface WarrantyTicket {
     id: string;
     username?: string;
     email?: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  customer?: {
+    id: string;
+    name: string;
+    phoneNumber?: string;
   };
   note?: string;
-  serials?: Array<{
+  details?: Array<{
     id: string;
+    serialId: string;
     serialNumber: string;
     productId: string;
+    productName: string;
     warrantyMonths: number;
-    warrantyStartDate?: string | null;
+    warrantyStartDate?: string;
     warrantyActived: boolean;
     createdAt: string;
+    processStatus?: string;
+    processed?: boolean;
+    processedAt?: string;
   }>;
   status: string;
   isDeleted?: boolean;
   createdAt: string;
   updatedAt?: string;
+  receivedAt?: string;
+  overdue?: boolean;
 }
 
 const WarrantyPage: React.FC = () => {
@@ -399,7 +414,7 @@ const fetchTickets = useCallback(async () => {
 
   const handleOpenChangePersonDialog = (ticket: WarrantyTicket) => {
     setTicketToChangePerson(ticket);
-    setSelectedNewPersonId(ticket.personInCharge?.id || ticket.personInChargeId || "");
+    setSelectedNewPersonId(ticket.personInCharge?.id || "");
     setShowChangePersonDialog(true);
   };
 
@@ -728,20 +743,35 @@ const fetchTickets = useCallback(async () => {
                         <TableCell className="p-0 text-center min-w-[180px]">
                           <div className="divide-y divide-slate-100">
                             {(() => {
-                              const uniqueProducts = [...new Set(ticket.serials?.map((s: any) => s.productName) || [])];
+                              const uniqueProducts = [...new Set(ticket.details?.map((d: any) => d.productName) || [])];
                               return uniqueProducts.map((productName, idx) => (
                                 <div key={idx} className="text-sm py-2 px-2 truncate">
                                   {productName || "-"}
                                 </div>
                               ));
                             })()}
-                            {(ticket.serials?.length === 0) && (
+                            {(ticket.details?.length === 0) && (
                               <div className="text-sm text-muted-foreground py-2 px-2">-</div>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center min-w-[60px]">
-                          {ticket.serials?.length || 0}
+                        <TableCell className="p-0 text-center min-w-[60px]">
+                          <div className="divide-y divide-slate-100">
+                            {(() => {
+                              const uniqueProducts = [...new Set(ticket.details?.map((d: any) => d.productName) || [])];
+                              return uniqueProducts.map((productName, idx) => {
+                                const productCount = ticket.details?.filter((d: any) => d.productName === productName).length || 0;
+                                return (
+                                  <div key={idx} className="text-sm py-2 px-2">
+                                    {productCount}
+                                  </div>
+                                );
+                              });
+                            })()}
+                            {(ticket.details?.length === 0) && (
+                              <div className="text-sm text-muted-foreground py-2 px-2">-</div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center min-w-[140px]">
                           <div className="truncate">
@@ -1022,7 +1052,7 @@ const fetchTickets = useCallback(async () => {
           <DialogHeader>
             <DialogTitle>Đổi người phụ trách</DialogTitle>
             <DialogDescription>
-              Chọn người phụ trách mới cho phiếu bảo hành {ticketToChangePerson?.code || ticketToChangePerson?.warrantyTicketCode}
+              Chọn người phụ trách mới cho phiếu bảo hành {ticketToChangePerson?.code || ticketToChangePerson?.id}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
