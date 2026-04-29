@@ -714,7 +714,7 @@ function ExportSlipsContent() {
     try {
       const receipt = await warehouseReceiptsApi.getReceipt(slipId);
       const missing = checkMissingSerials(receipt);
-      
+
       if (missing.length > 0) {
         setMissingSerials(missing);
         setPendingStatusAction({ slipId, action });
@@ -722,7 +722,12 @@ function ExportSlipsContent() {
         return;
       }
 
-      handleStatusAction(slipId, action);
+      // Call the appropriate direct status update function
+      if (action === 'picked') {
+        await markAsPicked(slipId);
+      } else if (action === 'exported') {
+        await markAsExported(slipId);
+      }
     } catch (error: any) {
       toast({ title: "Lỗi", description: error.response?.data?.message || error.message || "Không thể kiểm tra Serial", variant: "destructive" });
     }
